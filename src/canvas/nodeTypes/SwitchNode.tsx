@@ -36,7 +36,7 @@ function SwitchNode({ data }: NodeProps<SwitchNodeType>) {
   return (
     <div
       className={`
-        relative bg-gradient-to-b from-slate-800 to-slate-900 rounded-lg shadow-xl cursor-grab active:cursor-grabbing
+        relative bg-linear-to-b from-slate-800 to-slate-900 rounded-lg shadow-xl cursor-grab active:cursor-grabbing
         border-2 transition-all duration-200
         ${isSelected ? "border-blue-500 shadow-[0_0_12px_3px_rgba(59,130,246,0.7)] ring-2 ring-blue-400" : isHighlighted ? "border-blue-400 shadow-[0_0_10px_2px_rgba(59,130,246,0.6)]" : "border-slate-600"}
       `}
@@ -44,7 +44,7 @@ function SwitchNode({ data }: NodeProps<SwitchNodeType>) {
     >
       {/* Top bar with status */}
       <div className="flex items-center justify-between border-slate-600 px-2 py-1 border-b">
-        <span className="font-bold text-slate-300 uppercase tracking-wider truncate text-[9px] max-w-[120px]">
+        <span className="font-bold text-slate-300 uppercase tracking-wider truncate text-[9px] max-w-30">
           {device.hostname ?? device.name}
         </span>
         <div className={`rounded-full ${statusColors[status]} shadow-sm w-2 h-2`} />

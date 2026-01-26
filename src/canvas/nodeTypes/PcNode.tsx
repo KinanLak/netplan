@@ -28,7 +28,7 @@ function PcNode({ data }: NodeProps<PcNodeType>) {
       className={`
         relative rounded-lg border-2 shadow-md cursor-grab active:cursor-grabbing transition-all duration-200
         ${statusColors[status]}
-        ${isSelected ? "!border-blue-500 !shadow-[0_0_12px_3px_rgba(59,130,246,0.7)] ring-2 ring-blue-400" : isHighlighted ? "!border-blue-400 !shadow-[0_0_10px_2px_rgba(59,130,246,0.6)]" : ""}
+        ${isSelected ? "border-blue-500! shadow-[0_0_12px_3px_rgba(59,130,246,0.7)]! ring-2 ring-blue-400" : isHighlighted ? "border-blue-400! shadow-[0_0_10px_2px_rgba(59,130,246,0.6)]!" : ""}
       `}
       style={{ width: device.size.width, height: device.size.height }}
     >
@@ -49,7 +49,7 @@ function PcNode({ data }: NodeProps<PcNodeType>) {
 
         {/* Middle: hostname */}
         <div className="flex-1 flex items-center justify-center px-0.5">
-          <span className="text-[9px] font-medium text-slate-700 truncate text-center leading-tight">
+          <span className="text-xs uppercase font-bold text-slate-700 truncate text-center leading-tight">
             {device.hostname ?? device.name}
           </span>
         </div>
@@ -57,7 +57,7 @@ function PcNode({ data }: NodeProps<PcNodeType>) {
         {/* Bottom: last user */}
         {device.metadata.lastUser ? (
           <div className="flex items-center gap-0.5 justify-center">
-            <svg className="w-2 h-2 text-blue-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+            <svg className="w-2 h-2 text-blue-500 shrink-0" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
             </svg>
             <span className="text-[8px] text-blue-600 truncate">{device.metadata.lastUser}</span>

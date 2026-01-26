@@ -59,10 +59,11 @@ export default function DeviceDrawer() {
         // Smooth camera movement to the target device
         const centerX = targetDevice.position.x + targetDevice.size.width / 2;
         const centerY = targetDevice.position.y + targetDevice.size.height / 2;
+        const currentZoom = reactFlow.getZoom();
 
         reactFlow.setCenter(centerX, centerY, {
           duration: 500,
-          zoom: 1,
+          zoom: currentZoom
         });
       }
       setHighlightedDevices([]);
@@ -80,7 +81,7 @@ export default function DeviceDrawer() {
   return (
     <div className="absolute top-0 right-0 w-80 h-full bg-white border-l border-slate-200 flex flex-col shadow-xl z-20">
       {/* Header */}
-      <div className="p-4 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white">
+      <div className="p-4 border-b border-slate-200 bg-linear-to-r from-slate-50 to-white">
         <div className="flex items-start justify-between">
           <div className="flex-1 min-w-0">
             <h2 className="text-lg font-semibold text-slate-800 truncate">{device.name}</h2>

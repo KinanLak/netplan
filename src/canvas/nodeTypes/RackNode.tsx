@@ -19,7 +19,7 @@ function RackNode({ data }: NodeProps<RackNodeType>) {
   return (
     <div
       className={`
-        relative bg-gradient-to-b from-slate-700 to-slate-800 rounded-lg shadow-lg cursor-grab active:cursor-grabbing
+        relative bg-linear-to-b from-slate-700 to-slate-800 rounded-lg shadow-lg cursor-grab active:cursor-grabbing
         border-2 transition-all duration-200
         ${isSelected ? "border-blue-500 shadow-[0_0_12px_3px_rgba(59,130,246,0.7)] ring-2 ring-blue-400" : isHighlighted ? "border-blue-400 shadow-[0_0_10px_2px_rgba(59,130,246,0.6)]" : "border-slate-600"}
       `}
@@ -31,7 +31,7 @@ function RackNode({ data }: NodeProps<RackNodeType>) {
       {/* Header with label and status */}
       <div className="absolute top-1 left-1 right-1 flex items-center justify-between px-1">
         <span className="text-[8px] font-medium text-white truncate">{device.name}</span>
-        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${statusColors[status]}`} />
+        <div className={`w-2 h-2 rounded-full shrink-0 ${statusColors[status]}`} />
       </div>
 
       {/* Rack slots visualization */}

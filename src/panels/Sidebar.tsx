@@ -6,7 +6,7 @@ export default function Sidebar() {
   const currentBuilding = buildings.find((b) => b.id === currentBuildingId);
 
   return (
-    <aside className="w-64 h-full bg-gradient-to-b from-slate-900 to-slate-800 text-white flex flex-col border-r border-slate-700">
+    <aside className="w-64 h-full bg-linear-to-b from-slate-900 to-slate-800 text-white flex flex-col border-r border-slate-700">
       {/* Header */}
       <div className="p-4 border-b border-slate-700">
         <h1 className="text-lg font-bold tracking-tight">
