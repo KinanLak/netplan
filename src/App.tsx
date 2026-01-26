@@ -20,6 +20,8 @@ export default function App() {
         <ReactFlowProvider>
           <FlowCanvas />
           <Toolbar />
+          {/* Device details drawer (conditional) - inside ReactFlowProvider for camera control */}
+          {selectedDeviceId && <DeviceDrawer />}
         </ReactFlowProvider>
 
         {/* Mode toggle button - top left */}
@@ -60,9 +62,6 @@ export default function App() {
           </button>
         </div>
       </main>
-
-      {/* Device details drawer (conditional) */}
-      {selectedDeviceId && <DeviceDrawer />}
     </div>
   );
 }

@@ -9,7 +9,7 @@ function SwitchNode({ data }: NodeProps<SwitchNodeType>) {
   const ports = device.metadata.ports ?? [];
   const status: DeviceStatus = device.metadata.status ?? "unknown";
   const isHighlighted = device.highlighted;
-  const isRotated = device.rotation === 90;
+  const isSelected = device.selected;
 
   const statusColors: Record<DeviceStatus, string> = {
     up: "bg-emerald-400",
@@ -33,37 +33,30 @@ function SwitchNode({ data }: NodeProps<SwitchNodeType>) {
           status: "unknown" as DeviceStatus,
         }));
 
-  // Adjust grid based on rotation: landscape = 2x12, portrait = 12x2
-  const gridCols = isRotated ? 2 : 12;
-  const gridRows = isRotated ? 12 : 2;
-
   return (
     <div
       className={`
         relative bg-gradient-to-b from-slate-800 to-slate-900 rounded-lg shadow-xl cursor-grab active:cursor-grabbing
-        border-2 ${isHighlighted ? "!border-blue-400 !shadow-[0_0_10px_2px_rgba(59,130,246,0.6)] animate-pulse" : "border-slate-600"}
+        border-2 transition-all duration-200
+        ${isSelected ? "border-blue-500 shadow-[0_0_12px_3px_rgba(59,130,246,0.7)] ring-2 ring-blue-400" : isHighlighted ? "border-blue-400 shadow-[0_0_10px_2px_rgba(59,130,246,0.6)]" : "border-slate-600"}
       `}
       style={{ width: device.size.width, height: device.size.height }}
     >
       {/* Top bar with status */}
-      <div
-        className={`flex items-center justify-between border-slate-600 ${isRotated ? "px-1 py-0.5 border-b" : "px-2 py-1 border-b"}`}
-      >
-        <span
-          className={`font-bold text-slate-300 uppercase tracking-wider truncate ${isRotated ? "text-[7px] max-w-[30px]" : "text-[9px] max-w-[120px]"}`}
-        >
+      <div className="flex items-center justify-between border-slate-600 px-2 py-1 border-b">
+        <span className="font-bold text-slate-300 uppercase tracking-wider truncate text-[9px] max-w-[120px]">
           {device.hostname ?? device.name}
         </span>
-        <div className={`rounded-full ${statusColors[status]} shadow-sm ${isRotated ? "w-1.5 h-1.5" : "w-2 h-2"}`} />
+        <div className={`rounded-full ${statusColors[status]} shadow-sm w-2 h-2`} />
       </div>
 
-      {/* Ports grid - adapts to rotation */}
+      {/* Ports grid */}
       <div
         className="p-1 gap-0.5"
         style={{
           display: "grid",
-          gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))`,
-          gridTemplateRows: `repeat(${gridRows}, minmax(0, 1fr))`,
+          gridTemplateColumns: "repeat(12, minmax(0, 1fr))",
+          gridTemplateRows: "repeat(2, minmax(0, 1fr))",
         }}
       >
         {displayPorts.slice(0, 24).map((port) => (
@@ -72,23 +65,15 @@ function SwitchNode({ data }: NodeProps<SwitchNodeType>) {
             className={`
               rounded-sm ${portStatusColors[port.status]}
               shadow-sm hover:scale-125 transition-transform
-              cursor-pointer
-              ${isRotated ? "w-2.5 h-2" : "w-3 h-3"}
+              cursor-pointer w-3 h-3
             `}
             title={`Port ${port.number}: ${port.status}`}
           />
         ))}
       </div>
 
-      {/* Model label - only show when not rotated (no space in portrait) */}
-      {device.metadata.model && !isRotated && (
-        <div className="absolute bottom-0.5 left-1 right-1 text-center">
-          <span className="text-[8px] text-slate-500 truncate block">{device.metadata.model}</span>
-        </div>
-      )}
-
-      <Handle type="target" position={isRotated ? Position.Top : Position.Left} className="opacity-0" />
-      <Handle type="source" position={isRotated ? Position.Bottom : Position.Right} className="opacity-0" />
+      <Handle type="target" position={Position.Left} className="opacity-0" />
+      <Handle type="source" position={Position.Right} className="opacity-0" />
     </div>
   );
 }

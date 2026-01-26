@@ -83,31 +83,6 @@ export const useMapStore = create<MapStore>()(
                 }));
             },
 
-            rotateDevice: (deviceId: string) => {
-                const state = get();
-                const device = state.devices.find((d) => d.id === deviceId);
-                if (!device) return;
-
-                // Only rotate non-square devices
-                if (device.size.width === device.size.height) return;
-
-                const newRotation = device.rotation === 90 ? 0 : 90;
-                const newSize = {
-                    width: device.size.height,
-                    height: device.size.width,
-                };
-
-                // Check if rotation would cause collision
-                const hasCollision = state.checkCollision(deviceId, device.position, newSize);
-                if (hasCollision) return;
-
-                set((state) => ({
-                    devices: state.devices.map((d) =>
-                        d.id === deviceId ? { ...d, rotation: newRotation as 0 | 90, size: newSize } : d,
-                    ),
-                }));
-            },
-
             toggleEditMode: () => {
                 set((state) => ({ isEditMode: !state.isEditMode }));
             },

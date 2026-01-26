@@ -122,7 +122,7 @@ export const availableDevicesCatalog: Record<DeviceType, AvailableDevice[]> = {
             hostname: "pc-new-01",
             model: "Dell OptiPlex 7090",
             ip: "192.168.1.x",
-            size: { width: 60, height: 60 },
+            size: { width: 80, height: 80 },
             metadata: { model: "Dell OptiPlex 7090", status: "unknown" },
         },
         {
@@ -132,7 +132,7 @@ export const availableDevicesCatalog: Record<DeviceType, AvailableDevice[]> = {
             hostname: "pc-new-02",
             model: "HP EliteDesk 800 G6",
             ip: "192.168.1.x",
-            size: { width: 60, height: 60 },
+            size: { width: 80, height: 80 },
             metadata: { model: "HP EliteDesk 800 G6", status: "unknown" },
         },
         {
@@ -142,7 +142,7 @@ export const availableDevicesCatalog: Record<DeviceType, AvailableDevice[]> = {
             hostname: "pc-new-03",
             model: "Lenovo ThinkCentre M720",
             ip: "192.168.1.x",
-            size: { width: 60, height: 60 },
+            size: { width: 80, height: 80 },
             metadata: { model: "Lenovo ThinkCentre M720", status: "unknown" },
         },
         {
@@ -175,7 +175,7 @@ export const availableDevicesCatalog: Record<DeviceType, AvailableDevice[]> = {
             id: "catalog-wp-3",
             type: "wall-port",
             name: "Prise Double RJ45",
-            size: { width: 60, height: 40 },
+            size: { width: 40, height: 40 },
             metadata: { model: "Double RJ45 Cat6", status: "unknown" },
         },
     ],

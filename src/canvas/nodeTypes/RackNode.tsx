@@ -8,7 +8,7 @@ function RackNode({ data }: NodeProps<RackNodeType>) {
   const device = data.data;
   const status: DeviceStatus = device.metadata.status ?? "unknown";
   const isHighlighted = device.highlighted;
-  const isRotated = device.rotation === 90;
+  const isSelected = device.selected;
 
   const statusColors = {
     up: "bg-emerald-500",
@@ -20,36 +20,29 @@ function RackNode({ data }: NodeProps<RackNodeType>) {
     <div
       className={`
         relative bg-gradient-to-b from-slate-700 to-slate-800 rounded-lg shadow-lg cursor-grab active:cursor-grabbing
-        border-2 ${isHighlighted ? "!border-blue-400 !shadow-[0_0_10px_2px_rgba(59,130,246,0.6)] animate-pulse" : "border-slate-600"}
+        border-2 transition-all duration-200
+        ${isSelected ? "border-blue-500 shadow-[0_0_12px_3px_rgba(59,130,246,0.7)] ring-2 ring-blue-400" : isHighlighted ? "border-blue-400 shadow-[0_0_10px_2px_rgba(59,130,246,0.6)]" : "border-slate-600"}
       `}
       style={{ width: device.size.width, height: device.size.height }}
     >
       {/* Rack frame details */}
       <div className="absolute inset-1 border border-slate-500 rounded opacity-50" />
 
-      {/* Status indicator */}
-      <div className={`absolute top-2 right-2 w-2 h-2 rounded-full ${statusColors[status]}`} />
+      {/* Header with label and status */}
+      <div className="absolute top-1 left-1 right-1 flex items-center justify-between px-1">
+        <span className="text-[8px] font-medium text-white truncate">{device.name}</span>
+        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${statusColors[status]}`} />
+      </div>
 
-      {/* Rack slots visualization - adapts to orientation */}
-      <div
-        className={`absolute overflow-hidden ${isRotated ? "inset-2 left-6 flex flex-row gap-0.5" : "inset-2 top-6 flex flex-col gap-0.5"}`}
-      >
+      {/* Rack slots visualization */}
+      <div className="absolute inset-2 top-5 flex flex-col gap-0.5 overflow-hidden">
         {Array.from({ length: 8 }).map((_, i) => (
-          <div
-            key={i}
-            className={`bg-slate-600 rounded-sm border border-slate-500 ${isRotated ? "w-3 h-full" : "h-3 w-full"}`}
-          />
+          <div key={i} className="bg-slate-600 rounded-sm border border-slate-500 h-3 w-full" />
         ))}
       </div>
 
-      {/* Label */}
-      <div className={`absolute text-center ${isRotated ? "bottom-1 left-1 right-1" : "bottom-1 left-1 right-1"}`}>
-        <span className="text-[10px] font-medium text-white truncate block">{device.name}</span>
-      </div>
-
-      {/* Handles - position adapts to rotation */}
-      <Handle type="target" position={isRotated ? Position.Left : Position.Top} className="opacity-0" />
-      <Handle type="source" position={isRotated ? Position.Right : Position.Bottom} className="opacity-0" />
+      <Handle type="target" position={Position.Top} className="opacity-0" />
+      <Handle type="source" position={Position.Bottom} className="opacity-0" />
     </div>
   );
 }

@@ -37,7 +37,6 @@ export interface Device {
     floorId: string;
     position: Position;
     size: Size;
-    rotation?: 0 | 90; // 0 = normal, 90 = rotated (swap width/height)
     metadata: DeviceMetadata;
 }
 
@@ -77,7 +76,6 @@ export interface MapActions {
     selectDevice: (deviceId: string | null) => void;
     addDevice: (device: Omit<Device, "id">) => void;
     updateDevicePosition: (deviceId: string, position: Position) => void;
-    rotateDevice: (deviceId: string) => void;
     deleteDevice: (deviceId: string) => void;
     toggleEditMode: () => void;
     setHighlightedDevices: (deviceIds: string[]) => void;

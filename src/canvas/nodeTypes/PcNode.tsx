@@ -21,12 +21,14 @@ function PcNode({ data }: NodeProps<PcNodeType>) {
     unknown: "bg-slate-400",
   };
 
+  const isSelected = device.selected;
+
   return (
     <div
       className={`
-        relative rounded-lg border-2 shadow-md cursor-grab active:cursor-grabbing
+        relative rounded-lg border-2 shadow-md cursor-grab active:cursor-grabbing transition-all duration-200
         ${statusColors[status]}
-        ${isHighlighted ? "!border-blue-400 !shadow-[0_0_10px_2px_rgba(59,130,246,0.6)] animate-pulse" : ""}
+        ${isSelected ? "!border-blue-500 !shadow-[0_0_12px_3px_rgba(59,130,246,0.7)] ring-2 ring-blue-400" : isHighlighted ? "!border-blue-400 !shadow-[0_0_10px_2px_rgba(59,130,246,0.6)]" : ""}
       `}
       style={{ width: device.size.width, height: device.size.height }}
     >

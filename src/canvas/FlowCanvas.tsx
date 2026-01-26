@@ -3,7 +3,6 @@ import {
   ReactFlow,
   Background,
   Controls,
-  MiniMap,
   useNodesState,
   type Node,
   type OnNodesChange,
@@ -223,23 +222,6 @@ export default function FlowCanvas() {
     >
       <Background variant={BackgroundVariant.Dots} gap={20} size={1.5} color="#94a3b8" />
       <Controls showInteractive={false} />
-      <MiniMap
-        nodeStrokeColor={(n) => {
-          if (n.type === "rack") return "#475569";
-          if (n.type === "switch") return "#1e293b";
-          if (n.type === "pc") return "#64748b";
-          return "#94a3b8";
-        }}
-        nodeColor={(n) => {
-          if (n.type === "rack") return "#64748b";
-          if (n.type === "switch") return "#334155";
-          if (n.type === "pc") return "#e2e8f0";
-          return "#f1f5f9";
-        }}
-        nodeBorderRadius={4}
-        maskColor="rgba(0, 0, 0, 0.1)"
-        className="!bg-slate-100 !border-slate-200"
-      />
     </ReactFlow>
   );
 }

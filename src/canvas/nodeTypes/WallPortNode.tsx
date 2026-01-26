@@ -8,6 +8,7 @@ function WallPortNode({ data }: NodeProps<WallPortNodeType>) {
   const device = data.data;
   const status: DeviceStatus = device.metadata.status ?? "unknown";
   const isHighlighted = device.highlighted;
+  const isSelected = device.selected;
 
   const statusColors = {
     up: "border-emerald-400",
@@ -25,25 +26,25 @@ function WallPortNode({ data }: NodeProps<WallPortNodeType>) {
     <div
       className={`
         relative rounded shadow cursor-grab active:cursor-grabbing bg-white
-        border-2 ${isHighlighted ? "!border-blue-400 !shadow-[0_0_10px_2px_rgba(59,130,246,0.6)] animate-pulse" : statusColors[status]}
+        border-2 transition-all duration-200
+        ${isSelected ? "border-blue-500 shadow-[0_0_12px_3px_rgba(59,130,246,0.7)] ring-2 ring-blue-400" : isHighlighted ? "border-blue-400 shadow-[0_0_10px_2px_rgba(59,130,246,0.6)]" : statusColors[status]}
       `}
       style={{ width: device.size.width, height: device.size.height }}
     >
-      {/* RJ45 port visualization */}
-      <div className="absolute inset-2 flex items-center justify-center">
-        <div className={`w-4 h-3 rounded-sm border border-slate-400 ${innerColors[status]}`}>
-          {/* Port contacts */}
+      {/* Content: RJ45 icon + label */}
+      <div className="absolute inset-0 flex flex-col items-center justify-center p-1">
+        {/* Small RJ45 port visualization */}
+        <div className={`w-4 h-3 rounded-sm border border-slate-400 ${innerColors[status]} mb-1`}>
           <div className="flex justify-center gap-px pt-0.5">
             {Array.from({ length: 4 }).map((_, i) => (
               <div key={i} className="w-0.5 h-1 bg-amber-600" />
             ))}
           </div>
         </div>
-      </div>
-
-      {/* Label */}
-      <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 whitespace-nowrap">
-        <span className="text-[9px] font-medium text-slate-500 bg-white/80 px-0.5 rounded">{device.name}</span>
+        {/* Label inside */}
+        <span className="text-[8px] font-medium text-slate-600 truncate max-w-full px-0.5 leading-tight">
+          {device.name}
+        </span>
       </div>
 
       <Handle type="target" position={Position.Top} className="opacity-0" />

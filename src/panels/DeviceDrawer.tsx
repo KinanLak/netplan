@@ -1,6 +1,7 @@
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
+import { useReactFlow } from "@xyflow/react";
 import { useMapStore } from "../store/useMapStore";
-import type { Device, DeviceStatus } from "../types/map";
+import type { DeviceStatus } from "../types/map";
 
 const statusLabels: Record<DeviceStatus, string> = {
   up: "En ligne",
@@ -21,61 +22,18 @@ const typeLabels: Record<string, string> = {
   "wall-port": "Prise murale",
 };
 
-// Rotate button component with error feedback
-function RotateButton({ device, rotateDevice }: { device: Device; rotateDevice: (id: string) => void }) {
-  const [error, setError] = useState<string | null>(null);
-  const { checkCollision } = useMapStore();
-
-  const handleRotate = () => {
-    // Check if rotation would cause collision
-    const newSize = { width: device.size.height, height: device.size.width };
-    const wouldCollide = checkCollision(device.id, device.position, newSize);
-
-    if (wouldCollide) {
-      setError("Rotation impossible (collision)");
-      setTimeout(() => setError(null), 2000);
-      return;
-    }
-
-    rotateDevice(device.id);
-  };
-
-  return (
-    <div className="space-y-1">
-      <button
-        onClick={handleRotate}
-        className="
-          w-full px-4 py-2 rounded-lg text-sm font-medium
-          bg-slate-100 text-slate-700 hover:bg-slate-200
-          transition-colors flex items-center justify-center gap-2
-        "
-      >
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-          />
-        </svg>
-        Pivoter
-      </button>
-      {error && <div className="text-xs text-red-500 text-center animate-pulse">{error}</div>}
-    </div>
-  );
-}
-
 export default function DeviceDrawer() {
   const {
     devices,
     selectedDeviceId,
     selectDevice,
     deleteDevice,
-    rotateDevice,
     isEditMode,
     highlightedDeviceIds,
     setHighlightedDevices,
   } = useMapStore();
+
+  const reactFlow = useReactFlow();
 
   const device = devices.find((d) => d.id === selectedDeviceId);
 
@@ -96,10 +54,21 @@ export default function DeviceDrawer() {
 
   const handleSelectConnected = useCallback(
     (deviceId: string) => {
+      const targetDevice = devices.find((d) => d.id === deviceId);
+      if (targetDevice) {
+        // Smooth camera movement to the target device
+        const centerX = targetDevice.position.x + targetDevice.size.width / 2;
+        const centerY = targetDevice.position.y + targetDevice.size.height / 2;
+
+        reactFlow.setCenter(centerX, centerY, {
+          duration: 500,
+          zoom: 1,
+        });
+      }
       setHighlightedDevices([]);
       selectDevice(deviceId);
     },
-    [selectDevice, setHighlightedDevices],
+    [devices, selectDevice, setHighlightedDevices, reactFlow],
   );
 
   if (!device) {
@@ -109,7 +78,7 @@ export default function DeviceDrawer() {
   const status = device.metadata.status ?? "unknown";
 
   return (
-    <div className="w-80 h-full bg-white border-l border-slate-200 flex flex-col shadow-xl">
+    <div className="absolute top-0 right-0 w-80 h-full bg-white border-l border-slate-200 flex flex-col shadow-xl z-20">
       {/* Header */}
       <div className="p-4 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white">
         <div className="flex items-start justify-between">
@@ -303,9 +272,6 @@ export default function DeviceDrawer() {
       {/* Footer actions */}
       {isEditMode && (
         <div className="p-4 border-t border-slate-200 bg-slate-50 space-y-2">
-          {/* Rotate button - only for non-square devices */}
-          {device.size.width !== device.size.height && <RotateButton device={device} rotateDevice={rotateDevice} />}
-
           <button
             onClick={() => {
               deleteDevice(device.id);
