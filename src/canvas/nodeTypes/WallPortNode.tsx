@@ -1,10 +1,13 @@
 import { memo } from "react";
-import { Handle, Position, type NodeProps } from "@xyflow/react";
-import type { DeviceNodeData } from "../../types/map";
+import { Handle, Position, type NodeProps, type Node } from "@xyflow/react";
+import type { DeviceNodeData, DeviceStatus } from "../../types/map";
 
-function WallPortNode({ data }: NodeProps<{ data: DeviceNodeData }>) {
+type WallPortNodeType = Node<{ data: DeviceNodeData }>;
+
+function WallPortNode({ data }: NodeProps<WallPortNodeType>) {
   const device = data.data;
-  const status = device.metadata.status ?? "unknown";
+  const status: DeviceStatus = device.metadata.status ?? "unknown";
+  const isHighlighted = device.highlighted;
 
   const statusColors = {
     up: "border-emerald-400",
@@ -21,8 +24,8 @@ function WallPortNode({ data }: NodeProps<{ data: DeviceNodeData }>) {
   return (
     <div
       className={`
-        relative rounded border-2 shadow cursor-grab active:cursor-grabbing
-        bg-white ${statusColors[status]}
+        relative rounded shadow cursor-grab active:cursor-grabbing bg-white
+        border-2 ${isHighlighted ? "!border-blue-400 !shadow-[0_0_10px_2px_rgba(59,130,246,0.6)] animate-pulse" : statusColors[status]}
       `}
       style={{ width: device.size.width, height: device.size.height }}
     >

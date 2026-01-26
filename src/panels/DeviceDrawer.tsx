@@ -1,5 +1,6 @@
+import { useCallback, useState } from "react";
 import { useMapStore } from "../store/useMapStore";
-import type { DeviceStatus } from "../types/map";
+import type { Device, DeviceStatus } from "../types/map";
 
 const statusLabels: Record<DeviceStatus, string> = {
   up: "En ligne",
@@ -20,10 +21,86 @@ const typeLabels: Record<string, string> = {
   "wall-port": "Prise murale",
 };
 
+// Rotate button component with error feedback
+function RotateButton({ device, rotateDevice }: { device: Device; rotateDevice: (id: string) => void }) {
+  const [error, setError] = useState<string | null>(null);
+  const { checkCollision } = useMapStore();
+
+  const handleRotate = () => {
+    // Check if rotation would cause collision
+    const newSize = { width: device.size.height, height: device.size.width };
+    const wouldCollide = checkCollision(device.id, device.position, newSize);
+
+    if (wouldCollide) {
+      setError("Rotation impossible (collision)");
+      setTimeout(() => setError(null), 2000);
+      return;
+    }
+
+    rotateDevice(device.id);
+  };
+
+  return (
+    <div className="space-y-1">
+      <button
+        onClick={handleRotate}
+        className="
+          w-full px-4 py-2 rounded-lg text-sm font-medium
+          bg-slate-100 text-slate-700 hover:bg-slate-200
+          transition-colors flex items-center justify-center gap-2
+        "
+      >
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+          />
+        </svg>
+        Pivoter
+      </button>
+      {error && <div className="text-xs text-red-500 text-center animate-pulse">{error}</div>}
+    </div>
+  );
+}
+
 export default function DeviceDrawer() {
-  const { devices, selectedDeviceId, selectDevice, deleteDevice } = useMapStore();
+  const {
+    devices,
+    selectedDeviceId,
+    selectDevice,
+    deleteDevice,
+    rotateDevice,
+    isEditMode,
+    highlightedDeviceIds,
+    setHighlightedDevices,
+  } = useMapStore();
 
   const device = devices.find((d) => d.id === selectedDeviceId);
+
+  // Get connected devices
+  const connectedDevices =
+    device?.metadata.connectedDeviceIds?.map((id) => devices.find((d) => d.id === id)).filter(Boolean) ?? [];
+
+  const handleHighlightConnections = useCallback(() => {
+    if (!device?.metadata.connectedDeviceIds) return;
+
+    // Toggle highlight
+    if (highlightedDeviceIds.length > 0) {
+      setHighlightedDevices([]);
+    } else {
+      setHighlightedDevices(device.metadata.connectedDeviceIds);
+    }
+  }, [device, highlightedDeviceIds, setHighlightedDevices]);
+
+  const handleSelectConnected = useCallback(
+    (deviceId: string) => {
+      setHighlightedDevices([]);
+      selectDevice(deviceId);
+    },
+    [selectDevice, setHighlightedDevices],
+  );
 
   if (!device) {
     return null;
@@ -41,7 +118,10 @@ export default function DeviceDrawer() {
             <p className="text-sm text-slate-500">{typeLabels[device.type]}</p>
           </div>
           <button
-            onClick={() => selectDevice(null)}
+            onClick={() => {
+              setHighlightedDevices([]);
+              selectDevice(null);
+            }}
             className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -86,12 +166,81 @@ export default function DeviceDrawer() {
           </section>
         )}
 
+        {/* Last user (for PCs) */}
+        {device.type === "pc" && device.metadata.lastUser && (
+          <section>
+            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Utilisateur</h3>
+            <div className="flex items-center gap-2 text-sm">
+              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div>
+                <div className="font-medium text-slate-800">{device.metadata.lastUser}</div>
+                <div className="text-xs text-slate-500">Dernier connecté</div>
+              </div>
+            </div>
+          </section>
+        )}
+
         {/* Model */}
         {device.metadata.model && (
           <section>
             <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Matériel</h3>
             <div className="text-sm">
               <span className="text-slate-800">{device.metadata.model}</span>
+            </div>
+          </section>
+        )}
+
+        {/* Connected devices */}
+        {connectedDevices.length > 0 && (
+          <section>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                Connexions ({connectedDevices.length})
+              </h3>
+              <button
+                onClick={handleHighlightConnections}
+                className={`text-xs px-2 py-1 rounded transition-colors ${
+                  highlightedDeviceIds.length > 0
+                    ? "bg-blue-100 text-blue-700"
+                    : "bg-slate-100 text-slate-600 hover:bg-blue-50 hover:text-blue-600"
+                }`}
+              >
+                {highlightedDeviceIds.length > 0 ? "Masquer" : "Voir sur plan"}
+              </button>
+            </div>
+            <div className="space-y-1">
+              {connectedDevices.map(
+                (connDevice) =>
+                  connDevice && (
+                    <button
+                      key={connDevice.id}
+                      onClick={() => handleSelectConnected(connDevice.id)}
+                      className="w-full text-left px-3 py-2 rounded-lg bg-slate-50 hover:bg-blue-50 transition-colors group"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="text-sm font-medium text-slate-700 group-hover:text-blue-600">
+                            {connDevice.name}
+                          </div>
+                          <div className="text-xs text-slate-500">{typeLabels[connDevice.type]}</div>
+                        </div>
+                        <div
+                          className={`w-2 h-2 rounded-full ${
+                            connDevice.metadata.status === "up"
+                              ? "bg-emerald-400"
+                              : connDevice.metadata.status === "down"
+                                ? "bg-red-400"
+                                : "bg-slate-400"
+                          }`}
+                        />
+                      </div>
+                    </button>
+                  ),
+              )}
             </div>
           </section>
         )}
@@ -152,29 +301,34 @@ export default function DeviceDrawer() {
       </div>
 
       {/* Footer actions */}
-      <div className="p-4 border-t border-slate-200 bg-slate-50">
-        <button
-          onClick={() => {
-            deleteDevice(device.id);
-            selectDevice(null);
-          }}
-          className="
-            w-full px-4 py-2 rounded-lg text-sm font-medium
-            bg-red-50 text-red-600 hover:bg-red-100
-            transition-colors flex items-center justify-center gap-2
-          "
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-            />
-          </svg>
-          Supprimer
-        </button>
-      </div>
+      {isEditMode && (
+        <div className="p-4 border-t border-slate-200 bg-slate-50 space-y-2">
+          {/* Rotate button - only for non-square devices */}
+          {device.size.width !== device.size.height && <RotateButton device={device} rotateDevice={rotateDevice} />}
+
+          <button
+            onClick={() => {
+              deleteDevice(device.id);
+              selectDevice(null);
+            }}
+            className="
+              w-full px-4 py-2 rounded-lg text-sm font-medium
+              bg-red-50 text-red-600 hover:bg-red-100
+              transition-colors flex items-center justify-center gap-2
+            "
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+              />
+            </svg>
+            Supprimer
+          </button>
+        </div>
+      )}
     </div>
   );
 }

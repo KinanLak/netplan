@@ -1,11 +1,15 @@
 import { memo } from "react";
-import { Handle, Position, type NodeProps } from "@xyflow/react";
+import { Handle, Position, type NodeProps, type Node } from "@xyflow/react";
 import type { DeviceNodeData, DeviceStatus } from "../../types/map";
 
-function SwitchNode({ data }: NodeProps<{ data: DeviceNodeData }>) {
+type SwitchNodeType = Node<{ data: DeviceNodeData }>;
+
+function SwitchNode({ data }: NodeProps<SwitchNodeType>) {
   const device = data.data;
   const ports = device.metadata.ports ?? [];
-  const status = device.metadata.status ?? "unknown";
+  const status: DeviceStatus = device.metadata.status ?? "unknown";
+  const isHighlighted = device.highlighted;
+  const isRotated = device.rotation === 90;
 
   const statusColors: Record<DeviceStatus, string> = {
     up: "bg-emerald-400",
@@ -19,7 +23,7 @@ function SwitchNode({ data }: NodeProps<{ data: DeviceNodeData }>) {
     unknown: "bg-slate-500",
   };
 
-  // Generate 24 ports in 2x12 grid
+  // Generate 24 ports
   const displayPorts =
     ports.length > 0
       ? ports
@@ -29,43 +33,62 @@ function SwitchNode({ data }: NodeProps<{ data: DeviceNodeData }>) {
           status: "unknown" as DeviceStatus,
         }));
 
+  // Adjust grid based on rotation: landscape = 2x12, portrait = 12x2
+  const gridCols = isRotated ? 2 : 12;
+  const gridRows = isRotated ? 12 : 2;
+
   return (
     <div
-      className="relative bg-gradient-to-b from-slate-800 to-slate-900 rounded-lg border-2 border-slate-600 shadow-xl cursor-grab active:cursor-grabbing"
+      className={`
+        relative bg-gradient-to-b from-slate-800 to-slate-900 rounded-lg shadow-xl cursor-grab active:cursor-grabbing
+        border-2 ${isHighlighted ? "!border-blue-400 !shadow-[0_0_10px_2px_rgba(59,130,246,0.6)] animate-pulse" : "border-slate-600"}
+      `}
       style={{ width: device.size.width, height: device.size.height }}
     >
       {/* Top bar with status */}
-      <div className="flex items-center justify-between px-2 py-1 border-b border-slate-600">
-        <span className="text-[9px] font-bold text-slate-300 uppercase tracking-wider truncate max-w-[120px]">
+      <div
+        className={`flex items-center justify-between border-slate-600 ${isRotated ? "px-1 py-0.5 border-b" : "px-2 py-1 border-b"}`}
+      >
+        <span
+          className={`font-bold text-slate-300 uppercase tracking-wider truncate ${isRotated ? "text-[7px] max-w-[30px]" : "text-[9px] max-w-[120px]"}`}
+        >
           {device.hostname ?? device.name}
         </span>
-        <div className={`w-2 h-2 rounded-full ${statusColors[status]} shadow-sm`} />
+        <div className={`rounded-full ${statusColors[status]} shadow-sm ${isRotated ? "w-1.5 h-1.5" : "w-2 h-2"}`} />
       </div>
 
-      {/* Ports grid - 2 rows x 12 columns */}
-      <div className="p-1.5 grid grid-rows-2 grid-cols-12 gap-0.5">
+      {/* Ports grid - adapts to rotation */}
+      <div
+        className="p-1 gap-0.5"
+        style={{
+          display: "grid",
+          gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))`,
+          gridTemplateRows: `repeat(${gridRows}, minmax(0, 1fr))`,
+        }}
+      >
         {displayPorts.slice(0, 24).map((port) => (
           <div
             key={port.id}
             className={`
-              w-3 h-3 rounded-sm ${portStatusColors[port.status]}
+              rounded-sm ${portStatusColors[port.status]}
               shadow-sm hover:scale-125 transition-transform
               cursor-pointer
+              ${isRotated ? "w-2.5 h-2" : "w-3 h-3"}
             `}
-            title={`Port ${port.number}: ${port.status}${port.connectedTo ? ` → ${port.connectedTo}` : ""}`}
+            title={`Port ${port.number}: ${port.status}`}
           />
         ))}
       </div>
 
-      {/* Model label */}
-      {device.metadata.model && (
+      {/* Model label - only show when not rotated (no space in portrait) */}
+      {device.metadata.model && !isRotated && (
         <div className="absolute bottom-0.5 left-1 right-1 text-center">
           <span className="text-[8px] text-slate-500 truncate block">{device.metadata.model}</span>
         </div>
       )}
 
-      <Handle type="target" position={Position.Left} className="opacity-0" />
-      <Handle type="source" position={Position.Right} className="opacity-0" />
+      <Handle type="target" position={isRotated ? Position.Top : Position.Left} className="opacity-0" />
+      <Handle type="source" position={isRotated ? Position.Bottom : Position.Right} className="opacity-0" />
     </div>
   );
 }

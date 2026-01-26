@@ -8,6 +8,8 @@ export interface DeviceMetadata {
     status?: DeviceStatus;
     model?: string;
     ports?: PortInfo[];
+    lastUser?: string;
+    connectedDeviceIds?: string[];
 }
 
 export interface PortInfo {
@@ -35,6 +37,7 @@ export interface Device {
     floorId: string;
     position: Position;
     size: Size;
+    rotation?: 0 | 90; // 0 = normal, 90 = rotated (swap width/height)
     metadata: DeviceMetadata;
 }
 
@@ -54,6 +57,7 @@ export interface Building {
 // React Flow node data
 export interface DeviceNodeData extends Device {
     selected?: boolean;
+    highlighted?: boolean;
 }
 
 // Store types
@@ -63,6 +67,8 @@ export interface MapState {
     currentBuildingId: string | null;
     currentFloorId: string | null;
     selectedDeviceId: string | null;
+    isEditMode: boolean;
+    highlightedDeviceIds: string[];
 }
 
 export interface MapActions {
@@ -71,7 +77,11 @@ export interface MapActions {
     selectDevice: (deviceId: string | null) => void;
     addDevice: (device: Omit<Device, "id">) => void;
     updateDevicePosition: (deviceId: string, position: Position) => void;
+    rotateDevice: (deviceId: string) => void;
     deleteDevice: (deviceId: string) => void;
+    toggleEditMode: () => void;
+    setHighlightedDevices: (deviceIds: string[]) => void;
+    checkCollision: (deviceId: string, position: Position, size: Size) => boolean;
 }
 
 export type MapStore = MapState & MapActions;

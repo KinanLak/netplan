@@ -22,6 +22,7 @@ export const mockDevices: Device[] = [
         metadata: {
             model: "42U Standard",
             status: "up",
+            connectedDeviceIds: ["switch-1", "switch-2"],
         },
     },
     {
@@ -30,13 +31,14 @@ export const mockDevices: Device[] = [
         name: "Switch Core RDC",
         hostname: "sw-core-rdc-01",
         floorId: "floor-1",
-        position: { x: 250, y: 100 },
+        position: { x: 200, y: 100 },
         size: { width: 200, height: 60 },
         metadata: {
             ip: "192.168.1.1",
             status: "up",
             model: "Cisco Catalyst 9300",
             ports: generatePorts(24),
+            connectedDeviceIds: ["rack-1", "switch-2", "pc-1", "pc-2"],
         },
     },
     {
@@ -45,13 +47,14 @@ export const mockDevices: Device[] = [
         name: "Switch Accès RDC",
         hostname: "sw-access-rdc-01",
         floorId: "floor-1",
-        position: { x: 250, y: 200 },
+        position: { x: 200, y: 180 },
         size: { width: 200, height: 60 },
         metadata: {
             ip: "192.168.1.2",
             status: "up",
             model: "Cisco Catalyst 9200",
             ports: generatePorts(24),
+            connectedDeviceIds: ["rack-1", "switch-1", "pc-3", "pc-4", "pc-5", "wallport-1", "wallport-2"],
         },
     },
     {
@@ -66,6 +69,8 @@ export const mockDevices: Device[] = [
             ip: "192.168.1.100",
             status: "up",
             model: "Dell OptiPlex 7090",
+            lastUser: "Marie Dupont",
+            connectedDeviceIds: ["switch-1"],
         },
     },
     {
@@ -80,6 +85,8 @@ export const mockDevices: Device[] = [
             ip: "192.168.1.101",
             status: "up",
             model: "Dell OptiPlex 7090",
+            lastUser: "Jean Martin",
+            connectedDeviceIds: ["switch-1"],
         },
     },
     {
@@ -94,6 +101,8 @@ export const mockDevices: Device[] = [
             ip: "192.168.1.102",
             status: "down",
             model: "HP EliteDesk 800",
+            lastUser: "Sophie Leroy",
+            connectedDeviceIds: ["switch-2"],
         },
     },
     {
@@ -108,6 +117,8 @@ export const mockDevices: Device[] = [
             ip: "192.168.1.103",
             status: "up",
             model: "HP EliteDesk 800",
+            lastUser: "Pierre Bernard",
+            connectedDeviceIds: ["switch-2"],
         },
     },
     {
@@ -122,6 +133,8 @@ export const mockDevices: Device[] = [
             ip: "192.168.1.104",
             status: "up",
             model: "Dell Precision 5570",
+            lastUser: "François Moreau",
+            connectedDeviceIds: ["switch-2"],
         },
     },
     {
@@ -131,7 +144,10 @@ export const mockDevices: Device[] = [
         floorId: "floor-1",
         position: { x: 100, y: 300 },
         size: { width: 40, height: 40 },
-        metadata: { status: "up" },
+        metadata: {
+            status: "up",
+            connectedDeviceIds: ["switch-2"],
+        },
     },
     {
         id: "wallport-2",
@@ -140,7 +156,10 @@ export const mockDevices: Device[] = [
         floorId: "floor-1",
         position: { x: 160, y: 300 },
         size: { width: 40, height: 40 },
-        metadata: { status: "up" },
+        metadata: {
+            status: "up",
+            connectedDeviceIds: ["switch-2"],
+        },
     },
     {
         id: "wallport-3",
@@ -172,6 +191,7 @@ export const mockDevices: Device[] = [
         metadata: {
             model: "24U Compact",
             status: "up",
+            connectedDeviceIds: ["switch-3", "switch-4"],
         },
     },
     {
@@ -180,13 +200,14 @@ export const mockDevices: Device[] = [
         name: "Switch Étage 1",
         hostname: "sw-floor1-01",
         floorId: "floor-2",
-        position: { x: 250, y: 100 },
+        position: { x: 200, y: 100 },
         size: { width: 200, height: 60 },
         metadata: {
             ip: "192.168.2.1",
             status: "up",
             model: "Cisco Catalyst 9200",
             ports: generatePorts(24),
+            connectedDeviceIds: ["rack-2", "switch-4", "pc-6", "pc-7", "pc-8"],
         },
     },
     {
@@ -195,13 +216,14 @@ export const mockDevices: Device[] = [
         name: "Switch Salle Réunion",
         hostname: "sw-meeting-01",
         floorId: "floor-2",
-        position: { x: 250, y: 200 },
+        position: { x: 200, y: 180 },
         size: { width: 200, height: 60 },
         metadata: {
             ip: "192.168.2.2",
             status: "up",
             model: "Cisco Catalyst 9200",
             ports: generatePorts(24),
+            connectedDeviceIds: ["rack-2", "switch-3", "pc-9", "pc-10", "wallport-5", "wallport-6"],
         },
     },
     {
@@ -216,6 +238,8 @@ export const mockDevices: Device[] = [
             ip: "192.168.2.100",
             status: "up",
             model: "Apple Mac Studio",
+            lastUser: "Alice Nguyen",
+            connectedDeviceIds: ["switch-3"],
         },
     },
     {
@@ -230,6 +254,8 @@ export const mockDevices: Device[] = [
             ip: "192.168.2.101",
             status: "up",
             model: "Dell Precision 7875",
+            lastUser: "Thomas Garcia",
+            connectedDeviceIds: ["switch-3"],
         },
     },
     {
@@ -244,6 +270,8 @@ export const mockDevices: Device[] = [
             ip: "192.168.2.102",
             status: "up",
             model: "Lenovo ThinkStation P360",
+            lastUser: "Emma Robert",
+            connectedDeviceIds: ["switch-3"],
         },
     },
     {
@@ -258,6 +286,8 @@ export const mockDevices: Device[] = [
             ip: "192.168.2.103",
             status: "up",
             model: 'Apple iMac 27"',
+            lastUser: "Lucas Petit",
+            connectedDeviceIds: ["switch-4"],
         },
     },
     {
@@ -272,6 +302,8 @@ export const mockDevices: Device[] = [
             ip: "192.168.2.104",
             status: "down",
             model: "Dell OptiPlex 5090",
+            lastUser: "Camille Roux",
+            connectedDeviceIds: ["switch-4"],
         },
     },
     {
@@ -281,7 +313,10 @@ export const mockDevices: Device[] = [
         floorId: "floor-2",
         position: { x: 100, y: 300 },
         size: { width: 40, height: 40 },
-        metadata: { status: "up" },
+        metadata: {
+            status: "up",
+            connectedDeviceIds: ["switch-4"],
+        },
     },
     {
         id: "wallport-6",
@@ -290,7 +325,10 @@ export const mockDevices: Device[] = [
         floorId: "floor-2",
         position: { x: 160, y: 300 },
         size: { width: 40, height: 40 },
-        metadata: { status: "up" },
+        metadata: {
+            status: "up",
+            connectedDeviceIds: ["switch-4"],
+        },
     },
     {
         id: "wallport-7",
