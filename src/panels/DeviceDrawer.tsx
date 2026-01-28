@@ -2,13 +2,13 @@ import { useCallback } from "react";
 import { useReactFlow } from "@xyflow/react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Cancel01Icon, UserIcon, WasteIcon } from "@hugeicons/core-free-icons";
+import type { DeviceStatus } from "@/types/map";
 import { useMapStore } from "@/store/useMapStore";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
-import type { DeviceStatus } from "@/types/map";
 
 const statusLabels: Record<DeviceStatus, string> = {
   up: "En ligne",
@@ -16,7 +16,10 @@ const statusLabels: Record<DeviceStatus, string> = {
   unknown: "Inconnu",
 };
 
-const statusVariants: Record<DeviceStatus, "default" | "destructive" | "secondary"> = {
+const statusVariants: Record<
+  DeviceStatus,
+  "default" | "destructive" | "secondary"
+> = {
   up: "default",
   down: "destructive",
   unknown: "secondary",
@@ -46,7 +49,9 @@ export default function DeviceDrawer() {
 
   // Get connected devices
   const connectedDevices =
-    device?.metadata.connectedDeviceIds?.map((id) => devices.find((d) => d.id === id)).filter(Boolean) ?? [];
+    device?.metadata.connectedDeviceIds
+      ?.map((id) => devices.find((d) => d.id === id))
+      .filter(Boolean) ?? [];
 
   const handleHighlightConnections = useCallback(() => {
     if (!device?.metadata.connectedDeviceIds) return;
@@ -86,13 +91,15 @@ export default function DeviceDrawer() {
   const status = device.metadata.status ?? "unknown";
 
   return (
-    <Card className="absolute top-0 right-0 w-80 h-full rounded-none border-l border-t-0 border-b-0 border-r-0 shadow-xl z-20 flex flex-col">
+    <Card className="absolute top-0 right-0 z-20 flex h-full w-80 flex-col rounded-none! border-t-0 border-r-0 border-b-0 border-l shadow-xl">
       {/* Header */}
-      <CardHeader className="pb-3 bg-linear-to-r from-muted/50 to-background">
+      <CardHeader className="from-muted to-background m-2 mr-2 rounded-l-xl rounded-r-none! bg-linear-to-r py-4">
         <div className="flex items-start justify-between">
-          <div className="flex-1 min-w-0">
-            <CardTitle className="text-lg truncate">{device.name}</CardTitle>
-            <p className="text-sm text-muted-foreground">{typeLabels[device.type]}</p>
+          <div className="min-w-0 flex-1">
+            <CardTitle className="truncate text-lg">{device.name}</CardTitle>
+            <p className="text-muted-foreground text-sm">
+              {typeLabels[device.type]}
+            </p>
           </div>
           <Button
             variant="ghost"
@@ -103,7 +110,12 @@ export default function DeviceDrawer() {
             }}
             className="h-8 w-8"
           >
-            <HugeiconsIcon icon={Cancel01Icon} size={20} color="currentColor" strokeWidth={1.5} />
+            <HugeiconsIcon
+              icon={Cancel01Icon}
+              size={20}
+              color="currentColor"
+              strokeWidth={1.5}
+            />
           </Button>
         </div>
 
@@ -112,7 +124,7 @@ export default function DeviceDrawer() {
           <Badge variant={statusVariants[status]} className="gap-1.5">
             <span
               className={cn(
-                "w-2 h-2 rounded-full",
+                "h-2 w-2 rounded-full",
                 status === "up" && "bg-primary-foreground",
                 status === "down" && "bg-destructive-foreground",
                 status === "unknown" && "bg-secondary-foreground",
@@ -129,18 +141,24 @@ export default function DeviceDrawer() {
           {/* Hostname & IP */}
           {(device.hostname || device.metadata.ip) && (
             <section>
-              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Réseau</h3>
+              <h3 className="text-muted-foreground mb-2 text-xs font-semibold tracking-wider uppercase">
+                Réseau
+              </h3>
               <div className="space-y-2">
                 {device.hostname && (
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Hostname</span>
-                    <span className="font-mono text-foreground">{device.hostname}</span>
+                    <span className="text-foreground font-mono">
+                      {device.hostname}
+                    </span>
                   </div>
                 )}
                 {device.metadata.ip && (
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">IP</span>
-                    <span className="font-mono text-foreground">{device.metadata.ip}</span>
+                    <span className="text-foreground font-mono">
+                      {device.metadata.ip}
+                    </span>
                   </div>
                 )}
               </div>
@@ -150,14 +168,25 @@ export default function DeviceDrawer() {
           {/* Last user (for PCs) */}
           {device.type === "pc" && device.metadata.lastUser && (
             <section>
-              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Utilisateur</h3>
+              <h3 className="text-muted-foreground mb-2 text-xs font-semibold tracking-wider uppercase">
+                Utilisateur
+              </h3>
               <div className="flex items-center gap-2 text-sm">
-                <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center text-primary">
-                  <HugeiconsIcon icon={UserIcon} size={16} color="currentColor" strokeWidth={1.5} />
+                <div className="bg-primary/10 text-primary flex h-8 w-8 items-center justify-center rounded-full">
+                  <HugeiconsIcon
+                    icon={UserIcon}
+                    size={16}
+                    color="currentColor"
+                    strokeWidth={1.5}
+                  />
                 </div>
                 <div>
-                  <div className="font-medium text-foreground">{device.metadata.lastUser}</div>
-                  <div className="text-xs text-muted-foreground">Dernier connecté</div>
+                  <div className="text-foreground font-medium">
+                    {device.metadata.lastUser}
+                  </div>
+                  <div className="text-muted-foreground text-xs">
+                    Dernier connecté
+                  </div>
                 </div>
               </div>
             </section>
@@ -166,7 +195,9 @@ export default function DeviceDrawer() {
           {/* Model */}
           {device.metadata.model && (
             <section>
-              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Matériel</h3>
+              <h3 className="text-muted-foreground mb-2 text-xs font-semibold tracking-wider uppercase">
+                Matériel
+              </h3>
               <div className="text-sm">
                 <span className="text-foreground">{device.metadata.model}</span>
               </div>
@@ -176,17 +207,21 @@ export default function DeviceDrawer() {
           {/* Connected devices */}
           {connectedDevices.length > 0 && (
             <section>
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              <div className="mb-2 flex items-center justify-between">
+                <h3 className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
                   Connexions ({connectedDevices.length})
                 </h3>
                 <Button
-                  variant={highlightedDeviceIds.length > 0 ? "secondary" : "outline"}
+                  variant={
+                    highlightedDeviceIds.length > 0 ? "secondary" : "outline"
+                  }
                   size="sm"
                   onClick={handleHighlightConnections}
                   className="h-6 text-xs"
                 >
-                  {highlightedDeviceIds.length > 0 ? "Masquer" : "Voir sur plan"}
+                  {highlightedDeviceIds.length > 0
+                    ? "Masquer"
+                    : "Voir sur plan"}
                 </Button>
               </div>
               <div className="space-y-1">
@@ -196,21 +231,26 @@ export default function DeviceDrawer() {
                       <button
                         key={connDevice.id}
                         onClick={() => handleSelectConnected(connDevice.id)}
-                        className="w-full text-left px-3 py-2 rounded-lg bg-muted hover:bg-accent transition-colors group"
+                        className="bg-muted hover:bg-accent group w-full rounded-lg px-3 py-2 text-left transition-colors"
                       >
                         <div className="flex items-center justify-between">
                           <div>
-                            <div className="text-sm font-medium text-foreground group-hover:text-primary">
+                            <div className="text-foreground group-hover:text-primary text-sm font-medium">
                               {connDevice.name}
                             </div>
-                            <div className="text-xs text-muted-foreground">{typeLabels[connDevice.type]}</div>
+                            <div className="text-muted-foreground text-xs">
+                              {typeLabels[connDevice.type]}
+                            </div>
                           </div>
                           <div
                             className={cn(
-                              "w-2 h-2 rounded-full",
-                              connDevice.metadata.status === "up" && "bg-chart-2",
-                              connDevice.metadata.status === "down" && "bg-destructive",
-                              connDevice.metadata.status === "unknown" && "bg-muted-foreground",
+                              "h-2 w-2 rounded-full",
+                              connDevice.metadata.status === "up" &&
+                                "bg-chart-2",
+                              connDevice.metadata.status === "down" &&
+                                "bg-destructive",
+                              connDevice.metadata.status === "unknown" &&
+                                "bg-muted-foreground",
                             )}
                           />
                         </div>
@@ -224,7 +264,7 @@ export default function DeviceDrawer() {
           {/* Ports (for switches) */}
           {device.type === "switch" && device.metadata.ports && (
             <section>
-              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+              <h3 className="text-muted-foreground mb-2 text-xs font-semibold tracking-wider uppercase">
                 Ports ({device.metadata.ports.length})
               </h3>
               <div className="grid grid-cols-12 gap-1">
@@ -232,10 +272,14 @@ export default function DeviceDrawer() {
                   <div
                     key={port.id}
                     className={cn(
-                      "w-4 h-4 rounded-sm text-[8px] flex items-center justify-center",
-                      port.status === "up" && "bg-chart-2 text-primary-foreground",
-                      port.status === "down" && "bg-destructive text-destructive-foreground",
-                      port.status !== "up" && port.status !== "down" && "bg-muted text-muted-foreground",
+                      "flex h-4 w-4 items-center justify-center rounded-sm text-[8px]",
+                      port.status === "up" &&
+                        "bg-chart-2 text-primary-foreground",
+                      port.status === "down" &&
+                        "bg-destructive text-destructive-foreground",
+                      port.status !== "up" &&
+                        port.status !== "down" &&
+                        "bg-muted text-muted-foreground",
                     )}
                     title={`Port ${port.number}: ${port.status}`}
                   >
@@ -243,14 +287,22 @@ export default function DeviceDrawer() {
                   </div>
                 ))}
               </div>
-              <div className="mt-2 flex gap-3 text-xs text-muted-foreground">
+              <div className="text-muted-foreground mt-2 flex gap-3 text-xs">
                 <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 bg-chart-2 rounded-sm" />
-                  {device.metadata.ports.filter((p) => p.status === "up").length} actifs
+                  <span className="bg-chart-2 h-2 w-2 rounded-sm" />
+                  {
+                    device.metadata.ports.filter((p) => p.status === "up")
+                      .length
+                  }{" "}
+                  actifs
                 </span>
                 <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 bg-destructive rounded-sm" />
-                  {device.metadata.ports.filter((p) => p.status === "down").length} down
+                  <span className="bg-destructive h-2 w-2 rounded-sm" />
+                  {
+                    device.metadata.ports.filter((p) => p.status === "down")
+                      .length
+                  }{" "}
+                  down
                 </span>
               </div>
             </section>
@@ -258,15 +310,21 @@ export default function DeviceDrawer() {
 
           {/* Position */}
           <section>
-            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Position</h3>
+            <h3 className="text-muted-foreground mb-2 text-xs font-semibold tracking-wider uppercase">
+              Position
+            </h3>
             <div className="flex gap-4 text-sm">
               <div>
                 <span className="text-muted-foreground">X:</span>{" "}
-                <span className="font-mono text-foreground">{device.position.x}</span>
+                <span className="text-foreground font-mono">
+                  {device.position.x}
+                </span>
               </div>
               <div>
                 <span className="text-muted-foreground">Y:</span>{" "}
-                <span className="font-mono text-foreground">{device.position.y}</span>
+                <span className="text-foreground font-mono">
+                  {device.position.y}
+                </span>
               </div>
             </div>
           </section>
@@ -275,7 +333,7 @@ export default function DeviceDrawer() {
 
       {/* Footer actions */}
       {isEditMode && (
-        <div className="p-4 border-t border-border bg-muted/50 space-y-2">
+        <div className="border-border bg-muted/50 space-y-2 border-t p-4">
           <Button
             variant="destructive"
             onClick={() => {
@@ -284,7 +342,12 @@ export default function DeviceDrawer() {
             }}
             className="w-full gap-2"
           >
-            <HugeiconsIcon icon={WasteIcon} size={16} color="currentColor" strokeWidth={1.5} />
+            <HugeiconsIcon
+              icon={WasteIcon}
+              size={16}
+              color="currentColor"
+              strokeWidth={1.5}
+            />
             Supprimer
           </Button>
         </div>

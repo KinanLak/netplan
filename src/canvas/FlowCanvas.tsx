@@ -1,16 +1,15 @@
 import { useCallback, useMemo, useRef } from "react";
 import {
-  ReactFlow,
   Background,
-  Controls,
-  useNodesState,
-  type Node,
-  type OnNodesChange,
   BackgroundVariant,
+  Controls,
+  ReactFlow,
+  useNodesState,
 } from "@xyflow/react";
-import { useMapStore } from "@/store/useMapStore";
 import { nodeTypes } from "./nodeTypes";
+import type { Node, OnNodesChange } from "@xyflow/react";
 import type { DeviceNodeData, Position, Size } from "@/types/map";
+import { useMapStore } from "@/store/useMapStore";
 
 const SNAP_GRID: [number, number] = [20, 20];
 const GRID_SIZE = 20;
@@ -34,7 +33,7 @@ const findNearestValidPosition = (
   const maxRadius = 200; // Max search radius
   for (let radius = GRID_SIZE; radius <= maxRadius; radius += GRID_SIZE) {
     // Check positions in a circle pattern around the target
-    const positions: Position[] = [];
+    const positions: Array<Position> = [];
     for (let dx = -radius; dx <= radius; dx += GRID_SIZE) {
       for (let dy = -radius; dy <= radius; dy += GRID_SIZE) {
         // Only check positions at approximately this radius
@@ -84,7 +83,7 @@ export default function FlowCanvas() {
   const lastGridCell = useRef<Map<string, string>>(new Map());
 
   // Filter devices for current floor and convert to React Flow nodes
-  const initialNodes = useMemo((): DeviceNode[] => {
+  const initialNodes = useMemo((): Array<DeviceNode> => {
     const nodes = devices
       .filter((d) => d.floorId === currentFloorId)
       .map(
@@ -110,9 +109,16 @@ export default function FlowCanvas() {
     });
 
     return nodes;
-  }, [devices, currentFloorId, selectedDeviceId, isEditMode, highlightedDeviceIds]);
+  }, [
+    devices,
+    currentFloorId,
+    selectedDeviceId,
+    isEditMode,
+    highlightedDeviceIds,
+  ]);
 
-  const [nodes, setNodes, onNodesChange] = useNodesState<DeviceNode>(initialNodes);
+  const [nodes, setNodes, onNodesChange] =
+    useNodesState<DeviceNode>(initialNodes);
 
   // Sync nodes when floor changes or devices update
   useMemo(() => {
@@ -142,7 +148,8 @@ export default function FlowCanvas() {
             // Find the device being dragged
             const device = devices.find((d) => d.id === change.id);
             if (device) {
-              const lastValid = lastValidPositions.current.get(change.id) ?? device.position;
+              const lastValid =
+                lastValidPositions.current.get(change.id) ?? device.position;
 
               // Find nearest valid position
               const validPosition = findNearestValidPosition(
@@ -180,7 +187,11 @@ export default function FlowCanvas() {
       // Update positions in store after drag ends (only in edit mode)
       if (isEditMode) {
         processedChanges.forEach((change) => {
-          if (change.type === "position" && change.position && !change.dragging) {
+          if (
+            change.type === "position" &&
+            change.position &&
+            !change.dragging
+          ) {
             updateDevicePosition(change.id, change.position);
           }
         });
@@ -220,7 +231,12 @@ export default function FlowCanvas() {
       nodesDraggable={isEditMode}
       proOptions={{ hideAttribution: true }}
     >
-      <Background variant={BackgroundVariant.Dots} gap={20} size={1.5} color="#94a3b8" />
+      <Background
+        variant={BackgroundVariant.Dots}
+        gap={20}
+        size={1.5}
+        color="#94a3b8"
+      />
       <Controls showInteractive={false} />
     </ReactFlow>
   );

@@ -1,7 +1,8 @@
 import { memo } from "react";
-import { Handle, Position, type NodeProps, type Node } from "@xyflow/react";
-import { cn } from "@/lib/utils";
+import { Handle, Position } from "@xyflow/react";
+import type { Node, NodeProps } from "@xyflow/react";
 import type { DeviceNodeData, DeviceStatus } from "@/types/map";
+import { cn } from "@/lib/utils";
 
 type SwitchNodeType = Node<{ data: DeviceNodeData }>;
 
@@ -25,22 +26,25 @@ function SwitchNode({ data }: NodeProps<SwitchNodeType>) {
   return (
     <div
       className={cn(
-        "relative bg-linear-to-b from-secondary to-secondary/80 rounded-lg shadow-xl cursor-grab active:cursor-grabbing",
+        "from-secondary to-secondary/80 relative cursor-grab rounded-lg bg-linear-to-b shadow-xl active:cursor-grabbing",
         "border-2 transition-all duration-200",
-        isSelected && "border-ring shadow-[0_0_12px_3px_var(--ring)] ring-2 ring-ring",
-        isHighlighted && !isSelected && "border-ring/70 shadow-[0_0_10px_2px_var(--ring)]",
+        isSelected &&
+          "border-ring ring-ring shadow-[0_0_12px_3px_var(--ring)] ring-2",
+        isHighlighted &&
+          !isSelected &&
+          "border-ring/70 shadow-[0_0_10px_2px_var(--ring)]",
         !isSelected && !isHighlighted && "border-border",
       )}
       style={{ width: device.size.width, height: device.size.height }}
     >
       {/* Top bar with status */}
-      <div className="flex items-center justify-between border-border px-2 py-1 border-b">
-        <span className="font-bold text-muted-foreground uppercase tracking-wider truncate text-[9px] max-w-30">
+      <div className="border-border flex items-center justify-between border-b px-2 py-1">
+        <span className="text-muted-foreground max-w-30 truncate text-[9px] font-bold tracking-wider uppercase">
           {device.hostname ?? device.name}
         </span>
         <div
           className={cn(
-            "rounded-full shadow-sm w-2 h-2",
+            "h-2 w-2 rounded-full shadow-sm",
             status === "up" && "bg-chart-2",
             status === "down" && "bg-destructive",
             status === "unknown" && "bg-muted-foreground",
@@ -50,7 +54,7 @@ function SwitchNode({ data }: NodeProps<SwitchNodeType>) {
 
       {/* Ports grid */}
       <div
-        className="p-1 gap-0.5"
+        className="gap-0.5 p-1"
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(12, minmax(0, 1fr))",
@@ -61,7 +65,7 @@ function SwitchNode({ data }: NodeProps<SwitchNodeType>) {
           <div
             key={port.id}
             className={cn(
-              "rounded-sm shadow-sm hover:scale-125 transition-transform cursor-pointer w-3 h-3",
+              "h-3 w-3 cursor-pointer rounded-sm shadow-sm transition-transform hover:scale-125",
               port.status === "up" && "bg-chart-2 shadow-chart-2/50",
               port.status === "down" && "bg-destructive shadow-destructive/50",
               port.status === "unknown" && "bg-muted-foreground",

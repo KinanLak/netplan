@@ -1,21 +1,22 @@
-import { useCallback, useState, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useReactFlow } from "@xyflow/react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
-  ServerStack03Icon,
-  HardDriveIcon,
   ComputerIcon,
+  HardDriveIcon,
   PlugSocketIcon,
   Search01Icon,
+  ServerStack03Icon,
 } from "@hugeicons/core-free-icons";
+import type { Device, DeviceType } from "@/types/map";
+import type { AvailableDevice } from "@/mock/availableDevices";
 import { useMapStore } from "@/store/useMapStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
-import type { DeviceType, Device } from "@/types/map";
-import { availableDevicesCatalog, type AvailableDevice } from "@/mock/availableDevices";
+import { availableDevicesCatalog } from "@/mock/availableDevices";
 
 interface ToolbarButton {
   type: DeviceType;
@@ -23,31 +24,60 @@ interface ToolbarButton {
   icon: React.ReactNode;
 }
 
-const toolbarButtons: ToolbarButton[] = [
+const toolbarButtons: Array<ToolbarButton> = [
   {
     type: "rack",
     label: "Rack",
-    icon: <HugeiconsIcon icon={ServerStack03Icon} size={20} color="currentColor" strokeWidth={1.5} />,
+    icon: (
+      <HugeiconsIcon
+        icon={ServerStack03Icon}
+        size={20}
+        color="currentColor"
+        strokeWidth={1.5}
+      />
+    ),
   },
   {
     type: "switch",
     label: "Switch",
-    icon: <HugeiconsIcon icon={HardDriveIcon} size={20} color="currentColor" strokeWidth={1.5} />,
+    icon: (
+      <HugeiconsIcon
+        icon={HardDriveIcon}
+        size={20}
+        color="currentColor"
+        strokeWidth={1.5}
+      />
+    ),
   },
   {
     type: "pc",
     label: "PC",
-    icon: <HugeiconsIcon icon={ComputerIcon} size={20} color="currentColor" strokeWidth={1.5} />,
+    icon: (
+      <HugeiconsIcon
+        icon={ComputerIcon}
+        size={20}
+        color="currentColor"
+        strokeWidth={1.5}
+      />
+    ),
   },
   {
     type: "wall-port",
     label: "Prise",
-    icon: <HugeiconsIcon icon={PlugSocketIcon} size={20} color="currentColor" strokeWidth={1.5} />,
+    icon: (
+      <HugeiconsIcon
+        icon={PlugSocketIcon}
+        size={20}
+        color="currentColor"
+        strokeWidth={1.5}
+      />
+    ),
   },
 ];
 
 export default function Toolbar() {
-  const { currentFloorId, addDevice, isEditMode, checkCollision } = useMapStore();
+  const { currentFloorId, addDevice, isEditMode, checkCollision } =
+    useMapStore();
   const reactFlow = useReactFlow();
   const [selectedType, setSelectedType] = useState<DeviceType | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -124,7 +154,9 @@ export default function Toolbar() {
     [currentFloorId, addDevice, reactFlow, checkCollision],
   );
 
-  const availableDevices = selectedType ? availableDevicesCatalog[selectedType] : [];
+  const availableDevices = selectedType
+    ? availableDevicesCatalog[selectedType]
+    : [];
 
   // Filter devices based on search query
   const filteredDevices = useMemo(() => {
@@ -146,24 +178,29 @@ export default function Toolbar() {
     <div className="absolute top-4 right-4 z-10 flex gap-2">
       {/* Device selection dropdown - appears left of toolbar when active */}
       {selectedType && (
-        <Card className="w-56 max-h-64 flex flex-col bg-card/95 backdrop-blur-sm">
-          <CardHeader className="py-2 px-3">
-            <CardTitle className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider">
+        <Card className="bg-card/95 flex max-h-64 w-56 flex-col backdrop-blur-sm">
+          <CardHeader className="px-3 py-2">
+            <CardTitle className="text-2xs text-muted-foreground font-semibold tracking-wider uppercase">
               Choisir un équipement
             </CardTitle>
           </CardHeader>
-          <CardContent className="py-0 px-2 pb-2 flex flex-col flex-1 min-h-0">
+          <CardContent className="flex min-h-0 flex-1 flex-col px-2 py-0 pb-2">
             {/* Search input */}
             <div className="relative mb-1.5">
-              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground">
-                <HugeiconsIcon icon={Search01Icon} size={12} color="currentColor" strokeWidth={1.5} />
+              <span className="text-muted-foreground absolute top-1/2 left-2 -translate-y-1/2">
+                <HugeiconsIcon
+                  icon={Search01Icon}
+                  size={12}
+                  color="currentColor"
+                  strokeWidth={1.5}
+                />
               </span>
               <Input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Rechercher..."
-                className="pl-6 pr-2 py-1 h-7 text-xs"
+                className="h-7 py-1 pr-2 pl-6 text-xs"
                 autoFocus
               />
             </div>
@@ -176,17 +213,27 @@ export default function Toolbar() {
                     <button
                       key={device.id}
                       onClick={() => handleAddDevice(device)}
-                      className="w-full text-left px-2 py-1.5 rounded-md hover:bg-accent transition-colors group"
+                      className="hover:bg-accent group w-full rounded-md px-2 py-1.5 text-left transition-colors"
                     >
-                      <div className="font-medium text-foreground text-xs group-hover:text-primary">{device.name}</div>
-                      {device.model && <div className="text-2xs text-muted-foreground">{device.model}</div>}
+                      <div className="text-foreground group-hover:text-primary text-xs font-medium">
+                        {device.name}
+                      </div>
+                      {device.model && (
+                        <div className="text-2xs text-muted-foreground">
+                          {device.model}
+                        </div>
+                      )}
                       {device.hostname && (
-                        <div className="text-2xs text-muted-foreground/70 font-mono">{device.hostname}</div>
+                        <div className="text-2xs text-muted-foreground/70 font-mono">
+                          {device.hostname}
+                        </div>
                       )}
                     </button>
                   ))
                 ) : (
-                  <div className="text-center py-2 text-xs text-muted-foreground">Aucun résultat</div>
+                  <div className="text-muted-foreground py-2 text-center text-xs">
+                    Aucun résultat
+                  </div>
                 )}
               </div>
             </ScrollArea>
@@ -195,7 +242,7 @@ export default function Toolbar() {
       )}
 
       {/* Main toolbar - vertical compact */}
-      <Card className="bg-card/90 backdrop-blur-sm p-1.5">
+      <Card className="bg-card/90 p-1.5 backdrop-blur-sm">
         <div className="flex flex-col gap-1">
           {toolbarButtons.map((btn) => (
             <Button
@@ -205,12 +252,12 @@ export default function Toolbar() {
               onClick={() => handleTypeClick(btn.type)}
               disabled={!currentFloorId}
               className={cn(
-                "flex flex-col items-center gap-0.5 h-auto px-2 py-1.5",
-                selectedType === btn.type && "ring-2 ring-ring",
+                "flex h-auto flex-col items-center gap-0.5 px-2 py-1.5",
+                selectedType === btn.type && "ring-ring ring-2",
               )}
               title={`Ajouter ${btn.label}`}
             >
-              <span className="[&>svg]:w-4 [&>svg]:h-4">{btn.icon}</span>
+              <span className="[&>svg]:h-4 [&>svg]:w-4">{btn.icon}</span>
               <span className="text-2xs font-medium">{btn.label}</span>
             </Button>
           ))}

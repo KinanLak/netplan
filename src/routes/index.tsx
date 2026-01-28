@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ReactFlowProvider } from "@xyflow/react";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Tick01Icon, Edit01Icon } from "@hugeicons/core-free-icons";
+import { Edit01Icon, Tick01Icon } from "@hugeicons/core-free-icons";
 import FlowCanvas from "@/canvas/FlowCanvas";
 import Sidebar from "@/panels/Sidebar";
 import Toolbar from "@/panels/Toolbar";
