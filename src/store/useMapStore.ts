@@ -1,8 +1,8 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { MapStore, Device, Position, Size } from "../types/map";
-import { mockBuildings } from "../mock/buildings";
-import { mockDevices } from "../mock/devices";
+import type { MapStore, Device, Position, Size } from "@/types/map";
+import { mockBuildings } from "@/mock/buildings";
+import { mockDevices } from "@/mock/devices";
 
 const generateId = () => `device-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 

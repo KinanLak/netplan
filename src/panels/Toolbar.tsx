@@ -1,10 +1,21 @@
 import { useCallback, useState, useMemo } from "react";
 import { useReactFlow } from "@xyflow/react";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { ServerStack03Icon, HardDriveIcon, ComputerIcon, PlugSocketIcon, Search01Icon } from "@hugeicons/core-free-icons";
-import { useMapStore } from "../store/useMapStore";
-import type { DeviceType, Device } from "../types/map";
-import { availableDevicesCatalog, type AvailableDevice } from "../mock/availableDevices";
+import {
+  ServerStack03Icon,
+  HardDriveIcon,
+  ComputerIcon,
+  PlugSocketIcon,
+  Search01Icon,
+} from "@hugeicons/core-free-icons";
+import { useMapStore } from "@/store/useMapStore";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { cn } from "@/lib/utils";
+import type { DeviceType, Device } from "@/types/map";
+import { availableDevicesCatalog, type AvailableDevice } from "@/mock/availableDevices";
 
 interface ToolbarButton {
   type: DeviceType;
@@ -135,70 +146,76 @@ export default function Toolbar() {
     <div className="absolute top-4 right-4 z-10 flex gap-2">
       {/* Device selection dropdown - appears left of toolbar when active */}
       {selectedType && (
-        <div className="bg-white/95 backdrop-blur-sm rounded-lg shadow-lg border border-slate-200 p-2 w-56 max-h-64 flex flex-col">
-          <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
-            Choisir un équipement
-          </div>
+        <Card className="w-56 max-h-64 flex flex-col bg-card/95 backdrop-blur-sm">
+          <CardHeader className="py-2 px-3">
+            <CardTitle className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider">
+              Choisir un équipement
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="py-0 px-2 pb-2 flex flex-col flex-1 min-h-0">
+            {/* Search input */}
+            <div className="relative mb-1.5">
+              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground">
+                <HugeiconsIcon icon={Search01Icon} size={12} color="currentColor" strokeWidth={1.5} />
+              </span>
+              <Input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Rechercher..."
+                className="pl-6 pr-2 py-1 h-7 text-xs"
+                autoFocus
+              />
+            </div>
 
-          {/* Search input */}
-          <div className="relative mb-1.5">
-            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400">
-              <HugeiconsIcon icon={Search01Icon} size={12} color="currentColor" strokeWidth={1.5} />
-            </span>
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Rechercher..."
-              className="w-full pl-6 pr-2 py-1 text-xs border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-400 focus:border-transparent"
-              autoFocus
-            />
-          </div>
-
-          {/* Device list */}
-          <div className="flex-1 overflow-y-auto space-y-0.5">
-            {filteredDevices.length > 0 ? (
-              filteredDevices.map((device) => (
-                <button
-                  key={device.id}
-                  onClick={() => handleAddDevice(device)}
-                  className="w-full text-left px-2 py-1.5 rounded-md hover:bg-blue-50 transition-colors group"
-                >
-                  <div className="font-medium text-slate-800 text-xs group-hover:text-blue-600">{device.name}</div>
-                  {device.model && <div className="text-[10px] text-slate-500">{device.model}</div>}
-                  {device.hostname && <div className="text-[10px] text-slate-400 font-mono">{device.hostname}</div>}
-                </button>
-              ))
-            ) : (
-              <div className="text-center py-2 text-xs text-slate-400">Aucun résultat</div>
-            )}
-          </div>
-        </div>
+            {/* Device list */}
+            <ScrollArea className="flex-1">
+              <div className="space-y-0.5">
+                {filteredDevices.length > 0 ? (
+                  filteredDevices.map((device) => (
+                    <button
+                      key={device.id}
+                      onClick={() => handleAddDevice(device)}
+                      className="w-full text-left px-2 py-1.5 rounded-md hover:bg-accent transition-colors group"
+                    >
+                      <div className="font-medium text-foreground text-xs group-hover:text-primary">{device.name}</div>
+                      {device.model && <div className="text-2xs text-muted-foreground">{device.model}</div>}
+                      {device.hostname && (
+                        <div className="text-2xs text-muted-foreground/70 font-mono">{device.hostname}</div>
+                      )}
+                    </button>
+                  ))
+                ) : (
+                  <div className="text-center py-2 text-xs text-muted-foreground">Aucun résultat</div>
+                )}
+              </div>
+            </ScrollArea>
+          </CardContent>
+        </Card>
       )}
 
       {/* Main toolbar - vertical compact */}
-      <div className="flex flex-col gap-1 bg-white/90 backdrop-blur-sm rounded-lg shadow-lg border border-slate-200 p-1.5">
-        {toolbarButtons.map((btn) => (
-          <button
-            key={btn.type}
-            onClick={() => handleTypeClick(btn.type)}
-            disabled={!currentFloorId}
-            className={`
-              flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-md
-              transition-colors disabled:opacity-50 disabled:cursor-not-allowed
-              ${
-                selectedType === btn.type
-                  ? "bg-blue-100 text-blue-600 ring-2 ring-blue-400"
-                  : "text-slate-600 hover:text-blue-600 hover:bg-blue-50"
-              }
-            `}
-            title={`Ajouter ${btn.label}`}
-          >
-            <span className="[&>svg]:w-4 [&>svg]:h-4">{btn.icon}</span>
-            <span className="text-[10px] font-medium">{btn.label}</span>
-          </button>
-        ))}
-      </div>
+      <Card className="bg-card/90 backdrop-blur-sm p-1.5">
+        <div className="flex flex-col gap-1">
+          {toolbarButtons.map((btn) => (
+            <Button
+              key={btn.type}
+              variant={selectedType === btn.type ? "secondary" : "ghost"}
+              size="sm"
+              onClick={() => handleTypeClick(btn.type)}
+              disabled={!currentFloorId}
+              className={cn(
+                "flex flex-col items-center gap-0.5 h-auto px-2 py-1.5",
+                selectedType === btn.type && "ring-2 ring-ring",
+              )}
+              title={`Ajouter ${btn.label}`}
+            >
+              <span className="[&>svg]:w-4 [&>svg]:h-4">{btn.icon}</span>
+              <span className="text-2xs font-medium">{btn.label}</span>
+            </Button>
+          ))}
+        </div>
+      </Card>
     </div>
   );
 }

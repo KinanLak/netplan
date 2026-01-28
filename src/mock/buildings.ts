@@ -1,4 +1,4 @@
-import type { Building } from "../types/map";
+import type { Building } from "@/types/map";
 
 export const mockBuildings: Building[] = [
     {

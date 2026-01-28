@@ -1,30 +1,37 @@
 {
-    "compilerOptions": {
-        // Environment setup & latest features
-        "lib": ["ESNext", "DOM"],
-        "target": "ESNext",
-        "module": "Preserve",
-        "moduleDetection": "force",
-        "jsx": "react-jsx",
-        "allowJs": true,
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    "eslint.config.js",
+    "prettier.config.js",
+    "vite.config.js"
+  ],
+  "exclude": ["node_modules"],
+  "compilerOptions": {
+    "target": "ESNext",
+    "jsx": "react-jsx",
+    "module": "ESNext",
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "types": ["vite/client"],
+    "useDefineForClassFields": true,
 
-        // Bundler mode
-        "moduleResolution": "bundler",
-        "allowImportingTsExtensions": true,
-        "verbatimModuleSyntax": true,
-        "noEmit": true,
+    /* Bundler mode */
+    "moduleResolution": "bundler",
+    "moduleDetection": "force",
+    "isolatedModules": true,
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": false,
+    "noEmit": true,
 
-        // Best practices
-        "strict": true,
-        "skipLibCheck": true,
-        "noFallthroughCasesInSwitch": true,
-        "noUncheckedIndexedAccess": true,
-        "noImplicitOverride": true,
-
-        // Some stricter flags (disabled by default)
-        "noUnusedLocals": false,
-        "noUnusedParameters": false,
-        "noPropertyAccessFromIndexSignature": false
-    },
-    "include": ["src", "vite.config.ts"]
+    /* Linting */
+    "skipLibCheck": true,
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedSideEffectImports": true,
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  }
 }

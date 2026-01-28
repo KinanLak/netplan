@@ -8,9 +8,9 @@ import {
   type OnNodesChange,
   BackgroundVariant,
 } from "@xyflow/react";
-import { useMapStore } from "../store/useMapStore";
+import { useMapStore } from "@/store/useMapStore";
 import { nodeTypes } from "./nodeTypes";
-import type { DeviceNodeData, Position, Size } from "../types/map";
+import type { DeviceNodeData, Position, Size } from "@/types/map";
 
 const SNAP_GRID: [number, number] = [20, 20];
 const GRID_SIZE = 20;

@@ -2,8 +2,13 @@ import { useCallback } from "react";
 import { useReactFlow } from "@xyflow/react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Cancel01Icon, UserIcon, WasteIcon } from "@hugeicons/core-free-icons";
-import { useMapStore } from "../store/useMapStore";
-import type { DeviceStatus } from "../types/map";
+import { useMapStore } from "@/store/useMapStore";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { cn } from "@/lib/utils";
+import type { DeviceStatus } from "@/types/map";
 
 const statusLabels: Record<DeviceStatus, string> = {
   up: "En ligne",
@@ -11,10 +16,10 @@ const statusLabels: Record<DeviceStatus, string> = {
   unknown: "Inconnu",
 };
 
-const statusColors: Record<DeviceStatus, string> = {
-  up: "bg-emerald-100 text-emerald-700",
-  down: "bg-red-100 text-red-700",
-  unknown: "bg-slate-100 text-slate-700",
+const statusVariants: Record<DeviceStatus, "default" | "destructive" | "secondary"> = {
+  up: "default",
+  down: "destructive",
+  unknown: "secondary",
 };
 
 const typeLabels: Record<string, string> = {
@@ -81,212 +86,209 @@ export default function DeviceDrawer() {
   const status = device.metadata.status ?? "unknown";
 
   return (
-    <div className="absolute top-0 right-0 w-80 h-full bg-white border-l border-slate-200 flex flex-col shadow-xl z-20">
+    <Card className="absolute top-0 right-0 w-80 h-full rounded-none border-l border-t-0 border-b-0 border-r-0 shadow-xl z-20 flex flex-col">
       {/* Header */}
-      <div className="p-4 border-b border-slate-200 bg-linear-to-r from-slate-50 to-white">
+      <CardHeader className="pb-3 bg-linear-to-r from-muted/50 to-background">
         <div className="flex items-start justify-between">
           <div className="flex-1 min-w-0">
-            <h2 className="text-lg font-semibold text-slate-800 truncate">{device.name}</h2>
-            <p className="text-sm text-slate-500">{typeLabels[device.type]}</p>
+            <CardTitle className="text-lg truncate">{device.name}</CardTitle>
+            <p className="text-sm text-muted-foreground">{typeLabels[device.type]}</p>
           </div>
-          <button
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={() => {
               setHighlightedDevices([]);
               selectDevice(null);
             }}
-            className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+            className="h-8 w-8"
           >
             <HugeiconsIcon icon={Cancel01Icon} size={20} color="currentColor" strokeWidth={1.5} />
-          </button>
+          </Button>
         </div>
 
         {/* Status badge */}
         <div className="mt-3">
-          <span
-            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${statusColors[status]}`}
-          >
+          <Badge variant={statusVariants[status]} className="gap-1.5">
             <span
-              className={`w-2 h-2 rounded-full ${status === "up" ? "bg-emerald-500" : status === "down" ? "bg-red-500" : "bg-slate-400"}`}
+              className={cn(
+                "w-2 h-2 rounded-full",
+                status === "up" && "bg-primary-foreground",
+                status === "down" && "bg-destructive-foreground",
+                status === "unknown" && "bg-secondary-foreground",
+              )}
             />
             {statusLabels[status]}
-          </span>
+          </Badge>
         </div>
-      </div>
+      </CardHeader>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {/* Hostname & IP */}
-        {(device.hostname || device.metadata.ip) && (
-          <section>
-            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Réseau</h3>
-            <div className="space-y-2">
-              {device.hostname && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-500">Hostname</span>
-                  <span className="font-mono text-slate-800">{device.hostname}</span>
-                </div>
-              )}
-              {device.metadata.ip && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-500">IP</span>
-                  <span className="font-mono text-slate-800">{device.metadata.ip}</span>
-                </div>
-              )}
-            </div>
-          </section>
-        )}
+      <ScrollArea className="flex-1">
+        <CardContent className="space-y-4">
+          {/* Hostname & IP */}
+          {(device.hostname || device.metadata.ip) && (
+            <section>
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Réseau</h3>
+              <div className="space-y-2">
+                {device.hostname && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Hostname</span>
+                    <span className="font-mono text-foreground">{device.hostname}</span>
+                  </div>
+                )}
+                {device.metadata.ip && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">IP</span>
+                    <span className="font-mono text-foreground">{device.metadata.ip}</span>
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
 
-        {/* Last user (for PCs) */}
-        {device.type === "pc" && device.metadata.lastUser && (
+          {/* Last user (for PCs) */}
+          {device.type === "pc" && device.metadata.lastUser && (
+            <section>
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Utilisateur</h3>
+              <div className="flex items-center gap-2 text-sm">
+                <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center text-primary">
+                  <HugeiconsIcon icon={UserIcon} size={16} color="currentColor" strokeWidth={1.5} />
+                </div>
+                <div>
+                  <div className="font-medium text-foreground">{device.metadata.lastUser}</div>
+                  <div className="text-xs text-muted-foreground">Dernier connecté</div>
+                </div>
+              </div>
+            </section>
+          )}
+
+          {/* Model */}
+          {device.metadata.model && (
+            <section>
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Matériel</h3>
+              <div className="text-sm">
+                <span className="text-foreground">{device.metadata.model}</span>
+              </div>
+            </section>
+          )}
+
+          {/* Connected devices */}
+          {connectedDevices.length > 0 && (
+            <section>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Connexions ({connectedDevices.length})
+                </h3>
+                <Button
+                  variant={highlightedDeviceIds.length > 0 ? "secondary" : "outline"}
+                  size="sm"
+                  onClick={handleHighlightConnections}
+                  className="h-6 text-xs"
+                >
+                  {highlightedDeviceIds.length > 0 ? "Masquer" : "Voir sur plan"}
+                </Button>
+              </div>
+              <div className="space-y-1">
+                {connectedDevices.map(
+                  (connDevice) =>
+                    connDevice && (
+                      <button
+                        key={connDevice.id}
+                        onClick={() => handleSelectConnected(connDevice.id)}
+                        className="w-full text-left px-3 py-2 rounded-lg bg-muted hover:bg-accent transition-colors group"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="text-sm font-medium text-foreground group-hover:text-primary">
+                              {connDevice.name}
+                            </div>
+                            <div className="text-xs text-muted-foreground">{typeLabels[connDevice.type]}</div>
+                          </div>
+                          <div
+                            className={cn(
+                              "w-2 h-2 rounded-full",
+                              connDevice.metadata.status === "up" && "bg-chart-2",
+                              connDevice.metadata.status === "down" && "bg-destructive",
+                              connDevice.metadata.status === "unknown" && "bg-muted-foreground",
+                            )}
+                          />
+                        </div>
+                      </button>
+                    ),
+                )}
+              </div>
+            </section>
+          )}
+
+          {/* Ports (for switches) */}
+          {device.type === "switch" && device.metadata.ports && (
+            <section>
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                Ports ({device.metadata.ports.length})
+              </h3>
+              <div className="grid grid-cols-12 gap-1">
+                {device.metadata.ports.map((port) => (
+                  <div
+                    key={port.id}
+                    className={cn(
+                      "w-4 h-4 rounded-sm text-[8px] flex items-center justify-center",
+                      port.status === "up" && "bg-chart-2 text-primary-foreground",
+                      port.status === "down" && "bg-destructive text-destructive-foreground",
+                      port.status !== "up" && port.status !== "down" && "bg-muted text-muted-foreground",
+                    )}
+                    title={`Port ${port.number}: ${port.status}`}
+                  >
+                    {port.number}
+                  </div>
+                ))}
+              </div>
+              <div className="mt-2 flex gap-3 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 bg-chart-2 rounded-sm" />
+                  {device.metadata.ports.filter((p) => p.status === "up").length} actifs
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 bg-destructive rounded-sm" />
+                  {device.metadata.ports.filter((p) => p.status === "down").length} down
+                </span>
+              </div>
+            </section>
+          )}
+
+          {/* Position */}
           <section>
-            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Utilisateur</h3>
-            <div className="flex items-center gap-2 text-sm">
-              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600">
-                <HugeiconsIcon icon={UserIcon} size={16} color="currentColor" strokeWidth={1.5} />
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Position</h3>
+            <div className="flex gap-4 text-sm">
+              <div>
+                <span className="text-muted-foreground">X:</span>{" "}
+                <span className="font-mono text-foreground">{device.position.x}</span>
               </div>
               <div>
-                <div className="font-medium text-slate-800">{device.metadata.lastUser}</div>
-                <div className="text-xs text-slate-500">Dernier connecté</div>
+                <span className="text-muted-foreground">Y:</span>{" "}
+                <span className="font-mono text-foreground">{device.position.y}</span>
               </div>
             </div>
           </section>
-        )}
-
-        {/* Model */}
-        {device.metadata.model && (
-          <section>
-            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Matériel</h3>
-            <div className="text-sm">
-              <span className="text-slate-800">{device.metadata.model}</span>
-            </div>
-          </section>
-        )}
-
-        {/* Connected devices */}
-        {connectedDevices.length > 0 && (
-          <section>
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                Connexions ({connectedDevices.length})
-              </h3>
-              <button
-                onClick={handleHighlightConnections}
-                className={`text-xs px-2 py-1 rounded transition-colors ${
-                  highlightedDeviceIds.length > 0
-                    ? "bg-blue-100 text-blue-700"
-                    : "bg-slate-100 text-slate-600 hover:bg-blue-50 hover:text-blue-600"
-                }`}
-              >
-                {highlightedDeviceIds.length > 0 ? "Masquer" : "Voir sur plan"}
-              </button>
-            </div>
-            <div className="space-y-1">
-              {connectedDevices.map(
-                (connDevice) =>
-                  connDevice && (
-                    <button
-                      key={connDevice.id}
-                      onClick={() => handleSelectConnected(connDevice.id)}
-                      className="w-full text-left px-3 py-2 rounded-lg bg-slate-50 hover:bg-blue-50 transition-colors group"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="text-sm font-medium text-slate-700 group-hover:text-blue-600">
-                            {connDevice.name}
-                          </div>
-                          <div className="text-xs text-slate-500">{typeLabels[connDevice.type]}</div>
-                        </div>
-                        <div
-                          className={`w-2 h-2 rounded-full ${
-                            connDevice.metadata.status === "up"
-                              ? "bg-emerald-400"
-                              : connDevice.metadata.status === "down"
-                                ? "bg-red-400"
-                                : "bg-slate-400"
-                          }`}
-                        />
-                      </div>
-                    </button>
-                  ),
-              )}
-            </div>
-          </section>
-        )}
-
-        {/* Ports (for switches) */}
-        {device.type === "switch" && device.metadata.ports && (
-          <section>
-            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-              Ports ({device.metadata.ports.length})
-            </h3>
-            <div className="grid grid-cols-12 gap-1">
-              {device.metadata.ports.map((port) => (
-                <div
-                  key={port.id}
-                  className={`
-                    w-4 h-4 rounded-sm text-[8px] flex items-center justify-center
-                    ${
-                      port.status === "up"
-                        ? "bg-emerald-500 text-white"
-                        : port.status === "down"
-                          ? "bg-red-500 text-white"
-                          : "bg-slate-200 text-slate-600"
-                    }
-                  `}
-                  title={`Port ${port.number}: ${port.status}`}
-                >
-                  {port.number}
-                </div>
-              ))}
-            </div>
-            <div className="mt-2 flex gap-3 text-xs text-slate-500">
-              <span className="flex items-center gap-1">
-                <span className="w-2 h-2 bg-emerald-500 rounded-sm" />
-                {device.metadata.ports.filter((p) => p.status === "up").length} actifs
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="w-2 h-2 bg-red-500 rounded-sm" />
-                {device.metadata.ports.filter((p) => p.status === "down").length} down
-              </span>
-            </div>
-          </section>
-        )}
-
-        {/* Position */}
-        <section>
-          <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Position</h3>
-          <div className="flex gap-4 text-sm">
-            <div>
-              <span className="text-slate-500">X:</span>{" "}
-              <span className="font-mono text-slate-800">{device.position.x}</span>
-            </div>
-            <div>
-              <span className="text-slate-500">Y:</span>{" "}
-              <span className="font-mono text-slate-800">{device.position.y}</span>
-            </div>
-          </div>
-        </section>
-      </div>
+        </CardContent>
+      </ScrollArea>
 
       {/* Footer actions */}
       {isEditMode && (
-        <div className="p-4 border-t border-slate-200 bg-slate-50 space-y-2">
-          <button
+        <div className="p-4 border-t border-border bg-muted/50 space-y-2">
+          <Button
+            variant="destructive"
             onClick={() => {
               deleteDevice(device.id);
               selectDevice(null);
             }}
-            className="
-              w-full px-4 py-2 rounded-lg text-sm font-medium
-              bg-red-50 text-red-600 hover:bg-red-100
-              transition-colors flex items-center justify-center gap-2
-            "
+            className="w-full gap-2"
           >
             <HugeiconsIcon icon={WasteIcon} size={16} color="currentColor" strokeWidth={1.5} />
             Supprimer
-          </button>
+          </Button>
         </div>
       )}
-    </div>
+    </Card>
   );
 }

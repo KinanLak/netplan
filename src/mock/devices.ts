@@ -1,4 +1,4 @@
-import type { Device, PortInfo } from "../types/map";
+import type { Device, PortInfo } from "@/types/map";
 
 // Helper to generate switch ports
 const generatePorts = (count: number): PortInfo[] => {

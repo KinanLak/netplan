@@ -1,4 +1,4 @@
-import type { DeviceType, DeviceMetadata, Size } from "../types/map";
+import type { DeviceType, DeviceMetadata, Size } from "@/types/map";
 
 // Représente un device disponible dans le catalogue NetBox/LibreNMS
 export interface AvailableDevice {
