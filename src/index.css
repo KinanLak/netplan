@@ -11,8 +11,11 @@
     background-color: #f8fafc;
 }
 
-
 /* Button styles */
 button:hover {
     cursor: pointer;
+}
+
+@theme {
+    --text-2xs: 0.625rem;
 }

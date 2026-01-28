@@ -1,5 +1,7 @@
 import { memo } from "react";
 import { Handle, Position, type NodeProps, type Node } from "@xyflow/react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { PlugSocketIcon } from "@hugeicons/core-free-icons";
 import type { DeviceNodeData, DeviceStatus } from "../../types/map";
 
 type WallPortNodeType = Node<{ data: DeviceNodeData }>;
@@ -16,10 +18,10 @@ function WallPortNode({ data }: NodeProps<WallPortNodeType>) {
     unknown: "border-slate-400",
   };
 
-  const innerColors = {
-    up: "bg-emerald-100",
-    down: "bg-red-100",
-    unknown: "bg-slate-100",
+  const iconColors = {
+    up: "text-emerald-500",
+    down: "text-red-500",
+    unknown: "text-slate-500",
   };
 
   return (
@@ -32,17 +34,12 @@ function WallPortNode({ data }: NodeProps<WallPortNodeType>) {
       style={{ width: device.size.width, height: device.size.height }}
     >
       {/* Content: RJ45 icon + label */}
-      <div className="absolute inset-0 flex flex-col items-center justify-center p-1">
-        {/* Small RJ45 port visualization */}
-        <div className={`w-4 h-3 rounded-sm border border-slate-400 ${innerColors[status]} mb-1`}>
-          <div className="flex justify-center gap-px pt-0.5">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="w-0.5 h-1 bg-amber-600" />
-            ))}
-          </div>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <div className={`mb-1 ${iconColors[status]}`}>
+          <HugeiconsIcon icon={PlugSocketIcon} size={14} color="currentColor" strokeWidth={1.5} />
         </div>
         {/* Label inside */}
-        <span className="text-[8px] font-medium text-slate-600 truncate max-w-full px-0.5 leading-tight">
+        <span className="text-2xs font-medium text-slate-600 truncate max-w-max px-0.5 leading-tight">
           {device.name}
         </span>
       </div>

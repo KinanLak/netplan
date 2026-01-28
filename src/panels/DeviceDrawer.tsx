@@ -1,5 +1,7 @@
 import { useCallback } from "react";
 import { useReactFlow } from "@xyflow/react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { Cancel01Icon, UserIcon, WasteIcon } from "@hugeicons/core-free-icons";
 import { useMapStore } from "../store/useMapStore";
 import type { DeviceStatus } from "../types/map";
 
@@ -63,7 +65,7 @@ export default function DeviceDrawer() {
 
         reactFlow.setCenter(centerX, centerY, {
           duration: 500,
-          zoom: currentZoom
+          zoom: currentZoom,
         });
       }
       setHighlightedDevices([]);
@@ -94,9 +96,7 @@ export default function DeviceDrawer() {
             }}
             className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
           >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <HugeiconsIcon icon={Cancel01Icon} size={20} color="currentColor" strokeWidth={1.5} />
           </button>
         </div>
 
@@ -141,10 +141,8 @@ export default function DeviceDrawer() {
           <section>
             <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Utilisateur</h3>
             <div className="flex items-center gap-2 text-sm">
-              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-                </svg>
+              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600">
+                <HugeiconsIcon icon={UserIcon} size={16} color="currentColor" strokeWidth={1.5} />
               </div>
               <div>
                 <div className="font-medium text-slate-800">{device.metadata.lastUser}</div>
@@ -284,14 +282,7 @@ export default function DeviceDrawer() {
               transition-colors flex items-center justify-center gap-2
             "
           >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-              />
-            </svg>
+            <HugeiconsIcon icon={WasteIcon} size={16} color="currentColor" strokeWidth={1.5} />
             Supprimer
           </button>
         </div>

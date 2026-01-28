@@ -1,5 +1,7 @@
 import { memo } from "react";
 import { Handle, Position, type NodeProps, type Node } from "@xyflow/react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { ComputerIcon, UserIcon } from "@hugeicons/core-free-icons";
 import type { DeviceNodeData, DeviceStatus } from "../../types/map";
 
 type PcNodeType = Node<{ data: DeviceNodeData }>;
@@ -36,14 +38,9 @@ function PcNode({ data }: NodeProps<PcNodeType>) {
       <div className="absolute inset-1 flex flex-col justify-between overflow-hidden">
         {/* Top: small PC icon + status */}
         <div className="flex items-center justify-between">
-          <svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-            />
-          </svg>
+          <span className="text-slate-500">
+            <HugeiconsIcon icon={ComputerIcon} size={16} color="currentColor" strokeWidth={1.5} />
+          </span>
           <div className={`w-2 h-2 rounded-full ${statusDot[status]}`} />
         </div>
 
@@ -56,11 +53,9 @@ function PcNode({ data }: NodeProps<PcNodeType>) {
 
         {/* Bottom: last user */}
         {device.metadata.lastUser ? (
-          <div className="flex items-center gap-0.5 justify-center">
-            <svg className="w-2 h-2 text-blue-500 shrink-0" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-            </svg>
-            <span className="text-[8px] text-blue-600 truncate">{device.metadata.lastUser}</span>
+          <div className="flex items-center gap-0.5 justify-center text-blue-600">
+            <HugeiconsIcon icon={UserIcon} size={10} color="currentColor" strokeWidth={1.5} />
+            <span className="text-[8px] truncate">{device.metadata.lastUser}</span>
           </div>
         ) : (
           <div className="h-2.5" />

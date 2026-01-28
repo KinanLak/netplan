@@ -1,5 +1,7 @@
 import { useCallback, useState, useMemo } from "react";
 import { useReactFlow } from "@xyflow/react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { ServerStack03Icon, HardDriveIcon, ComputerIcon, PlugSocketIcon, Search01Icon } from "@hugeicons/core-free-icons";
 import { useMapStore } from "../store/useMapStore";
 import type { DeviceType, Device } from "../types/map";
 import { availableDevicesCatalog, type AvailableDevice } from "../mock/availableDevices";
@@ -14,53 +16,22 @@ const toolbarButtons: ToolbarButton[] = [
   {
     type: "rack",
     label: "Rack",
-    icon: (
-      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"
-        />
-      </svg>
-    ),
+    icon: <HugeiconsIcon icon={ServerStack03Icon} size={20} color="currentColor" strokeWidth={1.5} />,
   },
   {
     type: "switch",
     label: "Switch",
-    icon: (
-      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-        />
-      </svg>
-    ),
+    icon: <HugeiconsIcon icon={HardDriveIcon} size={20} color="currentColor" strokeWidth={1.5} />,
   },
   {
     type: "pc",
     label: "PC",
-    icon: (
-      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-        />
-      </svg>
-    ),
+    icon: <HugeiconsIcon icon={ComputerIcon} size={20} color="currentColor" strokeWidth={1.5} />,
   },
   {
     type: "wall-port",
     label: "Prise",
-    icon: (
-      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-      </svg>
-    ),
+    icon: <HugeiconsIcon icon={PlugSocketIcon} size={20} color="currentColor" strokeWidth={1.5} />,
   },
 ];
 
@@ -171,19 +142,9 @@ export default function Toolbar() {
 
           {/* Search input */}
           <div className="relative mb-1.5">
-            <svg
-              className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-              />
-            </svg>
+            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400">
+              <HugeiconsIcon icon={Search01Icon} size={12} color="currentColor" strokeWidth={1.5} />
+            </span>
             <input
               type="text"
               value={searchQuery}
