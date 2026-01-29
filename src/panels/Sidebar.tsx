@@ -72,7 +72,7 @@ export default function Sidebar() {
                       "w-full justify-start gap-2",
                       floor.id === currentFloorId
                         ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                        : "text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50",
+                        : "text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent",
                     )}
                   >
                     <HugeiconsIcon

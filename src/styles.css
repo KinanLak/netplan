@@ -141,4 +141,8 @@ button:hover {
     font-size: 0.625rem;
     line-height: 1.25rem;
   }
+  .text-3xs {
+    font-size: 0.5rem;
+    line-height: 0.75rem;
+  }
 }

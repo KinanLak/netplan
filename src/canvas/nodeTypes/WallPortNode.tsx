@@ -53,7 +53,7 @@ function WallPortNode({ data }: NodeProps<WallPortNodeType>) {
           />
         </div>
         {/* Label inside */}
-        <span className="text-2xs text-muted-foreground max-w-max truncate px-0.5 leading-tight font-medium">
+        <span className="text-3xs text-muted-foreground max-w-max truncate px-0.5 leading-tight font-medium">
           {device.name}
         </span>
       </div>
