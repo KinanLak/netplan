@@ -25,9 +25,9 @@ function PcNode({ data }: NodeProps<PcNodeType>) {
       className="bg-card"
     >
       {/* Content - hostname and lastUser inside */}
-      <div className="absolute inset-1 flex flex-col justify-between overflow-hidden">
+      <div className="absolute inset-1.5 flex flex-col justify-between overflow-hidden">
         {/* Top: small PC icon + status */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-start justify-between">
           <span className="text-muted-foreground">
             <HugeiconsIcon
               icon={ComputerIcon}

@@ -50,7 +50,7 @@ function SwitchNode({ data }: NodeProps<SwitchNodeType>) {
 
       {/* Ports grid */}
       <div
-        className="gap-0.5 p-1"
+        className="nodrag gap-0.5 p-1"
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(12, minmax(0, 1fr))",

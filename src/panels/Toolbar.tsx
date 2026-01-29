@@ -5,16 +5,25 @@ import {
   ComputerIcon,
   HardDriveIcon,
   PlugSocketIcon,
-  Search01Icon,
   ServerStack03Icon,
 } from "@hugeicons/core-free-icons";
+import { Check } from "lucide-react";
 import type { Device, DeviceType } from "@/types/map";
 import type { AvailableDevice } from "@/mock/availableDevices";
 import { useMapStore } from "@/store/useMapStore";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { cn } from "@/lib/utils";
 import { availableDevicesCatalog } from "@/mock/availableDevices";
 
@@ -81,10 +90,12 @@ export default function Toolbar() {
   const reactFlow = useReactFlow();
   const [selectedType, setSelectedType] = useState<DeviceType | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [open, setOpen] = useState(false);
 
   const handleTypeClick = useCallback((type: DeviceType) => {
     setSelectedType((prev) => (prev === type ? null : type));
     setSearchQuery("");
+    setOpen(true);
   }, []);
 
   const handleAddDevice = useCallback(
@@ -150,6 +161,7 @@ export default function Toolbar() {
       addDevice(newDevice);
       setSelectedType(null);
       setSearchQuery("");
+      setOpen(false);
     },
     [currentFloorId, addDevice, reactFlow, checkCollision],
   );
@@ -170,99 +182,100 @@ export default function Toolbar() {
     );
   }, [availableDevices, searchQuery]);
 
+  const handleOpenChange = (newOpen: boolean) => {
+    setOpen(newOpen);
+    if (!newOpen) {
+      // Delay reset to avoid visual jump during close animation
+      setTimeout(() => {
+        setSelectedType(null);
+        setSearchQuery("");
+      }, 150);
+    }
+  };
+
   if (!isEditMode) {
     return null;
   }
 
   return (
-    <div className="absolute top-4 right-4 z-10 flex gap-2">
-      {/* Device selection dropdown - appears left of toolbar when active */}
-      {selectedType && (
-        <Card className="bg-card flex max-h-64 w-56 flex-col shadow-lg">
-          <CardHeader className="px-3 py-2">
-            <CardTitle className="text-2xs text-muted-foreground font-semibold tracking-wider uppercase">
-              Choisir un équipement
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="flex min-h-0 flex-1 flex-col px-2 py-0 pb-2">
-            {/* Search input */}
-            <div className="relative mb-1.5">
-              <span className="text-muted-foreground absolute top-1/2 left-2 -translate-y-1/2">
-                <HugeiconsIcon
-                  icon={Search01Icon}
-                  size={12}
-                  color="currentColor"
-                  strokeWidth={1.5}
-                />
-              </span>
-              <Input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Rechercher..."
-                className="h-7 py-1 pr-2 pl-6 text-xs"
-                autoFocus
-              />
-            </div>
-
-            {/* Device list */}
-            <ScrollArea className="flex-1">
-              <div className="space-y-0.5">
-                {filteredDevices.length > 0 ? (
-                  filteredDevices.map((device) => (
-                    <button
-                      key={device.id}
-                      onClick={() => handleAddDevice(device)}
-                      className="hover:bg-accent group w-full rounded-md px-2 py-1.5 text-left transition-colors"
-                    >
-                      <div className="text-foreground group-hover:text-primary text-xs font-medium">
-                        {device.name}
-                      </div>
-                      {device.model && (
-                        <div className="text-2xs text-muted-foreground">
-                          {device.model}
-                        </div>
-                      )}
-                      {device.hostname && (
-                        <div className="text-2xs text-muted-foreground font-mono">
-                          {device.hostname}
-                        </div>
-                      )}
-                    </button>
-                  ))
-                ) : (
-                  <div className="text-muted-foreground py-2 text-center text-xs">
-                    Aucun résultat
-                  </div>
-                )}
-              </div>
-            </ScrollArea>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Main toolbar - vertical compact */}
-      <Card className="bg-card p-1.5 shadow-lg">
-        <div className="flex flex-col gap-1">
+    <div className="absolute top-4 left-1/2 z-10 -translate-x-1/2">
+      <Popover open={open && selectedType !== null} onOpenChange={handleOpenChange}>
+        {/* Main toolbar - horizontal compact */}
+        <div className="bg-card flex items-center rounded-lg p-1 shadow-lg">
           {toolbarButtons.map((btn) => (
-            <Button
+            <PopoverTrigger
               key={btn.type}
-              variant={selectedType === btn.type ? "secondary" : "ghost"}
-              size="sm"
-              onClick={() => handleTypeClick(btn.type)}
-              disabled={!currentFloorId}
-              className={cn(
-                "flex h-auto flex-col items-center gap-0.5 px-2 py-1.5",
-                selectedType === btn.type && "ring-ring ring-2",
-              )}
-              title={`Ajouter ${btn.label}`}
-            >
-              <span className="[&>svg]:h-4 [&>svg]:w-4">{btn.icon}</span>
-              <span className="text-2xs font-medium">{btn.label}</span>
-            </Button>
+              render={
+                <Button
+                  variant={selectedType === btn.type ? "secondary" : "ghost"}
+                  size="sm"
+                  onClick={() => handleTypeClick(btn.type)}
+                  disabled={!currentFloorId}
+                  className={cn(
+                    "flex h-auto flex-col items-center gap-0.5 rounded-md px-3 py-1.5",
+                    selectedType === btn.type && "ring-ring ring-2",
+                  )}
+                  title={`Ajouter ${btn.label}`}
+                >
+                  <span className="[&>svg]:h-5 [&>svg]:w-5">{btn.icon}</span>
+                  <span className="text-xs font-medium">{btn.label}</span>
+                </Button>
+              }
+            />
           ))}
         </div>
-      </Card>
+
+        {/* Device selection popover */}
+        <PopoverContent
+          side="bottom"
+          align="center"
+          className="w-72 p-0"
+          sideOffset={8}
+        >
+          <Command shouldFilter={false}>
+            <CommandInput
+              placeholder="Rechercher un équipement..."
+              className="h-9"
+              value={searchQuery}
+              onValueChange={setSearchQuery}
+            />
+            <CommandList>
+              {filteredDevices.length === 0 && (
+                <div className="text-muted-foreground py-6 text-center text-sm">
+                  Aucun équipement trouvé
+                </div>
+              )}
+              {filteredDevices.length > 0 && (
+                <CommandGroup>
+                  {filteredDevices.map((device) => (
+                    <CommandItem
+                      key={device.id}
+                      value={device.id}
+                      onSelect={() => handleAddDevice(device)}
+                      className="cursor-pointer"
+                    >
+                      <div className="flex w-full items-center justify-between">
+                        <div className="flex-1">
+                          <p className="font-medium">{device.name}</p>
+                          <p className="text-muted-foreground text-xs">
+                            {device.model}
+                            {device.hostname && (
+                              <span className="ml-2 font-mono">
+                                {device.hostname}
+                              </span>
+                            )}
+                          </p>
+                        </div>
+                        <Check className="ml-2 h-4 w-4 shrink-0 opacity-0" />
+                      </div>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              )}
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }

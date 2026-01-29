@@ -10,7 +10,6 @@ import { useMapStore } from "@/store/useMapStore";
 import {
   SidebarInset,
   SidebarProvider,
-  SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { ThemeProvider } from "@/components/theme-provider";
 
@@ -42,7 +41,6 @@ function HomePage() {
 
             {/* Mode toggle button - top left */}
             <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
-              <SidebarTrigger />
               <button
                 onClick={toggleEditMode}
                 className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium shadow-lg transition-all ${

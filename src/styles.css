@@ -73,29 +73,29 @@
 
 .dark {
   /* Base colors */
-  --background: oklch(0.12 0 0);
+  --background: oklch(0.18 0 0);
   --foreground: oklch(0.98 0 0);
 
   /* Card / Popover */
-  --card: oklch(0.16 0 0);
+  --card: oklch(0.21 0 0);
   --card-foreground: oklch(0.98 0 0);
-  --popover: oklch(0.16 0 0);
+  --popover: oklch(0.21 0 0);
   --popover-foreground: oklch(0.98 0 0);
 
   /* Primary - Lighter in dark mode for visibility */
   --primary: oklch(0.9 0 0);
-  --primary-foreground: oklch(0.12 0 0);
+  --primary-foreground: oklch(0.18 0 0);
 
   /* Secondary */
-  --secondary: oklch(0.22 0 0);
+  --secondary: oklch(0.26 0 0);
   --secondary-foreground: oklch(0.98 0 0);
 
   /* Muted */
-  --muted: oklch(0.22 0 0);
+  --muted: oklch(0.26 0 0);
   --muted-foreground: oklch(0.65 0 0);
 
   /* Accent */
-  --accent: oklch(0.28 0 0);
+  --accent: oklch(0.30 0 0);
   --accent-foreground: oklch(0.98 0 0);
 
   /* Destructive - Slightly brighter in dark mode */
@@ -103,8 +103,8 @@
   --destructive-foreground: oklch(0.98 0 0);
 
   /* Borders and inputs - Subtle but visible */
-  --border: oklch(0.28 0 0);
-  --input: oklch(0.28 0 0);
+  --border: oklch(0.32 0 0);
+  --input: oklch(0.32 0 0);
   --ring: oklch(0.5 0 0);
 
   /* Chart colors - Same palette */

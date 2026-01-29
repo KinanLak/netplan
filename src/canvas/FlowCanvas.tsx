@@ -179,6 +179,22 @@ export default function FlowCanvas() {
             }
           }
         }
+        
+        // Handle drag end - ensure final position is valid
+        if (change.type === "position" && change.position && !change.dragging) {
+          const device = devices.find((d) => d.id === change.id);
+          if (device) {
+            const lastValid = lastValidPositions.current.get(change.id);
+            if (lastValid) {
+              // Always use the last valid position when drag ends
+              return {
+                ...change,
+                position: lastValid,
+              };
+            }
+          }
+        }
+        
         return change;
       });
 
@@ -192,6 +208,7 @@ export default function FlowCanvas() {
             change.position &&
             !change.dragging
           ) {
+            // Use the processed position which is guaranteed to be valid
             updateDevicePosition(change.id, change.position);
           }
         });
@@ -214,30 +231,42 @@ export default function FlowCanvas() {
   }, [selectDevice]);
 
   return (
-    <ReactFlow<DeviceNode>
-      nodes={nodes}
-      edges={[]}
-      onNodesChange={handleNodesChange}
-      onNodeClick={handleNodeClick}
-      onPaneClick={handlePaneClick}
-      nodeTypes={nodeTypes}
-      snapToGrid={true}
-      snapGrid={SNAP_GRID}
-      fitView
-      fitViewOptions={{ padding: 0.2 }}
-      minZoom={0.1}
-      maxZoom={2}
-      deleteKeyCode={null}
-      nodesDraggable={isEditMode}
-      proOptions={{ hideAttribution: true }}
-    >
-      <Background
-        variant={BackgroundVariant.Dots}
-        gap={20}
-        size={1.5}
-        color="#94a3b8"
-      />
-      <Controls showInteractive={false} />
-    </ReactFlow>
+    <div className="relative h-full w-full">
+      <ReactFlow<DeviceNode>
+        nodes={nodes}
+        edges={[]}
+        onNodesChange={handleNodesChange}
+        onNodeClick={handleNodeClick}
+        onPaneClick={handlePaneClick}
+        nodeTypes={nodeTypes}
+        snapToGrid={true}
+        snapGrid={SNAP_GRID}
+        fitView
+        fitViewOptions={{ padding: 0.2 }}
+        minZoom={0.1}
+        maxZoom={2}
+        deleteKeyCode={null}
+        nodesDraggable={isEditMode}
+        proOptions={{ hideAttribution: true }}
+      >
+        <Background
+          variant={BackgroundVariant.Dots}
+          gap={20}
+          size={1.5}
+          color="#94a3b8"
+        />
+        <Controls showInteractive={false} />
+      </ReactFlow>
+      
+      {/* Edit mode vignette overlay */}
+      {isEditMode && (
+        <div
+          className="pointer-events-none absolute inset-0 z-10"
+          style={{
+            boxShadow: "inset 0 0 120px 40px rgba(59, 130, 246, 0.15)",
+          }}
+        />
+      )}
+    </div>
   );
 }

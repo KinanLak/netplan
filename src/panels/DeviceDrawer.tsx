@@ -1,11 +1,10 @@
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { useReactFlow } from "@xyflow/react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Cancel01Icon, UserIcon, WasteIcon } from "@hugeicons/core-free-icons";
 import type { DeviceStatus } from "@/types/map";
 import { useMapStore } from "@/store/useMapStore";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 
@@ -43,16 +42,24 @@ export default function DeviceDrawer() {
       ?.map((id) => devices.find((d) => d.id === id))
       .filter(Boolean) ?? [];
 
+  // Check if the currently highlighted devices belong to this device
+  const isCurrentDeviceHighlighted = useMemo(() => {
+    if (!device?.metadata.connectedDeviceIds || highlightedDeviceIds.length === 0) return false;
+    // Check if highlighted devices are exactly this device's connections
+    const connectedSet = new Set(device.metadata.connectedDeviceIds);
+    return highlightedDeviceIds.every((id) => connectedSet.has(id));
+  }, [device?.metadata.connectedDeviceIds, highlightedDeviceIds]);
+
   const handleHighlightConnections = useCallback(() => {
     if (!device?.metadata.connectedDeviceIds) return;
 
-    // Toggle highlight
-    if (highlightedDeviceIds.length > 0) {
+    // If this device's connections are highlighted, hide them. Otherwise, show this device's connections.
+    if (isCurrentDeviceHighlighted) {
       setHighlightedDevices([]);
     } else {
       setHighlightedDevices(device.metadata.connectedDeviceIds);
     }
-  }, [device, highlightedDeviceIds, setHighlightedDevices]);
+  }, [device, isCurrentDeviceHighlighted, setHighlightedDevices]);
 
   const handleSelectConnected = useCallback(
     (deviceId: string) => {
@@ -81,12 +88,12 @@ export default function DeviceDrawer() {
   const status = device.metadata.status ?? "unknown";
 
   return (
-    <Card className="absolute top-0 right-0 z-20 flex h-full w-80 flex-col rounded-none shadow-xl">
+    <aside className="bg-card border-border absolute top-0 right-0 z-20 flex h-full w-80 flex-col border-l shadow-xl">
       {/* Header */}
-      <CardHeader className="from-muted to-background rounded-none bg-linear-to-t py-4">
+      <header className="from-muted to-card space-y-3 bg-linear-to-t px-4 py-4">
         <div className="flex items-start justify-between">
           <div className="min-w-0 flex-1">
-            <CardTitle className="truncate text-lg">{device.name}</CardTitle>
+            <h2 className="text-foreground truncate text-lg font-semibold">{device.name}</h2>
             <p className="text-muted-foreground text-sm">
               {typeLabels[device.type]}
             </p>
@@ -112,7 +119,7 @@ export default function DeviceDrawer() {
         {/* Status badge */}
         <span
           className={cn(
-            "mt-3 inline-flex w-fit items-center gap-2 rounded-full border py-1.5 pr-3 pl-2 text-sm font-medium",
+            "inline-flex w-fit items-center gap-2 rounded-full border py-1.5 pr-3 pl-2 text-sm font-medium",
             status === "up" && "border-up bg-up-background text-up",
             status === "down" && "border-down bg-down-background text-down",
             status === "unknown" &&
@@ -129,11 +136,11 @@ export default function DeviceDrawer() {
           />
           {statusLabels[status]}
         </span>
-      </CardHeader>
+      </header>
 
       {/* Content */}
       <ScrollArea className="flex-1">
-        <CardContent className="space-y-4">
+        <div className="space-y-4 px-4 py-4">
           {/* Hostname & IP */}
           {(device.hostname || device.metadata.ip) && (
             <section>
@@ -209,13 +216,13 @@ export default function DeviceDrawer() {
                 </h3>
                 <Button
                   variant={
-                    highlightedDeviceIds.length > 0 ? "secondary" : "outline"
+                    isCurrentDeviceHighlighted ? "secondary" : "outline"
                   }
                   size="sm"
                   onClick={handleHighlightConnections}
                   className="h-6 text-xs"
                 >
-                  {highlightedDeviceIds.length > 0
+                  {isCurrentDeviceHighlighted
                     ? "Masquer"
                     : "Voir sur plan"}
                 </Button>
@@ -321,12 +328,12 @@ export default function DeviceDrawer() {
               </div>
             </div>
           </section>
-        </CardContent>
+        </div>
       </ScrollArea>
 
       {/* Footer actions */}
       {isEditMode && (
-        <div className="border-border bg-muted space-y-2 border-t p-4">
+        <footer className="border-border bg-muted space-y-2 border-t p-4">
           <Button
             variant="destructive"
             onClick={() => {
@@ -343,8 +350,8 @@ export default function DeviceDrawer() {
             />
             Supprimer
           </Button>
-        </div>
+        </footer>
       )}
-    </Card>
+    </aside>
   );
 }

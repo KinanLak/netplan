@@ -36,15 +36,15 @@ export default function AppSidebar() {
   const currentBuilding = buildings.find((b) => b.id === currentBuildingId);
 
   return (
-    <Sidebar>
+    <Sidebar collapsible="none" className="border-r">
       {/* Header */}
-      <SidebarHeader className="border-b px-4 py-3">
+      <SidebarHeader className="border-b px-4 py-4 ">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-lg font-bold tracking-tight">
+            <h1 className="text-xl font-bold tracking-tight">
               <span className="text-primary">Net</span>Plan
             </h1>
-            <p className="text-muted-foreground text-xs">Cartographie Réseau</p>
+            <p className="text-muted-foreground text-sm">Cartographie Réseau</p>
           </div>
           <ModeToggle />
         </div>
@@ -59,9 +59,12 @@ export default function AppSidebar() {
               {buildings.map((building) => (
                 <SidebarMenuItem key={building.id}>
                   <SidebarMenuButton
-                    isActive={building.id === currentBuildingId}
                     onClick={() => setCurrentBuilding(building.id)}
-                    tooltip={building.name}
+                    className={cn(
+                      "cursor-pointer",
+                      building.id === currentBuildingId &&
+                        "text-foreground font-medium",
+                    )}
                   >
                     <HugeiconsIcon
                       icon={Building05Icon}
@@ -79,7 +82,9 @@ export default function AppSidebar() {
                           <SidebarMenuSubButton
                             onClick={() => setCurrentFloor(floor.id)}
                             className={cn(
-                              floor.id === currentFloorId && "bg-accent",
+                              "cursor-pointer",
+                              floor.id === currentFloorId &&
+                                "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground font-semibold",
                             )}
                           >
                             <HugeiconsIcon
@@ -111,7 +116,6 @@ export default function AppSidebar() {
         </div>
       </SidebarFooter>
 
-      <SidebarRail />
     </Sidebar>
   );
 }
