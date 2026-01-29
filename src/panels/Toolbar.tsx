@@ -199,7 +199,10 @@ export default function Toolbar() {
 
   return (
     <div className="absolute top-4 left-1/2 z-10 -translate-x-1/2">
-      <Popover open={open && selectedType !== null} onOpenChange={handleOpenChange}>
+      <Popover
+        open={open && selectedType !== null}
+        onOpenChange={handleOpenChange}
+      >
         {/* Main toolbar - horizontal compact */}
         <div className="bg-card flex items-center rounded-lg p-1 shadow-lg">
           {toolbarButtons.map((btn) => (

@@ -48,7 +48,7 @@ function PcNode({ data }: NodeProps<PcNodeType>) {
 
         {/* Middle: hostname */}
         <div className="flex flex-1 items-center justify-center px-0.5">
-          <span className="text-foreground  text-center text-2xs leading-tight font-bold uppercase">
+          <span className="text-foreground text-2xs text-center leading-tight font-bold uppercase">
             {device.hostname ?? device.name}
           </span>
         </div>

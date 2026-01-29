@@ -95,7 +95,7 @@
   --muted-foreground: oklch(0.65 0 0);
 
   /* Accent */
-  --accent: oklch(0.30 0 0);
+  --accent: oklch(0.3 0 0);
   --accent-foreground: oklch(0.98 0 0);
 
   /* Destructive - Slightly brighter in dark mode */

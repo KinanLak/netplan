@@ -179,7 +179,7 @@ export default function FlowCanvas() {
             }
           }
         }
-        
+
         // Handle drag end - ensure final position is valid
         if (change.type === "position" && change.position && !change.dragging) {
           const device = devices.find((d) => d.id === change.id);
@@ -194,7 +194,7 @@ export default function FlowCanvas() {
             }
           }
         }
-        
+
         return change;
       });
 
@@ -257,7 +257,7 @@ export default function FlowCanvas() {
         />
         <Controls showInteractive={false} />
       </ReactFlow>
-      
+
       {/* Edit mode vignette overlay */}
       {isEditMode && (
         <div

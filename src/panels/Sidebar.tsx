@@ -20,7 +20,6 @@ import {
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarMenuSubItem,
-  SidebarRail,
 } from "@/components/ui/sidebar";
 import { ModeToggle } from "@/components/mode-toggle";
 
@@ -38,7 +37,7 @@ export default function AppSidebar() {
   return (
     <Sidebar collapsible="none" className="border-r">
       {/* Header */}
-      <SidebarHeader className="border-b px-4 py-4 ">
+      <SidebarHeader className="border-b px-4 py-4">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold tracking-tight">
@@ -115,7 +114,6 @@ export default function AppSidebar() {
           {currentBuilding?.name ?? "Aucun bâtiment"}
         </div>
       </SidebarFooter>
-
     </Sidebar>
   );
 }

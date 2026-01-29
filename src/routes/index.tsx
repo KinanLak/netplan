@@ -7,10 +7,7 @@ import AppSidebar from "@/panels/Sidebar";
 import Toolbar from "@/panels/Toolbar";
 import DeviceDrawer from "@/panels/DeviceDrawer";
 import { useMapStore } from "@/store/useMapStore";
-import {
-  SidebarInset,
-  SidebarProvider,
-} from "@/components/ui/sidebar";
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { ThemeProvider } from "@/components/theme-provider";
 
 export const Route = createFileRoute("/")({

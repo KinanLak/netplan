@@ -44,7 +44,11 @@ export default function DeviceDrawer() {
 
   // Check if the currently highlighted devices belong to this device
   const isCurrentDeviceHighlighted = useMemo(() => {
-    if (!device?.metadata.connectedDeviceIds || highlightedDeviceIds.length === 0) return false;
+    if (
+      !device?.metadata.connectedDeviceIds ||
+      highlightedDeviceIds.length === 0
+    )
+      return false;
     // Check if highlighted devices are exactly this device's connections
     const connectedSet = new Set(device.metadata.connectedDeviceIds);
     return highlightedDeviceIds.every((id) => connectedSet.has(id));
@@ -93,7 +97,9 @@ export default function DeviceDrawer() {
       <header className="from-muted to-card space-y-3 bg-linear-to-t px-4 py-4">
         <div className="flex items-start justify-between">
           <div className="min-w-0 flex-1">
-            <h2 className="text-foreground truncate text-lg font-semibold">{device.name}</h2>
+            <h2 className="text-foreground truncate text-lg font-semibold">
+              {device.name}
+            </h2>
             <p className="text-muted-foreground text-sm">
               {typeLabels[device.type]}
             </p>
@@ -215,16 +221,12 @@ export default function DeviceDrawer() {
                   Connexions ({connectedDevices.length})
                 </h3>
                 <Button
-                  variant={
-                    isCurrentDeviceHighlighted ? "secondary" : "outline"
-                  }
+                  variant={isCurrentDeviceHighlighted ? "secondary" : "outline"}
                   size="sm"
                   onClick={handleHighlightConnections}
                   className="h-6 text-xs"
                 >
-                  {isCurrentDeviceHighlighted
-                    ? "Masquer"
-                    : "Voir sur plan"}
+                  {isCurrentDeviceHighlighted ? "Masquer" : "Voir sur plan"}
                 </Button>
               </div>
               <div className="space-y-1">
