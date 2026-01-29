@@ -1,5 +1,6 @@
 import { Handle, Position } from "@xyflow/react";
 import { memo } from "react";
+import NetworkNode from "./NetworkNode";
 import type { DeviceNodeData, DeviceStatus } from "@/types/map";
 import type { Node, NodeProps } from "@xyflow/react";
 import { cn } from "@/lib/utils";
@@ -13,18 +14,13 @@ function RackNode({ data }: NodeProps<RackNodeType>) {
   const isSelected = device.selected;
 
   return (
-    <div
-      className={cn(
-        "from-secondary to-secondary/80 relative cursor-grab rounded-lg bg-linear-to-b shadow-lg active:cursor-grabbing",
-        "border-2 transition-all duration-200",
-        isSelected &&
-          "border-ring ring-ring shadow-[0_0_12px_3px_var(--ring)] ring-2",
-        isHighlighted &&
-          !isSelected &&
-          "border-ring/70 shadow-[0_0_10px_2px_var(--ring)]",
-        !isSelected && !isHighlighted && "border-border",
-      )}
-      style={{ width: device.size.width, height: device.size.height }}
+    <NetworkNode
+      status={status}
+      isSelected={isSelected}
+      isHighlighted={isHighlighted}
+      width={device.size.width}
+      height={device.size.height}
+      className="from-secondary to-secondary/80 bg-linear-to-b"
     >
       {/* Rack frame details */}
       <div className="border-border absolute inset-1 rounded border opacity-50" />
@@ -37,9 +33,9 @@ function RackNode({ data }: NodeProps<RackNodeType>) {
         <div
           className={cn(
             "h-2 w-2 shrink-0 rounded-full",
-            status === "up" && "bg-chart-2",
-            status === "down" && "bg-destructive",
-            status === "unknown" && "bg-muted-foreground",
+            status === "up" && "bg-up",
+            status === "down" && "bg-down",
+            status === "unknown" && "bg-unknown",
           )}
         />
       </div>
@@ -56,7 +52,7 @@ function RackNode({ data }: NodeProps<RackNodeType>) {
 
       <Handle type="target" position={Position.Top} className="opacity-0" />
       <Handle type="source" position={Position.Bottom} className="opacity-0" />
-    </div>
+    </NetworkNode>
   );
 }
 

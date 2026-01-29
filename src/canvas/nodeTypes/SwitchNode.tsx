@@ -1,5 +1,6 @@
 import { memo } from "react";
 import { Handle, Position } from "@xyflow/react";
+import NetworkNode from "./NetworkNode";
 import type { Node, NodeProps } from "@xyflow/react";
 import type { DeviceNodeData, DeviceStatus } from "@/types/map";
 import { cn } from "@/lib/utils";
@@ -24,18 +25,13 @@ function SwitchNode({ data }: NodeProps<SwitchNodeType>) {
         }));
 
   return (
-    <div
-      className={cn(
-        "from-secondary to-secondary/80 relative cursor-grab rounded-lg bg-linear-to-b shadow-xl active:cursor-grabbing",
-        "border-2 transition-all duration-200",
-        isSelected &&
-          "border-ring ring-ring shadow-[0_0_12px_3px_var(--ring)] ring-2",
-        isHighlighted &&
-          !isSelected &&
-          "border-ring/70 shadow-[0_0_10px_2px_var(--ring)]",
-        !isSelected && !isHighlighted && "border-border",
-      )}
-      style={{ width: device.size.width, height: device.size.height }}
+    <NetworkNode
+      status={status}
+      isSelected={isSelected}
+      isHighlighted={isHighlighted}
+      width={device.size.width}
+      height={device.size.height}
+      className="from-secondary to-secondary/80 bg-linear-to-b"
     >
       {/* Top bar with status */}
       <div className="border-border flex items-center justify-between border-b px-2 py-1">
@@ -45,9 +41,9 @@ function SwitchNode({ data }: NodeProps<SwitchNodeType>) {
         <div
           className={cn(
             "h-2 w-2 rounded-full shadow-sm",
-            status === "up" && "bg-chart-2",
-            status === "down" && "bg-destructive",
-            status === "unknown" && "bg-muted-foreground",
+            status === "up" && "bg-up",
+            status === "down" && "bg-down",
+            status === "unknown" && "bg-unknown",
           )}
         />
       </div>
@@ -65,10 +61,10 @@ function SwitchNode({ data }: NodeProps<SwitchNodeType>) {
           <div
             key={port.id}
             className={cn(
-              "h-3 w-3 cursor-pointer rounded-sm shadow-sm transition-transform hover:scale-125",
-              port.status === "up" && "bg-chart-2 shadow-chart-2/50",
-              port.status === "down" && "bg-destructive shadow-destructive/50",
-              port.status === "unknown" && "bg-muted-foreground",
+              "h-3 w-3 cursor-pointer rounded-xs shadow-sm transition-transform hover:scale-125",
+              port.status === "up" && "bg-up",
+              port.status === "down" && "bg-down",
+              port.status === "unknown" && "bg-unknown",
             )}
             title={`Port ${port.number}: ${port.status}`}
           />
@@ -77,7 +73,7 @@ function SwitchNode({ data }: NodeProps<SwitchNodeType>) {
 
       <Handle type="target" position={Position.Left} className="opacity-0" />
       <Handle type="source" position={Position.Right} className="opacity-0" />
-    </div>
+    </NetworkNode>
   );
 }
 

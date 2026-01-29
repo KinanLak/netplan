@@ -5,7 +5,6 @@ import { Cancel01Icon, UserIcon, WasteIcon } from "@hugeicons/core-free-icons";
 import type { DeviceStatus } from "@/types/map";
 import { useMapStore } from "@/store/useMapStore";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
@@ -14,15 +13,6 @@ const statusLabels: Record<DeviceStatus, string> = {
   up: "En ligne",
   down: "Hors ligne",
   unknown: "Inconnu",
-};
-
-const statusVariants: Record<
-  DeviceStatus,
-  "default" | "destructive" | "secondary"
-> = {
-  up: "default",
-  down: "destructive",
-  unknown: "secondary",
 };
 
 const typeLabels: Record<string, string> = {
@@ -91,9 +81,9 @@ export default function DeviceDrawer() {
   const status = device.metadata.status ?? "unknown";
 
   return (
-    <Card className="absolute top-0 right-0 z-20 flex h-full w-80 flex-col rounded-none! border-t-0 border-r-0 border-b-0 border-l shadow-xl">
+    <Card className="absolute top-0 right-0 z-20 flex h-full w-80 flex-col rounded-none shadow-xl">
       {/* Header */}
-      <CardHeader className="from-muted to-background m-2 mr-2 rounded-l-xl rounded-r-none! bg-linear-to-r py-4">
+      <CardHeader className="from-muted to-background rounded-none bg-linear-to-t py-4">
         <div className="flex items-start justify-between">
           <div className="min-w-0 flex-1">
             <CardTitle className="truncate text-lg">{device.name}</CardTitle>
@@ -120,19 +110,25 @@ export default function DeviceDrawer() {
         </div>
 
         {/* Status badge */}
-        <div className="mt-3">
-          <Badge variant={statusVariants[status]} className="gap-1.5">
-            <span
-              className={cn(
-                "h-2 w-2 rounded-full",
-                status === "up" && "bg-primary-foreground",
-                status === "down" && "bg-destructive-foreground",
-                status === "unknown" && "bg-secondary-foreground",
-              )}
-            />
-            {statusLabels[status]}
-          </Badge>
-        </div>
+        <span
+          className={cn(
+            "mt-3 inline-flex w-fit items-center gap-2 rounded-full border py-1.5 pr-3 pl-2 text-sm font-medium",
+            status === "up" && "border-up bg-up-background text-up",
+            status === "down" && "border-down bg-down-background text-down",
+            status === "unknown" &&
+              "border-unknown bg-unknown-background text-unknown",
+          )}
+        >
+          <span
+            className={cn(
+              "size-4 rounded-full",
+              status === "up" && "bg-up",
+              status === "down" && "bg-down",
+              status === "unknown" && "bg-unknown",
+            )}
+          />
+          {statusLabels[status]}
+        </span>
       </CardHeader>
 
       {/* Content */}
@@ -172,7 +168,7 @@ export default function DeviceDrawer() {
                 Utilisateur
               </h3>
               <div className="flex items-center gap-2 text-sm">
-                <div className="bg-primary/10 text-primary flex h-8 w-8 items-center justify-center rounded-full">
+                <div className="bg-secondary text-primary flex h-8 w-8 items-center justify-center rounded-full">
                   <HugeiconsIcon
                     icon={UserIcon}
                     size={16}
@@ -245,12 +241,11 @@ export default function DeviceDrawer() {
                           <div
                             className={cn(
                               "h-2 w-2 rounded-full",
-                              connDevice.metadata.status === "up" &&
-                                "bg-chart-2",
+                              connDevice.metadata.status === "up" && "bg-up",
                               connDevice.metadata.status === "down" &&
-                                "bg-destructive",
+                                "bg-down",
                               connDevice.metadata.status === "unknown" &&
-                                "bg-muted-foreground",
+                                "bg-unknown",
                             )}
                           />
                         </div>
@@ -273,13 +268,11 @@ export default function DeviceDrawer() {
                     key={port.id}
                     className={cn(
                       "flex h-4 w-4 items-center justify-center rounded-sm text-[8px]",
-                      port.status === "up" &&
-                        "bg-chart-2 text-primary-foreground",
+                      port.status === "up" && "bg-up text-primary-foreground",
                       port.status === "down" &&
-                        "bg-destructive text-destructive-foreground",
-                      port.status !== "up" &&
-                        port.status !== "down" &&
-                        "bg-muted text-muted-foreground",
+                        "bg-down text-primary-foreground",
+                      port.status === "unknown" &&
+                        "bg-unknown text-primary-foreground",
                     )}
                     title={`Port ${port.number}: ${port.status}`}
                   >
@@ -289,7 +282,7 @@ export default function DeviceDrawer() {
               </div>
               <div className="text-muted-foreground mt-2 flex gap-3 text-xs">
                 <span className="flex items-center gap-1">
-                  <span className="bg-chart-2 h-2 w-2 rounded-sm" />
+                  <span className="bg-up h-2 w-2 rounded-sm" />
                   {
                     device.metadata.ports.filter((p) => p.status === "up")
                       .length
@@ -297,7 +290,7 @@ export default function DeviceDrawer() {
                   actifs
                 </span>
                 <span className="flex items-center gap-1">
-                  <span className="bg-destructive h-2 w-2 rounded-sm" />
+                  <span className="bg-down h-2 w-2 rounded-sm" />
                   {
                     device.metadata.ports.filter((p) => p.status === "down")
                       .length
@@ -333,7 +326,7 @@ export default function DeviceDrawer() {
 
       {/* Footer actions */}
       {isEditMode && (
-        <div className="border-border bg-muted/50 space-y-2 border-t p-4">
+        <div className="border-border bg-muted space-y-2 border-t p-4">
           <Button
             variant="destructive"
             onClick={() => {

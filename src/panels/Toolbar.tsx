@@ -178,7 +178,7 @@ export default function Toolbar() {
     <div className="absolute top-4 right-4 z-10 flex gap-2">
       {/* Device selection dropdown - appears left of toolbar when active */}
       {selectedType && (
-        <Card className="bg-card/95 flex max-h-64 w-56 flex-col backdrop-blur-sm">
+        <Card className="bg-card flex max-h-64 w-56 flex-col shadow-lg">
           <CardHeader className="px-3 py-2">
             <CardTitle className="text-2xs text-muted-foreground font-semibold tracking-wider uppercase">
               Choisir un équipement
@@ -224,7 +224,7 @@ export default function Toolbar() {
                         </div>
                       )}
                       {device.hostname && (
-                        <div className="text-2xs text-muted-foreground/70 font-mono">
+                        <div className="text-2xs text-muted-foreground font-mono">
                           {device.hostname}
                         </div>
                       )}
@@ -242,7 +242,7 @@ export default function Toolbar() {
       )}
 
       {/* Main toolbar - vertical compact */}
-      <Card className="bg-card/90 p-1.5 backdrop-blur-sm">
+      <Card className="bg-card p-1.5 shadow-lg">
         <div className="flex flex-col gap-1">
           {toolbarButtons.map((btn) => (
             <Button
