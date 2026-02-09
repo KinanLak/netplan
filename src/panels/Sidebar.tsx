@@ -43,7 +43,7 @@ export default function AppSidebar() {
             <h1 className="text-xl font-bold tracking-tight">
               <span className="text-primary">Net</span>Plan
             </h1>
-            <p className="text-muted-foreground text-sm">Cartographie Réseau</p>
+            <p className="text-sm text-muted-foreground">Cartographie Réseau</p>
           </div>
           <ModeToggle />
         </div>
@@ -62,7 +62,7 @@ export default function AppSidebar() {
                     className={cn(
                       "cursor-pointer",
                       building.id === currentBuildingId &&
-                        "text-foreground font-medium",
+                        "font-medium text-foreground",
                     )}
                   >
                     <HugeiconsIcon
@@ -83,7 +83,7 @@ export default function AppSidebar() {
                             className={cn(
                               "cursor-pointer",
                               floor.id === currentFloorId &&
-                                "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground font-semibold",
+                                "bg-primary font-semibold text-primary-foreground hover:bg-primary hover:text-primary-foreground",
                             )}
                           >
                             <HugeiconsIcon
@@ -110,7 +110,7 @@ export default function AppSidebar() {
 
       {/* Footer */}
       <SidebarFooter className="border-t px-4 py-3">
-        <div className="text-muted-foreground text-xs">
+        <div className="text-xs text-muted-foreground">
           {currentBuilding?.name ?? "Aucun bâtiment"}
         </div>
       </SidebarFooter>

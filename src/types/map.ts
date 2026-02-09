@@ -1,5 +1,7 @@
 // Device types for network equipment
 export type DeviceType = "rack" | "switch" | "pc" | "wall-port";
+export type DrawTool = "device" | "wall" | "room";
+export type WallColor = "sand" | "concrete" | "slate";
 
 export type DeviceStatus = "up" | "down" | "unknown";
 
@@ -40,6 +42,21 @@ export interface Device {
   metadata: DeviceMetadata;
 }
 
+export interface WallSegment {
+  id: string;
+  floorId: string;
+  start: Position;
+  end: Position;
+  color: WallColor;
+}
+
+export interface RoomDraft {
+  floorId: string;
+  start: Position;
+  end: Position;
+  color: WallColor;
+}
+
 // Building & Floor types
 export interface Floor {
   id: string;
@@ -63,11 +80,14 @@ export interface DeviceNodeData extends Device {
 export interface MapState {
   buildings: Array<Building>;
   devices: Array<Device>;
+  walls: Array<WallSegment>;
   currentBuildingId: string | null;
   currentFloorId: string | null;
   selectedDeviceId: string | null;
   isEditMode: boolean;
   highlightedDeviceIds: Array<string>;
+  activeDrawTool: DrawTool;
+  selectedWallColor: WallColor;
 }
 
 export interface MapActions {
@@ -77,7 +97,11 @@ export interface MapActions {
   addDevice: (device: Omit<Device, "id">) => void;
   updateDevicePosition: (deviceId: string, position: Position) => void;
   deleteDevice: (deviceId: string) => void;
+  addWallSegment: (segment: Omit<WallSegment, "id">) => boolean;
+  addRoom: (room: RoomDraft) => boolean;
   toggleEditMode: () => void;
+  setActiveDrawTool: (tool: DrawTool) => void;
+  setSelectedWallColor: (color: WallColor) => void;
   setHighlightedDevices: (deviceIds: Array<string>) => void;
   checkCollision: (deviceId: string, position: Position, size: Size) => boolean;
 }

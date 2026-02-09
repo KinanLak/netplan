@@ -48,14 +48,14 @@ function PcNode({ data }: NodeProps<PcNodeType>) {
 
         {/* Middle: hostname */}
         <div className="flex flex-1 items-center justify-center px-0.5">
-          <span className="text-foreground text-2xs text-center leading-tight font-bold uppercase">
+          <span className="text-2xs text-center leading-tight font-bold text-foreground uppercase">
             {device.hostname ?? device.name}
           </span>
         </div>
 
         {/* Bottom: last user */}
         {device.metadata.lastUser ? (
-          <div className="text-primary flex items-center justify-center gap-0.5">
+          <div className="flex items-center justify-center gap-0.5 text-primary">
             <HugeiconsIcon
               icon={UserIcon}
               size={10}

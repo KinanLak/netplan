@@ -31,11 +31,11 @@ function SwitchNode({ data }: NodeProps<SwitchNodeType>) {
       isHighlighted={isHighlighted}
       width={device.size.width}
       height={device.size.height}
-      className="from-secondary to-secondary/80 bg-linear-to-b"
+      className="bg-linear-to-b from-secondary to-secondary/80"
     >
       {/* Top bar with status */}
-      <div className="border-border flex items-center justify-between border-b px-2 py-1">
-        <span className="text-muted-foreground max-w-30 truncate text-[9px] font-bold tracking-wider uppercase">
+      <div className="flex items-center justify-between border-b border-border px-2 py-1">
+        <span className="max-w-30 truncate text-[9px] font-bold tracking-wider text-muted-foreground uppercase">
           {device.hostname ?? device.name}
         </span>
         <div

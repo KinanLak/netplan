@@ -92,15 +92,15 @@ export default function DeviceDrawer() {
   const status = device.metadata.status ?? "unknown";
 
   return (
-    <aside className="bg-card border-border absolute top-0 right-0 z-20 flex h-full w-80 flex-col border-l shadow-xl">
+    <aside className="absolute top-0 right-0 z-20 flex h-full w-80 flex-col border-l border-border bg-card shadow-xl">
       {/* Header */}
-      <header className="from-muted to-card space-y-3 bg-linear-to-t px-4 py-4">
+      <header className="space-y-3 bg-linear-to-t from-muted to-card px-4 py-4">
         <div className="flex items-start justify-between">
           <div className="min-w-0 flex-1">
-            <h2 className="text-foreground truncate text-lg font-semibold">
+            <h2 className="truncate text-lg font-semibold text-foreground">
               {device.name}
             </h2>
-            <p className="text-muted-foreground text-sm">
+            <p className="text-sm text-muted-foreground">
               {typeLabels[device.type]}
             </p>
           </div>
@@ -150,14 +150,14 @@ export default function DeviceDrawer() {
           {/* Hostname & IP */}
           {(device.hostname || device.metadata.ip) && (
             <section>
-              <h3 className="text-muted-foreground mb-2 text-xs font-semibold tracking-wider uppercase">
+              <h3 className="mb-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
                 Réseau
               </h3>
               <div className="space-y-2">
                 {device.hostname && (
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Hostname</span>
-                    <span className="text-foreground font-mono">
+                    <span className="font-mono text-foreground">
                       {device.hostname}
                     </span>
                   </div>
@@ -165,7 +165,7 @@ export default function DeviceDrawer() {
                 {device.metadata.ip && (
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">IP</span>
-                    <span className="text-foreground font-mono">
+                    <span className="font-mono text-foreground">
                       {device.metadata.ip}
                     </span>
                   </div>
@@ -177,11 +177,11 @@ export default function DeviceDrawer() {
           {/* Last user (for PCs) */}
           {device.type === "pc" && device.metadata.lastUser && (
             <section>
-              <h3 className="text-muted-foreground mb-2 text-xs font-semibold tracking-wider uppercase">
+              <h3 className="mb-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
                 Utilisateur
               </h3>
               <div className="flex items-center gap-2 text-sm">
-                <div className="bg-secondary text-primary flex h-8 w-8 items-center justify-center rounded-full">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-primary">
                   <HugeiconsIcon
                     icon={UserIcon}
                     size={16}
@@ -190,10 +190,10 @@ export default function DeviceDrawer() {
                   />
                 </div>
                 <div>
-                  <div className="text-foreground font-medium">
+                  <div className="font-medium text-foreground">
                     {device.metadata.lastUser}
                   </div>
-                  <div className="text-muted-foreground text-xs">
+                  <div className="text-xs text-muted-foreground">
                     Dernier connecté
                   </div>
                 </div>
@@ -204,7 +204,7 @@ export default function DeviceDrawer() {
           {/* Model */}
           {device.metadata.model && (
             <section>
-              <h3 className="text-muted-foreground mb-2 text-xs font-semibold tracking-wider uppercase">
+              <h3 className="mb-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
                 Matériel
               </h3>
               <div className="text-sm">
@@ -217,7 +217,7 @@ export default function DeviceDrawer() {
           {connectedDevices.length > 0 && (
             <section>
               <div className="mb-2 flex items-center justify-between">
-                <h3 className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+                <h3 className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
                   Connexions ({connectedDevices.length})
                 </h3>
                 <Button
@@ -236,14 +236,14 @@ export default function DeviceDrawer() {
                       <button
                         key={connDevice.id}
                         onClick={() => handleSelectConnected(connDevice.id)}
-                        className="bg-muted hover:bg-accent group w-full rounded-lg px-3 py-2 text-left transition-colors"
+                        className="group w-full rounded-lg bg-muted px-3 py-2 text-left transition-colors hover:bg-accent"
                       >
                         <div className="flex items-center justify-between">
                           <div>
-                            <div className="text-foreground group-hover:text-primary text-sm font-medium">
+                            <div className="text-sm font-medium text-foreground group-hover:text-primary">
                               {connDevice.name}
                             </div>
-                            <div className="text-muted-foreground text-xs">
+                            <div className="text-xs text-muted-foreground">
                               {typeLabels[connDevice.type]}
                             </div>
                           </div>
@@ -268,7 +268,7 @@ export default function DeviceDrawer() {
           {/* Ports (for switches) */}
           {device.type === "switch" && device.metadata.ports && (
             <section>
-              <h3 className="text-muted-foreground mb-2 text-xs font-semibold tracking-wider uppercase">
+              <h3 className="mb-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
                 Ports ({device.metadata.ports.length})
               </h3>
               <div className="grid grid-cols-12 gap-1">
@@ -289,9 +289,9 @@ export default function DeviceDrawer() {
                   </div>
                 ))}
               </div>
-              <div className="text-muted-foreground mt-2 flex gap-3 text-xs">
+              <div className="mt-2 flex gap-3 text-xs text-muted-foreground">
                 <span className="flex items-center gap-1">
-                  <span className="bg-up h-2 w-2 rounded-sm" />
+                  <span className="h-2 w-2 rounded-sm bg-up" />
                   {
                     device.metadata.ports.filter((p) => p.status === "up")
                       .length
@@ -299,7 +299,7 @@ export default function DeviceDrawer() {
                   actifs
                 </span>
                 <span className="flex items-center gap-1">
-                  <span className="bg-down h-2 w-2 rounded-sm" />
+                  <span className="h-2 w-2 rounded-sm bg-down" />
                   {
                     device.metadata.ports.filter((p) => p.status === "down")
                       .length
@@ -312,19 +312,19 @@ export default function DeviceDrawer() {
 
           {/* Position */}
           <section>
-            <h3 className="text-muted-foreground mb-2 text-xs font-semibold tracking-wider uppercase">
+            <h3 className="mb-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
               Position
             </h3>
             <div className="flex gap-4 text-sm">
               <div>
                 <span className="text-muted-foreground">X:</span>{" "}
-                <span className="text-foreground font-mono">
+                <span className="font-mono text-foreground">
                   {device.position.x}
                 </span>
               </div>
               <div>
                 <span className="text-muted-foreground">Y:</span>{" "}
-                <span className="text-foreground font-mono">
+                <span className="font-mono text-foreground">
                   {device.position.y}
                 </span>
               </div>
@@ -335,7 +335,7 @@ export default function DeviceDrawer() {
 
       {/* Footer actions */}
       {isEditMode && (
-        <footer className="border-border bg-muted space-y-2 border-t p-4">
+        <footer className="space-y-2 border-t border-border bg-muted p-4">
           <Button
             variant="destructive"
             onClick={() => {

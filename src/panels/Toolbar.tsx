@@ -7,8 +7,8 @@ import {
   PlugSocketIcon,
   ServerStack03Icon,
 } from "@hugeicons/core-free-icons";
-import { Check } from "lucide-react";
-import type { Device, DeviceType } from "@/types/map";
+import { Check, Minus, Square } from "lucide-react";
+import type { Device, DeviceType, DrawTool } from "@/types/map";
 import type { AvailableDevice } from "@/mock/availableDevices";
 import { useMapStore } from "@/store/useMapStore";
 import { Button } from "@/components/ui/button";
@@ -26,9 +26,16 @@ import {
 } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
 import { availableDevicesCatalog } from "@/mock/availableDevices";
+import { GRID_SIZE, WALL_COLOR_ORDER, WALL_COLOR_TONES } from "@/lib/walls";
 
 interface ToolbarButton {
   type: DeviceType;
+  label: string;
+  icon: React.ReactNode;
+}
+
+interface DrawToolButton {
+  tool: Extract<DrawTool, "wall" | "room">;
   label: string;
   icon: React.ReactNode;
 }
@@ -84,18 +91,75 @@ const toolbarButtons: Array<ToolbarButton> = [
   },
 ];
 
+const drawToolButtons: Array<DrawToolButton> = [
+  {
+    tool: "wall",
+    label: "Mur",
+    icon: <Minus className="h-5 w-5" />,
+  },
+  {
+    tool: "room",
+    label: "Salle",
+    icon: <Square className="h-4 w-4" />,
+  },
+];
+
 export default function Toolbar() {
-  const { currentFloorId, addDevice, isEditMode, checkCollision } =
-    useMapStore();
+  const {
+    currentFloorId,
+    addDevice,
+    isEditMode,
+    checkCollision,
+    activeDrawTool,
+    setActiveDrawTool,
+    selectedWallColor,
+    setSelectedWallColor,
+    selectDevice,
+  } = useMapStore();
   const reactFlow = useReactFlow();
   const [selectedType, setSelectedType] = useState<DeviceType | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [open, setOpen] = useState(false);
 
-  const handleTypeClick = useCallback((type: DeviceType) => {
-    setSelectedType((prev) => (prev === type ? null : type));
-    setSearchQuery("");
-    setOpen(true);
+  const handleTypeClick = useCallback(
+    (type: DeviceType) => {
+      const nextType = selectedType === type ? null : type;
+      setActiveDrawTool("device");
+      selectDevice(null);
+      setSelectedType(nextType);
+      setOpen(nextType !== null);
+      setSearchQuery("");
+    },
+    [selectedType, selectDevice, setActiveDrawTool],
+  );
+
+  const handleDrawToolClick = useCallback(
+    (tool: Extract<DrawTool, "wall" | "room">) => {
+      if (!currentFloorId) return;
+
+      const nextTool = activeDrawTool === tool ? "device" : tool;
+      setActiveDrawTool(nextTool);
+      selectDevice(null);
+      setSelectedType(null);
+      setOpen(false);
+      setSearchQuery("");
+    },
+    [activeDrawTool, currentFloorId, selectDevice, setActiveDrawTool],
+  );
+
+  const handleSelectWallColor = useCallback(
+    (color: typeof selectedWallColor) => {
+      setSelectedWallColor(color);
+    },
+    [setSelectedWallColor],
+  );
+
+  const handleOpenChange = useCallback((newOpen: boolean) => {
+    setOpen(newOpen);
+    if (!newOpen) {
+      setSelectedType(null);
+      setSearchQuery("");
+    }
   }, []);
 
   const handleAddDevice = useCallback(
@@ -107,9 +171,9 @@ export default function Toolbar() {
       const centerX = (-x + window.innerWidth / 2) / zoom;
       const centerY = (-y + window.innerHeight / 2) / zoom;
 
-      // Snap to grid (20px)
-      const snappedX = Math.round(centerX / 20) * 20;
-      const snappedY = Math.round(centerY / 20) * 20;
+      // Snap to grid
+      const snappedX = Math.round(centerX / GRID_SIZE) * GRID_SIZE;
+      const snappedY = Math.round(centerY / GRID_SIZE) * GRID_SIZE;
 
       const position = { x: snappedX, y: snappedY };
 
@@ -135,8 +199,8 @@ export default function Toolbar() {
 
         for (const offset of offsets) {
           const newPos = {
-            x: Math.round((snappedX + offset.x) / 20) * 20,
-            y: Math.round((snappedY + offset.y) / 20) * 20,
+            x: Math.round((snappedX + offset.x) / GRID_SIZE) * GRID_SIZE,
+            y: Math.round((snappedY + offset.y) / GRID_SIZE) * GRID_SIZE,
           };
           if (!checkCollision("", newPos, catalogDevice.size)) {
             finalPosition = newPos;
@@ -159,16 +223,18 @@ export default function Toolbar() {
       };
 
       addDevice(newDevice);
+      setActiveDrawTool("device");
       setSelectedType(null);
       setSearchQuery("");
       setOpen(false);
     },
-    [currentFloorId, addDevice, reactFlow, checkCollision],
+    [currentFloorId, addDevice, reactFlow, checkCollision, setActiveDrawTool],
   );
 
-  const availableDevices = selectedType
-    ? availableDevicesCatalog[selectedType]
-    : [];
+  const availableDevices =
+    activeDrawTool === "device" && selectedType
+      ? availableDevicesCatalog[selectedType]
+      : [];
 
   // Filter devices based on search query
   const filteredDevices = useMemo(() => {
@@ -182,53 +248,93 @@ export default function Toolbar() {
     );
   }, [availableDevices, searchQuery]);
 
-  const handleOpenChange = (newOpen: boolean) => {
-    setOpen(newOpen);
-    if (!newOpen) {
-      // Delay reset to avoid visual jump during close animation
-      setTimeout(() => {
-        setSelectedType(null);
-        setSearchQuery("");
-      }, 150);
-    }
-  };
-
   if (!isEditMode) {
     return null;
   }
 
+  const showWallColors = activeDrawTool === "wall" || activeDrawTool === "room";
+
   return (
     <div className="absolute top-4 left-1/2 z-10 -translate-x-1/2">
       <Popover
-        open={open && selectedType !== null}
+        open={open && selectedType !== null && activeDrawTool === "device"}
         onOpenChange={handleOpenChange}
       >
-        {/* Main toolbar - horizontal compact */}
-        <div className="bg-card flex items-center rounded-lg p-1 shadow-lg">
-          {toolbarButtons.map((btn) => (
-            <PopoverTrigger
-              key={btn.type}
-              render={
-                <Button
-                  variant={selectedType === btn.type ? "secondary" : "ghost"}
-                  size="sm"
-                  onClick={() => handleTypeClick(btn.type)}
-                  disabled={!currentFloorId}
-                  className={cn(
-                    "flex h-auto flex-col items-center gap-0.5 rounded-md px-3 py-1.5",
-                    selectedType === btn.type && "ring-ring ring-2",
-                  )}
-                  title={`Ajouter ${btn.label}`}
-                >
-                  <span className="[&>svg]:h-5 [&>svg]:w-5">{btn.icon}</span>
-                  <span className="text-xs font-medium">{btn.label}</span>
-                </Button>
-              }
-            />
-          ))}
+        <div className="flex items-center gap-2 rounded-lg bg-card p-1 shadow-lg">
+          <div className="flex items-center gap-1 border-r pr-2">
+            {drawToolButtons.map((btn) => (
+              <Button
+                key={btn.tool}
+                variant={activeDrawTool === btn.tool ? "secondary" : "ghost"}
+                size="sm"
+                onClick={() => handleDrawToolClick(btn.tool)}
+                disabled={!currentFloorId}
+                className={cn(
+                  "flex h-auto min-w-16 flex-col items-center gap-0.5 rounded-md px-2 py-1.5",
+                  activeDrawTool === btn.tool && "ring-2 ring-ring",
+                )}
+                title={`Tracer ${btn.label.toLowerCase()}`}
+              >
+                <span className="[&>svg]:h-5 [&>svg]:w-5">{btn.icon}</span>
+                <span className="text-xs font-medium">{btn.label}</span>
+              </Button>
+            ))}
+          </div>
+
+          {showWallColors && (
+            <div className="flex items-center gap-1 border-r pr-2">
+              {WALL_COLOR_ORDER.map((color) => {
+                const tone = WALL_COLOR_TONES[color];
+                const isActive = selectedWallColor === color;
+
+                return (
+                  <button
+                    key={color}
+                    type="button"
+                    onClick={() => handleSelectWallColor(color)}
+                    disabled={!currentFloorId}
+                    className={cn(
+                      "h-6 w-6 rounded-full border-2 ring-ring transition-all",
+                      isActive && "ring-2 ring-offset-1",
+                    )}
+                    style={{
+                      backgroundColor: tone.fill,
+                      borderColor: tone.stroke,
+                    }}
+                    title={`Couleur mur: ${tone.label}`}
+                  />
+                );
+              })}
+            </div>
+          )}
+
+          <div className="flex items-center gap-1">
+            {toolbarButtons.map((btn) => (
+              <PopoverTrigger
+                key={btn.type}
+                render={
+                  <Button
+                    variant={selectedType === btn.type ? "secondary" : "ghost"}
+                    size="sm"
+                    onClick={() => handleTypeClick(btn.type)}
+                    disabled={!currentFloorId}
+                    className={cn(
+                      "flex h-auto flex-col items-center gap-0.5 rounded-md px-3 py-1.5",
+                      selectedType === btn.type &&
+                        activeDrawTool === "device" &&
+                        "ring-2 ring-ring",
+                    )}
+                    title={`Ajouter ${btn.label}`}
+                  >
+                    <span className="[&>svg]:h-5 [&>svg]:w-5">{btn.icon}</span>
+                    <span className="text-xs font-medium">{btn.label}</span>
+                  </Button>
+                }
+              />
+            ))}
+          </div>
         </div>
 
-        {/* Device selection popover */}
         <PopoverContent
           side="bottom"
           align="center"
@@ -244,7 +350,7 @@ export default function Toolbar() {
             />
             <CommandList>
               {filteredDevices.length === 0 && (
-                <div className="text-muted-foreground py-6 text-center text-sm">
+                <div className="py-6 text-center text-sm text-muted-foreground">
                   Aucun équipement trouvé
                 </div>
               )}
@@ -260,7 +366,7 @@ export default function Toolbar() {
                       <div className="flex w-full items-center justify-between">
                         <div className="flex-1">
                           <p className="font-medium">{device.name}</p>
-                          <p className="text-muted-foreground text-xs">
+                          <p className="text-xs text-muted-foreground">
                             {device.model}
                             {device.hostname && (
                               <span className="ml-2 font-mono">

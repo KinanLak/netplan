@@ -23,7 +23,7 @@ function HomePage() {
   return (
     <ThemeProvider defaultTheme="system" storageKey="netplan-ui-theme">
       <SidebarProvider>
-        <div className="bg-background flex h-screen w-screen overflow-hidden">
+        <div className="flex h-screen w-screen overflow-hidden bg-background">
           {/* Sidebar */}
           <AppSidebar />
 
@@ -42,8 +42,8 @@ function HomePage() {
                 onClick={toggleEditMode}
                 className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium shadow-lg transition-all ${
                   isEditMode
-                    ? "bg-accent border-accent text-accent-foreground"
-                    : "bg-primary border-primary text-primary-foreground"
+                    ? "border-accent bg-accent text-accent-foreground"
+                    : "border-primary bg-primary text-primary-foreground"
                 } `}
                 title={
                   isEditMode ? "Terminer les modifications" : "Modifier le plan"

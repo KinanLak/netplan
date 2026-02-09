@@ -3,13 +3,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite dev --port 8000",
+    "dev": "vite dev",
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint",
     "format": "prettier",
     "tsc": "tsc --noEmit --pretty",
-    "check": "tsc --noEmit --pretty && eslint --fix && prettier --write ."
+    "check": "tsc --noEmit --pretty && eslint --fix && prettier --write . --log-level warn"
   },
   "dependencies": {
     "@base-ui/react": "^1.1.0",

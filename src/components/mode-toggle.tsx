@@ -13,7 +13,7 @@ export function ModeToggle() {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="ring-ring hover:bg-accent hover:text-accent-foreground flex h-8 w-8 items-center justify-center rounded-md transition-colors focus-visible:ring-2 focus-visible:outline-hidden">
+      <DropdownMenuTrigger className="flex h-8 w-8 items-center justify-center rounded-md ring-ring transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:outline-hidden">
         <HugeiconsIcon
           icon={Sun01Icon}
           className="h-4 w-4 scale-100 rotate-0 transition-all dark:scale-0 dark:-rotate-90"

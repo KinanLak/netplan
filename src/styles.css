@@ -191,7 +191,7 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground font-sans;
+    @apply bg-background font-sans text-foreground;
   }
   html {
     @apply font-sans;
@@ -212,4 +212,24 @@ button:hover {
     font-size: 0.5rem;
     line-height: 0.75rem;
   }
+}
+
+.wall-cursor-crosshair .react-flow__pane {
+  cursor: crosshair !important;
+}
+
+.wall-cursor-e .react-flow__pane {
+  cursor: e-resize !important;
+}
+
+.wall-cursor-w .react-flow__pane {
+  cursor: w-resize !important;
+}
+
+.wall-cursor-n .react-flow__pane {
+  cursor: n-resize !important;
+}
+
+.wall-cursor-s .react-flow__pane {
+  cursor: s-resize !important;
 }

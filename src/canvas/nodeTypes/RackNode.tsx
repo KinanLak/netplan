@@ -20,14 +20,14 @@ function RackNode({ data }: NodeProps<RackNodeType>) {
       isHighlighted={isHighlighted}
       width={device.size.width}
       height={device.size.height}
-      className="from-secondary to-secondary/80 bg-linear-to-b"
+      className="bg-linear-to-b from-secondary to-secondary/80"
     >
       {/* Rack frame details */}
-      <div className="border-border absolute inset-1 rounded border opacity-50" />
+      <div className="absolute inset-1 rounded border border-border opacity-50" />
 
       {/* Header with label and status */}
       <div className="absolute top-1 right-1 left-1 flex items-center justify-between px-1">
-        <span className="text-foreground truncate text-[8px] font-medium">
+        <span className="truncate text-[8px] font-medium text-foreground">
           {device.name}
         </span>
         <div
@@ -45,7 +45,7 @@ function RackNode({ data }: NodeProps<RackNodeType>) {
         {Array.from({ length: 8 }).map((_, i) => (
           <div
             key={i}
-            className="bg-muted border-border h-3 w-full rounded-sm border"
+            className="h-3 w-full rounded-sm border border-border bg-muted"
           />
         ))}
       </div>

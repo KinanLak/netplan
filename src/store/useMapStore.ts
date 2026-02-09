@@ -1,11 +1,26 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { Device, MapStore, Position, Size } from "@/types/map";
+import type {
+  Device,
+  MapStore,
+  Position,
+  Size,
+  WallSegment,
+} from "@/types/map";
 import { mockBuildings } from "@/mock/buildings";
 import { mockDevices } from "@/mock/devices";
+import {
+  areSameWallGeometry,
+  createRoomWallSegments,
+  getWallRect,
+  isPointConnectedToWalls,
+  normalizeWallSegmentPoints,
+} from "@/lib/walls";
 
-const generateId = () =>
+const generateDeviceId = () =>
   `device-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+const generateWallId = () =>
+  `wall-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
 // Helper to check if two rectangles overlap
 const rectanglesOverlap = (
@@ -22,17 +37,64 @@ const rectanglesOverlap = (
   );
 };
 
+const wallCollidesWithDevices = (
+  wall: Pick<WallSegment, "start" | "end">,
+  devices: Array<Device>,
+): boolean => {
+  const wallRect = getWallRect(wall);
+  return devices.some((device) =>
+    rectanglesOverlap(
+      { x: wallRect.x, y: wallRect.y },
+      { width: wallRect.width, height: wallRect.height },
+      device.position,
+      device.size,
+    ),
+  );
+};
+
+const segmentTouchesFloorWalls = (
+  segment: Omit<WallSegment, "id">,
+  floorWalls: Array<WallSegment>,
+): boolean => {
+  if (floorWalls.length === 0) {
+    return true;
+  }
+
+  return (
+    isPointConnectedToWalls(segment.start, floorWalls) ||
+    isPointConnectedToWalls(segment.end, floorWalls)
+  );
+};
+
+const roomTouchesFloorWalls = (
+  roomSegments: Array<Omit<WallSegment, "id">>,
+  floorWalls: Array<WallSegment>,
+): boolean => {
+  if (floorWalls.length === 0) {
+    return true;
+  }
+
+  return roomSegments.some(
+    (segment) =>
+      isPointConnectedToWalls(segment.start, floorWalls) ||
+      isPointConnectedToWalls(segment.end, floorWalls),
+  );
+};
+
 export const useMapStore = create<MapStore>()(
   persist(
     (set, get) => ({
       // Initial state
       buildings: mockBuildings,
       devices: mockDevices,
+      walls: [],
       currentBuildingId: mockBuildings[0]?.id ?? null,
       currentFloorId: mockBuildings[0]?.floors[0]?.id ?? null,
       selectedDeviceId: null,
       isEditMode: true,
       highlightedDeviceIds: [],
+      activeDrawTool: "device",
+      selectedWallColor: "concrete",
 
       // Actions
       setCurrentBuilding: (buildingId: string) => {
@@ -60,7 +122,7 @@ export const useMapStore = create<MapStore>()(
       addDevice: (deviceData: Omit<Device, "id">) => {
         const newDevice: Device = {
           ...deviceData,
-          id: generateId(),
+          id: generateDeviceId(),
         };
         set((state) => ({
           devices: [...state.devices, newDevice],
@@ -80,8 +142,8 @@ export const useMapStore = create<MapStore>()(
         );
         if (hasCollision) return;
 
-        set((state) => ({
-          devices: state.devices.map((d) =>
+        set((currentState) => ({
+          devices: currentState.devices.map((d) =>
             d.id === deviceId ? { ...d, position } : d,
           ),
         }));
@@ -98,8 +160,119 @@ export const useMapStore = create<MapStore>()(
         }));
       },
 
+      addWallSegment: (segment: Omit<WallSegment, "id">) => {
+        const normalized = normalizeWallSegmentPoints(
+          segment.start,
+          segment.end,
+        );
+        if (!normalized) {
+          return false;
+        }
+
+        const state = get();
+        const floorWalls = state.walls.filter(
+          (wall) => wall.floorId === segment.floorId,
+        );
+
+        const candidate: Omit<WallSegment, "id"> = {
+          ...segment,
+          start: normalized.start,
+          end: normalized.end,
+        };
+
+        const floorDevices = state.devices.filter(
+          (device) => device.floorId === segment.floorId,
+        );
+        if (wallCollidesWithDevices(candidate, floorDevices)) {
+          return false;
+        }
+
+        if (!segmentTouchesFloorWalls(candidate, floorWalls)) {
+          return false;
+        }
+
+        const hasDuplicate = floorWalls.some((wall) =>
+          areSameWallGeometry(wall, candidate),
+        );
+        if (hasDuplicate) {
+          return false;
+        }
+
+        set((currentState) => ({
+          walls: [
+            ...currentState.walls,
+            { ...candidate, id: generateWallId() },
+          ],
+        }));
+
+        return true;
+      },
+
+      addRoom: (room) => {
+        const roomSegments = createRoomWallSegments(
+          room.start,
+          room.end,
+          room.floorId,
+          room.color,
+        );
+        if (roomSegments.length === 0) {
+          return false;
+        }
+
+        const state = get();
+        const floorWalls = state.walls.filter(
+          (wall) => wall.floorId === room.floorId,
+        );
+        const floorDevices = state.devices.filter(
+          (device) => device.floorId === room.floorId,
+        );
+
+        const roomHitsDevice = roomSegments.some((segment) =>
+          wallCollidesWithDevices(segment, floorDevices),
+        );
+        if (roomHitsDevice) {
+          return false;
+        }
+
+        if (!roomTouchesFloorWalls(roomSegments, floorWalls)) {
+          return false;
+        }
+
+        const uniqueSegments = roomSegments.filter(
+          (segment) =>
+            !floorWalls.some((wall) => areSameWallGeometry(wall, segment)),
+        );
+
+        if (uniqueSegments.length === 0) {
+          return false;
+        }
+
+        set((currentState) => ({
+          walls: [
+            ...currentState.walls,
+            ...uniqueSegments.map((segment) => ({
+              ...segment,
+              id: generateWallId(),
+            })),
+          ],
+        }));
+
+        return true;
+      },
+
       toggleEditMode: () => {
-        set((state) => ({ isEditMode: !state.isEditMode }));
+        set((state) => ({
+          isEditMode: !state.isEditMode,
+          activeDrawTool: state.isEditMode ? "device" : state.activeDrawTool,
+        }));
+      },
+
+      setActiveDrawTool: (tool) => {
+        set({ activeDrawTool: tool });
+      },
+
+      setSelectedWallColor: (color) => {
+        set({ selectedWallColor: color });
       },
 
       setHighlightedDevices: (deviceIds: Array<string>) => {
@@ -115,19 +288,40 @@ export const useMapStore = create<MapStore>()(
           (d) => d.id !== deviceId && d.floorId === currentFloorId,
         );
 
-        // Check if the new position would collide with any other device
-        return otherDevices.some((other) =>
+        // Check collisions with devices.
+        const deviceCollision = otherDevices.some((other) =>
           rectanglesOverlap(position, size, other.position, other.size),
         );
+        if (deviceCollision) {
+          return true;
+        }
+
+        // Check collisions with walls.
+        const floorWalls = state.walls.filter(
+          (wall) => wall.floorId === currentFloorId,
+        );
+
+        return floorWalls.some((wall) => {
+          const wallRect = getWallRect(wall);
+          return rectanglesOverlap(
+            position,
+            size,
+            { x: wallRect.x, y: wallRect.y },
+            { width: wallRect.width, height: wallRect.height },
+          );
+        });
       },
     }),
     {
       name: "netplan-storage",
       partialize: (state) => ({
         devices: state.devices,
+        walls: state.walls,
         currentBuildingId: state.currentBuildingId,
         currentFloorId: state.currentFloorId,
         isEditMode: state.isEditMode,
+        activeDrawTool: state.activeDrawTool,
+        selectedWallColor: state.selectedWallColor,
       }),
     },
   ),
