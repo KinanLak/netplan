@@ -8,10 +8,13 @@ import {
   useNodesState,
   useReactFlow,
 } from "@xyflow/react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { MouseRightClick04Icon } from "@hugeicons/core-free-icons";
 import { nodeTypes } from "./nodeTypes";
 import type { Node, OnNodesChange } from "@xyflow/react";
 import type { DeviceNodeData, Position, Size, WallSegment } from "@/types/map";
 import { useMapStore } from "@/store/useMapStore";
+import { Kbd } from "@/components/ui/kbd";
 import {
   GRID_SIZE,
   WALL_COLOR_TONES,
@@ -639,23 +642,6 @@ export default function FlowCanvas() {
     [isEditMode, activeDrawTool, setActiveDrawTool, selectWall],
   );
 
-  const drawHint = useMemo(() => {
-    if (activeDrawTool === "wall") {
-      if (drawAnchor) {
-        return "Cliquez le point d'arrivée du mur.";
-      }
-      return "Cliquez sur la grille pour démarrer un mur.";
-    }
-
-    if (activeDrawTool === "room") {
-      return drawAnchor
-        ? "Cliquez le coin opposé pour créer la salle rectangulaire."
-        : "Cliquez le premier coin de la salle.";
-    }
-
-    return null;
-  }, [activeDrawTool, drawAnchor]);
-
   return (
     <div className="relative h-full w-full">
       <ReactFlow<DeviceNode>
@@ -793,12 +779,19 @@ export default function FlowCanvas() {
       </ReactFlow>
 
       {/* Build mode help */}
-      {isEditMode && activeDrawTool !== "device" && drawHint && (
-        <div className="absolute top-4 right-4 z-20 max-w-80 rounded-md border bg-card/95 px-3 py-2 text-xs shadow-md backdrop-blur">
-          <p className="text-muted-foreground">{drawHint}</p>
-          <p className="mt-1 text-muted-foreground">
-            Echap ou clic droit: quitter le mode construction.
-          </p>
+      {isEditMode && activeDrawTool !== "device" && (
+        <div className="absolute top-4 right-4 z-20 max-w-80 rounded-md border bg-card px-3 py-2 text-xs shadow-md">
+          <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
+            <Kbd>Esc</Kbd>
+            <span>ou</span>
+            <HugeiconsIcon
+              icon={MouseRightClick04Icon}
+              size={18}
+              color="currentColor"
+              strokeWidth={1.8}
+            />
+            <span>pour quitter</span>
+          </div>
           {drawMessage && (
             <p className="mt-1 text-destructive">{drawMessage}</p>
           )}
@@ -811,7 +804,8 @@ export default function FlowCanvas() {
           isEditMode ? "opacity-100" : "opacity-0"
         }`}
         style={{
-          boxShadow: "inset 0 0 50px 40px rgba(46, 126, 255, 0.3)",
+          boxShadow:
+            "inset 0 0 50px 20px rgba(46, 126, 255, 0.3)",
         }}
       />
     </div>
