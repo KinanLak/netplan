@@ -1,3 +1,4 @@
+import { scan } from "react-scan";
 import {
   HeadContent,
   Outlet,
@@ -6,6 +7,7 @@ import {
 } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import { TanStackDevtools } from "@tanstack/react-devtools";
+import { useEffect } from "react";
 import type { ReactNode } from "react";
 import appCss from "@/styles.css?url";
 
@@ -33,6 +35,12 @@ function RootComponent() {
 }
 
 function RootDocument({ children }: { children: ReactNode }) {
+  useEffect(() => {
+    // Make sure to run this only after hydration
+    scan({
+      enabled: true,
+    });
+  }, []);
   return (
     <html lang="fr">
       <head>
