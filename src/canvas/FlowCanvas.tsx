@@ -22,7 +22,7 @@ import {
   getWallRect,
   isPointConnectedToWalls,
   isPointOnWall,
-  snapPositionToGrid,
+  snapPositionToWallGrid,
 } from "@/lib/walls";
 
 const SNAP_GRID: [number, number] = [GRID_SIZE, GRID_SIZE];
@@ -227,11 +227,11 @@ export default function FlowCanvas() {
 
   const getWallSnappedPanePosition = useCallback(
     (event: React.MouseEvent): Position => {
-      const flowPosition = reactFlow.screenToFlowPosition({
-        x: event.clientX,
-        y: event.clientY,
-      });
-      return snapPositionToGrid(flowPosition);
+      const flowPosition = reactFlow.screenToFlowPosition(
+        { x: event.clientX, y: event.clientY },
+        { snapToGrid: false },
+      );
+      return snapPositionToWallGrid(flowPosition);
     },
     [reactFlow],
   );
