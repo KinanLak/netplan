@@ -779,14 +779,14 @@ export default function FlowCanvas() {
       )}
 
       {/* Edit mode vignette overlay */}
-      {isEditMode && (
-        <div
-          className="pointer-events-none absolute inset-0 z-10"
-          style={{
-            boxShadow: "inset 0 0 120px 40px rgba(59, 130, 246, 0.15)",
-          }}
-        />
-      )}
+      <div
+        className={`pointer-events-none absolute inset-0 z-10 transition-opacity duration-300 ${
+          isEditMode ? "opacity-100" : "opacity-0"
+        }`}
+        style={{
+          boxShadow: "inset 0 0 50px 40px rgba(46, 126, 255, 0.3)",
+        }}
+      />
     </div>
   );
 }
