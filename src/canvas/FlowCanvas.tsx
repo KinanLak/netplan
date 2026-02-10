@@ -31,13 +31,17 @@ type DeviceNode = Node<{ data: DeviceNodeData }>;
 type DraftWallSegment = Omit<WallSegment, "id">;
 type WallRenderable = Pick<WallSegment, "start" | "end" | "color">;
 
-const getPointKey = (position: Position): string => `${position.x}:${position.y}`;
+const getPointKey = (position: Position): string =>
+  `${position.x}:${position.y}`;
 
 const collectJunctionPoints = (
   candidateSegments: Array<WallRenderable>,
   allSegments: Array<WallRenderable>,
 ): Array<{ point: Position; color: WallSegment["color"] }> => {
-  const jointMap = new Map<string, { point: Position; color: WallSegment["color"] }>();
+  const jointMap = new Map<
+    string,
+    { point: Position; color: WallSegment["color"] }
+  >();
 
   const candidates = candidateSegments.flatMap((segment) => [
     { point: segment.start, color: segment.color },
@@ -307,13 +311,7 @@ export default function FlowCanvas() {
     }
 
     return dy >= 0 ? "wall-cursor-s" : "wall-cursor-n";
-  }, [
-    isEditMode,
-    activeDrawTool,
-    drawAnchor,
-    pointerPreview,
-    isSnapHovering,
-  ]);
+  }, [isEditMode, activeDrawTool, drawAnchor, pointerPreview, isSnapHovering]);
 
   // Handle node changes (drag, select, etc.)
   const handleNodesChange: OnNodesChange<DeviceNode> = useCallback(
