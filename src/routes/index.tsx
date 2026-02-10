@@ -11,22 +11,23 @@ import WallDrawer from "@/panels/WallDrawer";
 import { useMapStore } from "@/store/useMapStore";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { ThemeProvider, useTheme } from "@/components/theme-provider";
-import { ShortcutsProvider, useShortcut } from "@/hooks/use-shortcuts";
+import { HotkeysProvider } from "@/components/hotkeys-provider";
+import { useShortcut } from "@/hooks/use-shortcuts";
 import { ShortcutsDialog } from "@/components/shortcuts-dialog";
 import { ShortcutHintAbsolute } from "@/components/ui/shortcut-hint";
 
 export const Route = createFileRoute("/")({
-  ssr: false,
+  ssr: true,
   component: HomePage,
 });
 
 function HomePage() {
   return (
     <ThemeProvider defaultTheme="system" storageKey="netplan-ui-theme">
-      <ShortcutsProvider>
+      <HotkeysProvider>
         <HomePageContent />
         <ShortcutsDialog />
-      </ShortcutsProvider>
+      </HotkeysProvider>
     </ThemeProvider>
   );
 }

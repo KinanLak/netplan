@@ -1,87 +1,136 @@
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useState,
-} from "react";
-import type { ReactNode } from "react";
-import type { ShortcutAction } from "@/lib/shortcuts";
-import { matchesAction } from "@/lib/shortcuts";
+import { useCallback, useEffect, useState } from "react";
+import { useHotkeys, useHotkeysContext } from "react-hotkeys-hook";
+import type { Options } from "react-hotkeys-hook";
+import type { ShortcutAction, ShortcutScope } from "@/lib/shortcuts";
+import { getHotkey, getScope } from "@/lib/shortcuts";
 
-type ShortcutHandler = () => void;
+export { useHotkeysContext };
 
-type ShortcutsContextValue = {
-  /** Whether the Option key is being held down */
-  isOptionHeld: boolean;
-  /** Register a shortcut handler */
-  registerShortcut: (action: ShortcutAction, handler: ShortcutHandler) => void;
-  /** Unregister a shortcut handler */
-  unregisterShortcut: (action: ShortcutAction) => void;
+type UseShortcutOptions = {
+  /** Override the enabled state */
+  enabled?: boolean;
+  /** Enable on form tags (input, textarea, select) */
+  enableOnFormTags?: boolean;
 };
 
-const ShortcutsContext = createContext<ShortcutsContextValue | null>(null);
+/**
+ * Hook to register a keyboard shortcut by action name
+ * Automatically uses the hotkey and scope from the shortcuts config
+ */
+export function useShortcut(
+  action: ShortcutAction,
+  handler: () => void,
+  options: UseShortcutOptions = {},
+) {
+  const { enabled = true, enableOnFormTags = false } = options;
+  const hotkey = getHotkey(action);
+  const scope = getScope(action);
 
-type ShortcutsProviderProps = {
-  children: ReactNode;
-};
+  // Convert array to comma-separated string if needed
+  const hotkeyString = Array.isArray(hotkey) ? hotkey.join(", ") : hotkey;
 
-export function ShortcutsProvider({ children }: ShortcutsProviderProps) {
-  const [isOptionHeld, setIsOptionHeld] = useState(false);
-  const [handlers] = useState(() => new Map<ShortcutAction, ShortcutHandler>());
+  const hotkeyOptions: Options = {
+    scopes: [scope],
+    enabled,
+    preventDefault: true,
+    enableOnFormTags: enableOnFormTags ? ["INPUT", "TEXTAREA", "SELECT"] : false,
+  };
 
-  const registerShortcut = useCallback(
-    (action: ShortcutAction, handler: ShortcutHandler) => {
-      handlers.set(action, handler);
-    },
-    [handlers],
-  );
+  useHotkeys(hotkeyString, handler, hotkeyOptions, [handler, enabled]);
+}
 
-  const unregisterShortcut = useCallback(
-    (action: ShortcutAction) => {
-      handlers.delete(action);
-    },
-    [handlers],
-  );
+/**
+ * Hook to directly use a hotkey string (for custom cases)
+ */
+export function useHotkeyDirect(
+  hotkey: string | Array<string>,
+  handler: () => void,
+  options: {
+    scope?: ShortcutScope;
+    enabled?: boolean;
+    enableOnFormTags?: boolean;
+  } = {},
+) {
+  const {
+    scope = "global",
+    enabled = true,
+    enableOnFormTags = false,
+  } = options;
+
+  const hotkeyString = Array.isArray(hotkey) ? hotkey.join(", ") : hotkey;
+
+  const hotkeyOptions: Options = {
+    scopes: [scope],
+    enabled,
+    preventDefault: true,
+    enableOnFormTags: enableOnFormTags ? ["INPUT", "TEXTAREA", "SELECT"] : false,
+  };
+
+  useHotkeys(hotkeyString, handler, hotkeyOptions, [handler, enabled]);
+}
+
+/**
+ * Hook to enable/disable the drawer scope
+ * Call this in drawer components to activate drawer-specific shortcuts
+ */
+export function useDrawerScope(isOpen: boolean) {
+  const { enableScope, disableScope } = useHotkeysContext();
 
   useEffect(() => {
+    if (isOpen) {
+      enableScope("drawer");
+      disableScope("canvas");
+    } else {
+      disableScope("drawer");
+      enableScope("canvas");
+    }
+
+    return () => {
+      disableScope("drawer");
+      enableScope("canvas");
+    };
+  }, [isOpen, enableScope, disableScope]);
+}
+
+/**
+ * Hook to track if option (Alt) key is held
+ * Used for showing shortcuts overlay (Linear-style)
+ */
+export function useOptionHeld(delay = 200) {
+  const [isHeld, setIsHeld] = useState(false);
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
     const handleKeyDown = (event: KeyboardEvent) => {
-      // Track Option key state
-      if (event.key === "Alt") {
-        setIsOptionHeld(true);
-        return;
-      }
-
-      // Ignore if user is typing in an input
-      const target = event.target as HTMLElement;
-      if (
-        target.tagName === "INPUT" ||
-        target.tagName === "TEXTAREA" ||
-        target.isContentEditable
-      ) {
-        return;
-      }
-
-      // Check registered handlers
-      // Pass ignoreAlt=true so shortcuts work even when Option is held (for showing hints)
-      for (const [action, handler] of handlers.entries()) {
-        if (matchesAction(event, action, true)) {
-          event.preventDefault();
-          handler();
-          return;
-        }
+      if (event.key === "Alt" && !event.repeat) {
+        setIsHeld(true);
+        // Delay before showing overlay
+        timeoutId = setTimeout(() => {
+          setIsVisible(true);
+        }, delay);
       }
     };
 
     const handleKeyUp = (event: KeyboardEvent) => {
       if (event.key === "Alt") {
-        setIsOptionHeld(false);
+        setIsHeld(false);
+        setIsVisible(false);
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          timeoutId = null;
+        }
       }
     };
 
-    // Handle window blur (user switched away while holding Option)
     const handleBlur = () => {
-      setIsOptionHeld(false);
+      setIsHeld(false);
+      setIsVisible(false);
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
     };
 
     window.addEventListener("keydown", handleKeyDown);
@@ -92,48 +141,36 @@ export function ShortcutsProvider({ children }: ShortcutsProviderProps) {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
       window.removeEventListener("blur", handleBlur);
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
     };
-  }, [handlers]);
+  }, [delay]);
 
-  return (
-    <ShortcutsContext.Provider
-      value={{ isOptionHeld, registerShortcut, unregisterShortcut }}
-    >
-      {children}
-    </ShortcutsContext.Provider>
+  return { isHeld, isVisible };
+}
+
+/**
+ * Hook to manage scopes imperatively
+ */
+export function useScopes() {
+  const { enableScope, disableScope, activeScopes } = useHotkeysContext();
+
+  const setScope = useCallback(
+    (scope: ShortcutScope, active: boolean) => {
+      if (active) {
+        enableScope(scope);
+      } else {
+        disableScope(scope);
+      }
+    },
+    [enableScope, disableScope],
   );
-}
 
-export function useShortcuts() {
-  const context = useContext(ShortcutsContext);
-  if (!context) {
-    throw new Error("useShortcuts must be used within a ShortcutsProvider");
-  }
-  return context;
-}
+  const isActive = useCallback(
+    (scope: ShortcutScope) => activeScopes.includes(scope),
+    [activeScopes],
+  );
 
-/**
- * Hook to register a shortcut handler for the component's lifecycle
- */
-export function useShortcut(
-  action: ShortcutAction,
-  handler: ShortcutHandler,
-  enabled = true,
-) {
-  const { registerShortcut, unregisterShortcut } = useShortcuts();
-
-  useEffect(() => {
-    if (!enabled) return;
-
-    registerShortcut(action, handler);
-    return () => unregisterShortcut(action);
-  }, [action, handler, enabled, registerShortcut, unregisterShortcut]);
-}
-
-/**
- * Hook to check if option key is held (for showing shortcuts)
- */
-export function useOptionHeld() {
-  const { isOptionHeld } = useShortcuts();
-  return isOptionHeld;
+  return { setScope, isActive, activeScopes };
 }

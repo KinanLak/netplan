@@ -3,7 +3,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { HelpCircleIcon } from "@hugeicons/core-free-icons";
 import type { ShortcutAction } from "@/lib/shortcuts";
 import { useShortcut } from "@/hooks/use-shortcuts";
-import { formatShortcutKey, shortcuts } from "@/lib/shortcuts";
+import { formatHotkey, shortcuts } from "@/lib/shortcuts";
 import { Kbd, KbdGroup } from "@/components/ui/kbd";
 import { Button } from "@/components/ui/button";
 import {
@@ -99,8 +99,11 @@ export function ShortcutsDialog() {
                 <ul className="space-y-2">
                   {group.actions.map((action) => {
                     const config = shortcuts[action];
-                    const firstKey = config.keys[0];
-                    const keyParts = formatShortcutKey(firstKey);
+                    // Get first hotkey (if array, take first element)
+                    const firstHotkey = Array.isArray(config.hotkey)
+                      ? config.hotkey[0]
+                      : config.hotkey;
+                    const keyParts = formatHotkey(firstHotkey);
 
                     return (
                       <li

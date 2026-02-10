@@ -1,20 +1,14 @@
 /**
  * Keyboard shortcuts configuration for NetPlan
  *
- * Each action can have multiple shortcuts.
- * Key names follow the standard KeyboardEvent.key values:
- * - Modifiers: Meta (Cmd on Mac), Alt (Option on Mac), Shift, Control
- * - Letters: a-z (lowercase)
- * - Special: Escape, Backspace, Delete, Enter, ArrowUp, ArrowDown, etc.
+ * Uses react-hotkeys-hook string format:
+ * - Modifiers: meta (Cmd on Mac), alt, shift, ctrl
+ * - Use 'mod' for cross-platform (Cmd on Mac, Ctrl on Windows)
+ * - Combine with '+': 'meta+z', 'ctrl+shift+s'
+ * - Multiple keys: 'delete, backspace' or ['delete', 'backspace']
  */
 
-export type ShortcutKey = {
-  key: string;
-  meta?: boolean;
-  alt?: boolean;
-  shift?: boolean;
-  ctrl?: boolean;
-};
+export type ShortcutScope = "global" | "canvas" | "drawer";
 
 export type ShortcutAction =
   // Global
@@ -57,55 +51,56 @@ export type ShortcutAction =
   | "highlight-connections";
 
 export type ShortcutConfig = {
-  keys: Array<ShortcutKey>;
+  /** Hotkey string(s) in react-hotkeys-hook format */
+  hotkey: string | Array<string>;
+  /** Display label */
   label: string;
+  /** Longer description */
   description?: string;
-  scope?: "global" | "canvas" | "drawer";
+  /** Scope for activation */
+  scope: ShortcutScope;
 };
 
 export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
   // Global actions
   "toggle-edit-mode": {
-    keys: [{ key: "e" }],
+    hotkey: "e",
     label: "Mode édition",
     description: "Activer/désactiver le mode édition",
     scope: "global",
   },
   escape: {
-    keys: [{ key: "Escape" }],
+    hotkey: "escape",
     label: "Annuler",
     description: "Désélectionner ou annuler l'action en cours",
     scope: "global",
   },
   delete: {
-    keys: [{ key: "Delete" }, { key: "Backspace" }],
+    hotkey: ["delete", "backspace"],
     label: "Supprimer",
     description: "Supprimer l'élément sélectionné",
     scope: "global",
   },
   undo: {
-    keys: [{ key: "z", meta: true }],
+    hotkey: "meta+z",
     label: "Annuler",
     description: "Annuler la dernière action",
     scope: "global",
   },
   redo: {
-    keys: [
-      { key: "z", meta: true, shift: true },
-      { key: "y", meta: true },
-    ],
+    hotkey: ["meta+shift+z", "meta+y"],
     label: "Rétablir",
     description: "Rétablir l'action annulée",
     scope: "global",
   },
   "show-shortcuts": {
-    keys: [{ key: "?", shift: true }],
+    hotkey: "shift+?",
     label: "Raccourcis",
     description: "Afficher la liste des raccourcis clavier",
     scope: "global",
   },
   "cycle-theme": {
-    keys: [{ key: "t", shift: true }],
+    hotkey: "shift+t",
     label: "Thème",
     description: "Changer le thème (clair/sombre/système)",
     scope: "global",
@@ -113,150 +108,124 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
 
   // Navigation
   "zoom-in": {
-    keys: [{ key: "+" }, { key: "=" }],
+    hotkey: ["=", "+"],
     label: "Zoom +",
     description: "Zoomer",
     scope: "canvas",
   },
   "zoom-out": {
-    keys: [{ key: "-" }],
+    hotkey: "-",
     label: "Zoom -",
     description: "Dézoomer",
     scope: "canvas",
   },
   "zoom-reset": {
-    keys: [{ key: "0" }],
+    hotkey: "0",
     label: "Réinitialiser zoom",
     description: "Remettre le zoom à 100%",
     scope: "canvas",
   },
   "pan-up": {
-    keys: [{ key: "ArrowUp" }],
+    hotkey: "up",
     label: "Haut",
     description: "Déplacer le canvas vers le haut",
     scope: "canvas",
   },
   "pan-down": {
-    keys: [{ key: "ArrowDown" }],
+    hotkey: "down",
     label: "Bas",
     description: "Déplacer le canvas vers le bas",
     scope: "canvas",
   },
   "pan-left": {
-    keys: [{ key: "ArrowLeft" }],
+    hotkey: "left",
     label: "Gauche",
     description: "Déplacer le canvas vers la gauche",
     scope: "canvas",
   },
   "pan-right": {
-    keys: [{ key: "ArrowRight" }],
+    hotkey: "right",
     label: "Droite",
     description: "Déplacer le canvas vers la droite",
     scope: "canvas",
   },
   "floor-up": {
-    keys: [{ key: "ArrowUp", ctrl: true }],
+    hotkey: "ctrl+up",
     label: "Étage supérieur",
     description: "Aller à l'étage supérieur",
     scope: "global",
   },
   "floor-down": {
-    keys: [{ key: "ArrowDown", ctrl: true }],
+    hotkey: "ctrl+down",
     label: "Étage inférieur",
     description: "Aller à l'étage inférieur",
     scope: "global",
   },
+  // Floor shortcuts - supporting both QWERTY and AZERTY layouts
   "floor-1": {
-    keys: [
-      { key: "1", ctrl: true },
-      { key: "&", ctrl: true },
-    ],
+    hotkey: ["ctrl+1", "ctrl+&"],
     label: "Étage 1",
     description: "Aller à l'étage 1",
     scope: "global",
   },
   "floor-2": {
-    keys: [
-      { key: "2", ctrl: true },
-      { key: "é", ctrl: true },
-    ],
+    hotkey: ["ctrl+2", "ctrl+é"],
     label: "Étage 2",
     description: "Aller à l'étage 2",
     scope: "global",
   },
   "floor-3": {
-    keys: [
-      { key: "3", ctrl: true },
-      { key: '"', ctrl: true },
-    ],
+    hotkey: ["ctrl+3", "ctrl+\""],
     label: "Étage 3",
     description: "Aller à l'étage 3",
     scope: "global",
   },
   "floor-4": {
-    keys: [
-      { key: "4", ctrl: true },
-      { key: "'", ctrl: true },
-    ],
+    hotkey: ["ctrl+4", "ctrl+'"],
     label: "Étage 4",
     description: "Aller à l'étage 4",
     scope: "global",
   },
   "floor-5": {
-    keys: [
-      { key: "5", ctrl: true },
-      { key: "(", ctrl: true },
-    ],
+    hotkey: ["ctrl+5", "ctrl+("],
     label: "Étage 5",
     description: "Aller à l'étage 5",
     scope: "global",
   },
   "floor-6": {
-    keys: [
-      { key: "6", ctrl: true },
-      { key: "-", ctrl: true },
-    ],
+    hotkey: ["ctrl+6", "ctrl+-"],
     label: "Étage 6",
     description: "Aller à l'étage 6",
     scope: "global",
   },
   "floor-7": {
-    keys: [
-      { key: "7", ctrl: true },
-      { key: "è", ctrl: true },
-    ],
+    hotkey: ["ctrl+7", "ctrl+è"],
     label: "Étage 7",
     description: "Aller à l'étage 7",
     scope: "global",
   },
   "floor-8": {
-    keys: [
-      { key: "8", ctrl: true },
-      { key: "_", ctrl: true },
-    ],
+    hotkey: ["ctrl+8", "ctrl+_"],
     label: "Étage 8",
     description: "Aller à l'étage 8",
     scope: "global",
   },
   "floor-9": {
-    keys: [
-      { key: "9", ctrl: true },
-      { key: "ç", ctrl: true },
-    ],
+    hotkey: ["ctrl+9", "ctrl+ç"],
     label: "Étage 9",
     description: "Aller à l'étage 9",
     scope: "global",
   },
 
-  // Tools - Walls & Rooms
+  // Tools - Walls & Rooms (supporting letter + number + AZERTY)
   "tool-wall": {
-    keys: [{ key: "w" }, { key: "1" }, { key: "&" }],
+    hotkey: ["w", "1", "&"],
     label: "Mur",
     description: "Outil de dessin de mur",
     scope: "canvas",
   },
   "tool-room": {
-    keys: [{ key: "l" }, { key: "2" }, { key: "é" }],
+    hotkey: ["l", "2", "é"],
     label: "Salle",
     description: "Outil de dessin de salle",
     scope: "canvas",
@@ -264,25 +233,25 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
 
   // Tools - Devices
   "tool-rack": {
-    keys: [{ key: "r" }, { key: "3" }, { key: '"' }],
+    hotkey: ["r", "3", "\""],
     label: "Rack",
     description: "Ajouter un rack serveur",
     scope: "canvas",
   },
   "tool-switch": {
-    keys: [{ key: "s" }, { key: "4" }, { key: "'" }],
+    hotkey: ["s", "4", "'"],
     label: "Switch",
     description: "Ajouter un switch réseau",
     scope: "canvas",
   },
   "tool-pc": {
-    keys: [{ key: "p" }, { key: "5" }, { key: "(" }],
+    hotkey: ["p", "5", "("],
     label: "PC",
     description: "Ajouter un poste de travail",
     scope: "canvas",
   },
   "tool-wall-port": {
-    keys: [{ key: "o" }, { key: "6" }, { key: "-" }],
+    hotkey: ["o", "6", "-"],
     label: "Prise",
     description: "Ajouter une prise murale",
     scope: "canvas",
@@ -290,19 +259,19 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
 
   // Device drawer
   "close-drawer": {
-    keys: [{ key: "Escape" }],
+    hotkey: "escape",
     label: "Fermer",
     description: "Fermer le panneau de détails",
     scope: "drawer",
   },
   "delete-device": {
-    keys: [{ key: "Delete" }, { key: "Backspace" }],
+    hotkey: ["delete", "backspace"],
     label: "Supprimer",
     description: "Supprimer l'appareil sélectionné",
     scope: "drawer",
   },
   "highlight-connections": {
-    keys: [{ key: "h" }],
+    hotkey: "h",
     label: "Connexions",
     description: "Afficher/masquer les connexions",
     scope: "drawer",
@@ -310,78 +279,86 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
 };
 
 /**
- * Check if a keyboard event matches a shortcut key
- * If ignoreAlt is true, the Alt key state is not checked (allows shortcuts to work while Option is held)
+ * Format a hotkey string for display (macOS style)
+ * Converts 'meta+shift+z' to ['⌘', '⇧', 'Z']
  */
-export function matchesShortcut(
-  event: KeyboardEvent,
-  shortcutKey: ShortcutKey,
-  ignoreAlt = false,
-): boolean {
-  const keyMatches =
-    event.key.toLowerCase() === shortcutKey.key.toLowerCase() ||
-    event.key === shortcutKey.key;
+export function formatHotkey(hotkey: string): Array<string> {
+  const parts = hotkey.toLowerCase().split("+");
+  const result: Array<string> = [];
 
-  const metaMatches = shortcutKey.meta ? event.metaKey : !event.metaKey;
-  // Alt is only checked strictly if the shortcut requires it, otherwise we allow it
-  const altMatches = shortcutKey.alt
-    ? event.altKey
-    : ignoreAlt || !event.altKey;
-  const shiftMatches = shortcutKey.shift ? event.shiftKey : !event.shiftKey;
-  const ctrlMatches = shortcutKey.ctrl ? event.ctrlKey : !event.ctrlKey;
+  for (const part of parts) {
+    switch (part) {
+      case "meta":
+      case "mod":
+        result.push("⌘");
+        break;
+      case "ctrl":
+        result.push("⌃");
+        break;
+      case "alt":
+        result.push("⌥");
+        break;
+      case "shift":
+        result.push("⇧");
+        break;
+      case "escape":
+        result.push("esc");
+        break;
+      case "delete":
+      case "backspace":
+        result.push("⌫");
+        break;
+      case "enter":
+        result.push("↵");
+        break;
+      case "up":
+        result.push("↑");
+        break;
+      case "down":
+        result.push("↓");
+        break;
+      case "left":
+        result.push("←");
+        break;
+      case "right":
+        result.push("→");
+        break;
+      case "space":
+        result.push("␣");
+        break;
+      case "plus":
+      case "=":
+        result.push("+");
+        break;
+      default:
+        result.push(part.toUpperCase());
+    }
+  }
 
-  return keyMatches && metaMatches && altMatches && shiftMatches && ctrlMatches;
+  return result;
 }
 
 /**
- * Check if an event matches any of the shortcuts for an action
- * If ignoreAlt is true, shortcuts without Alt modifier can still trigger when Alt is held
+ * Get formatted display for the first hotkey of an action
  */
-export function matchesAction(
-  event: KeyboardEvent,
-  action: ShortcutAction,
-  ignoreAlt = false,
-): boolean {
+export function getShortcutDisplay(action: ShortcutAction): Array<Array<string>> {
   const config = shortcuts[action];
-  return config.keys.some((key) => matchesShortcut(event, key, ignoreAlt));
+  const hotkeys = Array.isArray(config.hotkey)
+    ? config.hotkey
+    : [config.hotkey];
+  return hotkeys.map(formatHotkey);
 }
 
 /**
- * Format a shortcut key for display (macOS style)
+ * Get the hotkey string(s) for an action
  */
-export function formatShortcutKey(shortcutKey: ShortcutKey): Array<string> {
-  const parts: Array<string> = [];
-
-  if (shortcutKey.ctrl) parts.push("⌃");
-  if (shortcutKey.alt) parts.push("⌥");
-  if (shortcutKey.shift) parts.push("⇧");
-  if (shortcutKey.meta) parts.push("⌘");
-
-  // Format the main key
-  const keyMap: Record<string, string> = {
-    Escape: "esc",
-    Delete: "⌫",
-    Backspace: "⌫",
-    Enter: "↵",
-    ArrowUp: "↑",
-    ArrowDown: "↓",
-    ArrowLeft: "←",
-    ArrowRight: "→",
-    " ": "␣",
-  };
-
-  const displayKey = keyMap[shortcutKey.key] ?? shortcutKey.key.toUpperCase();
-  parts.push(displayKey);
-
-  return parts;
+export function getHotkey(action: ShortcutAction): string | Array<string> {
+  return shortcuts[action].hotkey;
 }
 
 /**
- * Get the first shortcut keys for an action (for display)
+ * Get the scope for an action
  */
-export function getShortcutDisplay(
-  action: ShortcutAction,
-): Array<Array<string>> {
-  const config = shortcuts[action];
-  return config.keys.map(formatShortcutKey);
+export function getScope(action: ShortcutAction): ShortcutScope {
+  return shortcuts[action].scope;
 }

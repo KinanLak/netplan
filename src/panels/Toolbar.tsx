@@ -185,32 +185,32 @@ export default function Toolbar() {
   useShortcut(
     "tool-wall",
     useCallback(() => handleDrawToolClick("wall"), [handleDrawToolClick]),
-    isEditMode && !!currentFloorId,
+    { enabled: isEditMode && !!currentFloorId },
   );
   useShortcut(
     "tool-room",
     useCallback(() => handleDrawToolClick("room"), [handleDrawToolClick]),
-    isEditMode && !!currentFloorId,
+    { enabled: isEditMode && !!currentFloorId },
   );
   useShortcut(
     "tool-rack",
     useCallback(() => handleTypeClick("rack"), [handleTypeClick]),
-    isEditMode && !!currentFloorId,
+    { enabled: isEditMode && !!currentFloorId },
   );
   useShortcut(
     "tool-switch",
     useCallback(() => handleTypeClick("switch"), [handleTypeClick]),
-    isEditMode && !!currentFloorId,
+    { enabled: isEditMode && !!currentFloorId },
   );
   useShortcut(
     "tool-pc",
     useCallback(() => handleTypeClick("pc"), [handleTypeClick]),
-    isEditMode && !!currentFloorId,
+    { enabled: isEditMode && !!currentFloorId },
   );
   useShortcut(
     "tool-wall-port",
     useCallback(() => handleTypeClick("wall-port"), [handleTypeClick]),
-    isEditMode && !!currentFloorId,
+    { enabled: isEditMode && !!currentFloorId },
   );
 
   const handleAddDevice = useCallback(

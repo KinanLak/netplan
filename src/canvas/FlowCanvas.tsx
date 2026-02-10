@@ -14,7 +14,7 @@ import { nodeTypes } from "./nodeTypes";
 import type { Node, OnNodesChange } from "@xyflow/react";
 import type { DeviceNodeData, Position, Size, WallSegment } from "@/types/map";
 import { useMapStore } from "@/store/useMapStore";
-import { useShortcut } from "@/hooks/use-shortcuts";
+import { useHotkeyDirect, useShortcut } from "@/hooks/use-shortcuts";
 import { Kbd } from "@/components/ui/kbd";
 import {
   GRID_SIZE,
@@ -236,29 +236,19 @@ export default function FlowCanvas() {
     }
   }, [activeDrawTool, currentFloorId, isEditMode, selectWall]);
 
-  useEffect(() => {
-    if (!isEditMode || activeDrawTool === "device") {
-      return;
-    }
+  // Cancel draw tool with Escape key
+  const cancelDrawTool = useCallback(() => {
+    setActiveDrawTool("device");
+    setDrawAnchor(null);
+    setPointerPreview(null);
+    setHoverSnapPoint(null);
+    setDrawMessage(null);
+  }, [setActiveDrawTool]);
 
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") {
-        return;
-      }
-
-      event.preventDefault();
-      setActiveDrawTool("device");
-      setDrawAnchor(null);
-      setPointerPreview(null);
-      setHoverSnapPoint(null);
-      setDrawMessage(null);
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [isEditMode, activeDrawTool, setActiveDrawTool]);
+  useHotkeyDirect("escape", cancelDrawTool, {
+    scope: "canvas",
+    enabled: isEditMode && activeDrawTool !== "device",
+  });
 
   const getWallSnappedPanePosition = useCallback(
     (event: React.MouseEvent): Position => {
@@ -529,7 +519,11 @@ export default function FlowCanvas() {
     // Enable when:
     // 1. There's a hovered device and no drawer open, OR
     // 2. There are highlighted devices and no drawer open (to de-highlight)
-    (!!hoveredDeviceId || highlightedDeviceIds.length > 0) && !selectedDeviceId,
+    {
+      enabled:
+        (!!hoveredDeviceId || highlightedDeviceIds.length > 0) &&
+        !selectedDeviceId,
+    },
   );
 
   const handlePaneMouseMove = useCallback(

@@ -27,7 +27,7 @@ export function ModeToggle() {
         <span
           className={cn(
             "transition-all duration-200 flex",
-            isOptionHeld ? "opacity-100" : "max-w-0 overflow-hidden opacity-0",
+            isOptionHeld.isHeld ? "opacity-100" : "max-w-0 overflow-hidden opacity-0",
           )}
         >
           <ShortcutHint size="sm" action="cycle-theme" alwaysShow  />

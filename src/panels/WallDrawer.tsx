@@ -1,7 +1,9 @@
+import { useCallback } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Cancel01Icon, WasteIcon } from "@hugeicons/core-free-icons";
 import { WALL_COLOR_TONES } from "@/lib/walls";
 import { useMapStore } from "@/store/useMapStore";
+import { useShortcut, useDrawerScope } from "@/hooks/use-shortcuts";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 
@@ -10,6 +12,17 @@ export default function WallDrawer() {
     useMapStore();
 
   const wall = walls.find((segment) => segment.id === selectedWallId);
+
+  const handleCloseDrawer = useCallback(() => {
+    selectWall(null);
+  }, [selectWall]);
+
+  // Manage drawer scope - enables drawer shortcuts when open
+  useDrawerScope(!!wall);
+
+  // Register keyboard shortcuts
+  useShortcut("close-drawer", handleCloseDrawer);
+
   if (!wall) {
     return null;
   }
@@ -34,7 +47,7 @@ export default function WallDrawer() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => selectWall(null)}
+            onClick={handleCloseDrawer}
             className="flex h-8 items-center gap-1.5 px-2"
           >
             <Kbd>esc</Kbd>

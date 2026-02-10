@@ -4,7 +4,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { Cancel01Icon, UserIcon, WasteIcon } from "@hugeicons/core-free-icons";
 import type { DeviceStatus } from "@/types/map";
 import { useMapStore } from "@/store/useMapStore";
-import { useShortcut } from "@/hooks/use-shortcuts";
+import { useShortcut, useDrawerScope } from "@/hooks/use-shortcuts";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -100,14 +100,15 @@ export default function DeviceDrawer() {
     selectDevice(null);
   }, [device, deleteDevice, selectDevice]);
 
+  // Manage drawer scope - enables drawer shortcuts when open
+  useDrawerScope(!!device);
+
   // Register keyboard shortcuts
-  useShortcut("close-drawer", handleCloseDrawer, !!device);
-  useShortcut("delete-device", handleDeleteDevice, !!device && isEditMode);
-  useShortcut(
-    "highlight-connections",
-    handleHighlightConnections,
-    !!device && (device.metadata.connectedDeviceIds?.length ?? 0) > 0,
-  );
+  useShortcut("close-drawer", handleCloseDrawer);
+  useShortcut("delete-device", handleDeleteDevice, { enabled: isEditMode });
+  useShortcut("highlight-connections", handleHighlightConnections, {
+    enabled: (device?.metadata.connectedDeviceIds?.length ?? 0) > 0,
+  });
 
   if (!device) {
     return null;

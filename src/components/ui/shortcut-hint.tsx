@@ -36,10 +36,10 @@ export function ShortcutHint({
   singleKey = true,
   size = "default",
 }: ShortcutHintProps) {
-  const isOptionHeld = useOptionHeld();
+  const { isVisible: isOptionVisible } = useOptionHeld();
   const shortcutKeys = getShortcutDisplay(action);
 
-  const isVisible = alwaysShow || isOptionHeld;
+  const isVisible = alwaysShow || isOptionVisible;
 
   if (!isVisible || shortcutKeys.length === 0) {
     return null;
@@ -93,9 +93,9 @@ export function ShortcutHintKeys({
   size = "default",
   kbdClassName,
 }: ShortcutHintKeysProps) {
-  const isOptionHeld = useOptionHeld();
+  const { isVisible: isOptionVisible } = useOptionHeld();
 
-  const isVisible = alwaysShow || isOptionHeld;
+  const isVisible = alwaysShow || isOptionVisible;
 
   if (!isVisible || keys.length === 0) {
     return null;
@@ -138,7 +138,7 @@ export function ShortcutHintInline({
   className,
   size = "default",
 }: ShortcutHintInlineProps) {
-  const isOptionHeld = useOptionHeld();
+  const { isVisible: isOptionVisible } = useOptionHeld();
   const shortcutKeys = getShortcutDisplay(action);
 
   if (shortcutKeys.length === 0) {
@@ -151,7 +151,7 @@ export function ShortcutHintInline({
     <span
       className={cn(
         "ml-auto inline-flex items-center gap-0.5 overflow-hidden transition-all duration-200 ease-out",
-        isOptionHeld ? "max-w-24 opacity-100" : "max-w-0 opacity-0",
+        isOptionVisible ? "max-w-24 opacity-100" : "max-w-0 opacity-0",
         className,
       )}
     >
@@ -192,7 +192,7 @@ export function ShortcutHintAbsolute({
   className,
   size = "default",
 }: ShortcutHintAbsoluteProps) {
-  const isOptionHeld = useOptionHeld();
+  const { isVisible: isOptionVisible } = useOptionHeld();
   const shortcutKeys = getShortcutDisplay(action);
 
   if (shortcutKeys.length === 0) {
@@ -214,7 +214,7 @@ export function ShortcutHintAbsolute({
       className={cn(
         "pointer-events-none absolute z-10 inline-flex items-center gap-0.5 transition-all duration-200 ease-out",
         positionClasses[position],
-        isOptionHeld ? "scale-100 opacity-100" : "scale-75 opacity-0",
+        isOptionVisible ? "scale-100 opacity-100" : "scale-75 opacity-0",
         className,
       )}
     >
