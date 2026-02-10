@@ -77,7 +77,11 @@ export function ModeToggle() {
           className="flex items-center justify-between"
         >
           <span className="flex items-center gap-2">
-            <HugeiconsIcon icon={Sun01Icon} className="h-4 w-4" strokeWidth={1.5} />
+            <HugeiconsIcon
+              icon={Sun01Icon}
+              className="h-4 w-4"
+              strokeWidth={1.5}
+            />
             Clair
           </span>
           {theme === "light" && <Check className="h-4 w-4" />}
@@ -87,7 +91,11 @@ export function ModeToggle() {
           className="flex items-center justify-between"
         >
           <span className="flex items-center gap-2">
-            <HugeiconsIcon icon={Moon01Icon} className="h-4 w-4" strokeWidth={1.5} />
+            <HugeiconsIcon
+              icon={Moon01Icon}
+              className="h-4 w-4"
+              strokeWidth={1.5}
+            />
             Sombre
           </span>
           {theme === "dark" && <Check className="h-4 w-4" />}
@@ -97,7 +105,11 @@ export function ModeToggle() {
           className="flex items-center justify-between"
         >
           <span className="flex items-center gap-2">
-            <HugeiconsIcon icon={ComputerPhoneSyncIcon} className="h-4 w-4" strokeWidth={1.5} />
+            <HugeiconsIcon
+              icon={ComputerPhoneSyncIcon}
+              className="h-4 w-4"
+              strokeWidth={1.5}
+            />
             Système
           </span>
           {theme === "system" && <Check className="h-4 w-4" />}

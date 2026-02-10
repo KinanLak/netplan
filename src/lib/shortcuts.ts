@@ -187,7 +187,7 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
   "floor-3": {
     keys: [
       { key: "3", ctrl: true },
-      { key: "\"", ctrl: true },
+      { key: '"', ctrl: true },
     ],
     label: "Étage 3",
     description: "Aller à l'étage 3",
@@ -250,21 +250,13 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
 
   // Tools - Walls & Rooms
   "tool-wall": {
-    keys: [
-      { key: "w" },
-      { key: "1" },
-      { key: "&" },
-    ],
+    keys: [{ key: "w" }, { key: "1" }, { key: "&" }],
     label: "Mur",
     description: "Outil de dessin de mur",
     scope: "canvas",
   },
   "tool-room": {
-    keys: [
-      { key: "l" },
-      { key: "2" },
-      { key: "é" },
-    ],
+    keys: [{ key: "l" }, { key: "2" }, { key: "é" }],
     label: "Salle",
     description: "Outil de dessin de salle",
     scope: "canvas",
@@ -272,41 +264,25 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
 
   // Tools - Devices
   "tool-rack": {
-    keys: [
-      { key: "r" },
-      { key: "3" },
-      { key: "\"" },
-    ],
+    keys: [{ key: "r" }, { key: "3" }, { key: '"' }],
     label: "Rack",
     description: "Ajouter un rack serveur",
     scope: "canvas",
   },
   "tool-switch": {
-    keys: [
-      { key: "s" },
-      { key: "4" },
-      { key: "'" },
-    ],
+    keys: [{ key: "s" }, { key: "4" }, { key: "'" }],
     label: "Switch",
     description: "Ajouter un switch réseau",
     scope: "canvas",
   },
   "tool-pc": {
-    keys: [
-      { key: "p" },
-      { key: "5" },
-      { key: "(" },
-    ],
+    keys: [{ key: "p" }, { key: "5" }, { key: "(" }],
     label: "PC",
     description: "Ajouter un poste de travail",
     scope: "canvas",
   },
   "tool-wall-port": {
-    keys: [
-      { key: "o" },
-      { key: "6" },
-      { key: "-" },
-    ],
+    keys: [{ key: "o" }, { key: "6" }, { key: "-" }],
     label: "Prise",
     description: "Ajouter une prise murale",
     scope: "canvas",

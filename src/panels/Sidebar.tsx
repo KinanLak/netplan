@@ -105,7 +105,8 @@ export default function AppSidebar() {
                       {building.floors.map((floor, floorIndex) => {
                         const isActive = floor.id === currentFloorId;
                         const shortcutNumber = floorIndex + 1;
-                        const showShortcut = isOptionHeld && shortcutNumber <= 9;
+                        const showShortcut =
+                          isOptionHeld && shortcutNumber <= 9;
 
                         return (
                           <SidebarMenuSubItem key={floor.id}>
@@ -120,7 +121,9 @@ export default function AppSidebar() {
                               <span className="flex items-center gap-2">
                                 <HugeiconsIcon
                                   icon={
-                                    isActive ? SolidLine01Icon : DashedLine01Icon
+                                    isActive
+                                      ? SolidLine01Icon
+                                      : DashedLine01Icon
                                   }
                                   size={16}
                                   strokeWidth={1}

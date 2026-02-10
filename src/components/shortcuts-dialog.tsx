@@ -21,7 +21,13 @@ type ShortcutGroup = {
 const shortcutGroups: Array<ShortcutGroup> = [
   {
     title: "Général",
-    actions: ["toggle-edit-mode", "escape", "delete", "cycle-theme", "show-shortcuts"],
+    actions: [
+      "toggle-edit-mode",
+      "escape",
+      "delete",
+      "cycle-theme",
+      "show-shortcuts",
+    ],
   },
   {
     title: "Navigation étages",
@@ -79,55 +85,56 @@ export function ShortcutsDialog() {
       )}
 
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Raccourcis clavier</DialogTitle>
-        </DialogHeader>
+        <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Raccourcis clavier</DialogTitle>
+          </DialogHeader>
 
-        <div className="grid grid-cols-2 gap-6 pt-4">
-          {shortcutGroups.map((group) => (
-            <div key={group.title}>
-              <h3 className="mb-3 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-                {group.title}
-              </h3>
-              <ul className="space-y-2">
-                {group.actions.map((action) => {
-                  const config = shortcuts[action];
-                  const firstKey = config.keys[0];
-                  const keyParts = formatShortcutKey(firstKey);
+          <div className="grid grid-cols-2 gap-6 pt-4">
+            {shortcutGroups.map((group) => (
+              <div key={group.title}>
+                <h3 className="mb-3 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+                  {group.title}
+                </h3>
+                <ul className="space-y-2">
+                  {group.actions.map((action) => {
+                    const config = shortcuts[action];
+                    const firstKey = config.keys[0];
+                    const keyParts = formatShortcutKey(firstKey);
 
-                  return (
-                    <li
-                      key={action}
-                      className="flex items-center justify-between gap-2"
-                    >
-                      <span className="text-sm text-foreground">
-                        {config.description ?? config.label}
-                      </span>
-                      <KbdGroup>
-                        {keyParts.map((key, index) => (
-                          <Kbd key={index}>{key}</Kbd>
-                        ))}
-                      </KbdGroup>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ))}
-        </div>
+                    return (
+                      <li
+                        key={action}
+                        className="flex items-center justify-between gap-2"
+                      >
+                        <span className="text-sm text-foreground">
+                          {config.description ?? config.label}
+                        </span>
+                        <KbdGroup>
+                          {keyParts.map((key, index) => (
+                            <Kbd key={index}>{key}</Kbd>
+                          ))}
+                        </KbdGroup>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
+          </div>
 
-        <div className="mt-4 flex flex-col gap-2 border-t border-border pt-4">
-          <p className="text-center text-xs text-muted-foreground">
-            Maintenez <Kbd className="mx-1">⌥</Kbd> pour voir les raccourcis en
-            contexte
-          </p>
-          <p className="text-center text-xs text-muted-foreground">
-            Appuyez <Kbd className="mx-1">?</Kbd> ou <Kbd className="mx-1">esc</Kbd> pour fermer
-          </p>
-        </div>
-      </DialogContent>
-    </Dialog>
+          <div className="mt-4 flex flex-col gap-2 border-t border-border pt-4">
+            <p className="text-center text-xs text-muted-foreground">
+              Maintenez <Kbd className="mx-1">⌥</Kbd> pour voir les raccourcis
+              en contexte
+            </p>
+            <p className="text-center text-xs text-muted-foreground">
+              Appuyez <Kbd className="mx-1">?</Kbd> ou{" "}
+              <Kbd className="mx-1">esc</Kbd> pour fermer
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
