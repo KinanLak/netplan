@@ -3,6 +3,7 @@ import { Cancel01Icon, WasteIcon } from "@hugeicons/core-free-icons";
 import { WALL_COLOR_TONES } from "@/lib/walls";
 import { useMapStore } from "@/store/useMapStore";
 import { Button } from "@/components/ui/button";
+import { Kbd } from "@/components/ui/kbd";
 
 export default function WallDrawer() {
   const { walls, selectedWallId, selectWall, deleteWall, isEditMode } =
@@ -32,13 +33,14 @@ export default function WallDrawer() {
           </div>
           <Button
             variant="ghost"
-            size="icon"
+            size="sm"
             onClick={() => selectWall(null)}
-            className="h-8 w-8"
+            className="flex h-8 items-center gap-1.5 px-2"
           >
+            <Kbd>esc</Kbd>
             <HugeiconsIcon
               icon={Cancel01Icon}
-              size={20}
+              size={18}
               color="currentColor"
               strokeWidth={1.5}
             />

@@ -6,11 +6,9 @@ import type { DeviceStatus } from "@/types/map";
 import { useMapStore } from "@/store/useMapStore";
 import { useShortcut } from "@/hooks/use-shortcuts";
 import { Button } from "@/components/ui/button";
+import { Kbd } from "@/components/ui/kbd";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  ShortcutHintAbsolute,
-  ShortcutHintInline,
-} from "@/components/ui/shortcut-hint";
+import { ShortcutHintInline } from "@/components/ui/shortcut-hint";
 import { cn } from "@/lib/utils";
 
 const statusLabels: Record<DeviceStatus, string> = {
@@ -54,10 +52,10 @@ export default function DeviceDrawer() {
       highlightedDeviceIds.length === 0
     )
       return false;
-    // Check if highlighted devices are exactly this device's connections
-    const connectedSet = new Set(device.metadata.connectedDeviceIds);
-    return highlightedDeviceIds.every((id) => connectedSet.has(id));
-  }, [device?.metadata.connectedDeviceIds, highlightedDeviceIds]);
+    // Check if highlighted devices include this device and its connections
+    const allIds = [device.id, ...device.metadata.connectedDeviceIds];
+    return allIds.every((id) => highlightedDeviceIds.includes(id));
+  }, [device?.id, device?.metadata.connectedDeviceIds, highlightedDeviceIds]);
 
   const handleHighlightConnections = useCallback(() => {
     if (!device?.metadata.connectedDeviceIds) return;
@@ -66,7 +64,8 @@ export default function DeviceDrawer() {
     if (isCurrentDeviceHighlighted) {
       setHighlightedDevices([]);
     } else {
-      setHighlightedDevices(device.metadata.connectedDeviceIds);
+      // Include the device itself and its connections
+      setHighlightedDevices([device.id, ...device.metadata.connectedDeviceIds]);
     }
   }, [device, isCurrentDeviceHighlighted, setHighlightedDevices]);
 
@@ -129,25 +128,20 @@ export default function DeviceDrawer() {
               {typeLabels[device.type]}
             </p>
           </div>
-          <div className="relative">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleCloseDrawer}
-              className="h-8 w-8"
-            >
-              <HugeiconsIcon
-                icon={Cancel01Icon}
-                size={20}
-                color="currentColor"
-                strokeWidth={1.5}
-              />
-            </Button>
-            <ShortcutHintAbsolute
-              action="close-drawer"
-              position="bottom-right"
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleCloseDrawer}
+            className="flex h-8 items-center gap-1.5 px-2"
+          >
+            <Kbd>esc</Kbd>
+            <HugeiconsIcon
+              icon={Cancel01Icon}
+              size={18}
+              color="currentColor"
+              strokeWidth={1.5}
             />
-          </div>
+          </Button>
         </div>
 
         {/* Status badge */}

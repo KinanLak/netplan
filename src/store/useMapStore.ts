@@ -78,6 +78,7 @@ export const useMapStore = create<MapStore>()(
       currentFloorId: mockBuildings[0]?.floors[0]?.id ?? null,
       selectedDeviceId: null,
       selectedWallId: null,
+      hoveredDeviceId: null,
       isEditMode: true,
       highlightedDeviceIds: [],
       activeDrawTool: "device",
@@ -109,6 +110,10 @@ export const useMapStore = create<MapStore>()(
           selectedDeviceId: deviceId,
           selectedWallId: deviceId ? null : state.selectedWallId,
         }));
+      },
+
+      setHoveredDevice: (deviceId: string | null) => {
+        set({ hoveredDeviceId: deviceId });
       },
 
       addDevice: (deviceData: Omit<Device, "id">) => {

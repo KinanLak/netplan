@@ -130,8 +130,11 @@ export default function FlowCanvas() {
     currentFloorId,
     selectedDeviceId,
     selectedWallId,
+    hoveredDeviceId,
     selectDevice,
     selectWall,
+    setHoveredDevice,
+    setHighlightedDevices,
     updateDevicePosition,
     isEditMode,
     highlightedDeviceIds,
@@ -470,6 +473,65 @@ export default function FlowCanvas() {
     [selectDevice, selectWall, activeDrawTool],
   );
 
+  // Handle node mouse enter (for hover-based shortcuts)
+  const handleNodeMouseEnter = useCallback(
+    (_: React.MouseEvent, node: DeviceNode) => {
+      setHoveredDevice(node.id);
+    },
+    [setHoveredDevice],
+  );
+
+  // Handle node mouse leave
+  const handleNodeMouseLeave = useCallback(() => {
+    setHoveredDevice(null);
+  }, [setHoveredDevice]);
+
+  // Handle H key to highlight connections for hovered or selected device
+  const handleHighlightHoveredConnections = useCallback(() => {
+    // If devices are already highlighted and no device is selected (no drawer), de-highlight
+    if (highlightedDeviceIds.length > 0 && !selectedDeviceId) {
+      setHighlightedDevices([]);
+      return;
+    }
+
+    // Determine target device: hovered (if no drawer open) or selected
+    const targetDeviceId = selectedDeviceId || hoveredDeviceId;
+    if (!targetDeviceId) return;
+
+    const device = devices.find((d) => d.id === targetDeviceId);
+    if (!device?.metadata.connectedDeviceIds?.length) return;
+
+    // Toggle highlight
+    const connectedIds = device.metadata.connectedDeviceIds;
+    // Include the hovered/selected device itself in the highlight
+    const allIdsToHighlight = [targetDeviceId, ...connectedIds];
+    const isCurrentlyHighlighted = allIdsToHighlight.every((id) =>
+      highlightedDeviceIds.includes(id),
+    );
+
+    if (isCurrentlyHighlighted) {
+      setHighlightedDevices([]);
+    } else {
+      setHighlightedDevices(allIdsToHighlight);
+    }
+  }, [
+    selectedDeviceId,
+    hoveredDeviceId,
+    devices,
+    highlightedDeviceIds,
+    setHighlightedDevices,
+  ]);
+
+  // Register H shortcut for highlighting connections (when not in drawer)
+  useShortcut(
+    "highlight-connections",
+    handleHighlightHoveredConnections,
+    // Enable when:
+    // 1. There's a hovered device and no drawer open, OR
+    // 2. There are highlighted devices and no drawer open (to de-highlight)
+    (!!hoveredDeviceId || highlightedDeviceIds.length > 0) && !selectedDeviceId,
+  );
+
   const handlePaneMouseMove = useCallback(
     (event: React.MouseEvent) => {
       if (!isEditMode || activeDrawTool === "device" || !currentFloorId) {
@@ -670,6 +732,8 @@ export default function FlowCanvas() {
         edges={[]}
         onNodesChange={handleNodesChange}
         onNodeClick={handleNodeClick}
+        onNodeMouseEnter={handleNodeMouseEnter}
+        onNodeMouseLeave={handleNodeMouseLeave}
         onNodeContextMenu={handleNodeContextMenu}
         onPaneClick={handlePaneClick}
         onPaneMouseMove={handlePaneMouseMove}

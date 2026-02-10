@@ -10,7 +10,7 @@ import DeviceDrawer from "@/panels/DeviceDrawer";
 import WallDrawer from "@/panels/WallDrawer";
 import { useMapStore } from "@/store/useMapStore";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
-import { ThemeProvider } from "@/components/theme-provider";
+import { ThemeProvider, useTheme } from "@/components/theme-provider";
 import { ShortcutsProvider, useShortcut } from "@/hooks/use-shortcuts";
 import { ShortcutsDialog } from "@/components/shortcuts-dialog";
 import { ShortcutHintAbsolute } from "@/components/ui/shortcut-hint";
@@ -39,10 +39,14 @@ function HomePageContent() {
   const selectDevice = useMapStore((state) => state.selectDevice);
   const selectWall = useMapStore((state) => state.selectWall);
   const setActiveDrawTool = useMapStore((state) => state.setActiveDrawTool);
+  const setHighlightedDevices = useMapStore(
+    (state) => state.setHighlightedDevices,
+  );
   const buildings = useMapStore((state) => state.buildings);
   const currentBuildingId = useMapStore((state) => state.currentBuildingId);
   const currentFloorId = useMapStore((state) => state.currentFloorId);
   const setCurrentFloor = useMapStore((state) => state.setCurrentFloor);
+  const { theme, setTheme } = useTheme();
 
   // Get current building's floors for navigation
   const currentBuilding = buildings.find((b) => b.id === currentBuildingId);
@@ -62,15 +66,81 @@ function HomePageContent() {
     }
   }, [currentFloorIndex, floors, setCurrentFloor]);
 
+  // Navigate to floor by index (0-based)
+  const navigateToFloorByIndex = useCallback(
+    (index: number) => {
+      if (index >= 0 && index < floors.length) {
+        setCurrentFloor(floors[index].id);
+      }
+    },
+    [floors, setCurrentFloor],
+  );
+
+  // Theme cycling handler
+  const cycleTheme = useCallback(() => {
+    const themeOrder = ["light", "dark", "system"] as const;
+    const currentIndex = themeOrder.indexOf(theme);
+    const nextIndex = (currentIndex + 1) % themeOrder.length;
+    setTheme(themeOrder[nextIndex]);
+  }, [theme, setTheme]);
+
   // Register global shortcuts
   useShortcut("toggle-edit-mode", toggleEditMode);
+  useShortcut("cycle-theme", cycleTheme);
   useShortcut("escape", () => {
-    selectDevice(null);
-    selectWall(null);
-    setActiveDrawTool("device");
+    // First deselect any device/wall and clear highlights
+    if (selectedDeviceId || selectedWallId) {
+      selectDevice(null);
+      selectWall(null);
+      setActiveDrawTool("device");
+      setHighlightedDevices([]);
+      return;
+    }
+    // Then exit edit mode if active
+    if (isEditMode) {
+      toggleEditMode();
+    }
   });
   useShortcut("floor-up", navigateFloorUp);
   useShortcut("floor-down", navigateFloorDown);
+
+  // Floor number shortcuts (Ctrl+1 through Ctrl+9)
+  useShortcut(
+    "floor-1",
+    useCallback(() => navigateToFloorByIndex(0), [navigateToFloorByIndex]),
+  );
+  useShortcut(
+    "floor-2",
+    useCallback(() => navigateToFloorByIndex(1), [navigateToFloorByIndex]),
+  );
+  useShortcut(
+    "floor-3",
+    useCallback(() => navigateToFloorByIndex(2), [navigateToFloorByIndex]),
+  );
+  useShortcut(
+    "floor-4",
+    useCallback(() => navigateToFloorByIndex(3), [navigateToFloorByIndex]),
+  );
+  useShortcut(
+    "floor-5",
+    useCallback(() => navigateToFloorByIndex(4), [navigateToFloorByIndex]),
+  );
+  useShortcut(
+    "floor-6",
+    useCallback(() => navigateToFloorByIndex(5), [navigateToFloorByIndex]),
+  );
+  useShortcut(
+    "floor-7",
+    useCallback(() => navigateToFloorByIndex(6), [navigateToFloorByIndex]),
+  );
+  useShortcut(
+    "floor-8",
+    useCallback(() => navigateToFloorByIndex(7), [navigateToFloorByIndex]),
+  );
+  useShortcut(
+    "floor-9",
+    useCallback(() => navigateToFloorByIndex(8), [navigateToFloorByIndex]),
+  );
 
   return (
     <SidebarProvider>

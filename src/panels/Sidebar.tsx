@@ -6,8 +6,10 @@ import {
 } from "@hugeicons/core-free-icons";
 import { useCallback } from "react";
 import { useMapStore } from "@/store/useMapStore";
+import { useOptionHeld } from "@/hooks/use-shortcuts";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Kbd } from "@/components/ui/kbd";
 import {
   Sidebar,
   SidebarContent,
@@ -33,6 +35,7 @@ export default function AppSidebar() {
     setCurrentBuilding,
     setCurrentFloor,
   } = useMapStore();
+  const isOptionHeld = useOptionHeld();
 
   const currentBuilding = buildings.find((b) => b.id === currentBuildingId);
 
@@ -99,29 +102,60 @@ export default function AppSidebar() {
                   {/* Floors (only show if building is selected) */}
                   {building.id === currentBuildingId && (
                     <SidebarMenuSub>
-                      {building.floors.map((floor) => (
-                        <SidebarMenuSubItem key={floor.id}>
-                          <SidebarMenuSubButton
-                            onClick={() => setCurrentFloor(floor.id)}
-                            className={cn(
-                              "cursor-pointer",
-                              floor.id === currentFloorId &&
-                                "bg-primary font-semibold text-primary-foreground hover:bg-primary hover:text-primary-foreground",
-                            )}
-                          >
-                            <HugeiconsIcon
-                              icon={
-                                floor.id === currentFloorId
-                                  ? SolidLine01Icon
-                                  : DashedLine01Icon
-                              }
-                              size={16}
-                              strokeWidth={1}
-                            />
-                            <span>{floor.name}</span>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                      ))}
+                      {building.floors.map((floor, floorIndex) => {
+                        const isActive = floor.id === currentFloorId;
+                        const shortcutNumber = floorIndex + 1;
+                        const showShortcut = isOptionHeld && shortcutNumber <= 9;
+
+                        return (
+                          <SidebarMenuSubItem key={floor.id}>
+                            <SidebarMenuSubButton
+                              onClick={() => setCurrentFloor(floor.id)}
+                              className={cn(
+                                "cursor-pointer justify-between",
+                                isActive &&
+                                  "bg-primary font-semibold text-primary-foreground hover:bg-primary hover:text-primary-foreground",
+                              )}
+                            >
+                              <span className="flex items-center gap-2">
+                                <HugeiconsIcon
+                                  icon={
+                                    isActive ? SolidLine01Icon : DashedLine01Icon
+                                  }
+                                  size={16}
+                                  strokeWidth={1}
+                                />
+                                <span>{floor.name}</span>
+                              </span>
+                              {showShortcut && (
+                                <span
+                                  className={cn(
+                                    "ml-auto flex items-center gap-0.5 transition-opacity duration-150",
+                                    isOptionHeld ? "opacity-100" : "opacity-0",
+                                  )}
+                                >
+                                  <Kbd
+                                    className={cn(
+                                      isActive &&
+                                        "bg-primary-foreground text-primary",
+                                    )}
+                                  >
+                                    ⌃
+                                  </Kbd>
+                                  <Kbd
+                                    className={cn(
+                                      isActive &&
+                                        "bg-primary-foreground text-primary",
+                                    )}
+                                  >
+                                    {shortcutNumber}
+                                  </Kbd>
+                                </span>
+                              )}
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        );
+                      })}
                     </SidebarMenuSub>
                   )}
                 </SidebarMenuItem>

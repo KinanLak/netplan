@@ -63,8 +63,9 @@ export function ShortcutsProvider({ children }: ShortcutsProviderProps) {
       }
 
       // Check registered handlers
+      // Pass ignoreAlt=true so shortcuts work even when Option is held (for showing hints)
       for (const [action, handler] of handlers.entries()) {
-        if (matchesAction(event, action)) {
+        if (matchesAction(event, action, true)) {
           event.preventDefault();
           handler();
           return;

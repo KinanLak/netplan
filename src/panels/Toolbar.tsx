@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useReactFlow } from "@xyflow/react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -36,7 +36,6 @@ interface ToolbarButton {
   label: string;
   icon: React.ReactNode;
   shortcut: ShortcutAction;
-  hotbarShortcut: ShortcutAction;
 }
 
 interface DrawToolButton {
@@ -44,7 +43,6 @@ interface DrawToolButton {
   label: string;
   icon: React.ReactNode;
   shortcut: ShortcutAction;
-  hotbarShortcut: ShortcutAction;
 }
 
 const toolbarButtons: Array<ToolbarButton> = [
@@ -52,7 +50,6 @@ const toolbarButtons: Array<ToolbarButton> = [
     type: "rack",
     label: "Rack",
     shortcut: "tool-rack",
-    hotbarShortcut: "hotbar-3",
     icon: (
       <HugeiconsIcon
         icon={ServerStack03Icon}
@@ -66,7 +63,6 @@ const toolbarButtons: Array<ToolbarButton> = [
     type: "switch",
     label: "Switch",
     shortcut: "tool-switch",
-    hotbarShortcut: "hotbar-4",
     icon: (
       <HugeiconsIcon
         icon={HardDriveIcon}
@@ -80,7 +76,6 @@ const toolbarButtons: Array<ToolbarButton> = [
     type: "pc",
     label: "PC",
     shortcut: "tool-pc",
-    hotbarShortcut: "hotbar-5",
     icon: (
       <HugeiconsIcon
         icon={ComputerIcon}
@@ -94,7 +89,6 @@ const toolbarButtons: Array<ToolbarButton> = [
     type: "wall-port",
     label: "Prise",
     shortcut: "tool-wall-port",
-    hotbarShortcut: "hotbar-6",
     icon: (
       <HugeiconsIcon
         icon={PlugSocketIcon}
@@ -111,14 +105,12 @@ const drawToolButtons: Array<DrawToolButton> = [
     tool: "wall",
     label: "Mur",
     shortcut: "tool-wall",
-    hotbarShortcut: "hotbar-1",
     icon: <Minus className="h-5 w-5" />,
   },
   {
     tool: "room",
     label: "Salle",
     shortcut: "tool-room",
-    hotbarShortcut: "hotbar-2",
     icon: <Square className="h-4 w-4" />,
   },
 ];
@@ -139,6 +131,14 @@ export default function Toolbar() {
   const [selectedType, setSelectedType] = useState<DeviceType | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [open, setOpen] = useState(false);
+
+  // Refs for each device type button to use as popover anchors
+  const buttonRefs = useRef<Record<DeviceType, HTMLButtonElement | null>>({
+    rack: null,
+    switch: null,
+    pc: null,
+    "wall-port": null,
+  });
 
   const handleTypeClick = useCallback(
     (type: DeviceType) => {
@@ -209,38 +209,6 @@ export default function Toolbar() {
   );
   useShortcut(
     "tool-wall-port",
-    useCallback(() => handleTypeClick("wall-port"), [handleTypeClick]),
-    isEditMode && !!currentFloorId,
-  );
-
-  // Hotbar shortcuts (1-6 like video game inventory)
-  useShortcut(
-    "hotbar-1",
-    useCallback(() => handleDrawToolClick("wall"), [handleDrawToolClick]),
-    isEditMode && !!currentFloorId,
-  );
-  useShortcut(
-    "hotbar-2",
-    useCallback(() => handleDrawToolClick("room"), [handleDrawToolClick]),
-    isEditMode && !!currentFloorId,
-  );
-  useShortcut(
-    "hotbar-3",
-    useCallback(() => handleTypeClick("rack"), [handleTypeClick]),
-    isEditMode && !!currentFloorId,
-  );
-  useShortcut(
-    "hotbar-4",
-    useCallback(() => handleTypeClick("switch"), [handleTypeClick]),
-    isEditMode && !!currentFloorId,
-  );
-  useShortcut(
-    "hotbar-5",
-    useCallback(() => handleTypeClick("pc"), [handleTypeClick]),
-    isEditMode && !!currentFloorId,
-  );
-  useShortcut(
-    "hotbar-6",
     useCallback(() => handleTypeClick("wall-port"), [handleTypeClick]),
     isEditMode && !!currentFloorId,
   );
@@ -363,7 +331,7 @@ export default function Toolbar() {
                   <span className="text-xs font-medium">{btn.label}</span>
                 </Button>
                 <ShortcutHintAbsolute
-                  action={btn.hotbarShortcut}
+                  action={btn.shortcut}
                   position="bottom-center"
                 />
               </div>
@@ -411,6 +379,9 @@ export default function Toolbar() {
                 <PopoverTrigger
                   render={
                     <Button
+                      ref={(el) => {
+                        buttonRefs.current[btn.type] = el;
+                      }}
                       variant={
                         selectedType === btn.type ? "secondary" : "ghost"
                       }
@@ -433,7 +404,7 @@ export default function Toolbar() {
                   }
                 />
                 <ShortcutHintAbsolute
-                  action={btn.hotbarShortcut}
+                  action={btn.shortcut}
                   position="bottom-center"
                 />
               </div>
@@ -446,6 +417,7 @@ export default function Toolbar() {
           align="center"
           className="w-72 p-0"
           sideOffset={8}
+          anchor={selectedType ? buttonRefs.current[selectedType] : undefined}
         >
           <Command shouldFilter={false}>
             <CommandInput

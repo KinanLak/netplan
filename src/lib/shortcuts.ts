@@ -24,6 +24,7 @@ export type ShortcutAction =
   | "undo"
   | "redo"
   | "show-shortcuts"
+  | "cycle-theme"
   // Navigation
   | "zoom-in"
   | "zoom-out"
@@ -34,6 +35,15 @@ export type ShortcutAction =
   | "pan-right"
   | "floor-up"
   | "floor-down"
+  | "floor-1"
+  | "floor-2"
+  | "floor-3"
+  | "floor-4"
+  | "floor-5"
+  | "floor-6"
+  | "floor-7"
+  | "floor-8"
+  | "floor-9"
   // Tools
   | "tool-wall"
   | "tool-room"
@@ -41,13 +51,6 @@ export type ShortcutAction =
   | "tool-switch"
   | "tool-pc"
   | "tool-wall-port"
-  // Tool hotbar (1-6)
-  | "hotbar-1"
-  | "hotbar-2"
-  | "hotbar-3"
-  | "hotbar-4"
-  | "hotbar-5"
-  | "hotbar-6"
   // Device drawer
   | "close-drawer"
   | "delete-device"
@@ -101,6 +104,12 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
     description: "Afficher la liste des raccourcis clavier",
     scope: "global",
   },
+  "cycle-theme": {
+    keys: [{ key: "t", shift: true }],
+    label: "Thème",
+    description: "Changer le thème (clair/sombre/système)",
+    scope: "global",
+  },
 
   // Navigation
   "zoom-in": {
@@ -146,27 +155,116 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
     scope: "canvas",
   },
   "floor-up": {
-    keys: [{ key: "ArrowUp", alt: true }],
+    keys: [{ key: "ArrowUp", ctrl: true }],
     label: "Étage supérieur",
     description: "Aller à l'étage supérieur",
     scope: "global",
   },
   "floor-down": {
-    keys: [{ key: "ArrowDown", alt: true }],
+    keys: [{ key: "ArrowDown", ctrl: true }],
     label: "Étage inférieur",
     description: "Aller à l'étage inférieur",
+    scope: "global",
+  },
+  "floor-1": {
+    keys: [
+      { key: "1", ctrl: true },
+      { key: "&", ctrl: true },
+    ],
+    label: "Étage 1",
+    description: "Aller à l'étage 1",
+    scope: "global",
+  },
+  "floor-2": {
+    keys: [
+      { key: "2", ctrl: true },
+      { key: "é", ctrl: true },
+    ],
+    label: "Étage 2",
+    description: "Aller à l'étage 2",
+    scope: "global",
+  },
+  "floor-3": {
+    keys: [
+      { key: "3", ctrl: true },
+      { key: "\"", ctrl: true },
+    ],
+    label: "Étage 3",
+    description: "Aller à l'étage 3",
+    scope: "global",
+  },
+  "floor-4": {
+    keys: [
+      { key: "4", ctrl: true },
+      { key: "'", ctrl: true },
+    ],
+    label: "Étage 4",
+    description: "Aller à l'étage 4",
+    scope: "global",
+  },
+  "floor-5": {
+    keys: [
+      { key: "5", ctrl: true },
+      { key: "(", ctrl: true },
+    ],
+    label: "Étage 5",
+    description: "Aller à l'étage 5",
+    scope: "global",
+  },
+  "floor-6": {
+    keys: [
+      { key: "6", ctrl: true },
+      { key: "-", ctrl: true },
+    ],
+    label: "Étage 6",
+    description: "Aller à l'étage 6",
+    scope: "global",
+  },
+  "floor-7": {
+    keys: [
+      { key: "7", ctrl: true },
+      { key: "è", ctrl: true },
+    ],
+    label: "Étage 7",
+    description: "Aller à l'étage 7",
+    scope: "global",
+  },
+  "floor-8": {
+    keys: [
+      { key: "8", ctrl: true },
+      { key: "_", ctrl: true },
+    ],
+    label: "Étage 8",
+    description: "Aller à l'étage 8",
+    scope: "global",
+  },
+  "floor-9": {
+    keys: [
+      { key: "9", ctrl: true },
+      { key: "ç", ctrl: true },
+    ],
+    label: "Étage 9",
+    description: "Aller à l'étage 9",
     scope: "global",
   },
 
   // Tools - Walls & Rooms
   "tool-wall": {
-    keys: [{ key: "w" }],
+    keys: [
+      { key: "w" },
+      { key: "1" },
+      { key: "&" },
+    ],
     label: "Mur",
     description: "Outil de dessin de mur",
     scope: "canvas",
   },
   "tool-room": {
-    keys: [{ key: "l" }],
+    keys: [
+      { key: "l" },
+      { key: "2" },
+      { key: "é" },
+    ],
     label: "Salle",
     description: "Outil de dessin de salle",
     scope: "canvas",
@@ -174,65 +272,43 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
 
   // Tools - Devices
   "tool-rack": {
-    keys: [{ key: "r" }],
+    keys: [
+      { key: "r" },
+      { key: "3" },
+      { key: "\"" },
+    ],
     label: "Rack",
     description: "Ajouter un rack serveur",
     scope: "canvas",
   },
   "tool-switch": {
-    keys: [{ key: "s" }],
+    keys: [
+      { key: "s" },
+      { key: "4" },
+      { key: "'" },
+    ],
     label: "Switch",
     description: "Ajouter un switch réseau",
     scope: "canvas",
   },
   "tool-pc": {
-    keys: [{ key: "p" }],
+    keys: [
+      { key: "p" },
+      { key: "5" },
+      { key: "(" },
+    ],
     label: "PC",
     description: "Ajouter un poste de travail",
     scope: "canvas",
   },
   "tool-wall-port": {
-    keys: [{ key: "o" }],
+    keys: [
+      { key: "o" },
+      { key: "6" },
+      { key: "-" },
+    ],
     label: "Prise",
     description: "Ajouter une prise murale",
-    scope: "canvas",
-  },
-
-  // Tool hotbar (1-6 like video game inventory)
-  "hotbar-1": {
-    keys: [{ key: "1" }],
-    label: "1",
-    description: "Outil Mur",
-    scope: "canvas",
-  },
-  "hotbar-2": {
-    keys: [{ key: "2" }],
-    label: "2",
-    description: "Outil Salle",
-    scope: "canvas",
-  },
-  "hotbar-3": {
-    keys: [{ key: "3" }],
-    label: "3",
-    description: "Rack",
-    scope: "canvas",
-  },
-  "hotbar-4": {
-    keys: [{ key: "4" }],
-    label: "4",
-    description: "Switch",
-    scope: "canvas",
-  },
-  "hotbar-5": {
-    keys: [{ key: "5" }],
-    label: "5",
-    description: "PC",
-    scope: "canvas",
-  },
-  "hotbar-6": {
-    keys: [{ key: "6" }],
-    label: "6",
-    description: "Prise",
     scope: "canvas",
   },
 
@@ -259,17 +335,22 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
 
 /**
  * Check if a keyboard event matches a shortcut key
+ * If ignoreAlt is true, the Alt key state is not checked (allows shortcuts to work while Option is held)
  */
 export function matchesShortcut(
   event: KeyboardEvent,
   shortcutKey: ShortcutKey,
+  ignoreAlt = false,
 ): boolean {
   const keyMatches =
     event.key.toLowerCase() === shortcutKey.key.toLowerCase() ||
     event.key === shortcutKey.key;
 
   const metaMatches = shortcutKey.meta ? event.metaKey : !event.metaKey;
-  const altMatches = shortcutKey.alt ? event.altKey : !event.altKey;
+  // Alt is only checked strictly if the shortcut requires it, otherwise we allow it
+  const altMatches = shortcutKey.alt
+    ? event.altKey
+    : ignoreAlt || !event.altKey;
   const shiftMatches = shortcutKey.shift ? event.shiftKey : !event.shiftKey;
   const ctrlMatches = shortcutKey.ctrl ? event.ctrlKey : !event.ctrlKey;
 
@@ -278,13 +359,15 @@ export function matchesShortcut(
 
 /**
  * Check if an event matches any of the shortcuts for an action
+ * If ignoreAlt is true, shortcuts without Alt modifier can still trigger when Alt is held
  */
 export function matchesAction(
   event: KeyboardEvent,
   action: ShortcutAction,
+  ignoreAlt = false,
 ): boolean {
   const config = shortcuts[action];
-  return config.keys.some((key) => matchesShortcut(event, key));
+  return config.keys.some((key) => matchesShortcut(event, key, ignoreAlt));
 }
 
 /**
