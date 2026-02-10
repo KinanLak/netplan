@@ -4,8 +4,10 @@ import {
   DashedLine01Icon,
   SolidLine01Icon,
 } from "@hugeicons/core-free-icons";
+import { useCallback } from "react";
 import { useMapStore } from "@/store/useMapStore";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import {
   Sidebar,
   SidebarContent,
@@ -33,6 +35,27 @@ export default function AppSidebar() {
   } = useMapStore();
 
   const currentBuilding = buildings.find((b) => b.id === currentBuildingId);
+
+  const handleResetCanvasStorage = useCallback(() => {
+    const keysToRemove: Array<string> = [];
+
+    for (let index = 0; index < localStorage.length; index += 1) {
+      const key = localStorage.key(index);
+      if (!key) {
+        continue;
+      }
+
+      if (key.startsWith("netplan-") && key !== "netplan-ui-theme") {
+        keysToRemove.push(key);
+      }
+    }
+
+    keysToRemove.forEach((key) => {
+      localStorage.removeItem(key);
+    });
+
+    window.location.reload();
+  }, []);
 
   return (
     <Sidebar collapsible="none" className="border-r">
@@ -110,8 +133,18 @@ export default function AppSidebar() {
 
       {/* Footer */}
       <SidebarFooter className="border-t px-4 py-3">
-        <div className="text-xs text-muted-foreground">
-          {currentBuilding?.name ?? "Aucun bâtiment"}
+        <div className="flex items-center justify-between gap-2">
+          <div className="truncate text-xs text-muted-foreground">
+            {currentBuilding?.name ?? "Aucun bâtiment"}
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleResetCanvasStorage}
+            className="h-7 px-2 text-xs"
+          >
+            Vider plan
+          </Button>
         </div>
       </SidebarFooter>
     </Sidebar>

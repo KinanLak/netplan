@@ -84,6 +84,7 @@ export interface MapState {
   currentBuildingId: string | null;
   currentFloorId: string | null;
   selectedDeviceId: string | null;
+  selectedWallId: string | null;
   isEditMode: boolean;
   highlightedDeviceIds: Array<string>;
   activeDrawTool: DrawTool;
@@ -97,6 +98,8 @@ export interface MapActions {
   addDevice: (device: Omit<Device, "id">) => void;
   updateDevicePosition: (deviceId: string, position: Position) => void;
   deleteDevice: (deviceId: string) => void;
+  selectWall: (wallId: string | null) => void;
+  deleteWall: (wallId: string) => void;
   addWallSegment: (segment: Omit<WallSegment, "id">) => boolean;
   addRoom: (room: RoomDraft) => boolean;
   toggleEditMode: () => void;

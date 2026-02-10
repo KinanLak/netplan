@@ -218,6 +218,14 @@ button:hover {
   cursor: crosshair !important;
 }
 
+.canvas-cursor-default .react-flow__pane {
+  cursor: default !important;
+}
+
+.canvas-cursor-default .react-flow__pane.dragging {
+  cursor: grabbing !important;
+}
+
 .wall-cursor-e .react-flow__pane {
   cursor: e-resize !important;
 }

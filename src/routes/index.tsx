@@ -6,6 +6,7 @@ import FlowCanvas from "@/canvas/FlowCanvas";
 import AppSidebar from "@/panels/Sidebar";
 import Toolbar from "@/panels/Toolbar";
 import DeviceDrawer from "@/panels/DeviceDrawer";
+import WallDrawer from "@/panels/WallDrawer";
 import { useMapStore } from "@/store/useMapStore";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -17,6 +18,7 @@ export const Route = createFileRoute("/")({
 
 function HomePage() {
   const selectedDeviceId = useMapStore((state) => state.selectedDeviceId);
+  const selectedWallId = useMapStore((state) => state.selectedWallId);
   const isEditMode = useMapStore((state) => state.isEditMode);
   const toggleEditMode = useMapStore((state) => state.toggleEditMode);
 
@@ -33,7 +35,11 @@ function HomePage() {
               <FlowCanvas />
               <Toolbar />
               {/* Device details drawer (conditional) - inside ReactFlowProvider for camera control */}
-              {selectedDeviceId && <DeviceDrawer />}
+              {selectedDeviceId ? (
+                <DeviceDrawer />
+              ) : selectedWallId ? (
+                <WallDrawer />
+              ) : null}
             </ReactFlowProvider>
 
             {/* Mode toggle button - top left */}

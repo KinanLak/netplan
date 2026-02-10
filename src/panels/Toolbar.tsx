@@ -253,6 +253,7 @@ export default function Toolbar() {
   }
 
   const showWallColors = activeDrawTool === "wall" || activeDrawTool === "room";
+  const wallColorSelectionEnabled = false;
 
   return (
     <div className="absolute top-4 left-1/2 z-10 -translate-x-1/2">
@@ -282,7 +283,13 @@ export default function Toolbar() {
           </div>
 
           {showWallColors && (
-            <div className="flex items-center gap-1 border-r pr-2">
+            <div
+              className={cn(
+                "border-r pr-2",
+                wallColorSelectionEnabled ? "flex items-center gap-1" : "hidden",
+              )}
+              aria-hidden={!wallColorSelectionEnabled}
+            >
               {WALL_COLOR_ORDER.map((color) => {
                 const tone = WALL_COLOR_TONES[color];
                 const isActive = selectedWallColor === color;
@@ -292,7 +299,7 @@ export default function Toolbar() {
                     key={color}
                     type="button"
                     onClick={() => handleSelectWallColor(color)}
-                    disabled={!currentFloorId}
+                    disabled={!currentFloorId || !wallColorSelectionEnabled}
                     className={cn(
                       "h-6 w-6 rounded-full border-2 ring-ring transition-all",
                       isActive && "ring-2 ring-offset-1",

@@ -20,7 +20,6 @@ import {
   createOrthogonalWallSegment,
   createRoomWallSegments,
   getWallRect,
-  isPointConnectedToWalls,
   isPointOnWall,
   snapPositionToWallGrid,
 } from "@/lib/walls";
@@ -126,7 +125,9 @@ export default function FlowCanvas() {
     walls,
     currentFloorId,
     selectedDeviceId,
+    selectedWallId,
     selectDevice,
+    selectWall,
     updateDevicePosition,
     isEditMode,
     highlightedDeviceIds,
@@ -203,7 +204,10 @@ export default function FlowCanvas() {
     setPointerPreview(null);
     setHoverSnapPoint(null);
     setDrawMessage(null);
-  }, [activeDrawTool, currentFloorId, isEditMode]);
+    if (activeDrawTool !== "device") {
+      selectWall(null);
+    }
+  }, [activeDrawTool, currentFloorId, isEditMode, selectWall]);
 
   useEffect(() => {
     if (!isEditMode || activeDrawTool === "device") {
@@ -287,12 +291,9 @@ export default function FlowCanvas() {
     return collectJunctionPoints(previewSegments, combined);
   }, [previewSegments, floorWalls]);
 
-  const isSnapHovering =
-    activeDrawTool === "wall" && !drawAnchor && hoverSnapPoint !== null;
-
   const paneCursorClass = useMemo(() => {
     if (!isEditMode || activeDrawTool === "device") {
-      return undefined;
+      return "canvas-cursor-default";
     }
 
     if (activeDrawTool === "room") {
@@ -300,7 +301,11 @@ export default function FlowCanvas() {
     }
 
     if (!drawAnchor || !pointerPreview) {
-      return isSnapHovering ? "wall-cursor-crosshair" : undefined;
+      return "wall-cursor-crosshair";
+    }
+
+    if (arePositionsEqual(pointerPreview, drawAnchor)) {
+      return "wall-cursor-crosshair";
     }
 
     const dx = pointerPreview.x - drawAnchor.x;
@@ -311,7 +316,25 @@ export default function FlowCanvas() {
     }
 
     return dy >= 0 ? "wall-cursor-s" : "wall-cursor-n";
-  }, [isEditMode, activeDrawTool, drawAnchor, pointerPreview, isSnapHovering]);
+  }, [isEditMode, activeDrawTool, drawAnchor, pointerPreview]);
+
+  const getWallAtFlowPosition = useCallback(
+    (position: Position): WallSegment | null => {
+      const wallsByDrawOrder = [...floorWalls].reverse();
+      const matchingWall = wallsByDrawOrder.find((wall) => {
+        const rect = getWallRect(wall);
+        return (
+          position.x >= rect.x &&
+          position.x <= rect.x + rect.width &&
+          position.y >= rect.y &&
+          position.y <= rect.y + rect.height
+        );
+      });
+
+      return matchingWall ?? null;
+    },
+    [floorWalls],
+  );
 
   // Handle node changes (drag, select, etc.)
   const handleNodesChange: OnNodesChange<DeviceNode> = useCallback(
@@ -417,9 +440,10 @@ export default function FlowCanvas() {
       if (activeDrawTool !== "device") {
         return;
       }
+      selectWall(null);
       selectDevice(node.id);
     },
-    [selectDevice, activeDrawTool],
+    [selectDevice, selectWall, activeDrawTool],
   );
 
   const handlePaneMouseMove = useCallback(
@@ -437,16 +461,7 @@ export default function FlowCanvas() {
       }
 
       if (activeDrawTool === "wall" && !drawAnchor) {
-        if (floorWalls.length === 0) {
-          setHoverSnapPoint(snappedPoint);
-          return;
-        }
-
-        setHoverSnapPoint(
-          isPointConnectedToWalls(snappedPoint, floorWalls)
-            ? snappedPoint
-            : null,
-        );
+        setHoverSnapPoint(snappedPoint);
         return;
       }
 
@@ -458,15 +473,39 @@ export default function FlowCanvas() {
       drawAnchor,
       currentFloorId,
       getWallSnappedPanePosition,
-      floorWalls,
     ],
   );
 
   // Handle pane click for draw tools / deselect
   const handlePaneClick = useCallback(
     (event: React.MouseEvent) => {
-      if (!isEditMode || !currentFloorId || activeDrawTool === "device") {
+      if (!currentFloorId) {
         selectDevice(null);
+        selectWall(null);
+        return;
+      }
+
+      if (!isEditMode) {
+        selectDevice(null);
+        selectWall(null);
+        return;
+      }
+
+      if (activeDrawTool === "device") {
+        const flowPosition = reactFlow.screenToFlowPosition(
+          { x: event.clientX, y: event.clientY },
+          { snapToGrid: false },
+        );
+        const clickedWall = getWallAtFlowPosition(flowPosition);
+
+        if (clickedWall) {
+          selectDevice(null);
+          selectWall(clickedWall.id);
+          return;
+        }
+
+        selectDevice(null);
+        selectWall(null);
         return;
       }
 
@@ -476,17 +515,10 @@ export default function FlowCanvas() {
           : getWallSnappedPanePosition(event);
       setPointerPreview(clickedPoint);
       selectDevice(null);
+      selectWall(null);
 
       if (activeDrawTool === "wall") {
         if (!drawAnchor) {
-          if (
-            floorWalls.length > 0 &&
-            !isPointConnectedToWalls(clickedPoint, floorWalls)
-          ) {
-            setDrawMessage("Le mur doit démarrer sur un mur existant.");
-            return;
-          }
-
           setDrawAnchor(clickedPoint);
           setDrawMessage(null);
           return;
@@ -513,9 +545,7 @@ export default function FlowCanvas() {
 
         const created = addWallSegment(newSegment);
         if (!created) {
-          setDrawMessage(
-            "Mur refusé: collision device/mur, non connecté, ou déjà existant.",
-          );
+          setDrawMessage("Mur refusé: collision device/mur ou déjà existant.");
           return;
         }
 
@@ -563,13 +593,15 @@ export default function FlowCanvas() {
       currentFloorId,
       activeDrawTool,
       selectDevice,
+      selectWall,
       getWallSnappedPanePosition,
       drawAnchor,
       hoverSnapPoint,
-      floorWalls,
       selectedWallColor,
       addWallSegment,
       addRoom,
+      reactFlow,
+      getWallAtFlowPosition,
     ],
   );
 
@@ -585,8 +617,9 @@ export default function FlowCanvas() {
       setPointerPreview(null);
       setHoverSnapPoint(null);
       setDrawMessage(null);
+      selectWall(null);
     },
-    [isEditMode, activeDrawTool, setActiveDrawTool],
+    [isEditMode, activeDrawTool, setActiveDrawTool, selectWall],
   );
 
   const handleNodeContextMenu = useCallback(
@@ -601,8 +634,9 @@ export default function FlowCanvas() {
       setPointerPreview(null);
       setHoverSnapPoint(null);
       setDrawMessage(null);
+      selectWall(null);
     },
-    [isEditMode, activeDrawTool, setActiveDrawTool],
+    [isEditMode, activeDrawTool, setActiveDrawTool, selectWall],
   );
 
   const drawHint = useMemo(() => {
@@ -610,10 +644,7 @@ export default function FlowCanvas() {
       if (drawAnchor) {
         return "Cliquez le point d'arrivée du mur.";
       }
-      if (floorWalls.length === 0) {
-        return "Cliquez sur la grille pour poser le premier mur.";
-      }
-      return "Survolez un mur existant (cercle) puis cliquez pour démarrer.";
+      return "Cliquez sur la grille pour démarrer un mur.";
     }
 
     if (activeDrawTool === "room") {
@@ -623,7 +654,7 @@ export default function FlowCanvas() {
     }
 
     return null;
-  }, [activeDrawTool, drawAnchor, floorWalls.length]);
+  }, [activeDrawTool, drawAnchor]);
 
   return (
     <div className="relative h-full w-full">
@@ -661,6 +692,7 @@ export default function FlowCanvas() {
               {floorWalls.map((wall) => {
                 const rect = getWallRect(wall);
                 const tone = WALL_COLOR_TONES[wall.color];
+                const isSelected = wall.id === selectedWallId;
                 return (
                   <rect
                     key={wall.id}
@@ -669,8 +701,8 @@ export default function FlowCanvas() {
                     width={rect.width}
                     height={rect.height}
                     fill={tone.fill}
-                    stroke={tone.stroke}
-                    strokeWidth={2}
+                    stroke={isSelected ? "var(--primary)" : tone.stroke}
+                    strokeWidth={isSelected ? 3 : 2}
                     shapeRendering="geometricPrecision"
                   />
                 );
@@ -763,10 +795,7 @@ export default function FlowCanvas() {
       {/* Build mode help */}
       {isEditMode && activeDrawTool !== "device" && drawHint && (
         <div className="absolute top-4 right-4 z-20 max-w-80 rounded-md border bg-card/95 px-3 py-2 text-xs shadow-md backdrop-blur">
-          <p className="font-semibold">
-            {activeDrawTool === "wall" ? "Mode Mur" : "Mode Salle"}
-          </p>
-          <p className="mt-1 text-muted-foreground">{drawHint}</p>
+          <p className="text-muted-foreground">{drawHint}</p>
           <p className="mt-1 text-muted-foreground">
             Echap ou clic droit: quitter le mode construction.
           </p>

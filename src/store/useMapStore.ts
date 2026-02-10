@@ -52,20 +52,6 @@ const wallCollidesWithDevices = (
   );
 };
 
-const segmentTouchesFloorWalls = (
-  segment: Omit<WallSegment, "id">,
-  floorWalls: Array<WallSegment>,
-): boolean => {
-  if (floorWalls.length === 0) {
-    return true;
-  }
-
-  return (
-    isPointConnectedToWalls(segment.start, floorWalls) ||
-    isPointConnectedToWalls(segment.end, floorWalls)
-  );
-};
-
 const roomTouchesFloorWalls = (
   roomSegments: Array<Omit<WallSegment, "id">>,
   floorWalls: Array<WallSegment>,
@@ -91,6 +77,7 @@ export const useMapStore = create<MapStore>()(
       currentBuildingId: mockBuildings[0]?.id ?? null,
       currentFloorId: mockBuildings[0]?.floors[0]?.id ?? null,
       selectedDeviceId: null,
+      selectedWallId: null,
       isEditMode: true,
       highlightedDeviceIds: [],
       activeDrawTool: "device",
@@ -103,6 +90,7 @@ export const useMapStore = create<MapStore>()(
           currentBuildingId: buildingId,
           currentFloorId: building?.floors[0]?.id ?? null,
           selectedDeviceId: null,
+          selectedWallId: null,
           highlightedDeviceIds: [],
         });
       },
@@ -111,12 +99,16 @@ export const useMapStore = create<MapStore>()(
         set({
           currentFloorId: floorId,
           selectedDeviceId: null,
+          selectedWallId: null,
           highlightedDeviceIds: [],
         });
       },
 
       selectDevice: (deviceId: string | null) => {
-        set({ selectedDeviceId: deviceId });
+        set((state) => ({
+          selectedDeviceId: deviceId,
+          selectedWallId: deviceId ? null : state.selectedWallId,
+        }));
       },
 
       addDevice: (deviceData: Omit<Device, "id">) => {
@@ -160,6 +152,21 @@ export const useMapStore = create<MapStore>()(
         }));
       },
 
+      selectWall: (wallId: string | null) => {
+        set((state) => ({
+          selectedWallId: wallId,
+          selectedDeviceId: wallId ? null : state.selectedDeviceId,
+        }));
+      },
+
+      deleteWall: (wallId: string) => {
+        set((state) => ({
+          walls: state.walls.filter((wall) => wall.id !== wallId),
+          selectedWallId:
+            state.selectedWallId === wallId ? null : state.selectedWallId,
+        }));
+      },
+
       addWallSegment: (segment: Omit<WallSegment, "id">) => {
         const normalized = normalizeWallSegmentPoints(
           segment.start,
@@ -184,10 +191,6 @@ export const useMapStore = create<MapStore>()(
           (device) => device.floorId === segment.floorId,
         );
         if (wallCollidesWithDevices(candidate, floorDevices)) {
-          return false;
-        }
-
-        if (!segmentTouchesFloorWalls(candidate, floorWalls)) {
           return false;
         }
 
@@ -264,6 +267,7 @@ export const useMapStore = create<MapStore>()(
         set((state) => ({
           isEditMode: !state.isEditMode,
           activeDrawTool: state.isEditMode ? "device" : state.activeDrawTool,
+          selectedWallId: state.isEditMode ? null : state.selectedWallId,
         }));
       },
 
