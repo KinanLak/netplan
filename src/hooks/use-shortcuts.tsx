@@ -33,7 +33,9 @@ export function useShortcut(
     scopes: [scope],
     enabled,
     preventDefault: true,
-    enableOnFormTags: enableOnFormTags ? ["INPUT", "TEXTAREA", "SELECT"] : false,
+    enableOnFormTags: enableOnFormTags
+      ? ["INPUT", "TEXTAREA", "SELECT"]
+      : false,
   };
 
   useHotkeys(hotkeyString, handler, hotkeyOptions, [handler, enabled]);
@@ -63,7 +65,9 @@ export function useHotkeyDirect(
     scopes: [scope],
     enabled,
     preventDefault: true,
-    enableOnFormTags: enableOnFormTags ? ["INPUT", "TEXTAREA", "SELECT"] : false,
+    enableOnFormTags: enableOnFormTags
+      ? ["INPUT", "TEXTAREA", "SELECT"]
+      : false,
   };
 
   useHotkeys(hotkeyString, handler, hotkeyOptions, [handler, enabled]);

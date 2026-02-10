@@ -175,7 +175,7 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
     scope: "global",
   },
   "floor-3": {
-    hotkey: ["ctrl+3", "ctrl+\""],
+    hotkey: ["ctrl+3", 'ctrl+"'],
     label: "Étage 3",
     description: "Aller à l'étage 3",
     scope: "global",
@@ -233,7 +233,7 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
 
   // Tools - Devices
   "tool-rack": {
-    hotkey: ["r", "3", "\""],
+    hotkey: ["r", "3", '"'],
     label: "Rack",
     description: "Ajouter un rack serveur",
     scope: "canvas",
@@ -341,7 +341,9 @@ export function formatHotkey(hotkey: string): Array<string> {
 /**
  * Get formatted display for the first hotkey of an action
  */
-export function getShortcutDisplay(action: ShortcutAction): Array<Array<string>> {
+export function getShortcutDisplay(
+  action: ShortcutAction,
+): Array<Array<string>> {
   const config = shortcuts[action];
   const hotkeys = Array.isArray(config.hotkey)
     ? config.hotkey
