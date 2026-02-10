@@ -7,7 +7,7 @@ export const mockBuildings: Array<Building> = [
     floors: [
       {
         id: "floor-1",
-        name: "Rez-de-chaussée",
+        name: "RDC",
       },
       {
         id: "floor-2",

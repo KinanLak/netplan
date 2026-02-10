@@ -6,10 +6,9 @@ import {
 } from "@hugeicons/core-free-icons";
 import { useCallback } from "react";
 import { useMapStore } from "@/store/useMapStore";
-import { useOptionHeld } from "@/hooks/use-shortcuts";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Kbd } from "@/components/ui/kbd";
+import { ShortcutHintKeys } from "@/components/ui/shortcut-hint";
 import {
   Sidebar,
   SidebarContent,
@@ -35,7 +34,6 @@ export default function AppSidebar() {
     setCurrentBuilding,
     setCurrentFloor,
   } = useMapStore();
-  const isOptionHeld = useOptionHeld();
 
   const currentBuilding = buildings.find((b) => b.id === currentBuildingId);
 
@@ -105,8 +103,7 @@ export default function AppSidebar() {
                       {building.floors.map((floor, floorIndex) => {
                         const isActive = floor.id === currentFloorId;
                         const shortcutNumber = floorIndex + 1;
-                        const showShortcut =
-                          isOptionHeld && shortcutNumber <= 9;
+                        const showShortcut = shortcutNumber <= 9;
 
                         return (
                           <SidebarMenuSubItem key={floor.id}>
@@ -131,29 +128,15 @@ export default function AppSidebar() {
                                 <span>{floor.name}</span>
                               </span>
                               {showShortcut && (
-                                <span
-                                  className={cn(
-                                    "ml-auto flex items-center gap-0.5 transition-opacity duration-150",
-                                    isOptionHeld ? "opacity-100" : "opacity-0",
+                                <ShortcutHintKeys
+                                  keys={["⌃", String(shortcutNumber)]}
+                                  size="sm"
+                                  className="ml-auto"
+                                  kbdClassName={cn(
+                                    isActive &&
+                                      "bg-primary-foreground text-primary",
                                   )}
-                                >
-                                  <Kbd
-                                    className={cn(
-                                      isActive &&
-                                        "bg-primary-foreground text-primary",
-                                    )}
-                                  >
-                                    ⌃
-                                  </Kbd>
-                                  <Kbd
-                                    className={cn(
-                                      isActive &&
-                                        "bg-primary-foreground text-primary",
-                                    )}
-                                  >
-                                    {shortcutNumber}
-                                  </Kbd>
-                                </span>
+                                />
                               )}
                             </SidebarMenuSubButton>
                           </SidebarMenuSubItem>

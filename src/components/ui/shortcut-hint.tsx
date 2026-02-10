@@ -3,6 +3,14 @@ import { getShortcutDisplay, type ShortcutAction } from "@/lib/shortcuts";
 import { Kbd, KbdGroup } from "@/components/ui/kbd";
 import { cn } from "@/lib/utils";
 
+type ShortcutHintSize = "sm" | "default" | "lg";
+
+const sizeClasses: Record<ShortcutHintSize, string> = {
+  sm: "h-4 min-w-4 text-[10px] px-0.5",
+  default: "",
+  lg: "h-6 min-w-6 text-sm px-1.5",
+};
+
 type ShortcutHintProps = {
   /** The action to display the shortcut for */
   action: ShortcutAction;
@@ -12,6 +20,8 @@ type ShortcutHintProps = {
   className?: string;
   /** Only show the first shortcut key combination */
   singleKey?: boolean;
+  /** Size of the keyboard hints */
+  size?: ShortcutHintSize;
 };
 
 /**
@@ -24,6 +34,7 @@ export function ShortcutHint({
   alwaysShow = false,
   className,
   singleKey = true,
+  size = "default",
 }: ShortcutHintProps) {
   const isOptionHeld = useOptionHeld();
   const shortcutKeys = getShortcutDisplay(action);
@@ -47,10 +58,64 @@ export function ShortcutHint({
       {keysToShow.map((keys, index) => (
         <KbdGroup key={index}>
           {keys.map((key, keyIndex) => (
-            <Kbd key={keyIndex}>{key}</Kbd>
+            <Kbd key={keyIndex} className={sizeClasses[size]}>
+              {key}
+            </Kbd>
           ))}
         </KbdGroup>
       ))}
+    </span>
+  );
+}
+
+type ShortcutHintKeysProps = {
+  /** Array of keys to display */
+  keys: string[];
+  /** Always show the hint, regardless of Option key state */
+  alwaysShow?: boolean;
+  /** Additional class names */
+  className?: string;
+  /** Size of the keyboard hints */
+  size?: ShortcutHintSize;
+  /** Additional class names applied to each Kbd element */
+  kbdClassName?: string;
+};
+
+/**
+ * Displays keyboard shortcut hints from raw keys.
+ * By default, only visible when the Option key is held down.
+ * Use this for dynamic shortcuts that aren't predefined actions.
+ */
+export function ShortcutHintKeys({
+  keys,
+  alwaysShow = false,
+  className,
+  size = "default",
+  kbdClassName,
+}: ShortcutHintKeysProps) {
+  const isOptionHeld = useOptionHeld();
+
+  const isVisible = alwaysShow || isOptionHeld;
+
+  if (!isVisible || keys.length === 0) {
+    return null;
+  }
+
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-0.5 transition-opacity duration-150",
+        isVisible ? "opacity-100" : "opacity-0",
+        className,
+      )}
+    >
+      <KbdGroup>
+        {keys.map((key, keyIndex) => (
+          <Kbd key={keyIndex} className={cn(sizeClasses[size], kbdClassName)}>
+            {key}
+          </Kbd>
+        ))}
+      </KbdGroup>
     </span>
   );
 }
@@ -60,6 +125,8 @@ type ShortcutHintInlineProps = {
   action: ShortcutAction;
   /** Additional class names */
   className?: string;
+  /** Size of the keyboard hints */
+  size?: ShortcutHintSize;
 };
 
 /**
@@ -69,6 +136,7 @@ type ShortcutHintInlineProps = {
 export function ShortcutHintInline({
   action,
   className,
+  size = "default",
 }: ShortcutHintInlineProps) {
   const isOptionHeld = useOptionHeld();
   const shortcutKeys = getShortcutDisplay(action);
@@ -89,7 +157,9 @@ export function ShortcutHintInline({
     >
       <KbdGroup>
         {firstKey.map((key, keyIndex) => (
-          <Kbd key={keyIndex}>{key}</Kbd>
+          <Kbd key={keyIndex} className={sizeClasses[size]}>
+            {key}
+          </Kbd>
         ))}
       </KbdGroup>
     </span>
@@ -108,6 +178,8 @@ type ShortcutHintAbsoluteProps = {
     | "bottom-center";
   /** Additional class names */
   className?: string;
+  /** Size of the keyboard hints */
+  size?: ShortcutHintSize;
 };
 
 /**
@@ -118,6 +190,7 @@ export function ShortcutHintAbsolute({
   action,
   position = "bottom-right",
   className,
+  size = "default",
 }: ShortcutHintAbsoluteProps) {
   const isOptionHeld = useOptionHeld();
   const shortcutKeys = getShortcutDisplay(action);
@@ -147,7 +220,7 @@ export function ShortcutHintAbsolute({
     >
       <KbdGroup>
         {firstKey.map((key, keyIndex) => (
-          <Kbd key={keyIndex} className="shadow-sm">
+          <Kbd key={keyIndex} className={cn("shadow-sm", sizeClasses[size])}>
             {key}
           </Kbd>
         ))}
