@@ -4,8 +4,13 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { Cancel01Icon, UserIcon, WasteIcon } from "@hugeicons/core-free-icons";
 import type { DeviceStatus } from "@/types/map";
 import { useMapStore } from "@/store/useMapStore";
+import { useShortcut } from "@/hooks/use-shortcuts";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  ShortcutHintAbsolute,
+  ShortcutHintInline,
+} from "@/components/ui/shortcut-hint";
 import { cn } from "@/lib/utils";
 
 const statusLabels: Record<DeviceStatus, string> = {
@@ -85,6 +90,26 @@ export default function DeviceDrawer() {
     [devices, selectDevice, setHighlightedDevices, reactFlow],
   );
 
+  const handleCloseDrawer = useCallback(() => {
+    setHighlightedDevices([]);
+    selectDevice(null);
+  }, [setHighlightedDevices, selectDevice]);
+
+  const handleDeleteDevice = useCallback(() => {
+    if (!device) return;
+    deleteDevice(device.id);
+    selectDevice(null);
+  }, [device, deleteDevice, selectDevice]);
+
+  // Register keyboard shortcuts
+  useShortcut("close-drawer", handleCloseDrawer, !!device);
+  useShortcut("delete-device", handleDeleteDevice, !!device && isEditMode);
+  useShortcut(
+    "highlight-connections",
+    handleHighlightConnections,
+    !!device && (device.metadata.connectedDeviceIds?.length ?? 0) > 0,
+  );
+
   if (!device) {
     return null;
   }
@@ -104,22 +129,25 @@ export default function DeviceDrawer() {
               {typeLabels[device.type]}
             </p>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => {
-              setHighlightedDevices([]);
-              selectDevice(null);
-            }}
-            className="h-8 w-8"
-          >
-            <HugeiconsIcon
-              icon={Cancel01Icon}
-              size={20}
-              color="currentColor"
-              strokeWidth={1.5}
+          <div className="relative">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleCloseDrawer}
+              className="h-8 w-8"
+            >
+              <HugeiconsIcon
+                icon={Cancel01Icon}
+                size={20}
+                color="currentColor"
+                strokeWidth={1.5}
+              />
+            </Button>
+            <ShortcutHintAbsolute
+              action="close-drawer"
+              position="bottom-right"
             />
-          </Button>
+          </div>
         </div>
 
         {/* Status badge */}
@@ -224,9 +252,10 @@ export default function DeviceDrawer() {
                   variant={isCurrentDeviceHighlighted ? "secondary" : "outline"}
                   size="sm"
                   onClick={handleHighlightConnections}
-                  className="h-6 text-xs"
+                  className="h-6 gap-1 text-xs"
                 >
                   {isCurrentDeviceHighlighted ? "Masquer" : "Voir sur plan"}
+                  <ShortcutHintInline action="highlight-connections" />
                 </Button>
               </div>
               <div className="space-y-1">
@@ -338,10 +367,7 @@ export default function DeviceDrawer() {
         <footer className="space-y-2 border-t border-border bg-muted p-4">
           <Button
             variant="destructive"
-            onClick={() => {
-              deleteDevice(device.id);
-              selectDevice(null);
-            }}
+            onClick={handleDeleteDevice}
             className="w-full gap-2"
           >
             <HugeiconsIcon
@@ -351,6 +377,7 @@ export default function DeviceDrawer() {
               strokeWidth={1.5}
             />
             Supprimer
+            <ShortcutHintInline action="delete-device" />
           </Button>
         </footer>
       )}

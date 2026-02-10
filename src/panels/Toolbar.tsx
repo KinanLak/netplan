@@ -10,7 +10,9 @@ import {
 import { Check, Minus, Square } from "lucide-react";
 import type { Device, DeviceType, DrawTool } from "@/types/map";
 import type { AvailableDevice } from "@/mock/availableDevices";
+import type { ShortcutAction } from "@/lib/shortcuts";
 import { useMapStore } from "@/store/useMapStore";
+import { useShortcut } from "@/hooks/use-shortcuts";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -24,6 +26,7 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import { ShortcutHintAbsolute } from "@/components/ui/shortcut-hint";
 import { cn } from "@/lib/utils";
 import { availableDevicesCatalog } from "@/mock/availableDevices";
 import { GRID_SIZE, WALL_COLOR_ORDER, WALL_COLOR_TONES } from "@/lib/walls";
@@ -32,18 +35,24 @@ interface ToolbarButton {
   type: DeviceType;
   label: string;
   icon: React.ReactNode;
+  shortcut: ShortcutAction;
+  hotbarShortcut: ShortcutAction;
 }
 
 interface DrawToolButton {
   tool: Extract<DrawTool, "wall" | "room">;
   label: string;
   icon: React.ReactNode;
+  shortcut: ShortcutAction;
+  hotbarShortcut: ShortcutAction;
 }
 
 const toolbarButtons: Array<ToolbarButton> = [
   {
     type: "rack",
     label: "Rack",
+    shortcut: "tool-rack",
+    hotbarShortcut: "hotbar-3",
     icon: (
       <HugeiconsIcon
         icon={ServerStack03Icon}
@@ -56,6 +65,8 @@ const toolbarButtons: Array<ToolbarButton> = [
   {
     type: "switch",
     label: "Switch",
+    shortcut: "tool-switch",
+    hotbarShortcut: "hotbar-4",
     icon: (
       <HugeiconsIcon
         icon={HardDriveIcon}
@@ -68,6 +79,8 @@ const toolbarButtons: Array<ToolbarButton> = [
   {
     type: "pc",
     label: "PC",
+    shortcut: "tool-pc",
+    hotbarShortcut: "hotbar-5",
     icon: (
       <HugeiconsIcon
         icon={ComputerIcon}
@@ -80,6 +93,8 @@ const toolbarButtons: Array<ToolbarButton> = [
   {
     type: "wall-port",
     label: "Prise",
+    shortcut: "tool-wall-port",
+    hotbarShortcut: "hotbar-6",
     icon: (
       <HugeiconsIcon
         icon={PlugSocketIcon}
@@ -95,11 +110,15 @@ const drawToolButtons: Array<DrawToolButton> = [
   {
     tool: "wall",
     label: "Mur",
+    shortcut: "tool-wall",
+    hotbarShortcut: "hotbar-1",
     icon: <Minus className="h-5 w-5" />,
   },
   {
     tool: "room",
     label: "Salle",
+    shortcut: "tool-room",
+    hotbarShortcut: "hotbar-2",
     icon: <Square className="h-4 w-4" />,
   },
 ];
@@ -161,6 +180,70 @@ export default function Toolbar() {
       setSearchQuery("");
     }
   }, []);
+
+  // Register keyboard shortcut handlers
+  useShortcut(
+    "tool-wall",
+    useCallback(() => handleDrawToolClick("wall"), [handleDrawToolClick]),
+    isEditMode && !!currentFloorId,
+  );
+  useShortcut(
+    "tool-room",
+    useCallback(() => handleDrawToolClick("room"), [handleDrawToolClick]),
+    isEditMode && !!currentFloorId,
+  );
+  useShortcut(
+    "tool-rack",
+    useCallback(() => handleTypeClick("rack"), [handleTypeClick]),
+    isEditMode && !!currentFloorId,
+  );
+  useShortcut(
+    "tool-switch",
+    useCallback(() => handleTypeClick("switch"), [handleTypeClick]),
+    isEditMode && !!currentFloorId,
+  );
+  useShortcut(
+    "tool-pc",
+    useCallback(() => handleTypeClick("pc"), [handleTypeClick]),
+    isEditMode && !!currentFloorId,
+  );
+  useShortcut(
+    "tool-wall-port",
+    useCallback(() => handleTypeClick("wall-port"), [handleTypeClick]),
+    isEditMode && !!currentFloorId,
+  );
+
+  // Hotbar shortcuts (1-6 like video game inventory)
+  useShortcut(
+    "hotbar-1",
+    useCallback(() => handleDrawToolClick("wall"), [handleDrawToolClick]),
+    isEditMode && !!currentFloorId,
+  );
+  useShortcut(
+    "hotbar-2",
+    useCallback(() => handleDrawToolClick("room"), [handleDrawToolClick]),
+    isEditMode && !!currentFloorId,
+  );
+  useShortcut(
+    "hotbar-3",
+    useCallback(() => handleTypeClick("rack"), [handleTypeClick]),
+    isEditMode && !!currentFloorId,
+  );
+  useShortcut(
+    "hotbar-4",
+    useCallback(() => handleTypeClick("switch"), [handleTypeClick]),
+    isEditMode && !!currentFloorId,
+  );
+  useShortcut(
+    "hotbar-5",
+    useCallback(() => handleTypeClick("pc"), [handleTypeClick]),
+    isEditMode && !!currentFloorId,
+  );
+  useShortcut(
+    "hotbar-6",
+    useCallback(() => handleTypeClick("wall-port"), [handleTypeClick]),
+    isEditMode && !!currentFloorId,
+  );
 
   const handleAddDevice = useCallback(
     (catalogDevice: AvailableDevice) => {
@@ -264,21 +347,26 @@ export default function Toolbar() {
         <div className="flex items-center gap-2 rounded-lg bg-card p-1 shadow-lg">
           <div className="flex items-center gap-1 border-r pr-2">
             {drawToolButtons.map((btn) => (
-              <Button
-                key={btn.tool}
-                variant={activeDrawTool === btn.tool ? "secondary" : "ghost"}
-                size="sm"
-                onClick={() => handleDrawToolClick(btn.tool)}
-                disabled={!currentFloorId}
-                className={cn(
-                  "flex h-auto min-w-16 flex-col items-center gap-0.5 rounded-md px-2 py-1.5",
-                  activeDrawTool === btn.tool && "ring-2 ring-ring",
-                )}
-                title={`Tracer ${btn.label.toLowerCase()}`}
-              >
-                <span className="[&>svg]:h-5 [&>svg]:w-5">{btn.icon}</span>
-                <span className="text-xs font-medium">{btn.label}</span>
-              </Button>
+              <div key={btn.tool} className="relative">
+                <Button
+                  variant={activeDrawTool === btn.tool ? "secondary" : "ghost"}
+                  size="sm"
+                  onClick={() => handleDrawToolClick(btn.tool)}
+                  disabled={!currentFloorId}
+                  className={cn(
+                    "flex h-auto min-w-16 flex-col items-center gap-0.5 rounded-md px-2 py-1.5",
+                    activeDrawTool === btn.tool && "ring-2 ring-ring",
+                  )}
+                  title={`Tracer ${btn.label.toLowerCase()}`}
+                >
+                  <span className="[&>svg]:h-5 [&>svg]:w-5">{btn.icon}</span>
+                  <span className="text-xs font-medium">{btn.label}</span>
+                </Button>
+                <ShortcutHintAbsolute
+                  action={btn.hotbarShortcut}
+                  position="bottom-center"
+                />
+              </div>
             ))}
           </div>
 
@@ -286,7 +374,9 @@ export default function Toolbar() {
             <div
               className={cn(
                 "border-r pr-2",
-                wallColorSelectionEnabled ? "flex items-center gap-1" : "hidden",
+                wallColorSelectionEnabled
+                  ? "flex items-center gap-1"
+                  : "hidden",
               )}
               aria-hidden={!wallColorSelectionEnabled}
             >
@@ -317,27 +407,36 @@ export default function Toolbar() {
 
           <div className="flex items-center gap-1">
             {toolbarButtons.map((btn) => (
-              <PopoverTrigger
-                key={btn.type}
-                render={
-                  <Button
-                    variant={selectedType === btn.type ? "secondary" : "ghost"}
-                    size="sm"
-                    onClick={() => handleTypeClick(btn.type)}
-                    disabled={!currentFloorId}
-                    className={cn(
-                      "flex h-auto flex-col items-center gap-0.5 rounded-md px-3 py-1.5",
-                      selectedType === btn.type &&
-                        activeDrawTool === "device" &&
-                        "ring-2 ring-ring",
-                    )}
-                    title={`Ajouter ${btn.label}`}
-                  >
-                    <span className="[&>svg]:h-5 [&>svg]:w-5">{btn.icon}</span>
-                    <span className="text-xs font-medium">{btn.label}</span>
-                  </Button>
-                }
-              />
+              <div key={btn.type} className="relative">
+                <PopoverTrigger
+                  render={
+                    <Button
+                      variant={
+                        selectedType === btn.type ? "secondary" : "ghost"
+                      }
+                      size="sm"
+                      onClick={() => handleTypeClick(btn.type)}
+                      disabled={!currentFloorId}
+                      className={cn(
+                        "flex h-auto flex-col items-center gap-0.5 rounded-md px-3 py-1.5",
+                        selectedType === btn.type &&
+                          activeDrawTool === "device" &&
+                          "ring-2 ring-ring",
+                      )}
+                      title={`Ajouter ${btn.label}`}
+                    >
+                      <span className="[&>svg]:h-5 [&>svg]:w-5">
+                        {btn.icon}
+                      </span>
+                      <span className="text-xs font-medium">{btn.label}</span>
+                    </Button>
+                  }
+                />
+                <ShortcutHintAbsolute
+                  action={btn.hotbarShortcut}
+                  position="bottom-center"
+                />
+              </div>
             ))}
           </div>
         </div>

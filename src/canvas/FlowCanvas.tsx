@@ -14,6 +14,7 @@ import { nodeTypes } from "./nodeTypes";
 import type { Node, OnNodesChange } from "@xyflow/react";
 import type { DeviceNodeData, Position, Size, WallSegment } from "@/types/map";
 import { useMapStore } from "@/store/useMapStore";
+import { useShortcut } from "@/hooks/use-shortcuts";
 import { Kbd } from "@/components/ui/kbd";
 import {
   GRID_SIZE,
@@ -153,6 +154,26 @@ export default function FlowCanvas() {
   const [drawMessage, setDrawMessage] = useState<string | null>(null);
 
   const canEditDevices = isEditMode && activeDrawTool === "device";
+
+  // Zoom and pan shortcuts
+  useShortcut(
+    "zoom-in",
+    useCallback(() => {
+      reactFlow.zoomIn({ duration: 200 });
+    }, [reactFlow]),
+  );
+  useShortcut(
+    "zoom-out",
+    useCallback(() => {
+      reactFlow.zoomOut({ duration: 200 });
+    }, [reactFlow]),
+  );
+  useShortcut(
+    "zoom-reset",
+    useCallback(() => {
+      reactFlow.setViewport({ x: 0, y: 0, zoom: 1 }, { duration: 300 });
+    }, [reactFlow]),
+  );
 
   const floorWalls = useMemo(
     () => walls.filter((wall) => wall.floorId === currentFloorId),
@@ -804,8 +825,7 @@ export default function FlowCanvas() {
           isEditMode ? "opacity-100" : "opacity-0"
         }`}
         style={{
-          boxShadow:
-            "inset 0 0 50px 20px rgba(46, 126, 255, 0.3)",
+          boxShadow: "inset 0 0 50px 20px rgba(46, 126, 255, 0.3)",
         }}
       />
     </div>
