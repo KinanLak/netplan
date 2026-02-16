@@ -3,11 +3,13 @@ import { useReactFlow } from "@xyflow/react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   ComputerIcon,
+  DashedLine01Icon,
+  DashedLine02Icon,
   HardDriveIcon,
   PlugSocketIcon,
   ServerStack03Icon,
 } from "@hugeicons/core-free-icons";
-import { Check, Minus, Square } from "lucide-react";
+import { Check } from "lucide-react";
 import type { Device, DeviceType, DrawTool } from "@/types/map";
 import type { AvailableDevice } from "@/mock/availableDevices";
 import type { ShortcutAction } from "@/lib/shortcuts";
@@ -31,89 +33,134 @@ import { cn } from "@/lib/utils";
 import { availableDevicesCatalog } from "@/mock/availableDevices";
 import { GRID_SIZE, WALL_COLOR_ORDER, WALL_COLOR_TONES } from "@/lib/walls";
 
-interface ToolbarButton {
+interface ToolbarActionBase {
+  group: "draw" | "device";
+  id: string;
+  label: string;
+  icon: React.ReactNode;
+  shortcut: ShortcutAction;
+  title: string;
+}
+
+interface DeviceToolbarAction extends ToolbarActionBase {
+  group: "device";
   type: DeviceType;
-  label: string;
-  icon: React.ReactNode;
-  shortcut: ShortcutAction;
 }
 
-interface DrawToolButton {
+interface DrawToolbarAction extends ToolbarActionBase {
+  group: "draw";
   tool: Extract<DrawTool, "wall" | "room">;
-  label: string;
-  icon: React.ReactNode;
-  shortcut: ShortcutAction;
 }
 
-const toolbarButtons: Array<ToolbarButton> = [
-  {
-    type: "rack",
-    label: "Rack",
-    shortcut: "tool-rack",
-    icon: (
-      <HugeiconsIcon
-        icon={ServerStack03Icon}
-        size={20}
-        color="currentColor"
-        strokeWidth={1.5}
-      />
-    ),
-  },
-  {
-    type: "switch",
-    label: "Switch",
-    shortcut: "tool-switch",
-    icon: (
-      <HugeiconsIcon
-        icon={HardDriveIcon}
-        size={20}
-        color="currentColor"
-        strokeWidth={1.5}
-      />
-    ),
-  },
-  {
-    type: "pc",
-    label: "PC",
-    shortcut: "tool-pc",
-    icon: (
-      <HugeiconsIcon
-        icon={ComputerIcon}
-        size={20}
-        color="currentColor"
-        strokeWidth={1.5}
-      />
-    ),
-  },
-  {
-    type: "wall-port",
-    label: "Prise",
-    shortcut: "tool-wall-port",
-    icon: (
-      <HugeiconsIcon
-        icon={PlugSocketIcon}
-        size={20}
-        color="currentColor"
-        strokeWidth={1.5}
-      />
-    ),
-  },
-];
+type ToolbarAction = DeviceToolbarAction | DrawToolbarAction;
 
-const drawToolButtons: Array<DrawToolButton> = [
+const TOOLBAR_ICON_SIZE_CLASS = "size-6";
+
+const toolbarActions: Array<ToolbarAction> = [
   {
+    group: "draw",
+    id: "wall",
     tool: "wall",
     label: "Mur",
     shortcut: "tool-wall",
-    icon: <Minus className="h-5 w-5" />,
+    title: "Tracer mur",
+    icon: (
+      <HugeiconsIcon
+        icon={DashedLine01Icon}
+        className={TOOLBAR_ICON_SIZE_CLASS}
+        color="currentColor"
+        strokeWidth={1.5}
+      />
+    ),
   },
   {
+    group: "draw",
+    id: "room",
     tool: "room",
     label: "Salle",
     shortcut: "tool-room",
-    icon: <Square className="h-4 w-4" />,
+    title: "Tracer salle",
+    icon: (
+      <HugeiconsIcon
+        icon={DashedLine02Icon}
+        className={TOOLBAR_ICON_SIZE_CLASS}
+        color="currentColor"
+        strokeWidth={1.5}
+      />
+    ),
+  },
+  {
+    group: "device",
+    id: "rack",
+    type: "rack",
+    label: "Rack",
+    shortcut: "tool-rack",
+    title: "Ajouter Rack",
+    icon: (
+      <HugeiconsIcon
+        icon={ServerStack03Icon}
+        className={TOOLBAR_ICON_SIZE_CLASS}
+        color="currentColor"
+        strokeWidth={1.5}
+      />
+    ),
+  },
+  {
+    group: "device",
+    id: "switch",
+    type: "switch",
+    label: "Switch",
+    shortcut: "tool-switch",
+    title: "Ajouter Switch",
+    icon: (
+      <HugeiconsIcon
+        icon={HardDriveIcon}
+        className={TOOLBAR_ICON_SIZE_CLASS}
+        color="currentColor"
+        strokeWidth={1.5}
+      />
+    ),
+  },
+  {
+    group: "device",
+    id: "pc",
+    type: "pc",
+    label: "PC",
+    shortcut: "tool-pc",
+    title: "Ajouter PC",
+    icon: (
+      <HugeiconsIcon
+        icon={ComputerIcon}
+        className={TOOLBAR_ICON_SIZE_CLASS}
+        color="currentColor"
+        strokeWidth={1.5}
+      />
+    ),
+  },
+  {
+    group: "device",
+    id: "wall-port",
+    type: "wall-port",
+    label: "Prise",
+    shortcut: "tool-wall-port",
+    title: "Ajouter Prise",
+    icon: (
+      <HugeiconsIcon
+        icon={PlugSocketIcon}
+        className={TOOLBAR_ICON_SIZE_CLASS}
+        color="currentColor"
+        strokeWidth={1.5}
+      />
+    ),
   },
 ];
+
+const drawToolbarActions = toolbarActions.filter(
+  (action): action is DrawToolbarAction => action.group === "draw",
+);
+const deviceToolbarActions = toolbarActions.filter(
+  (action): action is DeviceToolbarAction => action.group === "device",
+);
 
 export default function Toolbar() {
   const {
@@ -304,51 +351,85 @@ export default function Toolbar() {
   }
 
   const showWallColors = activeDrawTool === "wall" || activeDrawTool === "room";
-  const wallColorSelectionEnabled = false;
+  const wallColorSelectionEnabled = true;
+  const isActionActive = (action: ToolbarAction) => {
+    if (action.group === "draw") {
+      return activeDrawTool === action.tool;
+    }
+
+    return selectedType === action.type && activeDrawTool === "device";
+  };
+
+  const handleToolbarActionClick = (action: ToolbarAction) => {
+    if (action.group === "draw") {
+      handleDrawToolClick(action.tool);
+      return;
+    }
+
+    handleTypeClick(action.type);
+  };
+
+  const renderToolbarAction = (action: ToolbarAction) => {
+    const isActive = isActionActive(action);
+    const button = (
+      <Button
+        ref={
+          action.group === "device"
+            ? (el) => {
+                buttonRefs.current[action.type] = el;
+              }
+            : undefined
+        }
+        variant={isActive ? "secondary" : "ghost"}
+        size="sm"
+        onClick={() => handleToolbarActionClick(action)}
+        disabled={!currentFloorId}
+        className={cn(
+          "flex h-auto flex-col items-center -md px-2 py-1.5",
+          isActive && "ring-2 ring-ring",
+        )}
+        title={action.title}
+      >
+        {action.icon}
+      </Button>
+    );
+
+    return (
+      <div key={action.id} className="relative">
+        {action.group === "device" ? (
+          <PopoverTrigger render={button} />
+        ) : (
+          button
+        )}
+        <ShortcutHintAbsolute
+          action={action.shortcut}
+          position="bottom-center"
+        />
+      </div>
+    );
+  };
 
   return (
-    <div className="absolute top-4 left-1/2 z-10 -translate-x-1/2">
+    <div className="fixed top-4 left-1/2 z-10 -translate-x-1/2">
       <Popover
         open={open && selectedType !== null && activeDrawTool === "device"}
         onOpenChange={handleOpenChange}
       >
         <div className="flex items-center gap-2 rounded-lg bg-card p-1 shadow-lg">
-          <div className="flex items-center gap-1 border-r pr-2">
-            {drawToolButtons.map((btn) => (
-              <div key={btn.tool} className="relative">
-                <Button
-                  variant={activeDrawTool === btn.tool ? "secondary" : "ghost"}
-                  size="sm"
-                  onClick={() => handleDrawToolClick(btn.tool)}
-                  disabled={!currentFloorId}
-                  className={cn(
-                    "flex h-auto min-w-16 flex-col items-center gap-0.5 rounded-md px-2 py-1.5",
-                    activeDrawTool === btn.tool && "ring-2 ring-ring",
-                  )}
-                  title={`Tracer ${btn.label.toLowerCase()}`}
-                >
-                  <span className="[&>svg]:h-5 [&>svg]:w-5">{btn.icon}</span>
-                  <span className="text-xs font-medium">{btn.label}</span>
-                </Button>
-                <ShortcutHintAbsolute
-                  action={btn.shortcut}
-                  position="bottom-center"
-                />
-              </div>
-            ))}
+          <div className="flex items-center gap-1">
+            {drawToolbarActions.map((action) => renderToolbarAction(action))}
           </div>
 
           {showWallColors && (
             <div
               className={cn(
-                "border-r pr-2",
+                "flex items-center gap-1",
                 // eslint-disable-next-line
-                wallColorSelectionEnabled
-                  ? "flex items-center gap-1"
-                  : "hidden",
+                wallColorSelectionEnabled ? "" : "hidden",
               )}
               aria-hidden={!wallColorSelectionEnabled}
             >
+              <div className="h-6 w-px bg-border" aria-hidden />
               {WALL_COLOR_ORDER.map((color) => {
                 const tone = WALL_COLOR_TONES[color];
                 const isActive = selectedWallColor === color;
@@ -360,8 +441,8 @@ export default function Toolbar() {
                     onClick={() => handleSelectWallColor(color)}
                     disabled={!currentFloorId || !wallColorSelectionEnabled}
                     className={cn(
-                      "h-6 w-6 rounded-full border-2 ring-ring transition-all",
-                      isActive && "ring-2 ring-offset-1",
+                      "h-6 w-6 rounded-full ring-ring transition-all",
+                      isActive && "ring-2 ring-offset-0.5 ring-muted-foreground",
                     )}
                     style={{
                       backgroundColor: tone.fill,
@@ -374,42 +455,10 @@ export default function Toolbar() {
             </div>
           )}
 
+          <div className="h-6 w-px bg-border" aria-hidden />
+
           <div className="flex items-center gap-1">
-            {toolbarButtons.map((btn) => (
-              <div key={btn.type} className="relative">
-                <PopoverTrigger
-                  render={
-                    <Button
-                      ref={(el) => {
-                        buttonRefs.current[btn.type] = el;
-                      }}
-                      variant={
-                        selectedType === btn.type ? "secondary" : "ghost"
-                      }
-                      size="sm"
-                      onClick={() => handleTypeClick(btn.type)}
-                      disabled={!currentFloorId}
-                      className={cn(
-                        "flex h-auto flex-col items-center gap-0.5 rounded-md px-3 py-1.5",
-                        selectedType === btn.type &&
-                          activeDrawTool === "device" &&
-                          "ring-2 ring-ring",
-                      )}
-                      title={`Ajouter ${btn.label}`}
-                    >
-                      <span className="[&>svg]:h-5 [&>svg]:w-5">
-                        {btn.icon}
-                      </span>
-                      <span className="text-xs font-medium">{btn.label}</span>
-                    </Button>
-                  }
-                />
-                <ShortcutHintAbsolute
-                  action={btn.shortcut}
-                  position="bottom-center"
-                />
-              </div>
-            ))}
+            {deviceToolbarActions.map((action) => renderToolbarAction(action))}
           </div>
         </div>
 

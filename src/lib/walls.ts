@@ -3,7 +3,7 @@ import type { Position, WallColor, WallSegment } from "@/types/map";
 export const GRID_SIZE = 20;
 export const WALL_GRID_OFFSET = GRID_SIZE / 2;
 // Une prise fait 40px de large, donc le mur fait 20px.
-export const WALL_THICKNESS = 20;
+export const WALL_THICKNESS = 15;
 
 export interface WallColorTone {
   label: string;
