@@ -82,19 +82,19 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
     scope: "global",
   },
   undo: {
-    hotkey: "meta+z",
+    hotkey: "mod+z",
     label: "Annuler",
     description: "Annuler la dernière action",
     scope: "global",
   },
   redo: {
-    hotkey: ["meta+shift+z", "meta+y"],
+    hotkey: ["mod+shift+z", "mod+y"],
     label: "Rétablir",
     description: "Rétablir l'action annulée",
     scope: "global",
   },
   "show-shortcuts": {
-    hotkey: "shift+?",
+    hotkey: "?",
     label: "Raccourcis",
     description: "Afficher la liste des raccourcis clavier",
     scope: "global",
@@ -151,14 +151,14 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
   },
   "floor-up": {
     hotkey: "ctrl+up",
-    label: "Étage supérieur",
-    description: "Aller à l'étage supérieur",
+    label: "Étage précédent",
+    description: "Aller à l'étage précédent",
     scope: "global",
   },
   "floor-down": {
     hotkey: "ctrl+down",
-    label: "Étage inférieur",
-    description: "Aller à l'étage inférieur",
+    label: "Étage suivant",
+    description: "Aller à l'étage suivant",
     scope: "global",
   },
   // Floor shortcuts - supporting both QWERTY and AZERTY layouts
@@ -274,13 +274,23 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
     hotkey: "h",
     label: "Connexions",
     description: "Afficher/masquer les connexions",
-    scope: "drawer",
+    scope: "global",
   },
 };
 
 /**
- * Format a hotkey string for display (macOS style)
- * Converts 'meta+shift+z' to ['⌘', '⇧', 'Z']
+ * Detect if the current platform is macOS
+ */
+export const isMac =
+  typeof navigator !== "undefined" &&
+  /Mac|iPod|iPhone|iPad/.test(navigator.platform);
+
+/**
+ * Format a hotkey string for display
+ * Shows platform-appropriate symbols:
+ * - 'mod' -> ⌘ on Mac, Ctrl on others
+ * - 'meta' -> ⌘ (always Cmd/Win key)
+ * - 'ctrl' -> ⌃ on Mac, Ctrl on others
  */
 export function formatHotkey(hotkey: string): Array<string> {
   const parts = hotkey.toLowerCase().split("+");
@@ -289,17 +299,19 @@ export function formatHotkey(hotkey: string): Array<string> {
   for (const part of parts) {
     switch (part) {
       case "meta":
-      case "mod":
         result.push("⌘");
         break;
+      case "mod":
+        result.push(isMac ? "⌘" : "Ctrl");
+        break;
       case "ctrl":
-        result.push("⌃");
+        result.push(isMac ? "⌃" : "Ctrl");
         break;
       case "alt":
-        result.push("⌥");
+        result.push(isMac ? "⌥" : "Alt");
         break;
       case "shift":
-        result.push("⇧");
+        result.push(isMac ? "⇧" : "Shift");
         break;
       case "escape":
         result.push("esc");

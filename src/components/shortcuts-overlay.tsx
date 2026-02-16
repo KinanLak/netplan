@@ -1,6 +1,6 @@
 import type { ShortcutAction } from "@/lib/shortcuts";
 import { useOptionHeld } from "@/hooks/use-shortcuts";
-import { formatHotkey, shortcuts } from "@/lib/shortcuts";
+import { formatHotkey, isMac, shortcuts } from "@/lib/shortcuts";
 import { Kbd, KbdGroup } from "@/components/ui/kbd";
 import { cn } from "@/lib/utils";
 
@@ -58,7 +58,7 @@ export function ShortcutsOverlay() {
           </h2>
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <span>Maintenez</span>
-            <Kbd>⌥</Kbd>
+            <Kbd>{isMac ? "⌥" : "Alt"}</Kbd>
             <span>pour voir</span>
           </div>
         </div>

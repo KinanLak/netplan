@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { ReactFlowProvider } from "@xyflow/react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Edit01Icon, Tick01Icon } from "@hugeicons/core-free-icons";
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import FlowCanvas from "@/canvas/FlowCanvas";
 import AppSidebar from "@/panels/Sidebar";
 import Toolbar from "@/panels/Toolbar";
@@ -13,6 +13,7 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { ThemeProvider, useTheme } from "@/components/theme-provider";
 import { HotkeysProvider } from "@/components/hotkeys-provider";
 import { useShortcut } from "@/hooks/use-shortcuts";
+import { useUndoRedo } from "@/hooks/use-undo-redo";
 import { ShortcutsDialog } from "@/components/shortcuts-dialog";
 import { ShortcutHintAbsolute } from "@/components/ui/shortcut-hint";
 
@@ -48,6 +49,57 @@ function HomePageContent() {
   const currentFloorId = useMapStore((state) => state.currentFloorId);
   const setCurrentFloor = useMapStore((state) => state.setCurrentFloor);
   const { theme, setTheme } = useTheme();
+  const { handleUndo, handleRedo } = useUndoRedo();
+
+  useEffect(() => {
+    const isEditableTarget = (target: EventTarget | null): boolean => {
+      if (!(target instanceof HTMLElement)) {
+        return false;
+      }
+
+      const tagName = target.tagName;
+      return (
+        tagName === "INPUT" ||
+        tagName === "TEXTAREA" ||
+        tagName === "SELECT" ||
+        target.isContentEditable
+      );
+    };
+
+    const handleUndoRedoHotkeys = (event: KeyboardEvent) => {
+      if (!isEditMode) {
+        return;
+      }
+
+      if (isEditableTarget(event.target)) {
+        return;
+      }
+
+      const key = event.key.toLowerCase();
+      const modPressed = event.ctrlKey || event.metaKey;
+
+      if (!modPressed) {
+        return;
+      }
+
+      if (!event.shiftKey && key === "z") {
+        event.preventDefault();
+        handleUndo();
+        return;
+      }
+
+      if ((event.shiftKey && key === "z") || (!event.shiftKey && key === "y")) {
+        event.preventDefault();
+        handleRedo();
+      }
+    };
+
+    window.addEventListener("keydown", handleUndoRedoHotkeys, true);
+
+    return () => {
+      window.removeEventListener("keydown", handleUndoRedoHotkeys, true);
+    };
+  }, [handleUndo, handleRedo, isEditMode]);
 
   // Get current building's floors for navigation
   const currentBuilding = buildings.find((b) => b.id === currentBuildingId);
@@ -56,14 +108,14 @@ function HomePageContent() {
 
   // Floor navigation handlers
   const navigateFloorUp = useCallback(() => {
-    if (currentFloorIndex < floors.length - 1) {
-      setCurrentFloor(floors[currentFloorIndex + 1].id);
+    if (currentFloorIndex > 0) {
+      setCurrentFloor(floors[currentFloorIndex - 1].id);
     }
   }, [currentFloorIndex, floors, setCurrentFloor]);
 
   const navigateFloorDown = useCallback(() => {
-    if (currentFloorIndex > 0) {
-      setCurrentFloor(floors[currentFloorIndex - 1].id);
+    if (currentFloorIndex < floors.length - 1) {
+      setCurrentFloor(floors[currentFloorIndex + 1].id);
     }
   }, [currentFloorIndex, floors, setCurrentFloor]);
 

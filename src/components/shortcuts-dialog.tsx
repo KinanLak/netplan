@@ -1,9 +1,8 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { HelpCircleIcon } from "@hugeicons/core-free-icons";
 import type { ShortcutAction } from "@/lib/shortcuts";
-import { useShortcut } from "@/hooks/use-shortcuts";
-import { formatHotkey, shortcuts } from "@/lib/shortcuts";
+import { formatHotkey, isMac, shortcuts } from "@/lib/shortcuts";
 import { Kbd, KbdGroup } from "@/components/ui/kbd";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,6 +21,8 @@ const shortcutGroups: Array<ShortcutGroup> = [
   {
     title: "Général",
     actions: [
+      "undo",
+      "redo",
       "toggle-edit-mode",
       "escape",
       "delete",
@@ -62,7 +63,38 @@ export function ShortcutsDialog() {
     setIsOpen((prev) => !prev);
   }, []);
 
-  useShortcut("show-shortcuts", toggleDialog);
+  useEffect(() => {
+    const isEditableTarget = (target: EventTarget | null): boolean => {
+      if (!(target instanceof HTMLElement)) {
+        return false;
+      }
+
+      const tagName = target.tagName;
+      return (
+        tagName === "INPUT" ||
+        tagName === "TEXTAREA" ||
+        tagName === "SELECT" ||
+        target.isContentEditable
+      );
+    };
+
+    const handleToggleDialogShortcut = (event: KeyboardEvent) => {
+      if (isEditableTarget(event.target)) {
+        return;
+      }
+
+      if (event.key === "?") {
+        event.preventDefault();
+        toggleDialog();
+      }
+    };
+
+    window.addEventListener("keydown", handleToggleDialogShortcut, true);
+
+    return () => {
+      window.removeEventListener("keydown", handleToggleDialogShortcut, true);
+    };
+  }, [toggleDialog]);
 
   return (
     <>
@@ -128,8 +160,8 @@ export function ShortcutsDialog() {
 
           <div className="mt-4 flex flex-col gap-2 border-t border-border pt-4">
             <p className="text-center text-xs text-muted-foreground">
-              Maintenez <Kbd className="mx-1">⌥</Kbd> pour voir les raccourcis
-              en contexte
+              Maintenez <Kbd className="mx-1">{isMac ? "⌥" : "Alt"}</Kbd> pour
+              voir les raccourcis en contexte
             </p>
             <p className="text-center text-xs text-muted-foreground">
               Appuyez <Kbd className="mx-1">?</Kbd> ou{" "}

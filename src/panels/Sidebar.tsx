@@ -2,11 +2,15 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import {
   Building05Icon,
   DashedLine01Icon,
+  RedoIcon,
   SolidLine01Icon,
+  UndoIcon,
 } from "@hugeicons/core-free-icons";
 import { useCallback } from "react";
 import { useMapStore } from "@/store/useMapStore";
 import { cn } from "@/lib/utils";
+import { isMac } from "@/lib/shortcuts";
+import { useTemporalStore, useUndoRedo } from "@/hooks/use-undo-redo";
 import { Button } from "@/components/ui/button";
 import { ShortcutHintKeys } from "@/components/ui/shortcut-hint";
 import {
@@ -31,9 +35,14 @@ export default function AppSidebar() {
     buildings,
     currentBuildingId,
     currentFloorId,
+    isEditMode,
     setCurrentBuilding,
     setCurrentFloor,
   } = useMapStore();
+
+  const { handleUndo, handleRedo } = useUndoRedo();
+  const canUndo = useTemporalStore((s) => s.pastStates.length > 0);
+  const canRedo = useTemporalStore((s) => s.futureStates.length > 0);
 
   const currentBuilding = buildings.find((b) => b.id === currentBuildingId);
 
@@ -129,7 +138,10 @@ export default function AppSidebar() {
                               </span>
                               {showShortcut && (
                                 <ShortcutHintKeys
-                                  keys={["⌃", String(shortcutNumber)]}
+                                  keys={[
+                                    isMac ? "⌃" : "Ctrl",
+                                    String(shortcutNumber),
+                                  ]}
                                   size="sm"
                                   className="ml-auto"
                                   kbdClassName={cn(
@@ -150,6 +162,35 @@ export default function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+
+      {/* Undo / Redo */}
+      <div className="border-t px-4 py-2">
+        <div className="flex w-full">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleUndo}
+            disabled={!isEditMode || !canUndo}
+            className="flex h-8 flex-1 items-center justify-center gap-1.5 rounded-r-none text-xs"
+            title="Annuler (Ctrl+Z)"
+          >
+            <HugeiconsIcon icon={UndoIcon} size={14} strokeWidth={1.5} />
+            Annuler
+          </Button>
+          <div className="w-px bg-border" aria-hidden />
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleRedo}
+            disabled={!isEditMode || !canRedo}
+            className="flex h-8 flex-1 items-center justify-center gap-1.5 rounded-l-none text-xs"
+            title="Rétablir (Ctrl+Shift+Z)"
+          >
+            Rétablir
+            <HugeiconsIcon icon={RedoIcon} size={14} strokeWidth={1.5} />
+          </Button>
+        </div>
+      </div>
 
       {/* Footer */}
       <SidebarFooter className="border-t px-4 py-3">

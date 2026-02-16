@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useReactFlow } from "@xyflow/react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -178,6 +178,19 @@ export default function Toolbar() {
   const [selectedType, setSelectedType] = useState<DeviceType | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [open, setOpen] = useState(false);
+  const [flashType, setFlashType] = useState<"undo" | "redo" | null>(null);
+
+  // Listen for undo/redo events and flash the toolbar background
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const type = (e as CustomEvent<{ type: "undo" | "redo" }>).detail.type;
+      setFlashType(type);
+      const timeout = setTimeout(() => setFlashType(null), 500);
+      return () => clearTimeout(timeout);
+    };
+    window.addEventListener("netplan:undo-redo", handler);
+    return () => window.removeEventListener("netplan:undo-redo", handler);
+  }, []);
 
   // Refs for each device type button to use as popover anchors
   const buttonRefs = useRef<Record<DeviceType, HTMLButtonElement | null>>({
@@ -385,7 +398,7 @@ export default function Toolbar() {
         onClick={() => handleToolbarActionClick(action)}
         disabled={!currentFloorId}
         className={cn(
-          "flex h-auto flex-col items-center -md px-2 py-1.5",
+          "-md flex h-auto flex-col items-center px-2 py-1.5",
           isActive && "ring-2 ring-ring",
         )}
         title={action.title}
@@ -415,7 +428,16 @@ export default function Toolbar() {
         open={open && selectedType !== null && activeDrawTool === "device"}
         onOpenChange={handleOpenChange}
       >
-        <div className="flex items-center gap-2 rounded-lg bg-card p-1 shadow-lg">
+        <div
+          className={cn(
+            "flex items-center gap-2 rounded-lg p-1 shadow-lg transition-colors duration-500",
+            flashType === "undo"
+              ? "bg-red-100 dark:bg-red-950"
+              : flashType === "redo"
+                ? "bg-blue-100 dark:bg-blue-950"
+                : "bg-card",
+          )}
+        >
           <div className="flex items-center gap-1">
             {drawToolbarActions.map((action) => renderToolbarAction(action))}
           </div>
@@ -442,7 +464,8 @@ export default function Toolbar() {
                     disabled={!currentFloorId || !wallColorSelectionEnabled}
                     className={cn(
                       "h-6 w-6 rounded-full ring-ring transition-all",
-                      isActive && "ring-2 ring-offset-0.5 ring-muted-foreground",
+                      isActive &&
+                        "ring-offset-0.5 ring-2 ring-muted-foreground",
                     )}
                     style={{
                       backgroundColor: tone.fill,
