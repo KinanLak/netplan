@@ -10,5 +10,6 @@ export default defineConfig([
     "src/components/ui/**/*",
     "eslint.config.js",
     ".output/**/*",
+    "src/routeTree.gen.ts",
   ]),
 ]);
