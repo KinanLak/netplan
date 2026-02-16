@@ -53,21 +53,19 @@ export function ThemeProvider({
   storageKey = "netplan-ui-theme",
   ...props
 }: ThemeProviderProps) {
-  const [theme, setThemeState] = React.useState<Theme>(() =>
-    getStoredTheme(storageKey, defaultTheme),
-  );
+  const [theme, setThemeState] = React.useState<Theme>(defaultTheme);
   const [resolvedTheme, setResolvedTheme] = React.useState<ResolvedTheme>(
-    () => {
-      if (!isBrowser) {
-        return defaultTheme === "dark" ? "dark" : "light";
-      }
-
-      return resolveTheme(
-        getStoredTheme(storageKey, defaultTheme),
-        window.matchMedia("(prefers-color-scheme: dark)").matches,
-      );
-    },
+    defaultTheme === "dark" ? "dark" : "light",
   );
+
+  React.useEffect(() => {
+    if (!isBrowser) {
+      return;
+    }
+
+    const storedTheme = getStoredTheme(storageKey, defaultTheme);
+    setThemeState(storedTheme);
+  }, [defaultTheme, storageKey]);
 
   React.useEffect(() => {
     if (!isBrowser) {

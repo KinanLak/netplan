@@ -81,3 +81,7 @@ Why? Using `/XX` opacity on theme colors defeats the purpose of the design syste
 ## Path aliases
 
 - TypeScript path alias is configured in `tsconfig.json`: import from `@/...` to reference `src/...`.
+
+## Tips
+
+- Always use Context7 MCP when I need library/API documentation, code generation, setup or configuration steps without me having to explicitly ask.
