@@ -342,6 +342,7 @@ export default function Toolbar() {
             <div
               className={cn(
                 "border-r pr-2",
+                // eslint-disable-next-line
                 wallColorSelectionEnabled
                   ? "flex items-center gap-1"
                   : "hidden",

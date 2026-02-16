@@ -26,11 +26,13 @@ export function ModeToggle() {
         {/* Shortcut hint on the left, visible only when Option is held */}
         <span
           className={cn(
-            "transition-all duration-200 flex",
-            isOptionHeld.isHeld ? "opacity-100" : "max-w-0 overflow-hidden opacity-0",
+            "flex transition-all duration-200",
+            isOptionHeld.isHeld
+              ? "opacity-100"
+              : "max-w-0 overflow-hidden opacity-0",
           )}
         >
-          <ShortcutHint size="sm" action="cycle-theme" alwaysShow  />
+          <ShortcutHint size="sm" action="cycle-theme" alwaysShow />
         </span>
         <DropdownMenuTrigger className="flex h-8 w-8 items-center justify-center rounded-md ring-ring transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:outline-hidden">
           {/* Light mode icon */}

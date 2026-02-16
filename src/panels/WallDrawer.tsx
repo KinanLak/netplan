@@ -3,7 +3,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { Cancel01Icon, WasteIcon } from "@hugeicons/core-free-icons";
 import { WALL_COLOR_TONES } from "@/lib/walls";
 import { useMapStore } from "@/store/useMapStore";
-import { useShortcut, useDrawerScope } from "@/hooks/use-shortcuts";
+import { useDrawerScope, useShortcut } from "@/hooks/use-shortcuts";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 

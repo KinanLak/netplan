@@ -69,6 +69,7 @@ Why? Using `/XX` opacity on theme colors defeats the purpose of the design syste
 
 - Install deps: repo includes `bun.lock` (Bun is expected), only use bun.
 - Run dev server: `bun run dev` (Vite).
+- Check/Lint: `bun run check` (tsc + ESLint + Prettier) => To run after every code change.
 - Production build: `bun run build` (runs `tsc -b` then `vite build`).
 - Preview build: `bun run preview`.
 
