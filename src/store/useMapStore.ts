@@ -14,7 +14,6 @@ import {
   areSameWallGeometry,
   createRoomWallSegments,
   getWallRect,
-  isPointConnectedToWalls,
   normalizeWallSegmentPoints,
 } from "@/lib/walls";
 
@@ -50,21 +49,6 @@ const wallCollidesWithDevices = (
       device.position,
       device.size,
     ),
-  );
-};
-
-const roomTouchesFloorWalls = (
-  roomSegments: Array<Omit<WallSegment, "id">>,
-  floorWalls: Array<WallSegment>,
-): boolean => {
-  if (floorWalls.length === 0) {
-    return true;
-  }
-
-  return roomSegments.some(
-    (segment) =>
-      isPointConnectedToWalls(segment.start, floorWalls) ||
-      isPointConnectedToWalls(segment.end, floorWalls),
   );
 };
 
@@ -243,10 +227,6 @@ export const useMapStore = create<MapStore>()(
             wallCollidesWithDevices(segment, floorDevices),
           );
           if (roomHitsDevice) {
-            return false;
-          }
-
-          if (!roomTouchesFloorWalls(roomSegments, floorWalls)) {
             return false;
           }
 

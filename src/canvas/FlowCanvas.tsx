@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import {
   Background,
   BackgroundVariant,
-  Controls,
   ReactFlow,
   ViewportPortal,
   useNodesState,
@@ -10,6 +9,7 @@ import {
 } from "@xyflow/react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { MouseRightClick04Icon } from "@hugeicons/core-free-icons";
+import { LocateFixed, Minus, Plus } from "lucide-react";
 import { nodeTypes } from "./nodeTypes";
 import type { Node, OnNodesChange } from "@xyflow/react";
 import type { Device, Position, Size, WallSegment } from "@/types/map";
@@ -18,62 +18,24 @@ import { useHotkeyDirect, useShortcut } from "@/hooks/use-shortcuts";
 import { Kbd } from "@/components/ui/kbd";
 import {
   GRID_SIZE,
+  WALL_COLOR_ORDER,
   WALL_COLOR_TONES,
-  WALL_THICKNESS,
   arePositionsEqual,
   createOrthogonalWallSegment,
   createRoomWallSegments,
   getWallRect,
-  isPointOnWall,
   snapPositionToWallGrid,
 } from "@/lib/walls";
+import {
+  computeMergedWallGroups,
+  computeSingleWallPath,
+} from "@/lib/wallGeometry";
 import { cn } from "@/lib/utils";
 
 const SNAP_GRID: [number, number] = [GRID_SIZE, GRID_SIZE];
 
 type DeviceNode = Node<{ data: Device }>;
 type DraftWallSegment = Omit<WallSegment, "id">;
-type WallRenderable = Pick<WallSegment, "start" | "end" | "color">;
-
-const getPointKey = (position: Position): string =>
-  `${position.x}:${position.y}`;
-
-const collectJunctionPoints = (
-  candidateSegments: Array<WallRenderable>,
-  allSegments: Array<WallRenderable>,
-): Array<{ point: Position; color: WallSegment["color"] }> => {
-  const jointMap = new Map<
-    string,
-    { point: Position; color: WallSegment["color"] }
-  >();
-
-  const candidates = candidateSegments.flatMap((segment) => [
-    { point: segment.start, color: segment.color },
-    { point: segment.end, color: segment.color },
-  ]);
-
-  candidates.forEach((candidate) => {
-    const key = getPointKey(candidate.point);
-    if (jointMap.has(key)) {
-      return;
-    }
-
-    const touchingSegments = allSegments.filter((segment) =>
-      isPointOnWall(candidate.point, segment),
-    );
-    if (touchingSegments.length < 2) {
-      return;
-    }
-
-    jointMap.set(key, {
-      point: candidate.point,
-      color: candidate.color,
-    });
-  });
-
-  return Array.from(jointMap.values());
-};
-
 // Find the nearest valid position when there's a collision
 const findNearestValidPosition = (
   deviceId: string,
@@ -286,14 +248,21 @@ export default function FlowCanvas() {
     );
   })();
 
-  const floorWallJunctions = collectJunctionPoints(floorWalls, floorWalls);
+  const mergedWallGroups = computeMergedWallGroups(floorWalls).sort(
+    (a, b) =>
+      WALL_COLOR_ORDER.indexOf(a.color) - WALL_COLOR_ORDER.indexOf(b.color),
+  );
 
-  const previewJunctions = (() => {
-    if (previewSegments.length === 0) {
-      return [];
-    }
-    const combined: Array<WallRenderable> = [...floorWalls, ...previewSegments];
-    return collectJunctionPoints(previewSegments, combined);
+  const previewMergedWallGroups = computeMergedWallGroups(previewSegments).sort(
+    (a, b) =>
+      WALL_COLOR_ORDER.indexOf(a.color) - WALL_COLOR_ORDER.indexOf(b.color),
+  );
+
+  const selectedWallPath = (() => {
+    if (!selectedWallId) return null;
+    const wall = floorWalls.find((w) => w.id === selectedWallId);
+    if (!wall) return null;
+    return computeSingleWallPath(wall);
   })();
 
   const paneCursorClass = (() => {
@@ -638,7 +607,7 @@ export default function FlowCanvas() {
 
     if (!created) {
       setDrawMessage(
-        "Salle refusée: rectangle vide, collision device/mur, non connecté ou déjà présent.",
+        "Salle refusée: rectangle vide, collision device/mur ou déjà présent.",
       );
       return;
     }
@@ -675,6 +644,18 @@ export default function FlowCanvas() {
     setHoverSnapPoint(null);
     setDrawMessage(null);
     selectWall(null);
+  };
+
+  const handleZoomInClick = () => {
+    reactFlow.zoomIn({ duration: 200 });
+  };
+
+  const handleZoomOutClick = () => {
+    reactFlow.zoomOut({ duration: 200 });
+  };
+
+  const handleCenterViewportClick = () => {
+    reactFlow.fitView({ padding: 0.2, duration: 250 });
   };
 
   return (
@@ -719,78 +700,55 @@ export default function FlowCanvas() {
         <ViewportPortal>
           <div className="pointer-events-none absolute inset-0">
             <svg className="absolute inset-0 h-full w-full overflow-visible">
-              {floorWalls.map((wall) => {
-                const rect = getWallRect(wall);
-                const tone = WALL_COLOR_TONES[wall.color];
-                const isSelected = wall.id === selectedWallId;
+              {mergedWallGroups.map((group) => {
+                const tone = WALL_COLOR_TONES[group.color];
                 return (
-                  <rect
-                    key={wall.id}
-                    x={rect.x}
-                    y={rect.y}
-                    width={rect.width}
-                    height={rect.height}
-                    fill={tone.fill}
-                    stroke={isSelected ? "var(--primary)" : tone.stroke}
-                    strokeWidth={isSelected ? 3 : 2}
-                    shapeRendering="geometricPrecision"
-                  />
+                  <g key={group.color}>
+                    <path
+                      d={group.path}
+                      fill={tone.fill}
+                      shapeRendering="geometricPrecision"
+                    />
+                    <path
+                      d={group.path}
+                      fill="none"
+                      stroke={tone.stroke}
+                      strokeWidth={2}
+                      shapeRendering="geometricPrecision"
+                    />
+                  </g>
                 );
               })}
 
-              {floorWallJunctions.map((junction) => {
-                const tone = WALL_COLOR_TONES[junction.color];
-                return (
-                  <rect
-                    key={`junction-${junction.point.x}-${junction.point.y}`}
-                    x={junction.point.x - WALL_THICKNESS / 2}
-                    y={junction.point.y - WALL_THICKNESS / 2}
-                    width={WALL_THICKNESS}
-                    height={WALL_THICKNESS}
-                    fill={tone.fill}
-                    stroke={tone.stroke}
-                    strokeWidth={2}
-                    shapeRendering="geometricPrecision"
-                  />
-                );
-              })}
+              {selectedWallPath ? (
+                <path
+                  d={selectedWallPath}
+                  fill="var(--primary)"
+                  fillOpacity={0.25}
+                  stroke="none"
+                  shapeRendering="geometricPrecision"
+                />
+              ) : null}
 
-              {previewSegments.map((segment, index) => {
-                const rect = getWallRect(segment);
-                const tone = WALL_COLOR_TONES[segment.color];
+              {previewMergedWallGroups.map((group) => {
+                const tone = WALL_COLOR_TONES[group.color];
                 return (
-                  <rect
-                    key={`preview-${index}`}
-                    x={rect.x}
-                    y={rect.y}
-                    width={rect.width}
-                    height={rect.height}
-                    fill={tone.fill}
-                    fillOpacity={0.5}
-                    stroke={tone.stroke}
-                    strokeOpacity={0.8}
-                    strokeWidth={2}
-                    shapeRendering="geometricPrecision"
-                  />
-                );
-              })}
-
-              {previewJunctions.map((junction) => {
-                const tone = WALL_COLOR_TONES[junction.color];
-                return (
-                  <rect
-                    key={`preview-junction-${junction.point.x}-${junction.point.y}`}
-                    x={junction.point.x - WALL_THICKNESS / 2}
-                    y={junction.point.y - WALL_THICKNESS / 2}
-                    width={WALL_THICKNESS}
-                    height={WALL_THICKNESS}
-                    fill={tone.fill}
-                    fillOpacity={0.5}
-                    stroke={tone.stroke}
-                    strokeOpacity={0.8}
-                    strokeWidth={2}
-                    shapeRendering="geometricPrecision"
-                  />
+                  <g key={`preview-${group.color}`}>
+                    <path
+                      d={group.path}
+                      fill={tone.fill}
+                      fillOpacity={0.5}
+                      shapeRendering="geometricPrecision"
+                    />
+                    <path
+                      d={group.path}
+                      fill="none"
+                      stroke={tone.stroke}
+                      strokeOpacity={0.8}
+                      strokeWidth={2}
+                      shapeRendering="geometricPrecision"
+                    />
+                  </g>
                 );
               })}
 
@@ -818,9 +776,39 @@ export default function FlowCanvas() {
             </svg>
           </div>
         </ViewportPortal>
-
-        <Controls showInteractive={false} />
       </ReactFlow>
+
+      <div className="absolute bottom-4 left-4 z-20 overflow-hidden rounded-md border border-border bg-card shadow-md">
+        <div className="flex flex-col">
+          <button
+            type="button"
+            onClick={handleZoomInClick}
+            className="grid h-8 w-8 place-items-center border-b border-border text-foreground transition-colors hover:bg-muted"
+            aria-label="Zoom avant"
+            title="Zoom avant"
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={handleZoomOutClick}
+            className="grid h-8 w-8 place-items-center border-b border-border text-foreground transition-colors hover:bg-muted"
+            aria-label="Zoom arrière"
+            title="Zoom arrière"
+          >
+            <Minus className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={handleCenterViewportClick}
+            className="grid h-8 w-8 place-items-center text-foreground transition-colors hover:bg-muted"
+            aria-label="Centrer la vue"
+            title="Centrer la vue"
+          >
+            <LocateFixed className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
 
       {/* Build mode help */}
       {isEditMode && activeDrawTool !== "device" ? (
