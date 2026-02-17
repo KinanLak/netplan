@@ -38,7 +38,7 @@ function RootDocument({ children }: { children: ReactNode }) {
   useEffect(() => {
     // Make sure to run this only after hydration
     scan({
-      enabled: true,
+      enabled: false, showToolbar: true,
     });
   }, []);
   return (
@@ -50,7 +50,7 @@ function RootDocument({ children }: { children: ReactNode }) {
         {children}
         <TanStackDevtools
           config={{
-            position: "bottom-right",
+            position: "middle-left",
           }}
           plugins={[
             {
