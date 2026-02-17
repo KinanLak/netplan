@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { ReactFlowProvider } from "@xyflow/react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Edit01Icon, Tick01Icon } from "@hugeicons/core-free-icons";
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import FlowCanvas from "@/canvas/FlowCanvas";
 import AppSidebar from "@/panels/Sidebar";
 import Toolbar from "@/panels/Toolbar";
@@ -103,7 +103,10 @@ function HomePageContent() {
 
   // Get current building's floors for navigation
   const currentBuilding = buildings.find((b) => b.id === currentBuildingId);
-  const floors = currentBuilding?.floors ?? [];
+  const floors = useMemo(
+    () => currentBuilding?.floors ?? [],
+    [currentBuilding?.floors],
+  );
   const currentFloorIndex = floors.findIndex((f) => f.id === currentFloorId);
 
   // Floor navigation handlers

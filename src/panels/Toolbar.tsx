@@ -344,13 +344,12 @@ export default function Toolbar() {
     [currentFloorId, addDevice, reactFlow, checkCollision, setActiveDrawTool],
   );
 
-  const availableDevices =
-    activeDrawTool === "device" && selectedType
-      ? availableDevicesCatalog[selectedType]
-      : [];
-
   // Filter devices based on search query
   const filteredDevices = useMemo(() => {
+    const availableDevices =
+      activeDrawTool === "device" && selectedType
+        ? availableDevicesCatalog[selectedType]
+        : [];
     if (!searchQuery.trim()) return availableDevices;
     const query = searchQuery.toLowerCase();
     return availableDevices.filter(
@@ -359,7 +358,7 @@ export default function Toolbar() {
         device.model?.toLowerCase().includes(query) ||
         device.hostname?.toLowerCase().includes(query),
     );
-  }, [availableDevices, searchQuery]);
+  }, [activeDrawTool, selectedType, searchQuery]);
 
   if (!isEditMode) {
     return null;
