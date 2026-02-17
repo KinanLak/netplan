@@ -43,6 +43,9 @@ export function useShortcut(
     scopes: [scope],
     enabled,
     preventDefault: true,
+    // Use produced characters instead of physical key codes so letter shortcuts
+    // stay stable across keyboard layouts (e.g. W stays "w" on AZERTY/QWERTY).
+    useKey: true,
     enableOnFormTags: enableOnFormTags
       ? ["INPUT", "TEXTAREA", "SELECT"]
       : false,
