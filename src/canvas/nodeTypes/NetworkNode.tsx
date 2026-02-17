@@ -1,4 +1,3 @@
-import { forwardRef } from "react";
 import type { DeviceStatus } from "@/types/map";
 import { cn } from "@/lib/utils";
 
@@ -16,6 +15,8 @@ export interface NetworkNodeProps {
   className?: string;
   /** Content inside the node */
   children: React.ReactNode;
+  /** React 19: ref is a regular prop for function components */
+  ref?: React.Ref<HTMLDivElement>;
 }
 
 /**
@@ -27,67 +28,57 @@ export interface NetworkNodeProps {
  * - Shadow color matches the device status
  * - Border keeps the status color
  */
-const NetworkNode = forwardRef<HTMLDivElement, NetworkNodeProps>(
-  (
-    {
-      status,
-      isSelected = false,
-      isHighlighted = false,
-      width,
-      height,
-      className,
-      children,
-    },
-    ref,
-  ) => {
-    return (
-      <div
-        ref={ref}
-        className={cn(
-          // Base styles
-          "relative cursor-grab rounded-sm border-2 transition-all duration-200 active:cursor-grabbing",
+export default function NetworkNode({
+  status,
+  isSelected = false,
+  isHighlighted = false,
+  width,
+  height,
+  className,
+  children,
+  ref,
+}: NetworkNodeProps) {
+  return (
+    <div
+      ref={ref}
+      className={cn(
+        // Base styles
+        "relative cursor-grab rounded-sm border-2 transition-all duration-200 active:cursor-grabbing",
 
-          // Status-based border color (always applied)
-          status === "up" && "border-up",
-          status === "down" && "border-down",
-          status === "unknown" && "border-unknown",
+        // Status-based border color (always applied)
+        status === "up" && "border-up",
+        status === "down" && "border-down",
+        status === "unknown" && "border-unknown",
 
-          // Selection: shadow glow matching status color
-          isSelected && status === "up" && "shadow-[0_0_8px_2px_var(--up)]!",
-          isSelected &&
-            status === "down" &&
-            "shadow-[0_0_8px_2px_var(--down)]!",
-          isSelected &&
-            status === "unknown" &&
-            "shadow-[0_0_8px_2px_var(--unknown)]!",
+        // Selection: shadow glow matching status color
+        isSelected && status === "up" && "shadow-[0_0_8px_2px_var(--up)]!",
+        isSelected && status === "down" && "shadow-[0_0_8px_2px_var(--down)]!",
+        isSelected &&
+          status === "unknown" &&
+          "shadow-[0_0_8px_2px_var(--unknown)]!",
 
-          // Highlight (non-selected): subtle shadow
-          isHighlighted &&
-            !isSelected &&
-            status === "up" &&
-            "shadow-[0_0_6px_1px_var(--up)]!",
-          isHighlighted &&
-            !isSelected &&
-            status === "down" &&
-            "shadow-[0_0_6px_1px_var(--down)]!",
-          isHighlighted &&
-            !isSelected &&
-            status === "unknown" &&
-            "shadow-[0_0_6px_1px_var(--unknown)]!",
+        // Highlight (non-selected): subtle shadow
+        isHighlighted &&
+          !isSelected &&
+          status === "up" &&
+          "shadow-[0_0_6px_1px_var(--up)]!",
+        isHighlighted &&
+          !isSelected &&
+          status === "down" &&
+          "shadow-[0_0_6px_1px_var(--down)]!",
+        isHighlighted &&
+          !isSelected &&
+          status === "unknown" &&
+          "shadow-[0_0_6px_1px_var(--unknown)]!",
 
-          // Default shadow when not selected/highlighted
-          !isSelected && !isHighlighted && "shadow-md",
+        // Default shadow when not selected/highlighted
+        !isSelected && !isHighlighted && "shadow-md",
 
-          className,
-        )}
-        style={{ width, height }}
-      >
-        {children}
-      </div>
-    );
-  },
-);
-
-NetworkNode.displayName = "NetworkNode";
-
-export default NetworkNode;
+        className,
+      )}
+      style={{ width, height }}
+    >
+      {children}
+    </div>
+  );
+}
