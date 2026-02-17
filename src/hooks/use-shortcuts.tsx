@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useHotkeys, useHotkeysContext } from "react-hotkeys-hook";
 import type { Options } from "react-hotkeys-hook";
 import type { ShortcutAction, ShortcutScope } from "@/lib/shortcuts";
@@ -160,21 +160,15 @@ export function useOptionHeld(delay = 200) {
 export function useScopes() {
   const { enableScope, disableScope, activeScopes } = useHotkeysContext();
 
-  const setScope = useCallback(
-    (scope: ShortcutScope, active: boolean) => {
-      if (active) {
-        enableScope(scope);
-      } else {
-        disableScope(scope);
-      }
-    },
-    [enableScope, disableScope],
-  );
+  const setScope = (scope: ShortcutScope, active: boolean) => {
+    if (active) {
+      enableScope(scope);
+    } else {
+      disableScope(scope);
+    }
+  };
 
-  const isActive = useCallback(
-    (scope: ShortcutScope) => activeScopes.includes(scope),
-    [activeScopes],
-  );
+  const isActive = (scope: ShortcutScope) => activeScopes.includes(scope);
 
   return { setScope, isActive, activeScopes };
 }

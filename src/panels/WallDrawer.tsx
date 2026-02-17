@@ -1,4 +1,3 @@
-import { useCallback } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Cancel01Icon, WasteIcon } from "@hugeicons/core-free-icons";
 import { WALL_COLOR_TONES } from "@/lib/walls";
@@ -13,9 +12,9 @@ export default function WallDrawer() {
 
   const wall = walls.find((segment) => segment.id === selectedWallId);
 
-  const handleCloseDrawer = useCallback(() => {
+  const handleCloseDrawer = () => {
     selectWall(null);
-  }, [selectWall]);
+  };
 
   // Manage drawer scope - enables drawer shortcuts when open
   useDrawerScope(!!wall);

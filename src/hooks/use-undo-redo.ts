@@ -1,4 +1,3 @@
-import { useCallback } from "react";
 import { useStore } from "zustand";
 import type { TemporalState } from "zundo";
 import type { Device, WallSegment } from "@/types/map";
@@ -82,7 +81,7 @@ function findAffectedFloorId(before: Snapshot, after: Snapshot): string | null {
  * - Cleanup of stale UI references (selectedDeviceId, selectedWallId, highlightedDeviceIds)
  */
 export function useUndoRedo() {
-  const handleUndo = useCallback(() => {
+  const handleUndo = () => {
     const currentState = useMapStore.getState();
     if (!currentState.isEditMode) return;
 
@@ -115,9 +114,9 @@ export function useUndoRedo() {
     window.dispatchEvent(
       new CustomEvent("netplan:undo-redo", { detail: { type: "undo" } }),
     );
-  }, []);
+  };
 
-  const handleRedo = useCallback(() => {
+  const handleRedo = () => {
     const currentState = useMapStore.getState();
     if (!currentState.isEditMode) return;
 
@@ -150,7 +149,7 @@ export function useUndoRedo() {
     window.dispatchEvent(
       new CustomEvent("netplan:undo-redo", { detail: { type: "redo" } }),
     );
-  }, []);
+  };
 
   return { handleUndo, handleRedo };
 }

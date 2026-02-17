@@ -6,7 +6,6 @@ import {
   SolidLine01Icon,
   UndoIcon,
 } from "@hugeicons/core-free-icons";
-import { useCallback } from "react";
 import { useMapStore } from "@/store/useMapStore";
 import { cn } from "@/lib/utils";
 import { isMac } from "@/lib/shortcuts";
@@ -46,7 +45,7 @@ export default function AppSidebar() {
 
   const currentBuilding = buildings.find((b) => b.id === currentBuildingId);
 
-  const handleResetCanvasStorage = useCallback(() => {
+  const handleResetCanvasStorage = () => {
     const keysToRemove: Array<string> = [];
 
     for (let index = 0; index < localStorage.length; index += 1) {
@@ -65,7 +64,7 @@ export default function AppSidebar() {
     });
 
     window.location.reload();
-  }, []);
+  };
 
   return (
     <Sidebar collapsible="none" className="border-r">

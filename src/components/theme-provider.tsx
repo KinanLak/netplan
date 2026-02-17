@@ -97,20 +97,17 @@ export function ThemeProvider({
     };
   }, [theme]);
 
-  const value = React.useMemo(
-    () => ({
-      theme,
-      resolvedTheme,
-      setTheme: (newTheme: Theme) => {
-        if (isBrowser) {
-          window.localStorage.setItem(storageKey, newTheme);
-        }
+  const value = {
+    theme,
+    resolvedTheme,
+    setTheme: (newTheme: Theme) => {
+      if (isBrowser) {
+        window.localStorage.setItem(storageKey, newTheme);
+      }
 
-        setThemeState(newTheme);
-      },
-    }),
-    [theme, resolvedTheme, storageKey],
-  );
+      setThemeState(newTheme);
+    },
+  };
 
   return (
     <ThemeProviderContext.Provider {...props} value={value}>

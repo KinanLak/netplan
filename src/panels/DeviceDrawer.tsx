@@ -1,4 +1,3 @@
-import { useCallback } from "react";
 import { useReactFlow } from "@xyflow/react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Cancel01Icon, UserIcon, WasteIcon } from "@hugeicons/core-free-icons";
@@ -69,30 +68,27 @@ export default function DeviceDrawer() {
     }
   };
 
-  const handleSelectConnected = useCallback(
-    (deviceId: string) => {
-      const targetDevice = devices.find((d) => d.id === deviceId);
-      if (targetDevice) {
-        // Smooth camera movement to the target device
-        const centerX = targetDevice.position.x + targetDevice.size.width / 2;
-        const centerY = targetDevice.position.y + targetDevice.size.height / 2;
-        const currentZoom = reactFlow.getZoom();
+  const handleSelectConnected = (deviceId: string) => {
+    const targetDevice = devices.find((d) => d.id === deviceId);
+    if (targetDevice) {
+      // Smooth camera movement to the target device
+      const centerX = targetDevice.position.x + targetDevice.size.width / 2;
+      const centerY = targetDevice.position.y + targetDevice.size.height / 2;
+      const currentZoom = reactFlow.getZoom();
 
-        reactFlow.setCenter(centerX, centerY, {
-          duration: 500,
-          zoom: currentZoom,
-        });
-      }
-      setHighlightedDevices([]);
-      selectDevice(deviceId);
-    },
-    [devices, selectDevice, setHighlightedDevices, reactFlow],
-  );
+      reactFlow.setCenter(centerX, centerY, {
+        duration: 500,
+        zoom: currentZoom,
+      });
+    }
+    setHighlightedDevices([]);
+    selectDevice(deviceId);
+  };
 
-  const handleCloseDrawer = useCallback(() => {
+  const handleCloseDrawer = () => {
     setHighlightedDevices([]);
     selectDevice(null);
-  }, [setHighlightedDevices, selectDevice]);
+  };
 
   const handleDeleteDevice = () => {
     if (!device) return;

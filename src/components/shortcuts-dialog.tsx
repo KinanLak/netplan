@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { HelpCircleIcon } from "@hugeicons/core-free-icons";
 import type { ShortcutAction } from "@/lib/shortcuts";
@@ -59,10 +59,6 @@ const shortcutGroups: Array<ShortcutGroup> = [
 export function ShortcutsDialog() {
   const [isOpen, setIsOpen] = useState(false);
 
-  const toggleDialog = useCallback(() => {
-    setIsOpen((prev) => !prev);
-  }, []);
-
   useEffect(() => {
     const isEditableTarget = (target: EventTarget | null): boolean => {
       if (!(target instanceof HTMLElement)) {
@@ -85,7 +81,7 @@ export function ShortcutsDialog() {
 
       if (event.key === "?") {
         event.preventDefault();
-        toggleDialog();
+        setIsOpen((prev) => !prev);
       }
     };
 
@@ -94,7 +90,7 @@ export function ShortcutsDialog() {
     return () => {
       window.removeEventListener("keydown", handleToggleDialogShortcut, true);
     };
-  }, [toggleDialog]);
+  }, []);
 
   return (
     <>

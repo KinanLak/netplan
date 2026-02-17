@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useReactFlow } from "@xyflow/react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -202,163 +202,139 @@ export default function Toolbar() {
     "wall-port": null,
   });
 
-  const handleTypeClick = useCallback(
-    (type: DeviceType) => {
-      const nextType = selectedType === type ? null : type;
-      setActiveDrawTool("device");
-      selectDevice(null);
-      setSelectedType(nextType);
-      setOpen(nextType !== null);
-      setSearchQuery("");
-    },
-    [selectedType, selectDevice, setActiveDrawTool],
-  );
+  const handleTypeClick = (type: DeviceType) => {
+    const nextType = selectedType === type ? null : type;
+    setActiveDrawTool("device");
+    selectDevice(null);
+    setSelectedType(nextType);
+    setOpen(nextType !== null);
+    setSearchQuery("");
+  };
 
-  const handleDrawToolClick = useCallback(
-    (tool: Extract<DrawTool, "wall" | "room">) => {
-      if (!currentFloorId) return;
+  const handleDrawToolClick = (tool: Extract<DrawTool, "wall" | "room">) => {
+    if (!currentFloorId) return;
 
-      const nextTool = activeDrawTool === tool ? "device" : tool;
-      setActiveDrawTool(nextTool);
-      selectDevice(null);
-      setSelectedType(null);
-      setOpen(false);
-      setSearchQuery("");
-    },
-    [activeDrawTool, currentFloorId, selectDevice, setActiveDrawTool],
-  );
+    const nextTool = activeDrawTool === tool ? "device" : tool;
+    setActiveDrawTool(nextTool);
+    selectDevice(null);
+    setSelectedType(null);
+    setOpen(false);
+    setSearchQuery("");
+  };
 
-  const handleSelectWallColor = useCallback(
-    (color: typeof selectedWallColor) => {
-      setSelectedWallColor(color);
-    },
-    [setSelectedWallColor],
-  );
+  const handleSelectWallColor = (color: typeof selectedWallColor) => {
+    setSelectedWallColor(color);
+  };
 
-  const handleOpenChange = useCallback((newOpen: boolean) => {
+  const handleOpenChange = (newOpen: boolean) => {
     setOpen(newOpen);
     if (!newOpen) {
       setSelectedType(null);
       setSearchQuery("");
     }
-  }, []);
+  };
 
   // Register keyboard shortcut handlers
-  useShortcut(
-    "tool-wall",
-    useCallback(() => handleDrawToolClick("wall"), [handleDrawToolClick]),
-    { enabled: isEditMode && !!currentFloorId },
-  );
-  useShortcut(
-    "tool-room",
-    useCallback(() => handleDrawToolClick("room"), [handleDrawToolClick]),
-    { enabled: isEditMode && !!currentFloorId },
-  );
-  useShortcut(
-    "tool-rack",
-    useCallback(() => handleTypeClick("rack"), [handleTypeClick]),
-    { enabled: isEditMode && !!currentFloorId },
-  );
-  useShortcut(
-    "tool-switch",
-    useCallback(() => handleTypeClick("switch"), [handleTypeClick]),
-    { enabled: isEditMode && !!currentFloorId },
-  );
-  useShortcut(
-    "tool-pc",
-    useCallback(() => handleTypeClick("pc"), [handleTypeClick]),
-    { enabled: isEditMode && !!currentFloorId },
-  );
-  useShortcut(
-    "tool-wall-port",
-    useCallback(() => handleTypeClick("wall-port"), [handleTypeClick]),
-    { enabled: isEditMode && !!currentFloorId },
-  );
+  useShortcut("tool-wall", () => handleDrawToolClick("wall"), {
+    enabled: isEditMode && !!currentFloorId,
+  });
+  useShortcut("tool-room", () => handleDrawToolClick("room"), {
+    enabled: isEditMode && !!currentFloorId,
+  });
+  useShortcut("tool-rack", () => handleTypeClick("rack"), {
+    enabled: isEditMode && !!currentFloorId,
+  });
+  useShortcut("tool-switch", () => handleTypeClick("switch"), {
+    enabled: isEditMode && !!currentFloorId,
+  });
+  useShortcut("tool-pc", () => handleTypeClick("pc"), {
+    enabled: isEditMode && !!currentFloorId,
+  });
+  useShortcut("tool-wall-port", () => handleTypeClick("wall-port"), {
+    enabled: isEditMode && !!currentFloorId,
+  });
 
-  const handleAddDevice = useCallback(
-    (catalogDevice: AvailableDevice) => {
-      if (!currentFloorId) return;
+  const handleAddDevice = (catalogDevice: AvailableDevice) => {
+    if (!currentFloorId) return;
 
-      // Get center of viewport
-      const { x, y, zoom } = reactFlow.getViewport();
-      const centerX = (-x + window.innerWidth / 2) / zoom;
-      const centerY = (-y + window.innerHeight / 2) / zoom;
+    // Get center of viewport
+    const { x, y, zoom } = reactFlow.getViewport();
+    const centerX = (-x + window.innerWidth / 2) / zoom;
+    const centerY = (-y + window.innerHeight / 2) / zoom;
 
-      // Snap to grid
-      const snappedX = Math.round(centerX / GRID_SIZE) * GRID_SIZE;
-      const snappedY = Math.round(centerY / GRID_SIZE) * GRID_SIZE;
+    // Snap to grid
+    const snappedX = Math.round(centerX / GRID_SIZE) * GRID_SIZE;
+    const snappedY = Math.round(centerY / GRID_SIZE) * GRID_SIZE;
 
-      const position = { x: snappedX, y: snappedY };
+    const position = { x: snappedX, y: snappedY };
 
-      // Check collision at this position
-      const hasCollision = checkCollision("", position, catalogDevice.size);
+    // Check collision at this position
+    const hasCollision = checkCollision("", position, catalogDevice.size);
 
-      // If collision, try to find a free spot nearby
-      let finalPosition = position;
-      if (hasCollision) {
-        // Try positions in a spiral pattern
-        const offsets = [
-          { x: 100, y: 0 },
-          { x: 0, y: 100 },
-          { x: -100, y: 0 },
-          { x: 0, y: -100 },
-          { x: 100, y: 100 },
-          { x: -100, y: 100 },
-          { x: -100, y: -100 },
-          { x: 100, y: -100 },
-          { x: 200, y: 0 },
-          { x: 0, y: 200 },
-        ];
+    // If collision, try to find a free spot nearby
+    let finalPosition = position;
+    if (hasCollision) {
+      // Try positions in a spiral pattern
+      const offsets = [
+        { x: 100, y: 0 },
+        { x: 0, y: 100 },
+        { x: -100, y: 0 },
+        { x: 0, y: -100 },
+        { x: 100, y: 100 },
+        { x: -100, y: 100 },
+        { x: -100, y: -100 },
+        { x: 100, y: -100 },
+        { x: 200, y: 0 },
+        { x: 0, y: 200 },
+      ];
 
-        for (const offset of offsets) {
-          const newPos = {
-            x: Math.round((snappedX + offset.x) / GRID_SIZE) * GRID_SIZE,
-            y: Math.round((snappedY + offset.y) / GRID_SIZE) * GRID_SIZE,
-          };
-          if (!checkCollision("", newPos, catalogDevice.size)) {
-            finalPosition = newPos;
-            break;
-          }
+      for (const offset of offsets) {
+        const newPos = {
+          x: Math.round((snappedX + offset.x) / GRID_SIZE) * GRID_SIZE,
+          y: Math.round((snappedY + offset.y) / GRID_SIZE) * GRID_SIZE,
+        };
+        if (!checkCollision("", newPos, catalogDevice.size)) {
+          finalPosition = newPos;
+          break;
         }
       }
+    }
 
-      const newDevice: Omit<Device, "id"> = {
-        type: catalogDevice.type,
-        name: catalogDevice.name,
-        hostname: catalogDevice.hostname,
-        floorId: currentFloorId,
-        position: finalPosition,
-        size: catalogDevice.size,
-        metadata: {
-          ...catalogDevice.metadata,
-          ip: catalogDevice.ip,
-        },
-      };
+    const newDevice: Omit<Device, "id"> = {
+      type: catalogDevice.type,
+      name: catalogDevice.name,
+      hostname: catalogDevice.hostname,
+      floorId: currentFloorId,
+      position: finalPosition,
+      size: catalogDevice.size,
+      metadata: {
+        ...catalogDevice.metadata,
+        ip: catalogDevice.ip,
+      },
+    };
 
-      addDevice(newDevice);
-      setActiveDrawTool("device");
-      setSelectedType(null);
-      setSearchQuery("");
-      setOpen(false);
-    },
-    [currentFloorId, addDevice, reactFlow, checkCollision, setActiveDrawTool],
-  );
+    addDevice(newDevice);
+    setActiveDrawTool("device");
+    setSelectedType(null);
+    setSearchQuery("");
+    setOpen(false);
+  };
 
   // Filter devices based on search query
-  const filteredDevices = useMemo(() => {
-    const availableDevices =
-      activeDrawTool === "device" && selectedType
-        ? availableDevicesCatalog[selectedType]
-        : [];
-    if (!searchQuery.trim()) return availableDevices;
-    const query = searchQuery.toLowerCase();
-    return availableDevices.filter(
-      (device) =>
-        device.name.toLowerCase().includes(query) ||
-        device.model?.toLowerCase().includes(query) ||
-        device.hostname?.toLowerCase().includes(query),
-    );
-  }, [activeDrawTool, selectedType, searchQuery]);
+  const availableDevices =
+    activeDrawTool === "device" && selectedType
+      ? availableDevicesCatalog[selectedType]
+      : [];
+  const filteredDevices = !searchQuery.trim()
+    ? availableDevices
+    : availableDevices.filter((device) => {
+        const query = searchQuery.toLowerCase();
+        return (
+          device.name.toLowerCase().includes(query) ||
+          device.model?.toLowerCase().includes(query) ||
+          device.hostname?.toLowerCase().includes(query)
+        );
+      });
 
   if (!isEditMode) {
     return null;

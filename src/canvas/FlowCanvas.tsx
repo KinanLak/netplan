@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Background,
   BackgroundVariant,
@@ -159,34 +159,24 @@ export default function FlowCanvas() {
   const canEditDevices = isEditMode && activeDrawTool === "device";
 
   // Zoom and pan shortcuts
-  useShortcut(
-    "zoom-in",
-    useCallback(() => {
-      reactFlow.zoomIn({ duration: 200 });
-    }, [reactFlow]),
-  );
-  useShortcut(
-    "zoom-out",
-    useCallback(() => {
-      reactFlow.zoomOut({ duration: 200 });
-    }, [reactFlow]),
-  );
-  useShortcut(
-    "zoom-reset",
-    useCallback(() => {
-      reactFlow.setViewport({ x: 0, y: 0, zoom: 1 }, { duration: 300 });
-    }, [reactFlow]),
-  );
+  useShortcut("zoom-in", () => {
+    reactFlow.zoomIn({ duration: 200 });
+  });
+  useShortcut("zoom-out", () => {
+    reactFlow.zoomOut({ duration: 200 });
+  });
+  useShortcut("zoom-reset", () => {
+    reactFlow.setViewport({ x: 0, y: 0, zoom: 1 }, { duration: 300 });
+  });
 
-  const floorWalls = useMemo(
-    () => walls.filter((wall) => wall.floorId === currentFloorId),
-    [walls, currentFloorId],
-  );
+  const floorWalls = walls.filter((wall) => wall.floorId === currentFloorId);
 
-  // Filter devices for current floor and convert to React Flow nodes
-  const initialNodes = useMemo((): Array<DeviceNode> => {
-    return devices
-      .filter((d) => d.floorId === currentFloorId)
+  const [nodes, setNodes, onNodesChange] = useNodesState<DeviceNode>([]);
+
+  // Sync nodes when floor, selection or highlights change
+  useEffect(() => {
+    const nextNodes = devices
+      .filter((device) => device.floorId === currentFloorId)
       .map(
         (device): DeviceNode => ({
           id: device.id,
@@ -203,28 +193,20 @@ export default function FlowCanvas() {
           draggable: canEditDevices,
         }),
       );
+
+    nextNodes.forEach((node) => {
+      lastValidPositions.current.set(node.id, node.position);
+    });
+
+    setNodes(nextNodes);
   }, [
     devices,
     currentFloorId,
     selectedDeviceId,
-    canEditDevices,
     highlightedDeviceIds,
+    canEditDevices,
+    setNodes,
   ]);
-
-  // Sync last valid positions outside of render (refs must not be written during render)
-  useEffect(() => {
-    initialNodes.forEach((node) => {
-      lastValidPositions.current.set(node.id, node.position);
-    });
-  }, [initialNodes]);
-
-  const [nodes, setNodes, onNodesChange] =
-    useNodesState<DeviceNode>(initialNodes);
-
-  // Sync nodes when floor changes or devices update
-  useEffect(() => {
-    setNodes(initialNodes);
-  }, [initialNodes, setNodes]);
 
   // Reset draw state when context changes (React "set state during render" pattern)
   // See: https://react.dev/reference/react/useState#storing-information-from-previous-renders
@@ -247,31 +229,28 @@ export default function FlowCanvas() {
   }, [activeDrawTool, currentFloorId, isEditMode, selectWall]);
 
   // Cancel draw tool with Escape key
-  const cancelDrawTool = useCallback(() => {
+  const cancelDrawTool = () => {
     setActiveDrawTool("device");
     setDrawAnchor(null);
     setPointerPreview(null);
     setHoverSnapPoint(null);
     setDrawMessage(null);
-  }, [setActiveDrawTool]);
+  };
 
   useHotkeyDirect("escape", cancelDrawTool, {
     scope: "canvas",
     enabled: isEditMode && activeDrawTool !== "device",
   });
 
-  const getWallSnappedPanePosition = useCallback(
-    (event: React.MouseEvent): Position => {
-      const flowPosition = reactFlow.screenToFlowPosition(
-        { x: event.clientX, y: event.clientY },
-        { snapToGrid: false },
-      );
-      return snapPositionToWallGrid(flowPosition);
-    },
-    [reactFlow],
-  );
+  const getWallSnappedPanePosition = (event: React.MouseEvent): Position => {
+    const flowPosition = reactFlow.screenToFlowPosition(
+      { x: event.clientX, y: event.clientY },
+      { snapToGrid: false },
+    );
+    return snapPositionToWallGrid(flowPosition);
+  };
 
-  const previewSegments = useMemo((): Array<DraftWallSegment> => {
+  const previewSegments: Array<DraftWallSegment> = (() => {
     if (
       !drawAnchor ||
       !pointerPreview ||
@@ -297,28 +276,19 @@ export default function FlowCanvas() {
       currentFloorId,
       selectedWallColor,
     );
-  }, [
-    drawAnchor,
-    pointerPreview,
-    currentFloorId,
-    activeDrawTool,
-    selectedWallColor,
-  ]);
+  })();
 
-  const floorWallJunctions = useMemo(
-    () => collectJunctionPoints(floorWalls, floorWalls),
-    [floorWalls],
-  );
+  const floorWallJunctions = collectJunctionPoints(floorWalls, floorWalls);
 
-  const previewJunctions = useMemo(() => {
+  const previewJunctions = (() => {
     if (previewSegments.length === 0) {
       return [];
     }
     const combined: Array<WallRenderable> = [...floorWalls, ...previewSegments];
     return collectJunctionPoints(previewSegments, combined);
-  }, [previewSegments, floorWalls]);
+  })();
 
-  const paneCursorClass = useMemo(() => {
+  const paneCursorClass = (() => {
     if (!isEditMode || activeDrawTool === "device") {
       return "canvas-cursor-default";
     }
@@ -343,151 +313,129 @@ export default function FlowCanvas() {
     }
 
     return dy >= 0 ? "wall-cursor-s" : "wall-cursor-n";
-  }, [isEditMode, activeDrawTool, drawAnchor, pointerPreview]);
+  })();
 
-  const getWallAtFlowPosition = useCallback(
-    (position: Position): WallSegment | null => {
-      const wallsByDrawOrder = [...floorWalls].reverse();
-      const matchingWall = wallsByDrawOrder.find((wall) => {
-        const rect = getWallRect(wall);
-        return (
-          position.x >= rect.x &&
-          position.x <= rect.x + rect.width &&
-          position.y >= rect.y &&
-          position.y <= rect.y + rect.height
-        );
-      });
+  const getWallAtFlowPosition = (position: Position): WallSegment | null => {
+    const wallsByDrawOrder = [...floorWalls].reverse();
+    const matchingWall = wallsByDrawOrder.find((wall) => {
+      const rect = getWallRect(wall);
+      return (
+        position.x >= rect.x &&
+        position.x <= rect.x + rect.width &&
+        position.y >= rect.y &&
+        position.y <= rect.y + rect.height
+      );
+    });
 
-      return matchingWall ?? null;
-    },
-    [floorWalls],
-  );
+    return matchingWall ?? null;
+  };
 
   // Handle node changes (drag, select, etc.)
-  const handleNodesChange: OnNodesChange<DeviceNode> = useCallback(
-    (changes) => {
-      // Process changes and check for collisions during drag
-      const processedChanges = changes.map((change) => {
-        if (change.type === "position" && change.position && change.dragging) {
-          // Snap position to grid
-          const snappedPosition = {
-            x: Math.round(change.position.x / GRID_SIZE) * GRID_SIZE,
-            y: Math.round(change.position.y / GRID_SIZE) * GRID_SIZE,
-          };
+  const handleNodesChange: OnNodesChange<DeviceNode> = (changes) => {
+    // Process changes and check for collisions during drag
+    const processedChanges = changes.map((change) => {
+      if (change.type === "position" && change.position && change.dragging) {
+        // Snap position to grid
+        const snappedPosition = {
+          x: Math.round(change.position.x / GRID_SIZE) * GRID_SIZE,
+          y: Math.round(change.position.y / GRID_SIZE) * GRID_SIZE,
+        };
 
-          // Check if we moved to a new grid cell (optimization)
-          const currentCell = `${Math.floor(snappedPosition.x / GRID_SIZE)},${Math.floor(snappedPosition.y / GRID_SIZE)}`;
-          const prevCell = lastGridCell.current.get(change.id);
+        // Check if we moved to a new grid cell (optimization)
+        const currentCell = `${Math.floor(snappedPosition.x / GRID_SIZE)},${Math.floor(snappedPosition.y / GRID_SIZE)}`;
+        const prevCell = lastGridCell.current.get(change.id);
 
-          // Only recalculate if grid cell changed
-          if (currentCell !== prevCell) {
-            lastGridCell.current.set(change.id, currentCell);
+        // Only recalculate if grid cell changed
+        if (currentCell !== prevCell) {
+          lastGridCell.current.set(change.id, currentCell);
 
-            // Find the device being dragged
-            const device = devices.find((d) => d.id === change.id);
-            if (device) {
-              const lastValid =
-                lastValidPositions.current.get(change.id) ?? device.position;
-
-              // Find nearest valid position
-              const validPosition = findNearestValidPosition(
-                change.id,
-                snappedPosition,
-                device.size,
-                lastValid,
-                checkCollision,
-              );
-
-              // Update last valid position
-              lastValidPositions.current.set(change.id, validPosition);
-
-              return {
-                ...change,
-                position: validPosition,
-              };
-            }
-          } else {
-            // Same cell, use last valid position
-            const lastValid = lastValidPositions.current.get(change.id);
-            if (lastValid) {
-              return {
-                ...change,
-                position: lastValid,
-              };
-            }
-          }
-        }
-
-        // Handle drag end - ensure final position is valid
-        if (change.type === "position" && change.position && !change.dragging) {
+          // Find the device being dragged
           const device = devices.find((d) => d.id === change.id);
           if (device) {
-            const lastValid = lastValidPositions.current.get(change.id);
-            if (lastValid) {
-              // Always use the last valid position when drag ends
-              return {
-                ...change,
-                position: lastValid,
-              };
-            }
+            const lastValid =
+              lastValidPositions.current.get(change.id) ?? device.position;
+
+            // Find nearest valid position
+            const validPosition = findNearestValidPosition(
+              change.id,
+              snappedPosition,
+              device.size,
+              lastValid,
+              checkCollision,
+            );
+
+            // Update last valid position
+            lastValidPositions.current.set(change.id, validPosition);
+
+            return {
+              ...change,
+              position: validPosition,
+            };
+          }
+        } else {
+          // Same cell, use last valid position
+          const lastValid = lastValidPositions.current.get(change.id);
+          if (lastValid) {
+            return {
+              ...change,
+              position: lastValid,
+            };
           }
         }
-
-        return change;
-      });
-
-      onNodesChange(processedChanges);
-
-      // Update positions in store after drag ends (only in edit mode)
-      if (canEditDevices) {
-        processedChanges.forEach((change) => {
-          if (
-            change.type === "position" &&
-            change.position &&
-            !change.dragging
-          ) {
-            // Use the processed position which is guaranteed to be valid
-            updateDevicePosition(change.id, change.position);
-          }
-        });
       }
-    },
-    [
-      onNodesChange,
-      updateDevicePosition,
-      canEditDevices,
-      devices,
-      checkCollision,
-    ],
-  );
+
+      // Handle drag end - ensure final position is valid
+      if (change.type === "position" && change.position && !change.dragging) {
+        const device = devices.find((d) => d.id === change.id);
+        if (device) {
+          const lastValid = lastValidPositions.current.get(change.id);
+          if (lastValid) {
+            // Always use the last valid position when drag ends
+            return {
+              ...change,
+              position: lastValid,
+            };
+          }
+        }
+      }
+
+      return change;
+    });
+
+    onNodesChange(processedChanges);
+
+    // Update positions in store after drag ends (only in edit mode)
+    if (canEditDevices) {
+      processedChanges.forEach((change) => {
+        if (change.type === "position" && change.position && !change.dragging) {
+          // Use the processed position which is guaranteed to be valid
+          updateDevicePosition(change.id, change.position);
+        }
+      });
+    }
+  };
 
   // Handle node click
-  const handleNodeClick = useCallback(
-    (_: React.MouseEvent, node: DeviceNode) => {
-      if (activeDrawTool !== "device") {
-        return;
-      }
-      selectWall(null);
-      selectDevice(node.id);
-    },
-    [selectDevice, selectWall, activeDrawTool],
-  );
+  const handleNodeClick = (_: React.MouseEvent, node: DeviceNode) => {
+    if (activeDrawTool !== "device") {
+      return;
+    }
+    selectWall(null);
+    selectDevice(node.id);
+  };
 
   // Handle node mouse enter (for hover-based shortcuts)
-  const handleNodeMouseEnter = useCallback(
-    (_: React.MouseEvent, node: DeviceNode) => {
-      setHoveredDevice(node.id);
-    },
-    [setHoveredDevice],
-  );
+  const handleNodeMouseEnter = (_: React.MouseEvent, node: DeviceNode) => {
+    setHoveredDevice(node.id);
+  };
 
   // Handle node mouse leave
-  const handleNodeMouseLeave = useCallback(() => {
+  const handleNodeMouseLeave = () => {
     setHoveredDevice(null);
-  }, [setHoveredDevice]);
+  };
 
   // Handle H key to highlight connections for hovered or selected device
-  const handleHighlightHoveredConnections = useCallback(() => {
+  const handleHighlightHoveredConnections = () => {
     // If devices are already highlighted and no device is selected (no drawer), de-highlight
     if (highlightedDeviceIds.length > 0 && !selectedDeviceId) {
       setHighlightedDevices([]);
@@ -514,13 +462,7 @@ export default function FlowCanvas() {
     } else {
       setHighlightedDevices(allIdsToHighlight);
     }
-  }, [
-    selectedDeviceId,
-    hoveredDeviceId,
-    devices,
-    highlightedDeviceIds,
-    setHighlightedDevices,
-  ]);
+  };
 
   // Register H shortcut for highlighting connections (when not in drawer)
   useShortcut(
@@ -536,116 +478,68 @@ export default function FlowCanvas() {
     },
   );
 
-  const handlePaneMouseMove = useCallback(
-    (event: React.MouseEvent) => {
-      if (!isEditMode || activeDrawTool === "device" || !currentFloorId) {
-        return;
-      }
+  const handlePaneMouseMove = (event: React.MouseEvent) => {
+    if (!isEditMode || activeDrawTool === "device" || !currentFloorId) {
+      return;
+    }
 
-      const snappedPoint = getWallSnappedPanePosition(event);
+    const snappedPoint = getWallSnappedPanePosition(event);
 
-      if (drawAnchor) {
-        setPointerPreview(snappedPoint);
-      } else {
-        setPointerPreview(null);
-      }
+    if (drawAnchor) {
+      setPointerPreview(snappedPoint);
+    } else {
+      setPointerPreview(null);
+    }
 
-      if (activeDrawTool === "wall" && !drawAnchor) {
-        setHoverSnapPoint(snappedPoint);
-        return;
-      }
+    if (activeDrawTool === "wall" && !drawAnchor) {
+      setHoverSnapPoint(snappedPoint);
+      return;
+    }
 
-      setHoverSnapPoint(null);
-    },
-    [
-      isEditMode,
-      activeDrawTool,
-      drawAnchor,
-      currentFloorId,
-      getWallSnappedPanePosition,
-    ],
-  );
+    setHoverSnapPoint(null);
+  };
 
   // Handle pane click for draw tools / deselect
-  const handlePaneClick = useCallback(
-    (event: React.MouseEvent) => {
-      if (!currentFloorId) {
-        selectDevice(null);
-        selectWall(null);
-        return;
-      }
-
-      if (!isEditMode) {
-        selectDevice(null);
-        selectWall(null);
-        return;
-      }
-
-      if (activeDrawTool === "device") {
-        const flowPosition = reactFlow.screenToFlowPosition(
-          { x: event.clientX, y: event.clientY },
-          { snapToGrid: false },
-        );
-        const clickedWall = getWallAtFlowPosition(flowPosition);
-
-        if (clickedWall) {
-          selectDevice(null);
-          selectWall(clickedWall.id);
-          return;
-        }
-
-        selectDevice(null);
-        selectWall(null);
-        return;
-      }
-
-      const clickedPoint =
-        activeDrawTool === "wall" && !drawAnchor && hoverSnapPoint
-          ? hoverSnapPoint
-          : getWallSnappedPanePosition(event);
-      setPointerPreview(clickedPoint);
+  const handlePaneClick = (event: React.MouseEvent) => {
+    if (!currentFloorId) {
       selectDevice(null);
       selectWall(null);
+      return;
+    }
 
-      if (activeDrawTool === "wall") {
-        if (!drawAnchor) {
-          setDrawAnchor(clickedPoint);
-          setDrawMessage(null);
-          return;
-        }
+    if (!isEditMode) {
+      selectDevice(null);
+      selectWall(null);
+      return;
+    }
 
-        if (arePositionsEqual(clickedPoint, drawAnchor)) {
-          setDrawAnchor(null);
-          setPointerPreview(null);
-          setDrawMessage(null);
-          return;
-        }
+    if (activeDrawTool === "device") {
+      const flowPosition = reactFlow.screenToFlowPosition(
+        { x: event.clientX, y: event.clientY },
+        { snapToGrid: false },
+      );
+      const clickedWall = getWallAtFlowPosition(flowPosition);
 
-        const newSegment = createOrthogonalWallSegment(
-          drawAnchor,
-          clickedPoint,
-          currentFloorId,
-          selectedWallColor,
-        );
-
-        if (!newSegment) {
-          setDrawMessage("Segment de mur invalide.");
-          return;
-        }
-
-        const created = addWallSegment(newSegment);
-        if (!created) {
-          setDrawMessage("Mur refusé: collision device/mur ou déjà existant.");
-          return;
-        }
-
-        setDrawAnchor(null);
-        setPointerPreview(null);
-        setHoverSnapPoint(null);
-        setDrawMessage(null);
+      if (clickedWall) {
+        selectDevice(null);
+        selectWall(clickedWall.id);
         return;
       }
 
+      selectDevice(null);
+      selectWall(null);
+      return;
+    }
+
+    const clickedPoint =
+      activeDrawTool === "wall" && !drawAnchor && hoverSnapPoint
+        ? hoverSnapPoint
+        : getWallSnappedPanePosition(event);
+    setPointerPreview(clickedPoint);
+    selectDevice(null);
+    selectWall(null);
+
+    if (activeDrawTool === "wall") {
       if (!drawAnchor) {
         setDrawAnchor(clickedPoint);
         setDrawMessage(null);
@@ -659,17 +553,21 @@ export default function FlowCanvas() {
         return;
       }
 
-      const created = addRoom({
-        floorId: currentFloorId,
-        start: drawAnchor,
-        end: clickedPoint,
-        color: selectedWallColor,
-      });
+      const newSegment = createOrthogonalWallSegment(
+        drawAnchor,
+        clickedPoint,
+        currentFloorId,
+        selectedWallColor,
+      );
 
+      if (!newSegment) {
+        setDrawMessage("Segment de mur invalide.");
+        return;
+      }
+
+      const created = addWallSegment(newSegment);
       if (!created) {
-        setDrawMessage(
-          "Salle refusée: rectangle vide, collision device/mur, non connecté ou déjà présent.",
-        );
+        setDrawMessage("Mur refusé: collision device/mur ou déjà existant.");
         return;
       }
 
@@ -677,57 +575,69 @@ export default function FlowCanvas() {
       setPointerPreview(null);
       setHoverSnapPoint(null);
       setDrawMessage(null);
-    },
-    [
-      isEditMode,
-      currentFloorId,
-      activeDrawTool,
-      selectDevice,
-      selectWall,
-      getWallSnappedPanePosition,
-      drawAnchor,
-      hoverSnapPoint,
-      selectedWallColor,
-      addWallSegment,
-      addRoom,
-      reactFlow,
-      getWallAtFlowPosition,
-    ],
-  );
+      return;
+    }
 
-  const handlePaneContextMenu = useCallback(
-    (event: React.MouseEvent | MouseEvent) => {
-      if (!isEditMode || activeDrawTool === "device") {
-        return;
-      }
+    if (!drawAnchor) {
+      setDrawAnchor(clickedPoint);
+      setDrawMessage(null);
+      return;
+    }
 
-      event.preventDefault();
-      setActiveDrawTool("device");
+    if (arePositionsEqual(clickedPoint, drawAnchor)) {
       setDrawAnchor(null);
       setPointerPreview(null);
-      setHoverSnapPoint(null);
       setDrawMessage(null);
-      selectWall(null);
-    },
-    [isEditMode, activeDrawTool, setActiveDrawTool, selectWall],
-  );
+      return;
+    }
 
-  const handleNodeContextMenu = useCallback(
-    (event: React.MouseEvent) => {
-      if (!isEditMode || activeDrawTool === "device") {
-        return;
-      }
+    const created = addRoom({
+      floorId: currentFloorId,
+      start: drawAnchor,
+      end: clickedPoint,
+      color: selectedWallColor,
+    });
 
-      event.preventDefault();
-      setActiveDrawTool("device");
-      setDrawAnchor(null);
-      setPointerPreview(null);
-      setHoverSnapPoint(null);
-      setDrawMessage(null);
-      selectWall(null);
-    },
-    [isEditMode, activeDrawTool, setActiveDrawTool, selectWall],
-  );
+    if (!created) {
+      setDrawMessage(
+        "Salle refusée: rectangle vide, collision device/mur, non connecté ou déjà présent.",
+      );
+      return;
+    }
+
+    setDrawAnchor(null);
+    setPointerPreview(null);
+    setHoverSnapPoint(null);
+    setDrawMessage(null);
+  };
+
+  const handlePaneContextMenu = (event: React.MouseEvent | MouseEvent) => {
+    if (!isEditMode || activeDrawTool === "device") {
+      return;
+    }
+
+    event.preventDefault();
+    setActiveDrawTool("device");
+    setDrawAnchor(null);
+    setPointerPreview(null);
+    setHoverSnapPoint(null);
+    setDrawMessage(null);
+    selectWall(null);
+  };
+
+  const handleNodeContextMenu = (event: React.MouseEvent) => {
+    if (!isEditMode || activeDrawTool === "device") {
+      return;
+    }
+
+    event.preventDefault();
+    setActiveDrawTool("device");
+    setDrawAnchor(null);
+    setPointerPreview(null);
+    setHoverSnapPoint(null);
+    setDrawMessage(null);
+    selectWall(null);
+  };
 
   return (
     <div className="relative h-full w-full">

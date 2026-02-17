@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { ReactFlowProvider } from "@xyflow/react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Edit01Icon, Tick01Icon } from "@hugeicons/core-free-icons";
-import { useCallback, useEffect, useMemo } from "react";
+import { useEffect } from "react";
 import FlowCanvas from "@/canvas/FlowCanvas";
 import AppSidebar from "@/panels/Sidebar";
 import Toolbar from "@/panels/Toolbar";
@@ -103,42 +103,33 @@ function HomePageContent() {
 
   // Get current building's floors for navigation
   const currentBuilding = buildings.find((b) => b.id === currentBuildingId);
-  const floors = useMemo(
-    () => currentBuilding?.floors ?? [],
-    [currentBuilding?.floors],
-  );
+  const floors = currentBuilding?.floors ?? [];
   const currentFloorIndex = floors.findIndex((f) => f.id === currentFloorId);
 
-  // Floor navigation handlers
-  const navigateFloorUp = useCallback(() => {
+  const navigateFloorUp = () => {
     if (currentFloorIndex > 0) {
       setCurrentFloor(floors[currentFloorIndex - 1].id);
     }
-  }, [currentFloorIndex, floors, setCurrentFloor]);
+  };
 
-  const navigateFloorDown = useCallback(() => {
+  const navigateFloorDown = () => {
     if (currentFloorIndex < floors.length - 1) {
       setCurrentFloor(floors[currentFloorIndex + 1].id);
     }
-  }, [currentFloorIndex, floors, setCurrentFloor]);
+  };
 
-  // Navigate to floor by index (0-based)
-  const navigateToFloorByIndex = useCallback(
-    (index: number) => {
-      if (index >= 0 && index < floors.length) {
-        setCurrentFloor(floors[index].id);
-      }
-    },
-    [floors, setCurrentFloor],
-  );
+  const navigateToFloorByIndex = (index: number) => {
+    if (index >= 0 && index < floors.length) {
+      setCurrentFloor(floors[index].id);
+    }
+  };
 
-  // Theme cycling handler
-  const cycleTheme = useCallback(() => {
+  const cycleTheme = () => {
     const themeOrder = ["light", "dark", "system"] as const;
     const currentIndex = themeOrder.indexOf(theme);
     const nextIndex = (currentIndex + 1) % themeOrder.length;
     setTheme(themeOrder[nextIndex]);
-  }, [theme, setTheme]);
+  };
 
   // Register global shortcuts
   useShortcut("toggle-edit-mode", toggleEditMode);
@@ -161,42 +152,15 @@ function HomePageContent() {
   useShortcut("floor-down", navigateFloorDown);
 
   // Floor number shortcuts (Ctrl+1 through Ctrl+9)
-  useShortcut(
-    "floor-1",
-    useCallback(() => navigateToFloorByIndex(0), [navigateToFloorByIndex]),
-  );
-  useShortcut(
-    "floor-2",
-    useCallback(() => navigateToFloorByIndex(1), [navigateToFloorByIndex]),
-  );
-  useShortcut(
-    "floor-3",
-    useCallback(() => navigateToFloorByIndex(2), [navigateToFloorByIndex]),
-  );
-  useShortcut(
-    "floor-4",
-    useCallback(() => navigateToFloorByIndex(3), [navigateToFloorByIndex]),
-  );
-  useShortcut(
-    "floor-5",
-    useCallback(() => navigateToFloorByIndex(4), [navigateToFloorByIndex]),
-  );
-  useShortcut(
-    "floor-6",
-    useCallback(() => navigateToFloorByIndex(5), [navigateToFloorByIndex]),
-  );
-  useShortcut(
-    "floor-7",
-    useCallback(() => navigateToFloorByIndex(6), [navigateToFloorByIndex]),
-  );
-  useShortcut(
-    "floor-8",
-    useCallback(() => navigateToFloorByIndex(7), [navigateToFloorByIndex]),
-  );
-  useShortcut(
-    "floor-9",
-    useCallback(() => navigateToFloorByIndex(8), [navigateToFloorByIndex]),
-  );
+  useShortcut("floor-1", () => navigateToFloorByIndex(0));
+  useShortcut("floor-2", () => navigateToFloorByIndex(1));
+  useShortcut("floor-3", () => navigateToFloorByIndex(2));
+  useShortcut("floor-4", () => navigateToFloorByIndex(3));
+  useShortcut("floor-5", () => navigateToFloorByIndex(4));
+  useShortcut("floor-6", () => navigateToFloorByIndex(5));
+  useShortcut("floor-7", () => navigateToFloorByIndex(6));
+  useShortcut("floor-8", () => navigateToFloorByIndex(7));
+  useShortcut("floor-9", () => navigateToFloorByIndex(8));
 
   return (
     <SidebarProvider>
