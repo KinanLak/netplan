@@ -11,10 +11,18 @@ const sizeClasses: Record<ShortcutHintSize, string> = {
   lg: "h-6 min-w-6 text-sm px-1.5",
 };
 
+const hintTransitionClassName =
+  "inline-flex items-center gap-0.5 overflow-hidden transition-all duration-200 ease-out";
+
+const hintVisibilityClassName = (isVisible: boolean): string =>
+  isVisible
+    ? "max-w-80 translate-y-0 opacity-100"
+    : "max-w-0 -translate-y-0.5 opacity-0";
+
 type ShortcutHintProps = {
   /** The action to display the shortcut for */
   action: ShortcutAction;
-  /** Always show the hint, regardless of Option key state */
+  /** Always show the hint, regardless of modifier key state */
   alwaysShow?: boolean;
   /** Additional class names */
   className?: string;
@@ -26,7 +34,7 @@ type ShortcutHintProps = {
 
 /**
  * Displays keyboard shortcut hints for an action.
- * By default, only visible when the Option key is held down.
+ * By default, only visible when the modifier key is held down.
  * Shows shortcuts in a subtle, elegant way similar to Linear.
  */
 export function ShortcutHint({
@@ -36,12 +44,12 @@ export function ShortcutHint({
   singleKey = true,
   size = "default",
 }: ShortcutHintProps) {
-  const { isVisible: isOptionVisible } = useOptionHeld();
+  const { isVisible: isModifierVisible } = useOptionHeld();
   const shortcutKeys = getShortcutDisplay(action);
 
-  const isVisible = alwaysShow || isOptionVisible;
+  const isVisible = alwaysShow || isModifierVisible;
 
-  if (!isVisible || shortcutKeys.length === 0) {
+  if (shortcutKeys.length === 0) {
     return null;
   }
 
@@ -50,8 +58,8 @@ export function ShortcutHint({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-0.5 transition-opacity duration-150",
-        isVisible ? "opacity-100" : "opacity-0",
+        hintTransitionClassName,
+        hintVisibilityClassName(isVisible),
         className,
       )}
     >
@@ -71,7 +79,7 @@ export function ShortcutHint({
 type ShortcutHintKeysProps = {
   /** Array of keys to display */
   keys: string[];
-  /** Always show the hint, regardless of Option key state */
+  /** Always show the hint, regardless of modifier key state */
   alwaysShow?: boolean;
   /** Additional class names */
   className?: string;
@@ -83,7 +91,7 @@ type ShortcutHintKeysProps = {
 
 /**
  * Displays keyboard shortcut hints from raw keys.
- * By default, only visible when the Option key is held down.
+ * By default, only visible when the modifier key is held down.
  * Use this for dynamic shortcuts that aren't predefined actions.
  */
 export function ShortcutHintKeys({
@@ -93,19 +101,19 @@ export function ShortcutHintKeys({
   size = "default",
   kbdClassName,
 }: ShortcutHintKeysProps) {
-  const { isVisible: isOptionVisible } = useOptionHeld();
+  const { isVisible: isModifierVisible } = useOptionHeld();
 
-  const isVisible = alwaysShow || isOptionVisible;
+  const isVisible = alwaysShow || isModifierVisible;
 
-  if (!isVisible || keys.length === 0) {
+  if (keys.length === 0) {
     return null;
   }
 
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-0.5 transition-opacity duration-150",
-        isVisible ? "opacity-100" : "opacity-0",
+        hintTransitionClassName,
+        hintVisibilityClassName(isVisible),
         className,
       )}
     >
@@ -130,7 +138,7 @@ type ShortcutHintInlineProps = {
 };
 
 /**
- * Inline shortcut hint that animates in/out based on Option key.
+ * Inline shortcut hint that animates in/out based on modifier key.
  * More subtle version meant for inline use in buttons/menus.
  */
 export function ShortcutHintInline({
@@ -138,7 +146,7 @@ export function ShortcutHintInline({
   className,
   size = "default",
 }: ShortcutHintInlineProps) {
-  const { isVisible: isOptionVisible } = useOptionHeld();
+  const { isVisible: isModifierVisible } = useOptionHeld();
   const shortcutKeys = getShortcutDisplay(action);
 
   if (shortcutKeys.length === 0) {
@@ -150,8 +158,9 @@ export function ShortcutHintInline({
   return (
     <span
       className={cn(
-        "ml-auto inline-flex items-center gap-0.5 overflow-hidden transition-all duration-200 ease-out",
-        isOptionVisible ? "max-w-24 opacity-100" : "max-w-0 opacity-0",
+        "ml-auto",
+        hintTransitionClassName,
+        hintVisibilityClassName(isModifierVisible),
         className,
       )}
     >
@@ -183,7 +192,7 @@ type ShortcutHintAbsoluteProps = {
 };
 
 /**
- * Absolutely positioned shortcut hint that appears on Option key hold.
+ * Absolutely positioned shortcut hint that appears on modifier key hold.
  * Useful for placing hints on buttons or interactive elements.
  */
 export function ShortcutHintAbsolute({
@@ -192,7 +201,7 @@ export function ShortcutHintAbsolute({
   className,
   size = "default",
 }: ShortcutHintAbsoluteProps) {
-  const { isVisible: isOptionVisible } = useOptionHeld();
+  const { isVisible: isModifierVisible } = useOptionHeld();
   const shortcutKeys = getShortcutDisplay(action);
 
   if (shortcutKeys.length === 0) {
@@ -214,7 +223,9 @@ export function ShortcutHintAbsolute({
       className={cn(
         "pointer-events-none absolute z-10 inline-flex items-center gap-0.5 transition-all duration-200 ease-out",
         positionClasses[position],
-        isOptionVisible ? "scale-100 opacity-100" : "scale-75 opacity-0",
+        isModifierVisible
+          ? "translate-y-0 opacity-100"
+          : "translate-y-0.5 opacity-0",
         className,
       )}
     >

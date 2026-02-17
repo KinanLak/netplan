@@ -27,6 +27,7 @@ import {
   isPointOnWall,
   snapPositionToWallGrid,
 } from "@/lib/walls";
+import { cn } from "@/lib/utils";
 
 const SNAP_GRID: [number, number] = [GRID_SIZE, GRID_SIZE];
 
@@ -156,6 +157,7 @@ export default function FlowCanvas() {
   const [pointerPreview, setPointerPreview] = useState<Position | null>(null);
   const [hoverSnapPoint, setHoverSnapPoint] = useState<Position | null>(null);
   const [drawMessage, setDrawMessage] = useState<string | null>(null);
+  const [isCursorDragging, setIsCursorDragging] = useState(false);
 
   const canEditDevices = isEditMode && activeDrawTool === "device";
 
@@ -440,6 +442,36 @@ export default function FlowCanvas() {
     setHoveredDevice(null);
   };
 
+  const handleMoveStart = () => {
+    setIsCursorDragging(true);
+  };
+
+  const handleMoveEnd = () => {
+    setIsCursorDragging(false);
+  };
+
+  const handleNodeDragStart = () => {
+    setIsCursorDragging(true);
+  };
+
+  const handleNodeDragStop = () => {
+    setIsCursorDragging(false);
+  };
+
+  useEffect(() => {
+    const resetDraggingCursor = () => {
+      setIsCursorDragging(false);
+    };
+
+    window.addEventListener("mouseup", resetDraggingCursor);
+    window.addEventListener("blur", resetDraggingCursor);
+
+    return () => {
+      window.removeEventListener("mouseup", resetDraggingCursor);
+      window.removeEventListener("blur", resetDraggingCursor);
+    };
+  }, []);
+
   // Handle H key to highlight connections for hovered or selected device
   const handleHighlightHoveredConnections = () => {
     // If devices are already highlighted and no device is selected (no drawer), de-highlight
@@ -654,10 +686,14 @@ export default function FlowCanvas() {
         onNodeClick={handleNodeClick}
         onNodeMouseEnter={handleNodeMouseEnter}
         onNodeMouseLeave={handleNodeMouseLeave}
+        onNodeDragStart={handleNodeDragStart}
+        onNodeDragStop={handleNodeDragStop}
         onNodeContextMenu={handleNodeContextMenu}
         onPaneClick={handlePaneClick}
         onPaneMouseMove={handlePaneMouseMove}
         onPaneContextMenu={handlePaneContextMenu}
+        onMoveStart={handleMoveStart}
+        onMoveEnd={handleMoveEnd}
         nodeTypes={nodeTypes}
         snapToGrid={true}
         snapGrid={SNAP_GRID}
@@ -667,7 +703,10 @@ export default function FlowCanvas() {
         maxZoom={2}
         deleteKeyCode={null}
         nodesDraggable={canEditDevices}
-        className={paneCursorClass}
+        className={cn(
+          paneCursorClass,
+          isCursorDragging && "canvas-cursor-grabbing",
+        )}
         proOptions={{ hideAttribution: true }}
       >
         <Background

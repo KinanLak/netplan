@@ -226,6 +226,23 @@ button:hover {
   cursor: grabbing !important;
 }
 
+.canvas-cursor-grabbing .react-flow__pane,
+.canvas-cursor-grabbing .react-flow__node,
+.canvas-cursor-grabbing .network-node,
+.canvas-cursor-grabbing .network-node * {
+  cursor: grabbing !important;
+}
+
+.react-flow__pane.dragging ~ .react-flow__viewport .network-node,
+.react-flow__pane.dragging ~ .react-flow__viewport .network-node * {
+  cursor: grabbing !important;
+}
+
+.react-flow__node.dragging .network-node,
+.react-flow__node.dragging .network-node * {
+  cursor: grabbing !important;
+}
+
 .wall-cursor-e .react-flow__pane {
   cursor: e-resize !important;
 }

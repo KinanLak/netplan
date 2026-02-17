@@ -1,5 +1,6 @@
 import type { DeviceStatus } from "@/types/map";
 import { cn } from "@/lib/utils";
+import { useMapStore } from "@/store/useMapStore";
 
 export interface NetworkNodeProps {
   /** Device status for border and shadow color */
@@ -38,12 +39,15 @@ export default function NetworkNode({
   children,
   ref,
 }: NetworkNodeProps) {
+  const isEditMode = useMapStore((s) => s.isEditMode);
+
   return (
     <div
       ref={ref}
       className={cn(
         // Base styles
-        "relative cursor-grab rounded-sm border-2 transition-all duration-200 active:cursor-grabbing",
+        "network-node relative rounded-sm border-2 transition-all duration-200",
+        isEditMode ? "cursor-grab active:cursor-grabbing" : "cursor-pointer",
 
         // Status-based border color (always applied)
         status === "up" && "border-up",

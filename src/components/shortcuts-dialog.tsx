@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { HelpCircleIcon } from "@hugeicons/core-free-icons";
-import type { ShortcutAction } from "@/lib/shortcuts";
 import { formatHotkey, isMac, shortcuts } from "@/lib/shortcuts";
+import {
+  buildBalancedShortcutGrid,
+  shortcutGroups,
+} from "@/lib/shortcut-groups";
 import { Kbd, KbdGroup } from "@/components/ui/kbd";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,45 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-type ShortcutGroup = {
-  title: string;
-  actions: Array<ShortcutAction>;
-};
-
-const shortcutGroups: Array<ShortcutGroup> = [
-  {
-    title: "Général",
-    actions: [
-      "undo",
-      "redo",
-      "toggle-edit-mode",
-      "escape",
-      "delete",
-      "cycle-theme",
-      "show-shortcuts",
-    ],
-  },
-  {
-    title: "Navigation étages",
-    actions: ["floor-up", "floor-down"],
-  },
-  {
-    title: "Outils - Construction",
-    actions: ["tool-wall", "tool-room"],
-  },
-  {
-    title: "Outils - Équipements",
-    actions: ["tool-rack", "tool-switch", "tool-pc", "tool-wall-port"],
-  },
-  {
-    title: "Panneau de détails",
-    actions: ["close-drawer", "delete-device", "highlight-connections"],
-  },
-  {
-    title: "Zoom",
-    actions: ["zoom-in", "zoom-out", "zoom-reset"],
-  },
-];
+const orderedShortcutGroups = buildBalancedShortcutGrid(shortcutGroups, 2);
 
 /**
  * Dialog showing all keyboard shortcuts, opened with "?" key.
@@ -58,6 +23,7 @@ const shortcutGroups: Array<ShortcutGroup> = [
  */
 export function ShortcutsDialog() {
   const [isOpen, setIsOpen] = useState(false);
+  const overlayModifierLabel = isMac ? "⌘" : "Ctrl";
 
   useEffect(() => {
     const isEditableTarget = (target: EventTarget | null): boolean => {
@@ -113,14 +79,14 @@ export function ShortcutsDialog() {
       ) : null}
 
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
+        <DialogContent className="max-h-[85vh] max-w-2xl! overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Raccourcis clavier</DialogTitle>
           </DialogHeader>
 
           <div className="grid grid-cols-2 gap-6 pt-4">
-            {shortcutGroups.map((group) => (
-              <div key={group.title}>
+            {orderedShortcutGroups.map((group) => (
+              <div key={group.id}>
                 <h3 className="mb-3 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
                   {group.title}
                 </h3>
@@ -156,12 +122,16 @@ export function ShortcutsDialog() {
 
           <div className="mt-4 flex flex-col gap-2 border-t border-border pt-4">
             <p className="text-center text-xs text-muted-foreground">
-              Maintenez <Kbd className="mx-1">{isMac ? "⌥" : "Alt"}</Kbd> pour
+              Maintenez <Kbd className="mx-1">{overlayModifierLabel}</Kbd> pour
               voir les raccourcis en contexte
             </p>
             <p className="text-center text-xs text-muted-foreground">
-              Appuyez <Kbd className="mx-1">?</Kbd> ou{" "}
-              <Kbd className="mx-1">esc</Kbd> pour fermer
+              Appuyez sur{" "}
+              <KbdGroup className="mx-1">
+                <Kbd>Shift</Kbd>
+                <Kbd>?</Kbd>
+              </KbdGroup>{" "}
+              ou <Kbd className="mx-1">esc</Kbd> pour fermer
             </p>
           </div>
         </DialogContent>

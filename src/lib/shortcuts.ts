@@ -66,13 +66,13 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
   "toggle-edit-mode": {
     hotkey: "e",
     label: "Mode édition",
-    description: "Activer/désactiver le mode édition",
+    description: "Basculer dans le mode édition",
     scope: "global",
   },
   escape: {
     hotkey: "escape",
     label: "Annuler",
-    description: "Désélectionner ou annuler l'action en cours",
+    description: "Annuler l'action en cours",
     scope: "global",
   },
   delete: {
@@ -102,7 +102,7 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
   "cycle-theme": {
     hotkey: "shift+t",
     label: "Thème",
-    description: "Changer le thème (clair/sombre/système)",
+    description: "Changer le thème",
     scope: "global",
   },
 

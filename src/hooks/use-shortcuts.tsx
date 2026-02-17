@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useHotkeys, useHotkeysContext } from "react-hotkeys-hook";
 import type { Options } from "react-hotkeys-hook";
 import type { ShortcutAction, ShortcutScope } from "@/lib/shortcuts";
-import { getHotkey, getScope } from "@/lib/shortcuts";
+import { getHotkey, getScope, isMac } from "@/lib/shortcuts";
 
 export { useHotkeysContext };
 
@@ -21,6 +21,7 @@ type UseHotkeyDirectOptions = {
 
 const DEFAULT_SHORTCUT_OPTIONS: UseShortcutOptions = {};
 const DEFAULT_HOTKEY_DIRECT_OPTIONS: UseHotkeyDirectOptions = {};
+const OVERLAY_MODIFIER_KEY = isMac ? "Meta" : "Control";
 
 /**
  * Hook to register a keyboard shortcut by action name
@@ -102,7 +103,8 @@ export function useDrawerScope(isOpen: boolean) {
 }
 
 /**
- * Hook to track if option (Alt) key is held
+ * Hook to track if the overlay modifier key is held
+ * Ctrl on Windows/Linux, Cmd on macOS
  * Used for showing shortcuts overlay (Linear-style)
  */
 export function useOptionHeld(delay = 200) {
@@ -113,7 +115,7 @@ export function useOptionHeld(delay = 200) {
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Alt" && !event.repeat) {
+      if (event.key === OVERLAY_MODIFIER_KEY && !event.repeat) {
         setIsHeld(true);
         // Delay before showing overlay
         timeoutId = setTimeout(() => {
@@ -123,7 +125,7 @@ export function useOptionHeld(delay = 200) {
     };
 
     const handleKeyUp = (event: KeyboardEvent) => {
-      if (event.key === "Alt") {
+      if (event.key === OVERLAY_MODIFIER_KEY) {
         setIsHeld(false);
         setIsVisible(false);
         if (timeoutId) {

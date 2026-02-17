@@ -12,28 +12,16 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ShortcutHint } from "@/components/ui/shortcut-hint";
-import { useOptionHeld } from "@/hooks/use-shortcuts";
 import { useTheme } from "@/components/theme-provider";
 import { cn } from "@/lib/utils";
 
 export function ModeToggle() {
   const { theme, setTheme } = useTheme();
-  const isOptionHeld = useOptionHeld();
 
   return (
     <DropdownMenu>
       <div className="flex items-center gap-1.5">
-        {/* Shortcut hint on the left, visible only when Option is held */}
-        <span
-          className={cn(
-            "flex transition-all duration-200",
-            isOptionHeld.isHeld
-              ? "opacity-100"
-              : "max-w-0 overflow-hidden opacity-0",
-          )}
-        >
-          <ShortcutHint size="sm" action="cycle-theme" alwaysShow />
-        </span>
+        <ShortcutHint size="sm" action="cycle-theme" />
         <DropdownMenuTrigger className="flex h-8 w-8 items-center justify-center rounded-md ring-ring transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:outline-hidden">
           {/* Light mode icon */}
           <HugeiconsIcon

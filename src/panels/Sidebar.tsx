@@ -74,7 +74,6 @@ export default function AppSidebar() {
             <h1 className="text-xl font-bold tracking-tight">
               <span className="text-primary">Net</span>Plan
             </h1>
-            <p className="text-sm text-muted-foreground">Cartographie Réseau</p>
           </div>
           <ModeToggle />
         </div>
@@ -162,31 +161,32 @@ export default function AppSidebar() {
       </SidebarContent>
 
       {/* Undo / Redo */}
-      <div className="border-t px-4 py-2">
-        <div className="flex w-full">
-          <Button
-            variant="ghost"
-            size="sm"
+      <div className={`border-t ${isEditMode ? "" : "hidden"}`}>
+        <div className="flex h-10 w-full">
+          <button
+            type="button"
             onClick={handleUndo}
             disabled={!isEditMode || !canUndo}
-            className="flex h-8 flex-1 items-center justify-center gap-1.5 rounded-r-none text-xs"
+            className="group flex h-full flex-1 items-center justify-center border-0 border-r border-border text-xs text-sidebar-foreground transition-[background-color,color,box-shadow] hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-inset active:bg-sidebar-accent active:text-sidebar-accent-foreground active:shadow-[inset_0_1px_2px_var(--color-border)] disabled:pointer-events-none disabled:opacity-50"
             title="Annuler (Ctrl+Z)"
           >
-            <HugeiconsIcon icon={UndoIcon} size={14} strokeWidth={1.5} />
-            Annuler
-          </Button>
-          <div className="w-px bg-border" aria-hidden />
-          <Button
-            variant="ghost"
-            size="sm"
+            <span className="flex items-center gap-1.5 transition-transform duration-75">
+              <HugeiconsIcon icon={UndoIcon} size={14} strokeWidth={1.5} />
+              Annuler
+            </span>
+          </button>
+          <button
+            type="button"
             onClick={handleRedo}
             disabled={!isEditMode || !canRedo}
-            className="flex h-8 flex-1 items-center justify-center gap-1.5 rounded-l-none text-xs"
+            className="group flex h-full flex-1 items-center justify-center text-xs text-sidebar-foreground transition-[background-color,color,box-shadow] hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-inset active:bg-sidebar-accent active:text-sidebar-accent-foreground active:shadow-[inset_0_1px_2px_var(--color-border)] disabled:pointer-events-none disabled:opacity-50"
             title="Rétablir (Ctrl+Shift+Z)"
           >
-            Rétablir
-            <HugeiconsIcon icon={RedoIcon} size={14} strokeWidth={1.5} />
-          </Button>
+            <span className="flex items-center gap-1.5 transition-transform duration-75">
+              Rétablir
+              <HugeiconsIcon icon={RedoIcon} size={14} strokeWidth={1.5} />
+            </span>
+          </button>
         </div>
       </div>
 
