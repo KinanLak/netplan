@@ -68,6 +68,7 @@ function HomePageContent() {
   const toggleEditMode = useMapStore((state) => state.toggleEditMode);
   const selectDevice = useMapStore((state) => state.selectDevice);
   const selectWall = useMapStore((state) => state.selectWall);
+  const activeDrawTool = useMapStore((state) => state.activeDrawTool);
   const setActiveDrawTool = useMapStore((state) => state.setActiveDrawTool);
   const setHighlightedDevices = useMapStore(
     (state) => state.setHighlightedDevices,
@@ -169,6 +170,11 @@ function HomePageContent() {
       selectWall(null);
       setActiveDrawTool("device");
       setHighlightedDevices([]);
+      return;
+    }
+    // Then cancel any active draw tool (wall/room) without leaving edit mode
+    if (activeDrawTool !== "device") {
+      setActiveDrawTool("device");
       return;
     }
     // Then exit edit mode if active

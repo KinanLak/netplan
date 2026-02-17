@@ -5,6 +5,7 @@ import { useMapStore } from "@/store/useMapStore";
 import { useDrawerScope, useShortcut } from "@/hooks/use-shortcuts";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
+import { ShortcutHintInline } from "@/components/ui/shortcut-hint";
 
 export default function WallDrawer() {
   const walls = useMapStore((s) => s.walls);
@@ -20,11 +21,18 @@ export default function WallDrawer() {
     selectWall(null);
   };
 
+  const handleDeleteWall = () => {
+    if (!wall) return;
+    deleteWall(wall.id);
+    selectWall(null);
+  };
+
   // Manage drawer scope - enables drawer shortcuts when open
   useDrawerScope(!!wall);
 
   // Register keyboard shortcuts
   useShortcut("close-drawer", handleCloseDrawer);
+  useShortcut("delete-device", handleDeleteWall, { enabled: isEditMode });
 
   if (!wall) {
     return null;
@@ -102,10 +110,7 @@ export default function WallDrawer() {
         <footer className="space-y-2 border-t border-border bg-muted p-4">
           <Button
             variant="destructive"
-            onClick={() => {
-              deleteWall(wall.id);
-              selectWall(null);
-            }}
+            onClick={handleDeleteWall}
             className="w-full gap-2"
           >
             <HugeiconsIcon
@@ -115,6 +120,7 @@ export default function WallDrawer() {
               strokeWidth={1.5}
             />
             Supprimer
+            <ShortcutHintInline action="delete-device" />
           </Button>
         </footer>
       ) : null}
