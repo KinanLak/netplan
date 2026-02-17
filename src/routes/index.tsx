@@ -2,13 +2,13 @@ import { createFileRoute } from "@tanstack/react-router";
 import { ReactFlowProvider } from "@xyflow/react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Edit01Icon, Tick01Icon } from "@hugeicons/core-free-icons";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import FlowCanvas from "@/canvas/FlowCanvas";
 import AppSidebar from "@/panels/Sidebar";
 import Toolbar from "@/panels/Toolbar";
 import DeviceDrawer from "@/panels/DeviceDrawer";
 import WallDrawer from "@/panels/WallDrawer";
-import { useMapStore } from "@/store/useMapStore";
+import { rehydrateMapStore, useMapStore } from "@/store/useMapStore";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { ThemeProvider, useTheme } from "@/components/theme-provider";
 import { HotkeysProvider } from "@/components/hotkeys-provider";
@@ -23,11 +23,39 @@ export const Route = createFileRoute("/")({
 });
 
 function HomePage() {
+  const [isStoreHydrated, setIsStoreHydrated] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const hydrateStore = async () => {
+      try {
+        await rehydrateMapStore();
+      } finally {
+        if (mounted) {
+          setIsStoreHydrated(true);
+        }
+      }
+    };
+
+    void hydrateStore();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   return (
     <ThemeProvider defaultTheme="system" storageKey="netplan-ui-theme">
       <HotkeysProvider>
-        <HomePageContent />
-        <ShortcutsDialog />
+        {isStoreHydrated ? (
+          <>
+            <HomePageContent />
+            <ShortcutsDialog />
+          </>
+        ) : (
+          <div className="h-screen w-screen bg-background" />
+        )}
       </HotkeysProvider>
     </ThemeProvider>
   );

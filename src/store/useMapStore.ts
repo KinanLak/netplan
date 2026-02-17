@@ -335,11 +335,15 @@ export const useMapStore = create<MapStore>()(
           pastState.walls === currentState.walls,
         limit: 100,
         wrapTemporal: (storeInitializer) =>
-          persist(storeInitializer, { name: "netplan-temporal" }),
+          persist(storeInitializer, {
+            name: "netplan-temporal",
+            skipHydration: true,
+          }),
       },
     ),
     {
       name: "netplan-storage",
+      skipHydration: true,
       partialize: (state) => ({
         devices: state.devices,
         walls: state.walls,
@@ -352,3 +356,19 @@ export const useMapStore = create<MapStore>()(
     },
   ),
 );
+
+type PersistApi = {
+  rehydrate: () => Promise<void>;
+};
+
+const temporalStoreWithPersist =
+  useMapStore.temporal as typeof useMapStore.temporal & {
+    persist?: PersistApi;
+  };
+
+export async function rehydrateMapStore() {
+  await Promise.all([
+    useMapStore.persist.rehydrate(),
+    temporalStoreWithPersist.persist?.rehydrate() ?? Promise.resolve(),
+  ]);
+}
