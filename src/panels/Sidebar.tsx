@@ -106,7 +106,7 @@ export default function AppSidebar() {
                   </SidebarMenuButton>
 
                   {/* Floors (only show if building is selected) */}
-                  {building.id === currentBuildingId && (
+                  {building.id === currentBuildingId ? (
                     <SidebarMenuSub>
                       {building.floors.map((floor, floorIndex) => {
                         const isActive = floor.id === currentFloorId;
@@ -135,7 +135,7 @@ export default function AppSidebar() {
                                 />
                                 <span>{floor.name}</span>
                               </span>
-                              {showShortcut && (
+                              {showShortcut ? (
                                 <ShortcutHintKeys
                                   keys={[
                                     isMac ? "⌃" : "Ctrl",
@@ -148,13 +148,13 @@ export default function AppSidebar() {
                                       "bg-primary-foreground text-primary",
                                   )}
                                 />
-                              )}
+                              ) : null}
                             </SidebarMenuSubButton>
                           </SidebarMenuSubItem>
                         );
                       })}
                     </SidebarMenuSub>
-                  )}
+                  ) : null}
                 </SidebarMenuItem>
               ))}
             </SidebarMenu>

@@ -94,7 +94,7 @@ export default function WallDrawer() {
         </section>
       </div>
 
-      {isEditMode && (
+      {isEditMode ? (
         <footer className="space-y-2 border-t border-border bg-muted p-4">
           <Button
             variant="destructive"
@@ -113,7 +113,7 @@ export default function WallDrawer() {
             Supprimer
           </Button>
         </footer>
-      )}
+      ) : null}
     </aside>
   );
 }

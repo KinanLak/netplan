@@ -13,6 +13,15 @@ type UseShortcutOptions = {
   enableOnFormTags?: boolean;
 };
 
+type UseHotkeyDirectOptions = {
+  scope?: ShortcutScope;
+  enabled?: boolean;
+  enableOnFormTags?: boolean;
+};
+
+const DEFAULT_SHORTCUT_OPTIONS: UseShortcutOptions = {};
+const DEFAULT_HOTKEY_DIRECT_OPTIONS: UseHotkeyDirectOptions = {};
+
 /**
  * Hook to register a keyboard shortcut by action name
  * Automatically uses the hotkey and scope from the shortcuts config
@@ -20,7 +29,7 @@ type UseShortcutOptions = {
 export function useShortcut(
   action: ShortcutAction,
   handler: () => void,
-  options: UseShortcutOptions = {},
+  options: UseShortcutOptions = DEFAULT_SHORTCUT_OPTIONS,
 ) {
   const { enabled = true, enableOnFormTags = false } = options;
   const hotkey = getHotkey(action);
@@ -47,11 +56,7 @@ export function useShortcut(
 export function useHotkeyDirect(
   hotkey: string | Array<string>,
   handler: () => void,
-  options: {
-    scope?: ShortcutScope;
-    enabled?: boolean;
-    enableOnFormTags?: boolean;
-  } = {},
+  options: UseHotkeyDirectOptions = DEFAULT_HOTKEY_DIRECT_OPTIONS,
 ) {
   const {
     scope = "global",

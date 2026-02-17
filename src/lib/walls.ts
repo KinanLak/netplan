@@ -157,21 +157,20 @@ export const createRoomWallSegments = (
     { start: { x: left, y: top }, end: { x: left, y: bottom } },
   ];
 
-  return drafts
-    .map((draft) => {
-      const normalized = normalizeWallSegmentPoints(draft.start, draft.end);
-      if (!normalized) {
-        return null;
-      }
+  return drafts.reduce<Array<Omit<WallSegment, "id">>>((segments, draft) => {
+    const normalized = normalizeWallSegmentPoints(draft.start, draft.end);
+    if (!normalized) {
+      return segments;
+    }
 
-      return {
-        floorId,
-        color,
-        start: normalized.start,
-        end: normalized.end,
-      };
-    })
-    .filter((segment): segment is Omit<WallSegment, "id"> => segment !== null);
+    segments.push({
+      floorId,
+      color,
+      start: normalized.start,
+      end: normalized.end,
+    });
+    return segments;
+  }, []);
 };
 
 export const getWallRect = (

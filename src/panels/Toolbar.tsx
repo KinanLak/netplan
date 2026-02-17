@@ -423,7 +423,7 @@ export default function Toolbar() {
             {drawToolbarActions.map((action) => renderToolbarAction(action))}
           </div>
 
-          {showWallColors && (
+          {showWallColors ? (
             <div
               className={cn(
                 "flex items-center gap-1",
@@ -457,7 +457,7 @@ export default function Toolbar() {
                 );
               })}
             </div>
-          )}
+          ) : null}
 
           <div className="h-6 w-px bg-border" aria-hidden />
 
@@ -481,12 +481,12 @@ export default function Toolbar() {
               onValueChange={setSearchQuery}
             />
             <CommandList>
-              {filteredDevices.length === 0 && (
+              {filteredDevices.length === 0 ? (
                 <div className="py-6 text-center text-sm text-muted-foreground">
                   Aucun équipement trouvé
                 </div>
-              )}
-              {filteredDevices.length > 0 && (
+              ) : null}
+              {filteredDevices.length > 0 ? (
                 <CommandGroup>
                   {filteredDevices.map((device) => (
                     <CommandItem
@@ -500,11 +500,11 @@ export default function Toolbar() {
                           <p className="font-medium">{device.name}</p>
                           <p className="text-xs text-muted-foreground">
                             {device.model}
-                            {device.hostname && (
+                            {device.hostname ? (
                               <span className="ml-2 font-mono">
                                 {device.hostname}
                               </span>
-                            )}
+                            ) : null}
                           </p>
                         </div>
                         <Check className="ml-2 h-4 w-4 shrink-0 opacity-0" />
@@ -512,7 +512,7 @@ export default function Toolbar() {
                     </CommandItem>
                   ))}
                 </CommandGroup>
-              )}
+              ) : null}
             </CommandList>
           </Command>
         </PopoverContent>

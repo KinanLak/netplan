@@ -95,7 +95,7 @@ export function ShortcutsDialog() {
   return (
     <>
       {/* Floating help button - hidden when dialog is open */}
-      {!isOpen && (
+      {!isOpen ? (
         <Button
           variant="outline"
           size="icon"
@@ -110,7 +110,7 @@ export function ShortcutsDialog() {
             strokeWidth={1.5}
           />
         </Button>
-      )}
+      ) : null}
 
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">

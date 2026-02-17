@@ -167,34 +167,34 @@ export default function DeviceDrawer() {
       <ScrollArea className="flex-1">
         <div className="space-y-4 px-4 py-4">
           {/* Hostname & IP */}
-          {(device.hostname || device.metadata.ip) && (
+          {device.hostname || device.metadata.ip ? (
             <section>
               <h3 className="mb-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
                 Réseau
               </h3>
               <div className="space-y-2">
-                {device.hostname && (
+                {device.hostname ? (
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Hostname</span>
                     <span className="font-mono text-foreground">
                       {device.hostname}
                     </span>
                   </div>
-                )}
-                {device.metadata.ip && (
+                ) : null}
+                {device.metadata.ip ? (
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">IP</span>
                     <span className="font-mono text-foreground">
                       {device.metadata.ip}
                     </span>
                   </div>
-                )}
+                ) : null}
               </div>
             </section>
-          )}
+          ) : null}
 
           {/* Last user (for PCs) */}
-          {device.type === "pc" && device.metadata.lastUser && (
+          {device.type === "pc" && device.metadata.lastUser ? (
             <section>
               <h3 className="mb-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
                 Utilisateur
@@ -218,10 +218,10 @@ export default function DeviceDrawer() {
                 </div>
               </div>
             </section>
-          )}
+          ) : null}
 
           {/* Model */}
-          {device.metadata.model && (
+          {device.metadata.model ? (
             <section>
               <h3 className="mb-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
                 Matériel
@@ -230,10 +230,10 @@ export default function DeviceDrawer() {
                 <span className="text-foreground">{device.metadata.model}</span>
               </div>
             </section>
-          )}
+          ) : null}
 
           {/* Connected devices */}
-          {connectedDevices.length > 0 && (
+          {connectedDevices.length > 0 ? (
             <section>
               <div className="mb-2 flex items-center justify-between">
                 <h3 className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
@@ -283,10 +283,10 @@ export default function DeviceDrawer() {
                 )}
               </div>
             </section>
-          )}
+          ) : null}
 
           {/* Ports (for switches) */}
-          {device.type === "switch" && device.metadata.ports && (
+          {device.type === "switch" && device.metadata.ports ? (
             <section>
               <h3 className="mb-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
                 Ports ({device.metadata.ports.length})
@@ -328,7 +328,7 @@ export default function DeviceDrawer() {
                 </span>
               </div>
             </section>
-          )}
+          ) : null}
 
           {/* Position */}
           <section>
@@ -354,7 +354,7 @@ export default function DeviceDrawer() {
       </ScrollArea>
 
       {/* Footer actions */}
-      {isEditMode && (
+      {isEditMode ? (
         <footer className="space-y-2 border-t border-border bg-muted p-4">
           <Button
             variant="destructive"
@@ -371,7 +371,7 @@ export default function DeviceDrawer() {
             <ShortcutHintInline action="delete-device" />
           </Button>
         </footer>
-      )}
+      ) : null}
     </aside>
   );
 }

@@ -175,24 +175,28 @@ export default function FlowCanvas() {
 
   // Sync nodes when floor, selection or highlights change
   useEffect(() => {
-    const nextNodes = devices
-      .filter((device) => device.floorId === currentFloorId)
-      .map(
-        (device): DeviceNode => ({
-          id: device.id,
-          type: device.type,
-          position: device.position,
+    const nextNodes = devices.reduce<Array<DeviceNode>>((acc, device) => {
+      if (device.floorId !== currentFloorId) {
+        return acc;
+      }
+
+      acc.push({
+        id: device.id,
+        type: device.type,
+        position: device.position,
+        data: {
           data: {
-            data: {
-              ...device,
-              selected: device.id === selectedDeviceId,
-              highlighted: highlightedDeviceIds.includes(device.id),
-            },
+            ...device,
+            selected: device.id === selectedDeviceId,
+            highlighted: highlightedDeviceIds.includes(device.id),
           },
-          selected: device.id === selectedDeviceId,
-          draggable: canEditDevices,
-        }),
-      );
+        },
+        selected: device.id === selectedDeviceId,
+        draggable: canEditDevices,
+      });
+
+      return acc;
+    }, []);
 
     nextNodes.forEach((node) => {
       lastValidPositions.current.set(node.id, node.position);
@@ -749,7 +753,7 @@ export default function FlowCanvas() {
                 );
               })}
 
-              {drawAnchor && activeDrawTool !== "device" && (
+              {drawAnchor && activeDrawTool !== "device" ? (
                 <circle
                   cx={drawAnchor.x}
                   cy={drawAnchor.y}
@@ -758,9 +762,9 @@ export default function FlowCanvas() {
                   stroke="#ffffff"
                   strokeWidth={2}
                 />
-              )}
+              ) : null}
 
-              {activeDrawTool === "wall" && !drawAnchor && hoverSnapPoint && (
+              {activeDrawTool === "wall" && !drawAnchor && hoverSnapPoint ? (
                 <circle
                   cx={hoverSnapPoint.x}
                   cy={hoverSnapPoint.y}
@@ -769,7 +773,7 @@ export default function FlowCanvas() {
                   stroke="rgba(59, 130, 246, 0.85)"
                   strokeWidth={1.5}
                 />
-              )}
+              ) : null}
             </svg>
           </div>
         </ViewportPortal>
@@ -778,7 +782,7 @@ export default function FlowCanvas() {
       </ReactFlow>
 
       {/* Build mode help */}
-      {isEditMode && activeDrawTool !== "device" && (
+      {isEditMode && activeDrawTool !== "device" ? (
         <div className="absolute top-4 right-4 z-20 max-w-80 rounded-md border bg-card px-3 py-2 text-xs shadow-md">
           <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
             <Kbd>Esc</Kbd>
@@ -791,11 +795,11 @@ export default function FlowCanvas() {
             />
             <span>pour quitter</span>
           </div>
-          {drawMessage && (
+          {drawMessage ? (
             <p className="mt-1 text-destructive">{drawMessage}</p>
-          )}
+          ) : null}
         </div>
-      )}
+      ) : null}
 
       {/* Edit mode vignette overlay */}
       <div

@@ -86,7 +86,7 @@ export function ModeToggle() {
             />
             Clair
           </span>
-          {theme === "light" && <Check className="h-4 w-4" />}
+          {theme === "light" ? <Check className="h-4 w-4" /> : null}
         </DropdownMenuItem>
         <DropdownMenuItem
           onClick={() => setTheme("dark")}
@@ -100,7 +100,7 @@ export function ModeToggle() {
             />
             Sombre
           </span>
-          {theme === "dark" && <Check className="h-4 w-4" />}
+          {theme === "dark" ? <Check className="h-4 w-4" /> : null}
         </DropdownMenuItem>
         <DropdownMenuItem
           onClick={() => setTheme("system")}
@@ -114,7 +114,7 @@ export function ModeToggle() {
             />
             Système
           </span>
-          {theme === "system" && <Check className="h-4 w-4" />}
+          {theme === "system" ? <Check className="h-4 w-4" /> : null}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
