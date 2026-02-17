@@ -4,16 +4,17 @@ import { Handle, Position } from "@xyflow/react";
 import { memo } from "react";
 import NetworkNode from "./NetworkNode";
 import type { Node, NodeProps } from "@xyflow/react";
-import type { DeviceNodeData, DeviceStatus } from "@/types/map";
+import type { Device, DeviceStatus } from "@/types/map";
+import { useMapStore } from "@/store/useMapStore";
 import { cn } from "@/lib/utils";
 
-type WallPortNodeType = Node<{ data: DeviceNodeData }>;
+type WallPortNodeType = Node<{ data: Device }>;
 
-function WallPortNode({ data }: NodeProps<WallPortNodeType>) {
+function WallPortNode({ data, id }: NodeProps<WallPortNodeType>) {
   const device = data.data;
   const status: DeviceStatus = device.metadata.status ?? "unknown";
-  const isHighlighted = device.highlighted;
-  const isSelected = device.selected;
+  const isSelected = useMapStore((s) => s.selectedDeviceId === id);
+  const isHighlighted = useMapStore((s) => s.highlightedDeviceIds.includes(id));
 
   return (
     <NetworkNode

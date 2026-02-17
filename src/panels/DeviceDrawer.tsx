@@ -24,15 +24,14 @@ const typeLabels: Record<string, string> = {
 };
 
 export default function DeviceDrawer() {
-  const {
-    devices,
-    selectedDeviceId,
-    selectDevice,
-    deleteDevice,
-    isEditMode,
-    highlightedDeviceIds,
-    setHighlightedDevices,
-  } = useMapStore();
+  const devices = useMapStore((s) => s.devices);
+  const selectedDeviceId = useMapStore((s) => s.selectedDeviceId);
+  const isEditMode = useMapStore((s) => s.isEditMode);
+  const highlightedDeviceIds = useMapStore((s) => s.highlightedDeviceIds);
+
+  const selectDevice = useMapStore((s) => s.selectDevice);
+  const deleteDevice = useMapStore((s) => s.deleteDevice);
+  const setHighlightedDevices = useMapStore((s) => s.setHighlightedDevices);
 
   const reactFlow = useReactFlow();
 

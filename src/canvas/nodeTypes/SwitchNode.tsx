@@ -2,17 +2,18 @@ import { memo } from "react";
 import { Handle, Position } from "@xyflow/react";
 import NetworkNode from "./NetworkNode";
 import type { Node, NodeProps } from "@xyflow/react";
-import type { DeviceNodeData, DeviceStatus } from "@/types/map";
+import type { Device, DeviceStatus } from "@/types/map";
+import { useMapStore } from "@/store/useMapStore";
 import { cn } from "@/lib/utils";
 
-type SwitchNodeType = Node<{ data: DeviceNodeData }>;
+type SwitchNodeType = Node<{ data: Device }>;
 
-function SwitchNode({ data }: NodeProps<SwitchNodeType>) {
+function SwitchNode({ data, id }: NodeProps<SwitchNodeType>) {
   const device = data.data;
   const ports = device.metadata.ports ?? [];
   const status: DeviceStatus = device.metadata.status ?? "unknown";
-  const isHighlighted = device.highlighted;
-  const isSelected = device.selected;
+  const isSelected = useMapStore((s) => s.selectedDeviceId === id);
+  const isHighlighted = useMapStore((s) => s.highlightedDeviceIds.includes(id));
 
   // Generate 24 ports
   const displayPorts =

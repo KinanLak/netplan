@@ -1,17 +1,18 @@
 import { Handle, Position } from "@xyflow/react";
 import { memo } from "react";
 import NetworkNode from "./NetworkNode";
-import type { DeviceNodeData, DeviceStatus } from "@/types/map";
+import type { Device, DeviceStatus } from "@/types/map";
 import type { Node, NodeProps } from "@xyflow/react";
+import { useMapStore } from "@/store/useMapStore";
 import { cn } from "@/lib/utils";
 
-type RackNodeType = Node<{ data: DeviceNodeData }>;
+type RackNodeType = Node<{ data: Device }>;
 
-function RackNode({ data }: NodeProps<RackNodeType>) {
+function RackNode({ data, id }: NodeProps<RackNodeType>) {
   const device = data.data;
   const status: DeviceStatus = device.metadata.status ?? "unknown";
-  const isHighlighted = device.highlighted;
-  const isSelected = device.selected;
+  const isSelected = useMapStore((s) => s.selectedDeviceId === id);
+  const isHighlighted = useMapStore((s) => s.highlightedDeviceIds.includes(id));
 
   return (
     <NetworkNode

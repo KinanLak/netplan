@@ -12,7 +12,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { MouseRightClick04Icon } from "@hugeicons/core-free-icons";
 import { nodeTypes } from "./nodeTypes";
 import type { Node, OnNodesChange } from "@xyflow/react";
-import type { DeviceNodeData, Position, Size, WallSegment } from "@/types/map";
+import type { Device, Position, Size, WallSegment } from "@/types/map";
 import { useMapStore } from "@/store/useMapStore";
 import { useHotkeyDirect, useShortcut } from "@/hooks/use-shortcuts";
 import { Kbd } from "@/components/ui/kbd";
@@ -30,7 +30,7 @@ import {
 
 const SNAP_GRID: [number, number] = [GRID_SIZE, GRID_SIZE];
 
-type DeviceNode = Node<{ data: DeviceNodeData }>;
+type DeviceNode = Node<{ data: Device }>;
 type DraftWallSegment = Omit<WallSegment, "id">;
 type WallRenderable = Pick<WallSegment, "start" | "end" | "color">;
 
@@ -124,27 +124,28 @@ const findNearestValidPosition = (
 };
 
 export default function FlowCanvas() {
-  const {
-    devices,
-    walls,
-    currentFloorId,
-    selectedDeviceId,
-    selectedWallId,
-    hoveredDeviceId,
-    selectDevice,
-    selectWall,
-    setHoveredDevice,
-    setHighlightedDevices,
-    updateDevicePosition,
-    isEditMode,
-    highlightedDeviceIds,
-    checkCollision,
-    activeDrawTool,
-    selectedWallColor,
-    addWallSegment,
-    addRoom,
-    setActiveDrawTool,
-  } = useMapStore();
+  // State subscriptions — granular selectors prevent re-renders from unrelated changes
+  const devices = useMapStore((s) => s.devices);
+  const walls = useMapStore((s) => s.walls);
+  const currentFloorId = useMapStore((s) => s.currentFloorId);
+  const selectedDeviceId = useMapStore((s) => s.selectedDeviceId);
+  const selectedWallId = useMapStore((s) => s.selectedWallId);
+  const hoveredDeviceId = useMapStore((s) => s.hoveredDeviceId);
+  const isEditMode = useMapStore((s) => s.isEditMode);
+  const highlightedDeviceIds = useMapStore((s) => s.highlightedDeviceIds);
+  const activeDrawTool = useMapStore((s) => s.activeDrawTool);
+  const selectedWallColor = useMapStore((s) => s.selectedWallColor);
+
+  // Actions — stable references in Zustand, never trigger re-renders
+  const selectDevice = useMapStore((s) => s.selectDevice);
+  const selectWall = useMapStore((s) => s.selectWall);
+  const setHoveredDevice = useMapStore((s) => s.setHoveredDevice);
+  const setHighlightedDevices = useMapStore((s) => s.setHighlightedDevices);
+  const updateDevicePosition = useMapStore((s) => s.updateDevicePosition);
+  const checkCollision = useMapStore((s) => s.checkCollision);
+  const addWallSegment = useMapStore((s) => s.addWallSegment);
+  const addRoom = useMapStore((s) => s.addRoom);
+  const setActiveDrawTool = useMapStore((s) => s.setActiveDrawTool);
   const reactFlow = useReactFlow();
 
   // Store last valid positions and last grid cell for optimization
@@ -173,8 +174,9 @@ export default function FlowCanvas() {
 
   const [nodes, setNodes, onNodesChange] = useNodesState<DeviceNode>([]);
 
-  // Sync nodes when floor, selection or highlights change
+  // Sync nodes when devices or floor change — selection/highlight handled separately
   useEffect(() => {
+    const selectedId = useMapStore.getState().selectedDeviceId;
     const nextNodes = devices.reduce<Array<DeviceNode>>((acc, device) => {
       if (device.floorId !== currentFloorId) {
         return acc;
@@ -184,14 +186,8 @@ export default function FlowCanvas() {
         id: device.id,
         type: device.type,
         position: device.position,
-        data: {
-          data: {
-            ...device,
-            selected: device.id === selectedDeviceId,
-            highlighted: highlightedDeviceIds.includes(device.id),
-          },
-        },
-        selected: device.id === selectedDeviceId,
+        data: { data: device },
+        selected: device.id === selectedId,
         draggable: canEditDevices,
       });
 
@@ -203,14 +199,20 @@ export default function FlowCanvas() {
     });
 
     setNodes(nextNodes);
-  }, [
-    devices,
-    currentFloorId,
-    selectedDeviceId,
-    highlightedDeviceIds,
-    canEditDevices,
-    setNodes,
-  ]);
+  }, [devices, currentFloorId, canEditDevices, setNodes]);
+
+  // Lightweight selection sync — only updates the `selected` flag on nodes,
+  // preserving `data` references so memo() on node components is effective.
+  useEffect(() => {
+    setNodes((prev) =>
+      prev.map((node) => {
+        const shouldBeSelected = node.id === selectedDeviceId;
+        return node.selected === shouldBeSelected
+          ? node
+          : { ...node, selected: shouldBeSelected };
+      }),
+    );
+  }, [selectedDeviceId, setNodes]);
 
   // Reset draw state when context changes (React "set state during render" pattern)
   // See: https://react.dev/reference/react/useState#storing-information-from-previous-renders

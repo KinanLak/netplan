@@ -4,16 +4,17 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { ComputerIcon, UserIcon } from "@hugeicons/core-free-icons";
 import NetworkNode from "./NetworkNode";
 import type { Node, NodeProps } from "@xyflow/react";
-import type { DeviceNodeData, DeviceStatus } from "@/types/map";
+import type { Device, DeviceStatus } from "@/types/map";
+import { useMapStore } from "@/store/useMapStore";
 import { cn } from "@/lib/utils";
 
-type PcNodeType = Node<{ data: DeviceNodeData }>;
+type PcNodeType = Node<{ data: Device }>;
 
-function PcNode({ data }: NodeProps<PcNodeType>) {
+function PcNode({ data, id }: NodeProps<PcNodeType>) {
   const device = data.data;
   const status: DeviceStatus = device.metadata.status ?? "unknown";
-  const isHighlighted = device.highlighted;
-  const isSelected = device.selected;
+  const isSelected = useMapStore((s) => s.selectedDeviceId === id);
+  const isHighlighted = useMapStore((s) => s.highlightedDeviceIds.includes(id));
 
   return (
     <NetworkNode

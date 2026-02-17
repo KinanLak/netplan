@@ -30,14 +30,13 @@ import {
 import { ModeToggle } from "@/components/mode-toggle";
 
 export default function AppSidebar() {
-  const {
-    buildings,
-    currentBuildingId,
-    currentFloorId,
-    isEditMode,
-    setCurrentBuilding,
-    setCurrentFloor,
-  } = useMapStore();
+  const buildings = useMapStore((s) => s.buildings);
+  const currentBuildingId = useMapStore((s) => s.currentBuildingId);
+  const currentFloorId = useMapStore((s) => s.currentFloorId);
+  const isEditMode = useMapStore((s) => s.isEditMode);
+
+  const setCurrentBuilding = useMapStore((s) => s.setCurrentBuilding);
+  const setCurrentFloor = useMapStore((s) => s.setCurrentFloor);
 
   const { handleUndo, handleRedo } = useUndoRedo();
   const canUndo = useTemporalStore((s) => s.pastStates.length > 0);

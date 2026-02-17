@@ -70,11 +70,8 @@ export interface Building {
   floors: Array<Floor>;
 }
 
-// React Flow node data
-export interface DeviceNodeData extends Device {
-  selected?: boolean;
-  highlighted?: boolean;
-}
+// React Flow node data — selection/highlight is read from the store by each node
+export type DeviceNodeData = Device;
 
 // Store types
 export interface MapState {

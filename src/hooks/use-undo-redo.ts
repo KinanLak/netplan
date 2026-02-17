@@ -76,82 +76,89 @@ function findAffectedFloorId(before: Snapshot, after: Snapshot): string | null {
 }
 
 /**
- * Hook providing undo/redo handlers with:
- * - Auto-navigation to the affected floor
- * - Cleanup of stale UI references (selectedDeviceId, selectedWallId, highlightedDeviceIds)
+ * Module-level stable undo handler.
+ * Only accesses store via getState() — no hooks, no re-renders.
+ */
+function handleUndo() {
+  const currentState = useMapStore.getState();
+  if (!currentState.isEditMode) return;
+
+  const temporal = useMapStore.temporal.getState();
+  if (temporal.pastStates.length === 0) return;
+
+  const before: Snapshot = {
+    devices: currentState.devices,
+    walls: currentState.walls,
+  };
+
+  temporal.undo();
+
+  const state = useMapStore.getState();
+  const after: Snapshot = {
+    devices: state.devices,
+    walls: state.walls,
+  };
+
+  // Auto-navigate to affected floor
+  const affectedFloor = findAffectedFloorId(before, after);
+  if (affectedFloor && affectedFloor !== state.currentFloorId) {
+    state.setCurrentFloor(affectedFloor);
+  }
+
+  // Cleanup stale UI references
+  cleanupStaleReferences(state);
+
+  // Visual feedback
+  window.dispatchEvent(
+    new CustomEvent("netplan:undo-redo", { detail: { type: "undo" } }),
+  );
+}
+
+/**
+ * Module-level stable redo handler.
+ * Only accesses store via getState() — no hooks, no re-renders.
+ */
+function handleRedo() {
+  const currentState = useMapStore.getState();
+  if (!currentState.isEditMode) return;
+
+  const temporal = useMapStore.temporal.getState();
+  if (temporal.futureStates.length === 0) return;
+
+  const before: Snapshot = {
+    devices: currentState.devices,
+    walls: currentState.walls,
+  };
+
+  temporal.redo();
+
+  const state = useMapStore.getState();
+  const after: Snapshot = {
+    devices: state.devices,
+    walls: state.walls,
+  };
+
+  // Auto-navigate to affected floor
+  const affectedFloor = findAffectedFloorId(before, after);
+  if (affectedFloor && affectedFloor !== state.currentFloorId) {
+    state.setCurrentFloor(affectedFloor);
+  }
+
+  // Cleanup stale UI references
+  cleanupStaleReferences(state);
+
+  // Visual feedback
+  window.dispatchEvent(
+    new CustomEvent("netplan:undo-redo", { detail: { type: "redo" } }),
+  );
+}
+
+/**
+ * Hook providing stable undo/redo handlers.
+ * Returns the same function references every render — no unnecessary re-renders in consumers.
  */
 export function useUndoRedo() {
-  const handleUndo = () => {
-    const currentState = useMapStore.getState();
-    if (!currentState.isEditMode) return;
-
-    const temporal = useMapStore.temporal.getState();
-    if (temporal.pastStates.length === 0) return;
-
-    const before: Snapshot = {
-      devices: currentState.devices,
-      walls: currentState.walls,
-    };
-
-    temporal.undo();
-
-    const state = useMapStore.getState();
-    const after: Snapshot = {
-      devices: state.devices,
-      walls: state.walls,
-    };
-
-    // Auto-navigate to affected floor
-    const affectedFloor = findAffectedFloorId(before, after);
-    if (affectedFloor && affectedFloor !== state.currentFloorId) {
-      state.setCurrentFloor(affectedFloor);
-    }
-
-    // Cleanup stale UI references
-    cleanupStaleReferences(state);
-
-    // Visual feedback
-    window.dispatchEvent(
-      new CustomEvent("netplan:undo-redo", { detail: { type: "undo" } }),
-    );
-  };
-
-  const handleRedo = () => {
-    const currentState = useMapStore.getState();
-    if (!currentState.isEditMode) return;
-
-    const temporal = useMapStore.temporal.getState();
-    if (temporal.futureStates.length === 0) return;
-
-    const before: Snapshot = {
-      devices: currentState.devices,
-      walls: currentState.walls,
-    };
-
-    temporal.redo();
-
-    const state = useMapStore.getState();
-    const after: Snapshot = {
-      devices: state.devices,
-      walls: state.walls,
-    };
-
-    // Auto-navigate to affected floor
-    const affectedFloor = findAffectedFloorId(before, after);
-    if (affectedFloor && affectedFloor !== state.currentFloorId) {
-      state.setCurrentFloor(affectedFloor);
-    }
-
-    // Cleanup stale UI references
-    cleanupStaleReferences(state);
-
-    // Visual feedback
-    window.dispatchEvent(
-      new CustomEvent("netplan:undo-redo", { detail: { type: "redo" } }),
-    );
-  };
-
-  return { handleUndo, handleRedo };
+  return { handleUndo, handleRedo } as const;
 }
 
 /**

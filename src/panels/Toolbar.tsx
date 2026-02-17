@@ -163,17 +163,16 @@ const deviceToolbarActions = toolbarActions.filter(
 );
 
 export default function Toolbar() {
-  const {
-    currentFloorId,
-    addDevice,
-    isEditMode,
-    checkCollision,
-    activeDrawTool,
-    setActiveDrawTool,
-    selectedWallColor,
-    setSelectedWallColor,
-    selectDevice,
-  } = useMapStore();
+  const currentFloorId = useMapStore((s) => s.currentFloorId);
+  const isEditMode = useMapStore((s) => s.isEditMode);
+  const activeDrawTool = useMapStore((s) => s.activeDrawTool);
+  const selectedWallColor = useMapStore((s) => s.selectedWallColor);
+
+  const addDevice = useMapStore((s) => s.addDevice);
+  const checkCollision = useMapStore((s) => s.checkCollision);
+  const setActiveDrawTool = useMapStore((s) => s.setActiveDrawTool);
+  const setSelectedWallColor = useMapStore((s) => s.setSelectedWallColor);
+  const selectDevice = useMapStore((s) => s.selectDevice);
   const reactFlow = useReactFlow();
   const [selectedType, setSelectedType] = useState<DeviceType | null>(null);
   const [searchQuery, setSearchQuery] = useState("");

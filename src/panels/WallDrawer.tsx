@@ -7,8 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 
 export default function WallDrawer() {
-  const { walls, selectedWallId, selectWall, deleteWall, isEditMode } =
-    useMapStore();
+  const walls = useMapStore((s) => s.walls);
+  const selectedWallId = useMapStore((s) => s.selectedWallId);
+  const isEditMode = useMapStore((s) => s.isEditMode);
+
+  const selectWall = useMapStore((s) => s.selectWall);
+  const deleteWall = useMapStore((s) => s.deleteWall);
 
   const wall = walls.find((segment) => segment.id === selectedWallId);
 
