@@ -215,7 +215,7 @@ export function ShortcutHintAbsolute({
     "bottom-right": "-bottom-1 -right-1 translate-x-1/4 translate-y-1/4",
     "top-left": "-top-1 -left-1 -translate-x-1/4 -translate-y-1/4",
     "bottom-left": "-bottom-1 -left-1 -translate-x-1/4 translate-y-1/4",
-    "bottom-center": "-bottom-1 left-1/2 -translate-x-1/2 translate-y-1/2",
+    "bottom-center": "-bottom-4 left-1/2 -translate-x-1/2 translate-y-1/2",
   };
 
   return (

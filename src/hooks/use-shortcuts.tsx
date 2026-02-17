@@ -107,7 +107,7 @@ export function useDrawerScope(isOpen: boolean) {
  * Ctrl on Windows/Linux, Cmd on macOS
  * Used for showing shortcuts overlay (Linear-style)
  */
-export function useOptionHeld(delay = 200) {
+export function useOptionHeld(delay = 50) {
   const [isHeld, setIsHeld] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
 
