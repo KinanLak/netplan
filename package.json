@@ -49,12 +49,14 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.0.4",
+    "babel-plugin-react-compiler": "^1.0.0",
+    "eslint-plugin-react-hooks": "^7.0.1",
     "jsdom": "^27.0.0",
     "prettier": "^3.8.1",
     "prettier-plugin-tailwindcss": "^0.7.2",
     "react-scan": "^0.4.3",
     "typescript": "^5.7.2",
-    "vite": "^7.1.7",
+    "vite": "npm:rolldown-vite@latest",
     "web-vitals": "^5.1.0"
   }
 }
