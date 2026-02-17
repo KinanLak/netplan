@@ -185,7 +185,7 @@ export default function FlowCanvas() {
 
   // Filter devices for current floor and convert to React Flow nodes
   const initialNodes = useMemo((): Array<DeviceNode> => {
-    const nodes = devices
+    return devices
       .filter((d) => d.floorId === currentFloorId)
       .map(
         (device): DeviceNode => ({
@@ -203,13 +203,6 @@ export default function FlowCanvas() {
           draggable: canEditDevices,
         }),
       );
-
-    // Update last valid positions
-    nodes.forEach((node) => {
-      lastValidPositions.current.set(node.id, node.position);
-    });
-
-    return nodes;
   }, [
     devices,
     currentFloorId,
@@ -217,6 +210,13 @@ export default function FlowCanvas() {
     canEditDevices,
     highlightedDeviceIds,
   ]);
+
+  // Sync last valid positions outside of render (refs must not be written during render)
+  useEffect(() => {
+    initialNodes.forEach((node) => {
+      lastValidPositions.current.set(node.id, node.position);
+    });
+  }, [initialNodes]);
 
   const [nodes, setNodes, onNodesChange] =
     useNodesState<DeviceNode>(initialNodes);
@@ -226,11 +226,21 @@ export default function FlowCanvas() {
     setNodes(initialNodes);
   }, [initialNodes, setNodes]);
 
-  useEffect(() => {
+  // Reset draw state when context changes (React "set state during render" pattern)
+  // See: https://react.dev/reference/react/useState#storing-information-from-previous-renders
+  const drawContextKey = `${activeDrawTool}:${currentFloorId}:${isEditMode}`;
+  const [prevDrawContext, setPrevDrawContext] = useState(drawContextKey);
+
+  if (prevDrawContext !== drawContextKey) {
+    setPrevDrawContext(drawContextKey);
     setDrawAnchor(null);
     setPointerPreview(null);
     setHoverSnapPoint(null);
     setDrawMessage(null);
+  }
+
+  // Deselect wall when switching away from device tool (external state, ok in effect)
+  useEffect(() => {
     if (activeDrawTool !== "device") {
       selectWall(null);
     }

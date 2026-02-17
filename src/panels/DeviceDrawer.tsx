@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback } from "react";
 import { useReactFlow } from "@xyflow/react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Cancel01Icon, UserIcon, WasteIcon } from "@hugeicons/core-free-icons";
@@ -46,7 +46,7 @@ export default function DeviceDrawer() {
       .filter(Boolean) ?? [];
 
   // Check if the currently highlighted devices belong to this device
-  const isCurrentDeviceHighlighted = useMemo(() => {
+  const isCurrentDeviceHighlighted = (() => {
     if (
       !device?.metadata.connectedDeviceIds ||
       highlightedDeviceIds.length === 0
@@ -55,9 +55,9 @@ export default function DeviceDrawer() {
     // Check if highlighted devices include this device and its connections
     const allIds = [device.id, ...device.metadata.connectedDeviceIds];
     return allIds.every((id) => highlightedDeviceIds.includes(id));
-  }, [device?.id, device?.metadata.connectedDeviceIds, highlightedDeviceIds]);
+  })();
 
-  const handleHighlightConnections = useCallback(() => {
+  const handleHighlightConnections = () => {
     if (!device?.metadata.connectedDeviceIds) return;
 
     // If this device's connections are highlighted, hide them. Otherwise, show this device's connections.
@@ -67,7 +67,7 @@ export default function DeviceDrawer() {
       // Include the device itself and its connections
       setHighlightedDevices([device.id, ...device.metadata.connectedDeviceIds]);
     }
-  }, [device, isCurrentDeviceHighlighted, setHighlightedDevices]);
+  };
 
   const handleSelectConnected = useCallback(
     (deviceId: string) => {
@@ -94,11 +94,11 @@ export default function DeviceDrawer() {
     selectDevice(null);
   }, [setHighlightedDevices, selectDevice]);
 
-  const handleDeleteDevice = useCallback(() => {
+  const handleDeleteDevice = () => {
     if (!device) return;
     deleteDevice(device.id);
     selectDevice(null);
-  }, [device, deleteDevice, selectDevice]);
+  };
 
   // Manage drawer scope - enables drawer shortcuts when open
   useDrawerScope(!!device);

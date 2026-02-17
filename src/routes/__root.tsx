@@ -38,7 +38,8 @@ function RootDocument({ children }: { children: ReactNode }) {
   useEffect(() => {
     // Make sure to run this only after hydration
     scan({
-      enabled: false, showToolbar: true,
+      enabled: false,
+      showToolbar: true,
     });
   }, []);
   return (

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useReactFlow } from "@xyflow/react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -192,8 +192,10 @@ export default function Toolbar() {
     return () => window.removeEventListener("netplan:undo-redo", handler);
   }, []);
 
-  // Refs for each device type button to use as popover anchors
-  const buttonRefs = useRef<Record<DeviceType, HTMLButtonElement | null>>({
+  // Track button elements as state so they can be read during render (refs cannot)
+  const [buttonElements, setButtonElements] = useState<
+    Record<DeviceType, HTMLButtonElement | null>
+  >({
     rack: null,
     switch: null,
     pc: null,
@@ -388,8 +390,12 @@ export default function Toolbar() {
       <Button
         ref={
           action.group === "device"
-            ? (el) => {
-                buttonRefs.current[action.type] = el;
+            ? (el: HTMLButtonElement | null) => {
+                setButtonElements((prev) =>
+                  prev[action.type] === el
+                    ? prev
+                    : { ...prev, [action.type]: el },
+                );
               }
             : undefined
         }
@@ -490,7 +496,7 @@ export default function Toolbar() {
           align="center"
           className="w-72 p-0"
           sideOffset={8}
-          anchor={selectedType ? buttonRefs.current[selectedType] : undefined}
+          anchor={selectedType ? buttonElements[selectedType] : undefined}
         >
           <Command shouldFilter={false}>
             <CommandInput
