@@ -15,7 +15,7 @@
  *   6. Generate SVG path with rounded corners
  */
 
-import { WALL_THICKNESS } from "./walls";
+import { WALL_THICKNESS, isPointOnWall } from "./walls";
 import type { Position, WallColor, WallSegment } from "@/types/map";
 
 // ---------------------------------------------------------------------------
@@ -94,12 +94,21 @@ export function computeMergedWallGroups(
 
 /**
  * Computes the merged SVG path for a single wall segment using the same
- * extended-cap and rounded-corner geometry as grouped wall rendering.
+ * rounded-corner geometry as grouped wall rendering.
+ *
+ * When `surroundingWalls` is provided, endpoint caps are removed at
+ * connected junctions so the path reflects the wall as placed in context.
  */
 export function computeSingleWallPath(
   wall: Pick<WallSegment, "start" | "end">,
+  surroundingWalls: ReadonlyArray<Pick<WallSegment, "start" | "end">> = [],
 ): string | null {
-  return computeRectUnionPath([getExtendedWallRect(wall)], CORNER_RADIUS);
+  const wallRect =
+    surroundingWalls.length > 0
+      ? getContextualWallRect(wall, surroundingWalls)
+      : getExtendedWallRect(wall);
+
+  return computeRectUnionPath([wallRect], CORNER_RADIUS);
 }
 
 // ---------------------------------------------------------------------------
@@ -135,6 +144,83 @@ function getExtendedWallRect(wall: Pick<WallSegment, "start" | "end">): Rect {
     width: WALL_THICKNESS,
     height: length + WALL_THICKNESS,
   };
+}
+
+/**
+ * Builds the selected wall rectangle using surrounding walls as context:
+ * - Free endpoints keep a half-thickness cap
+ * - Connected endpoints do not extend past the junction
+ */
+function getContextualWallRect(
+  wall: Pick<WallSegment, "start" | "end">,
+  surroundingWalls: ReadonlyArray<Pick<WallSegment, "start" | "end">>,
+): Rect {
+  const half = WALL_THICKNESS / 2;
+  const startConnected = isWallEndpointConnected(wall.start, surroundingWalls);
+  const endConnected = isWallEndpointConnected(wall.end, surroundingWalls);
+
+  if (wall.start.y === wall.end.y) {
+    const minX = Math.min(wall.start.x, wall.end.x);
+    const length = Math.abs(wall.end.x - wall.start.x);
+    const startIsLeft = wall.start.x <= wall.end.x;
+
+    const leftCap = startIsLeft
+      ? startConnected
+        ? 0
+        : half
+      : endConnected
+        ? 0
+        : half;
+
+    const rightCap = startIsLeft
+      ? endConnected
+        ? 0
+        : half
+      : startConnected
+        ? 0
+        : half;
+
+    return {
+      x: minX - leftCap,
+      y: wall.start.y - half,
+      width: length + leftCap + rightCap,
+      height: WALL_THICKNESS,
+    };
+  }
+
+  const minY = Math.min(wall.start.y, wall.end.y);
+  const length = Math.abs(wall.end.y - wall.start.y);
+  const startIsTop = wall.start.y <= wall.end.y;
+
+  const topCap = startIsTop
+    ? startConnected
+      ? 0
+      : half
+    : endConnected
+      ? 0
+      : half;
+
+  const bottomCap = startIsTop
+    ? endConnected
+      ? 0
+      : half
+    : startConnected
+      ? 0
+      : half;
+
+  return {
+    x: wall.start.x - half,
+    y: minY - topCap,
+    width: WALL_THICKNESS,
+    height: length + topCap + bottomCap,
+  };
+}
+
+function isWallEndpointConnected(
+  point: Position,
+  walls: ReadonlyArray<Pick<WallSegment, "start" | "end">>,
+): boolean {
+  return walls.some((candidate) => isPointOnWall(point, candidate));
 }
 
 // ---------------------------------------------------------------------------

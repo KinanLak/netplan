@@ -266,12 +266,17 @@ export default function FlowCanvas() {
     mergedWallGroups.map((g) => [g.color, g.path] as const),
   );
 
-  const selectedWallPath = (() => {
+  const selectedWall = (() => {
     if (!selectedWallId) return null;
-    const wall = floorWalls.find((w) => w.id === selectedWallId);
-    if (!wall) return null;
-    return computeSingleWallPath(wall);
+    return floorWalls.find((w) => w.id === selectedWallId) ?? null;
   })();
+
+  const selectedWallPath = selectedWall
+    ? computeSingleWallPath(
+        selectedWall,
+        floorWalls.filter((wall) => wall.id !== selectedWall.id),
+      )
+    : null;
 
   const paneCursorClass = (() => {
     if (!isEditMode || activeDrawTool === "device") {
@@ -726,32 +731,20 @@ export default function FlowCanvas() {
                   })}
               </defs>
 
-              {/* ---- Wall color layers (z-order: sand → concrete → slate) ---- */}
+              {/* ---- Wall color fills (z-order: sand → concrete → slate) ---- */}
               {combinedMergedWallGroups.map((group) => {
                 const tone = WALL_COLOR_TONES[group.color];
 
                 return (
-                  <g key={group.color}>
-                    {/* Fill — masked for preview opacity */}
-                    <g
-                      mask={
-                        hasPreview
-                          ? `url(#wall-mask-${group.color})`
-                          : undefined
-                      }
-                    >
-                      <path
-                        d={group.path}
-                        fill={tone.fill}
-                        shapeRendering="geometricPrecision"
-                      />
-                    </g>
-                    {/* Stroke — always fully visible (outside mask) */}
+                  <g
+                    key={`fill-${group.color}`}
+                    mask={
+                      hasPreview ? `url(#wall-mask-${group.color})` : undefined
+                    }
+                  >
                     <path
                       d={group.path}
-                      fill="none"
-                      stroke={tone.stroke}
-                      strokeWidth={2}
+                      fill={tone.fill}
                       shapeRendering="geometricPrecision"
                     />
                   </g>
@@ -768,6 +761,22 @@ export default function FlowCanvas() {
                   shapeRendering="geometricPrecision"
                 />
               ) : null}
+
+              {/* ---- Wall strokes (always above highlight) ---- */}
+              {combinedMergedWallGroups.map((group) => {
+                const tone = WALL_COLOR_TONES[group.color];
+
+                return (
+                  <path
+                    key={`stroke-${group.color}`}
+                    d={group.path}
+                    fill="none"
+                    stroke={tone.stroke}
+                    strokeWidth={2}
+                    shapeRendering="geometricPrecision"
+                  />
+                );
+              })}
 
               {drawAnchor && activeDrawTool !== "device" ? (
                 <circle

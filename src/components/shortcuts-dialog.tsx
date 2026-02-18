@@ -7,7 +7,6 @@ import {
   shortcutGroups,
 } from "@/lib/shortcut-groups";
 import { Kbd, KbdGroup } from "@/components/ui/kbd";
-import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -17,11 +16,15 @@ import {
 
 const orderedShortcutGroups = buildBalancedShortcutGrid(shortcutGroups, 2);
 
+type ShortcutsDialogProps = {
+  hasRightDrawerOpen: boolean;
+};
+
 /**
  * Dialog showing all keyboard shortcuts, opened with "?" key.
  * Includes a floating help button in the bottom-right corner.
  */
-export function ShortcutsDialog() {
+export function ShortcutsDialog({ hasRightDrawerOpen }: ShortcutsDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const overlayModifierLabel = isMac ? "⌘" : "Ctrl";
 
@@ -64,7 +67,9 @@ export function ShortcutsDialog() {
       {!isOpen ? (
         <button
           onClick={() => setIsOpen(true)}
-          className="fixed right-4 bottom-4 flex justify-center items-center h-10 w-10 rounded-full hover:shadow-lg hover:border-accent hover:bg-muted"
+          className={`absolute bottom-4 z-30 flex h-10 w-10 items-center justify-center rounded-full transition-[right] hover:border-accent hover:bg-muted hover:shadow-lg ${
+            hasRightDrawerOpen ? "right-[calc(20rem+1rem)]" : "right-4"
+          }`}
           title="Afficher les raccourcis clavier"
         >
           <HugeiconsIcon

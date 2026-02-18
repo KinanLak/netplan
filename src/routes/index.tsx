@@ -51,7 +51,6 @@ function HomePage() {
         {isStoreHydrated ? (
           <>
             <HomePageContent />
-            <ShortcutsDialog />
           </>
         ) : (
           <div className="h-screen w-screen bg-background" />
@@ -291,6 +290,10 @@ function HomePageContent() {
               />
             </button>
           </div>
+
+          <ShortcutsDialog
+            hasRightDrawerOpen={Boolean(selectedDeviceId || selectedWallId)}
+          />
         </SidebarInset>
       </div>
     </SidebarProvider>
