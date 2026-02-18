@@ -6,27 +6,26 @@ import type {
   MapStore,
   Position,
   Size,
+  WallCommandResult,
   WallDraft,
   WallSegment,
 } from "@/types/map";
 import { mockBuildings } from "@/mock/buildings";
 import { mockDevices } from "@/mock/devices";
+import { getWallRect } from "@/lib/walls";
 import {
-  EMPTY_WALL_JUNCTIONS,
-  applyWallJunctions,
-  createRoomWallSegments,
-  getWallGeometryKey,
-  getWallIdsToDeleteFromSegments,
-  getWallRect,
-  splitWallSegmentsIntoBlocks,
-} from "@/lib/walls";
+  addLine,
+  addRoom,
+  eraseAtPointer,
+  eraseStroke,
+  previewEraseAtPointer,
+} from "@/walls/engine";
 
 const generateDeviceId = () =>
   `device-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 const generateWallId = () =>
   `wall-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
-// Helper to check if two rectangles overlap
 const rectanglesOverlap = (
   pos1: Position,
   size1: Size,
@@ -56,13 +55,6 @@ const wallCollidesWithDevices = (
   );
 };
 
-const toWallDraft = (wall: WallSegment): WallDraft => ({
-  floorId: wall.floorId,
-  color: wall.color,
-  start: wall.start,
-  end: wall.end,
-});
-
 const normalizeActiveDrawTool = (tool: unknown): MapStore["activeDrawTool"] => {
   if (
     tool === "device" ||
@@ -80,58 +72,39 @@ const normalizeActiveDrawTool = (tool: unknown): MapStore["activeDrawTool"] => {
   return "device";
 };
 
-const withRecomputedWallJunctions = (
-  walls: Array<WallSegment>,
-): Array<WallSegment> => {
-  if (walls.length === 0) {
-    return walls;
+const applyWallCommand = (
+  result: WallCommandResult,
+  setWalls: (nextWalls: Array<WallSegment>) => void,
+): WallCommandResult => {
+  if (result.changed) {
+    setWalls(result.nextWalls);
   }
 
-  const wallsByFloor = walls.reduce<Map<string, Array<WallSegment>>>(
-    (acc, wall) => {
-      const floorWalls = acc.get(wall.floorId);
-      if (floorWalls) {
-        floorWalls.push(wall);
-        return acc;
-      }
-
-      acc.set(wall.floorId, [wall]);
-      return acc;
-    },
-    new Map(),
-  );
-
-  return Array.from(wallsByFloor.values()).flatMap((floorWalls) =>
-    applyWallJunctions(floorWalls),
-  );
+  return result;
 };
 
 export const useMapStore = create<MapStore>()(
   persist(
     temporal(
       (set, get) => ({
-        // Initial state
         buildings: mockBuildings,
         devices: mockDevices,
         walls: [],
         currentBuildingId: mockBuildings[0]?.id ?? null,
         currentFloorId: mockBuildings[0]?.floors[0]?.id ?? null,
         selectedDeviceId: null,
-        selectedWallId: null,
         hoveredDeviceId: null,
         isEditMode: true,
         highlightedDeviceIds: [],
         activeDrawTool: "device",
         selectedWallColor: "concrete",
 
-        // Actions
         setCurrentBuilding: (buildingId: string) => {
           const building = get().buildings.find((b) => b.id === buildingId);
           set({
             currentBuildingId: buildingId,
             currentFloorId: building?.floors[0]?.id ?? null,
             selectedDeviceId: null,
-            selectedWallId: null,
             highlightedDeviceIds: [],
           });
         },
@@ -140,16 +113,12 @@ export const useMapStore = create<MapStore>()(
           set({
             currentFloorId: floorId,
             selectedDeviceId: null,
-            selectedWallId: null,
             highlightedDeviceIds: [],
           });
         },
 
         selectDevice: (deviceId: string | null) => {
-          set((state) => ({
-            selectedDeviceId: deviceId,
-            selectedWallId: deviceId ? null : state.selectedWallId,
-          }));
+          set({ selectedDeviceId: deviceId });
         },
 
         setHoveredDevice: (deviceId: string | null) => {
@@ -161,6 +130,7 @@ export const useMapStore = create<MapStore>()(
             ...deviceData,
             id: generateDeviceId(),
           };
+
           set((state) => ({
             devices: [...state.devices, newDevice],
           }));
@@ -169,15 +139,18 @@ export const useMapStore = create<MapStore>()(
         updateDevicePosition: (deviceId: string, position: Position) => {
           const state = get();
           const device = state.devices.find((d) => d.id === deviceId);
-          if (!device) return;
+          if (!device) {
+            return;
+          }
 
-          // Check for collision before updating
           const hasCollision = state.checkCollision(
             deviceId,
             position,
             device.size,
           );
-          if (hasCollision) return;
+          if (hasCollision) {
+            return;
+          }
 
           set((currentState) => ({
             devices: currentState.devices.map((d) =>
@@ -199,160 +172,97 @@ export const useMapStore = create<MapStore>()(
           }));
         },
 
-        selectWall: (wallId: string | null) => {
-          set((state) => ({
-            selectedWallId: wallId,
-            selectedDeviceId: wallId ? null : state.selectedDeviceId,
-          }));
-        },
-
-        deleteWall: (wallId: string) => {
-          set((state) => ({
-            walls: withRecomputedWallJunctions(
-              state.walls.filter((wall) => wall.id !== wallId),
-            ),
-            selectedWallId:
-              state.selectedWallId === wallId ? null : state.selectedWallId,
-          }));
-        },
-
-        addWallBlocks: (segments: Array<WallDraft>) => {
-          if (segments.length === 0) {
-            return false;
-          }
-
+        addWallLine: (line: WallDraft) => {
           const state = get();
-          const candidateBlocks = splitWallSegmentsIntoBlocks(segments);
-
-          if (candidateBlocks.length === 0) {
-            return false;
-          }
-
-          const candidateBlocksByFloor = candidateBlocks.reduce<
-            Map<string, Array<WallDraft>>
-          >((acc, block) => {
-            const floorBlocks = acc.get(block.floorId);
-            if (floorBlocks) {
-              floorBlocks.push(block);
-              return acc;
-            }
-
-            acc.set(block.floorId, [block]);
-            return acc;
-          }, new Map());
-
-          const uniqueBlocksToInsert: Array<WallDraft> = [];
-
-          for (const [
-            floorId,
-            floorCandidateBlocks,
-          ] of candidateBlocksByFloor) {
-            const floorDevices = state.devices.filter(
-              (device) => device.floorId === floorId,
-            );
-
-            const floorWalls = state.walls.filter(
-              (wall) => wall.floorId === floorId,
-            );
-            const existingFloorBlocks = splitWallSegmentsIntoBlocks(
-              floorWalls.map(toWallDraft),
-            );
-
-            const existingKeys = new Set(
-              existingFloorBlocks
-                .map((block) => getWallGeometryKey(block))
-                .filter((key): key is string => key !== null),
-            );
-
-            const stagedKeys = new Set<string>();
-
-            for (const block of floorCandidateBlocks) {
-              if (wallCollidesWithDevices(block, floorDevices)) {
-                return false;
-              }
-
-              const key = getWallGeometryKey(block);
-              if (!key || existingKeys.has(key) || stagedKeys.has(key)) {
-                continue;
-              }
-
-              stagedKeys.add(key);
-              uniqueBlocksToInsert.push(block);
-            }
-          }
-
-          if (uniqueBlocksToInsert.length === 0) {
-            return false;
-          }
-
-          set((currentState) => ({
-            walls: withRecomputedWallJunctions([
-              ...currentState.walls,
-              ...uniqueBlocksToInsert.map((block) => ({
-                ...block,
-                id: generateWallId(),
-                junctions: { ...EMPTY_WALL_JUNCTIONS },
-              })),
-            ]),
-          }));
-
-          return true;
-        },
-
-        deleteWallBlocks: (segments: Array<WallDraft>) => {
-          if (segments.length === 0) {
-            return false;
-          }
-
-          const state = get();
-          const wallIdsToDelete = getWallIdsToDeleteFromSegments(
-            state.walls,
-            segments,
+          const floorDevices = state.devices.filter(
+            (device) => device.floorId === line.floorId,
           );
 
-          if (wallIdsToDelete.size === 0) {
-            return false;
-          }
+          const result = addLine({
+            walls: state.walls,
+            floorId: line.floorId,
+            color: line.color,
+            start: line.start,
+            end: line.end,
+            generateWallId,
+            collidesWithBlock: (block) =>
+              wallCollidesWithDevices(block, floorDevices),
+          });
 
-          set((currentState) => ({
-            walls: withRecomputedWallJunctions(
-              currentState.walls.filter(
-                (wall) => !wallIdsToDelete.has(wall.id),
-              ),
-            ),
-            selectedWallId:
-              currentState.selectedWallId &&
-              wallIdsToDelete.has(currentState.selectedWallId)
-                ? null
-                : currentState.selectedWallId,
-          }));
-
-          return true;
+          return applyWallCommand(result, (nextWalls) => {
+            set({ walls: nextWalls });
+          });
         },
 
-        addWallSegment: (segment: WallDraft) => {
-          return get().addWallBlocks([segment]);
-        },
-
-        addRoom: (room) => {
-          const roomSegments = createRoomWallSegments(
-            room.start,
-            room.end,
-            room.floorId,
-            room.color,
+        addWallRoom: (room) => {
+          const state = get();
+          const floorDevices = state.devices.filter(
+            (device) => device.floorId === room.floorId,
           );
-          if (roomSegments.length === 0) {
-            return false;
-          }
 
-          return get().addWallBlocks(roomSegments);
+          const result = addRoom({
+            walls: state.walls,
+            floorId: room.floorId,
+            color: room.color,
+            start: room.start,
+            end: room.end,
+            generateWallId,
+            collidesWithBlock: (block) =>
+              wallCollidesWithDevices(block, floorDevices),
+          });
+
+          return applyWallCommand(result, (nextWalls) => {
+            set({ walls: nextWalls });
+          });
+        },
+
+        eraseWallAtPointer: (input) => {
+          const state = get();
+
+          const result = eraseAtPointer({
+            walls: state.walls,
+            floorId: input.floorId,
+            pointer: input.pointer,
+            snappedPoint: input.snappedPoint,
+          });
+
+          return applyWallCommand(result, (nextWalls) => {
+            set({ walls: nextWalls });
+          });
+        },
+
+        eraseWallStroke: (input) => {
+          const state = get();
+
+          const result = eraseStroke({
+            walls: state.walls,
+            floorId: input.floorId,
+            fromPointer: input.fromPointer,
+            fromSnappedPoint: input.fromSnappedPoint,
+            toPointer: input.toPointer,
+            toSnappedPoint: input.toSnappedPoint,
+          });
+
+          return applyWallCommand(result, (nextWalls) => {
+            set({ walls: nextWalls });
+          });
+        },
+
+        previewEraseWallAtPointer: (input) => {
+          const state = get();
+
+          return previewEraseAtPointer({
+            walls: state.walls,
+            floorId: input.floorId,
+            pointer: input.pointer,
+            snappedPoint: input.snappedPoint,
+          });
         },
 
         toggleEditMode: () => {
           set((state) => ({
             isEditMode: !state.isEditMode,
             activeDrawTool: state.isEditMode ? "device" : state.activeDrawTool,
-            selectedWallId: state.isEditMode ? null : state.selectedWallId,
           }));
         },
 
@@ -372,12 +282,10 @@ export const useMapStore = create<MapStore>()(
           const state = get();
           const currentFloorId = state.currentFloorId;
 
-          // Get all other devices on the same floor
           const otherDevices = state.devices.filter(
             (d) => d.id !== deviceId && d.floorId === currentFloorId,
           );
 
-          // Check collisions with devices.
           const deviceCollision = otherDevices.some((other) =>
             rectanglesOverlap(position, size, other.position, other.size),
           );
@@ -385,7 +293,6 @@ export const useMapStore = create<MapStore>()(
             return true;
           }
 
-          // Check collisions with walls.
           const floorWalls = state.walls.filter(
             (wall) => wall.floorId === currentFloorId,
           );
@@ -412,16 +319,16 @@ export const useMapStore = create<MapStore>()(
         limit: 100,
         wrapTemporal: (storeInitializer) =>
           persist(storeInitializer, {
-            name: "netplan-temporal",
+            name: "netplan-temporal-v3",
             skipHydration: true,
           }),
       },
     ),
     {
       name: "netplan-storage",
-      version: 1,
+      version: 3,
       skipHydration: true,
-      migrate: (persistedState) => {
+      migrate: (persistedState, version) => {
         if (!persistedState || typeof persistedState !== "object") {
           return persistedState;
         }
@@ -433,6 +340,10 @@ export const useMapStore = create<MapStore>()(
         typedState.activeDrawTool = normalizeActiveDrawTool(
           typedState.activeDrawTool,
         );
+
+        if (version < 3) {
+          typedState.walls = [];
+        }
 
         return typedState;
       },

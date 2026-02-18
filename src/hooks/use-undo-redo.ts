@@ -162,21 +162,16 @@ export function useUndoRedo() {
 }
 
 /**
- * Clear selectedDeviceId, selectedWallId, and highlightedDeviceIds
+ * Clear selectedDeviceId and highlightedDeviceIds
  * if they reference entities that no longer exist after undo/redo.
  */
 function cleanupStaleReferences(
   state: ReturnType<typeof useMapStore.getState>,
 ) {
   const deviceIds = new Set(state.devices.map((d) => d.id));
-  const wallIds = new Set(state.walls.map((w) => w.id));
 
   if (state.selectedDeviceId && !deviceIds.has(state.selectedDeviceId)) {
     state.selectDevice(null);
-  }
-
-  if (state.selectedWallId && !wallIds.has(state.selectedWallId)) {
-    state.selectWall(null);
   }
 
   const validHighlighted = state.highlightedDeviceIds.filter((id) =>

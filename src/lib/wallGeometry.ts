@@ -1,43 +1,12 @@
-/**
- * Wall geometry engine — computes the merged SVG outline of axis-aligned wall
- * rectangles, grouped by color. Produces a single `<path>` per color group
- * with:
- *   • A unified fill (no internal borders)
- *   • An exterior-only stroke
- *   • Rounded corners via quadratic Bezier curves
- *
- * Algorithm overview:
- *   1. Extend each wall rect by WALL_THICKNESS/2 on each end (caps)
- *   2. Collect unique X/Y grid coordinates from all rects
- *   3. Build a boolean grid: each cell is "filled" if covered by any rect
- *   4. Trace boundary edges with CW winding (filled on RIGHT)
- *   5. Chain edges into closed contours, simplify collinear vertices
- *   6. Generate SVG path with rounded corners
- */
-
-import { WALL_THICKNESS, isPointOnWall } from "./walls";
 import type { Position, WallColor, WallSegment } from "@/types/map";
-
-// ---------------------------------------------------------------------------
-// Public types
-// ---------------------------------------------------------------------------
+import { GRID_SIZE, WALL_THICKNESS } from "@/lib/walls";
 
 export interface MergedWallGroup {
   color: WallColor;
-  /** SVG path `d` attribute — may contain multiple M…Z sub-paths */
   path: string;
 }
 
-// ---------------------------------------------------------------------------
-// Configuration
-// ---------------------------------------------------------------------------
-
-/** Radius applied to all contour corners */
-const CORNER_RADIUS = 10;
-
-// ---------------------------------------------------------------------------
-// Internal types
-// ---------------------------------------------------------------------------
+const CORNER_RADIUS = 8;
 
 interface Rect {
   x: number;
@@ -51,82 +20,57 @@ interface DirectedEdge {
   to: Position;
 }
 
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
+type WallLike = Pick<WallSegment, "start" | "end" | "color">;
 
-/**
- * Groups walls by color and computes one merged SVG path per group.
- * Each wall rect is extended by half-thickness on each end so that
- * adjacent walls overlap at their junction — the union naturally produces
- * clean outlines without explicit junction squares.
- */
 export function computeMergedWallGroups(
-  walls: ReadonlyArray<Pick<WallSegment, "start" | "end" | "color">>,
+  walls: ReadonlyArray<WallLike>,
 ): Array<MergedWallGroup> {
-  // Group walls by color
-  const groups = new Map<
-    WallColor,
-    Array<Pick<WallSegment, "start" | "end" | "color">>
-  >();
+  const groups = new Map<WallColor, Array<WallLike>>();
 
   for (const wall of walls) {
-    let group = groups.get(wall.color);
-    if (!group) {
-      group = [];
-      groups.set(wall.color, group);
+    const list = groups.get(wall.color);
+    if (list) {
+      list.push(wall);
+    } else {
+      groups.set(wall.color, [wall]);
     }
-    group.push(wall);
   }
 
-  const result: Array<MergedWallGroup> = [];
+  const merged: Array<MergedWallGroup> = [];
 
   for (const [color, colorWalls] of groups) {
-    const rects = colorWalls.map(getExtendedWallRect);
+    const rects = colorWalls.map((wall) => getWallRenderRect(wall));
     const path = computeRectUnionPath(rects, CORNER_RADIUS);
     if (path) {
-      result.push({ color, path });
+      merged.push({ color, path });
     }
   }
 
-  return result;
+  return merged;
 }
 
-/**
- * Computes the merged SVG path for a single wall segment using the same
- * rounded-corner geometry as grouped wall rendering.
- *
- * When `surroundingWalls` is provided, endpoint caps are removed at
- * connected junctions so the path reflects the wall as placed in context.
- */
 export function computeSingleWallPath(
   wall: Pick<WallSegment, "start" | "end">,
-  surroundingWalls: ReadonlyArray<Pick<WallSegment, "start" | "end">> = [],
 ): string | null {
-  const wallRect =
-    surroundingWalls.length > 0
-      ? getContextualWallRect(wall, surroundingWalls)
-      : getExtendedWallRect(wall);
-
-  return computeRectUnionPath([wallRect], CORNER_RADIUS);
+  return computeRectUnionPath([getWallRenderRect(wall)], 0);
 }
 
-// ---------------------------------------------------------------------------
-// Wall → extended rect
-// ---------------------------------------------------------------------------
+function getWallRenderRect(wall: Pick<WallSegment, "start" | "end">): Rect {
+  if (wall.start.x === wall.end.x && wall.start.y === wall.end.y) {
+    return {
+      x: wall.start.x - GRID_SIZE / 2,
+      y: wall.start.y - GRID_SIZE / 2,
+      width: GRID_SIZE,
+      height: GRID_SIZE,
+    };
+  }
 
-/**
- * Converts a wall segment to its rendering rectangle, extended by
- * `WALL_THICKNESS / 2` on each end along the wall's axis. This creates
- * a small cap at free ends and ensures overlapping coverage at junctions.
- */
-function getExtendedWallRect(wall: Pick<WallSegment, "start" | "end">): Rect {
   const half = WALL_THICKNESS / 2;
 
   if (wall.start.y === wall.end.y) {
-    // Horizontal
     const minX = Math.min(wall.start.x, wall.end.x);
     const length = Math.abs(wall.end.x - wall.start.x);
+
     return {
       x: minX - half,
       y: wall.start.y - half,
@@ -135,9 +79,9 @@ function getExtendedWallRect(wall: Pick<WallSegment, "start" | "end">): Rect {
     };
   }
 
-  // Vertical
   const minY = Math.min(wall.start.y, wall.end.y);
   const length = Math.abs(wall.end.y - wall.start.y);
+
   return {
     x: wall.start.x - half,
     y: minY - half,
@@ -146,102 +90,22 @@ function getExtendedWallRect(wall: Pick<WallSegment, "start" | "end">): Rect {
   };
 }
 
-/**
- * Builds the selected wall rectangle using surrounding walls as context:
- * - Free endpoints keep a half-thickness cap
- * - Connected endpoints do not extend past the junction
- */
-function getContextualWallRect(
-  wall: Pick<WallSegment, "start" | "end">,
-  surroundingWalls: ReadonlyArray<Pick<WallSegment, "start" | "end">>,
-): Rect {
-  const half = WALL_THICKNESS / 2;
-  const startConnected = isWallEndpointConnected(wall.start, surroundingWalls);
-  const endConnected = isWallEndpointConnected(wall.end, surroundingWalls);
-
-  if (wall.start.y === wall.end.y) {
-    const minX = Math.min(wall.start.x, wall.end.x);
-    const length = Math.abs(wall.end.x - wall.start.x);
-    const startIsLeft = wall.start.x <= wall.end.x;
-
-    const leftCap = startIsLeft
-      ? startConnected
-        ? 0
-        : half
-      : endConnected
-        ? 0
-        : half;
-
-    const rightCap = startIsLeft
-      ? endConnected
-        ? 0
-        : half
-      : startConnected
-        ? 0
-        : half;
-
-    return {
-      x: minX - leftCap,
-      y: wall.start.y - half,
-      width: length + leftCap + rightCap,
-      height: WALL_THICKNESS,
-    };
-  }
-
-  const minY = Math.min(wall.start.y, wall.end.y);
-  const length = Math.abs(wall.end.y - wall.start.y);
-  const startIsTop = wall.start.y <= wall.end.y;
-
-  const topCap = startIsTop
-    ? startConnected
-      ? 0
-      : half
-    : endConnected
-      ? 0
-      : half;
-
-  const bottomCap = startIsTop
-    ? endConnected
-      ? 0
-      : half
-    : startConnected
-      ? 0
-      : half;
-
-  return {
-    x: wall.start.x - half,
-    y: minY - topCap,
-    width: WALL_THICKNESS,
-    height: length + topCap + bottomCap,
-  };
-}
-
-function isWallEndpointConnected(
-  point: Position,
-  walls: ReadonlyArray<Pick<WallSegment, "start" | "end">>,
-): boolean {
-  return walls.some((candidate) => isPointOnWall(point, candidate));
-}
-
-// ---------------------------------------------------------------------------
-// Rectangle union → SVG path
-// ---------------------------------------------------------------------------
-
 function computeRectUnionPath(
   rects: Array<Rect>,
   cornerRadius: number,
 ): string | null {
-  if (rects.length === 0) return null;
+  if (rects.length === 0) {
+    return null;
+  }
 
-  // 1. Collect unique X and Y coordinates
   const xsSet = new Set<number>();
   const ysSet = new Set<number>();
 
-  for (const r of rects) {
-    xsSet.add(r.x);
-    xsSet.add(r.x + r.width);
-    ysSet.add(r.y);
-    ysSet.add(r.y + r.height);
+  for (const rect of rects) {
+    xsSet.add(rect.x);
+    xsSet.add(rect.x + rect.width);
+    ysSet.add(rect.y);
+    ysSet.add(rect.y + rect.height);
   }
 
   const xs = [...xsSet].sort((a, b) => a - b);
@@ -249,183 +113,203 @@ function computeRectUnionPath(
 
   const numCols = xs.length - 1;
   const numRows = ys.length - 1;
-  if (numCols <= 0 || numRows <= 0) return null;
 
-  // 2. Build boolean grid — cell (col i, row j) is filled if its center
-  //    lies inside any input rect.
+  if (numCols <= 0 || numRows <= 0) {
+    return null;
+  }
+
   const grid: Array<Array<boolean>> = [];
-  for (let j = 0; j < numRows; j++) {
-    const row: Array<boolean> = [];
-    for (let i = 0; i < numCols; i++) {
-      const cx = (xs[i] + xs[i + 1]) / 2;
-      const cy = (ys[j] + ys[j + 1]) / 2;
-      row.push(
+
+  for (let row = 0; row < numRows; row++) {
+    const currentRow: Array<boolean> = [];
+
+    for (let col = 0; col < numCols; col++) {
+      const cx = (xs[col] + xs[col + 1]) / 2;
+      const cy = (ys[row] + ys[row + 1]) / 2;
+
+      currentRow.push(
         rects.some(
-          (r) =>
-            cx >= r.x &&
-            cx <= r.x + r.width &&
-            cy >= r.y &&
-            cy <= r.y + r.height,
+          (rect) =>
+            cx >= rect.x &&
+            cx <= rect.x + rect.width &&
+            cy >= rect.y &&
+            cy <= rect.y + rect.height,
         ),
       );
     }
-    grid.push(row);
+
+    grid.push(currentRow);
   }
 
-  // 3. Collect directed boundary edges.
-  //    Convention: the filled region is on the RIGHT side of the directed
-  //    edge (in screen coordinates with y-down). This produces CW outer
-  //    contours and CCW hole contours.
   const edges: Array<DirectedEdge> = [];
 
-  // Horizontal edges — at each y = ys[j], scan columns
-  for (let j = 0; j <= numRows; j++) {
-    for (let i = 0; i < numCols; i++) {
-      const above = j > 0 ? grid[j - 1][i] : false;
-      const below = j < numRows ? grid[j][i] : false;
-      if (above === below) continue;
+  for (let row = 0; row <= numRows; row++) {
+    for (let col = 0; col < numCols; col++) {
+      const above = row > 0 ? grid[row - 1][col] : false;
+      const below = row < numRows ? grid[row][col] : false;
+
+      if (above === below) {
+        continue;
+      }
 
       if (below) {
-        // Filled below → edge left-to-right
         edges.push({
-          from: { x: xs[i], y: ys[j] },
-          to: { x: xs[i + 1], y: ys[j] },
+          from: { x: xs[col], y: ys[row] },
+          to: { x: xs[col + 1], y: ys[row] },
         });
       } else {
-        // Filled above → edge right-to-left
         edges.push({
-          from: { x: xs[i + 1], y: ys[j] },
-          to: { x: xs[i], y: ys[j] },
+          from: { x: xs[col + 1], y: ys[row] },
+          to: { x: xs[col], y: ys[row] },
         });
       }
     }
   }
 
-  // Vertical edges — at each x = xs[i], scan rows
-  for (let i = 0; i <= numCols; i++) {
-    for (let j = 0; j < numRows; j++) {
-      const left = i > 0 ? grid[j][i - 1] : false;
-      const right = i < numCols ? grid[j][i] : false;
-      if (left === right) continue;
+  for (let col = 0; col <= numCols; col++) {
+    for (let row = 0; row < numRows; row++) {
+      const left = col > 0 ? grid[row][col - 1] : false;
+      const right = col < numCols ? grid[row][col] : false;
+
+      if (left === right) {
+        continue;
+      }
 
       if (right) {
-        // Filled right → edge bottom-to-top
         edges.push({
-          from: { x: xs[i], y: ys[j + 1] },
-          to: { x: xs[i], y: ys[j] },
+          from: { x: xs[col], y: ys[row + 1] },
+          to: { x: xs[col], y: ys[row] },
         });
       } else {
-        // Filled left → edge top-to-bottom
         edges.push({
-          from: { x: xs[i], y: ys[j] },
-          to: { x: xs[i], y: ys[j + 1] },
+          from: { x: xs[col], y: ys[row] },
+          to: { x: xs[col], y: ys[row + 1] },
         });
       }
     }
   }
 
-  if (edges.length === 0) return null;
+  if (edges.length === 0) {
+    return null;
+  }
 
-  // 4. Chain edges into closed contours
   const contours = chainEdges(edges);
+  if (contours.length === 0) {
+    return null;
+  }
 
-  if (contours.length === 0) return null;
+  const paths: Array<string> = [];
 
-  // 5. Simplify (remove collinear vertices) and generate SVG paths
-  const pathParts: Array<string> = [];
-  for (const raw of contours) {
-    const simplified = simplifyContour(raw);
+  for (const contour of contours) {
+    const simplified = simplifyContour(contour);
     if (simplified.length >= 3) {
-      pathParts.push(contourToSVGPath(simplified, cornerRadius));
+      paths.push(contourToSVGPath(simplified, cornerRadius));
     }
   }
 
-  return pathParts.length > 0 ? pathParts.join(" ") : null;
+  return paths.length > 0 ? paths.join(" ") : null;
 }
 
-// ---------------------------------------------------------------------------
-// Edge chaining
-// ---------------------------------------------------------------------------
+const pointKey = (point: Position): string => `${point.x}:${point.y}`;
 
-const pointKey = (p: Position): string => `${p.x}:${p.y}`;
-
-/**
- * Encode the direction of a vector as 0=right, 1=down, 2=left, 3=up.
- */
 function dirIndex(dx: number, dy: number): number {
-  if (dx > 0) return 0;
-  if (dy > 0) return 1;
-  if (dx < 0) return 2;
-  return 3; // dy < 0
+  if (dx > 0) {
+    return 0;
+  }
+
+  if (dy > 0) {
+    return 1;
+  }
+
+  if (dx < 0) {
+    return 2;
+  }
+
+  return 3;
 }
 
-/**
- * CW turn-priority: at an ambiguous vertex (checkerboard), prefer the
- * rightmost turn to keep the filled region on our right.
- * Priority order: right(1) > straight(0) > left(3) > u-turn(2).
- */
-const TURN_PRIORITY = [1, 0, 3, 2]; // index = rank (lower is better)
+const TURN_PRIORITY = [1, 0, 3, 2];
 
-function turnRank(inDir: number, outDir: number): number {
-  const turn = (outDir - inDir + 4) % 4;
+function turnRank(inDirection: number, outDirection: number): number {
+  const turn = (outDirection - inDirection + 4) % 4;
   return TURN_PRIORITY.indexOf(turn);
 }
 
 function chainEdges(edges: Array<DirectedEdge>): Array<Array<Position>> {
-  // Index edges by their starting vertex
   const edgesByFrom = new Map<string, Array<number>>();
-  for (let idx = 0; idx < edges.length; idx++) {
-    const key = pointKey(edges[idx].from);
-    let list = edgesByFrom.get(key);
-    if (!list) {
-      list = [];
-      edgesByFrom.set(key, list);
+
+  for (let index = 0; index < edges.length; index++) {
+    const key = pointKey(edges[index].from);
+    const existing = edgesByFrom.get(key);
+
+    if (existing) {
+      existing.push(index);
+    } else {
+      edgesByFrom.set(key, [index]);
     }
-    list.push(idx);
   }
 
   const used = new Set<number>();
   const contours: Array<Array<Position>> = [];
 
-  for (let startIdx = 0; startIdx < edges.length; startIdx++) {
-    if (used.has(startIdx)) continue;
+  for (let start = 0; start < edges.length; start++) {
+    if (used.has(start)) {
+      continue;
+    }
 
     const contour: Array<Position> = [];
-    let currentIdx = startIdx;
-    let prevEdge: DirectedEdge | null = null;
+    let currentEdgeIndex = start;
+    let previousEdge: DirectedEdge | null = null;
 
-    while (!used.has(currentIdx)) {
-      used.add(currentIdx);
-      const edge = edges[currentIdx];
+    while (!used.has(currentEdgeIndex)) {
+      used.add(currentEdgeIndex);
+
+      const edge = edges[currentEdgeIndex];
       contour.push(edge.from);
-      prevEdge = edge;
+      previousEdge = edge;
 
-      // Find next edge
       const nextKey = pointKey(edge.to);
       const candidates = edgesByFrom.get(nextKey);
-      if (!candidates) break;
 
-      // Filter to unused candidates
-      const available = candidates.filter((idx) => !used.has(idx));
-      if (available.length === 0) break;
+      if (!candidates) {
+        break;
+      }
+
+      const available = candidates.filter((candidate) => !used.has(candidate));
+
+      if (available.length === 0) {
+        break;
+      }
 
       if (available.length === 1) {
-        currentIdx = available[0];
-      } else {
-        // Ambiguous vertex — pick rightmost CW turn
-        const inDir = dirIndex(
-          prevEdge.to.x - prevEdge.from.x,
-          prevEdge.to.y - prevEdge.from.y,
-        );
-        available.sort((a, b) => {
-          const ea = edges[a];
-          const eb = edges[b];
-          const dirA = dirIndex(ea.to.x - ea.from.x, ea.to.y - ea.from.y);
-          const dirB = dirIndex(eb.to.x - eb.from.x, eb.to.y - eb.from.y);
-          return turnRank(inDir, dirA) - turnRank(inDir, dirB);
-        });
-        currentIdx = available[0];
+        currentEdgeIndex = available[0];
+        continue;
       }
+
+      const inDirection = dirIndex(
+        previousEdge.to.x - previousEdge.from.x,
+        previousEdge.to.y - previousEdge.from.y,
+      );
+
+      available.sort((a, b) => {
+        const edgeA = edges[a];
+        const edgeB = edges[b];
+
+        const directionA = dirIndex(
+          edgeA.to.x - edgeA.from.x,
+          edgeA.to.y - edgeA.from.y,
+        );
+        const directionB = dirIndex(
+          edgeB.to.x - edgeB.from.x,
+          edgeB.to.y - edgeB.from.y,
+        );
+
+        return (
+          turnRank(inDirection, directionA) - turnRank(inDirection, directionB)
+        );
+      });
+
+      currentEdgeIndex = available[0];
     }
 
     if (contour.length >= 3) {
@@ -436,110 +320,91 @@ function chainEdges(edges: Array<DirectedEdge>): Array<Array<Position>> {
   return contours;
 }
 
-// ---------------------------------------------------------------------------
-// Contour simplification
-// ---------------------------------------------------------------------------
-
-/**
- * Removes collinear vertices from a closed rectilinear contour.
- * A vertex is collinear if all three of (prev, curr, next) share the
- * same X or the same Y coordinate.
- */
 function simplifyContour(contour: Array<Position>): Array<Position> {
-  const n = contour.length;
-  if (n <= 4) return contour;
+  const size = contour.length;
+
+  if (size <= 4) {
+    return contour;
+  }
 
   const simplified: Array<Position> = [];
 
-  for (let i = 0; i < n; i++) {
-    const prev = contour[(i - 1 + n) % n];
-    const curr = contour[i];
-    const next = contour[(i + 1) % n];
+  for (let index = 0; index < size; index++) {
+    const previous = contour[(index - 1 + size) % size];
+    const current = contour[index];
+    const next = contour[(index + 1) % size];
 
-    const collinearH = prev.y === curr.y && curr.y === next.y;
-    const collinearV = prev.x === curr.x && curr.x === next.x;
+    const collinearHorizontal =
+      previous.y === current.y && current.y === next.y;
+    const collinearVertical = previous.x === current.x && current.x === next.x;
 
-    if (!collinearH && !collinearV) {
-      simplified.push(curr);
+    if (!collinearHorizontal && !collinearVertical) {
+      simplified.push(current);
     }
   }
 
   return simplified;
 }
 
-// ---------------------------------------------------------------------------
-// SVG path generation
-// ---------------------------------------------------------------------------
-
-/**
- * Generates an SVG path `d` string from a simplified closed contour.
- *
- * Every corner is rounded with a quadratic Bezier curve.
- */
 function contourToSVGPath(
   contour: Array<Position>,
   cornerRadius: number,
 ): string {
-  const n = contour.length;
+  const size = contour.length;
   const parts: Array<string> = [];
 
-  for (let i = 0; i < n; i++) {
-    const prev = contour[(i - 1 + n) % n];
-    const curr = contour[i];
-    const next = contour[(i + 1) % n];
+  for (let index = 0; index < size; index++) {
+    const previous = contour[(index - 1 + size) % size];
+    const current = contour[index];
+    const next = contour[(index + 1) % size];
 
-    const inDx = curr.x - prev.x;
-    const inDy = curr.y - prev.y;
-    const outDx = next.x - curr.x;
-    const outDy = next.y - curr.y;
+    const inDx = current.x - previous.x;
+    const inDy = current.y - previous.y;
+    const outDx = next.x - current.x;
+    const outDy = next.y - current.y;
 
-    const inLen = Math.sqrt(inDx * inDx + inDy * inDy);
-    const outLen = Math.sqrt(outDx * outDx + outDy * outDy);
+    const inLength = Math.sqrt(inDx * inDx + inDy * inDy);
+    const outLength = Math.sqrt(outDx * outDx + outDy * outDy);
 
-    // Guard against degenerate edges (should not happen after simplification)
-    if (inLen === 0 || outLen === 0) {
-      if (i === 0) {
-        parts.push(`M ${curr.x} ${curr.y}`);
+    if (inLength === 0 || outLength === 0) {
+      if (index === 0) {
+        parts.push(`M ${current.x} ${current.y}`);
       } else {
-        parts.push(`L ${curr.x} ${curr.y}`);
+        parts.push(`L ${current.x} ${current.y}`);
       }
+
       continue;
     }
 
-    const inUx = inDx / inLen;
-    const inUy = inDy / inLen;
-    const outUx = outDx / outLen;
-    const outUy = outDy / outLen;
+    const inUx = inDx / inLength;
+    const inUy = inDy / inLength;
+    const outUx = outDx / outLength;
+    const outUy = outDy / outLength;
 
     if (cornerRadius > 0) {
-      // Clamp radius so adjacent rounded corners cannot overlap
-      const maxR = Math.min(inLen, outLen) / 2;
-      const r = Math.min(cornerRadius, maxR);
+      const maxRadius = Math.min(inLength, outLength) / 2;
+      const radius = Math.min(cornerRadius, maxRadius);
 
-      // Approach point: step back along incoming edge
-      const approachX = curr.x - r * inUx;
-      const approachY = curr.y - r * inUy;
+      const approachX = current.x - radius * inUx;
+      const approachY = current.y - radius * inUy;
+      const departX = current.x + radius * outUx;
+      const departY = current.y + radius * outUy;
 
-      // Departure point: step forward along outgoing edge
-      const departX = curr.x + r * outUx;
-      const departY = curr.y + r * outUy;
-
-      if (i === 0) {
+      if (index === 0) {
         parts.push(`M ${approachX} ${approachY}`);
       } else {
         parts.push(`L ${approachX} ${approachY}`);
       }
-      // Quadratic Bézier: control point is the original corner
-      parts.push(`Q ${curr.x} ${curr.y} ${departX} ${departY}`);
+
+      parts.push(`Q ${current.x} ${current.y} ${departX} ${departY}`);
+    } else if (index === 0) {
+      parts.push(`M ${current.x} ${current.y}`);
     } else {
-      if (i === 0) {
-        parts.push(`M ${curr.x} ${curr.y}`);
-      } else {
-        parts.push(`L ${curr.x} ${curr.y}`);
-      }
+      parts.push(`L ${current.x} ${current.y}`);
     }
   }
 
   parts.push("Z");
+
   return parts.join(" ");
 }

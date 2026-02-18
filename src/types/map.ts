@@ -48,23 +48,47 @@ export interface WallSegment {
   start: Position;
   end: Position;
   color: WallColor;
-  junctions: WallJunctions;
 }
 
-export interface WallJunctions {
-  left: boolean;
-  right: boolean;
-  up: boolean;
-  down: boolean;
-}
-
-export type WallDraft = Omit<WallSegment, "id" | "junctions">;
+export type WallDraft = Omit<WallSegment, "id">;
 
 export interface RoomDraft {
   floorId: string;
   start: Position;
   end: Position;
   color: WallColor;
+}
+
+export type WallCommandReason =
+  | "applied"
+  | "invalid-line"
+  | "invalid-room"
+  | "already-exists"
+  | "collision-with-device"
+  | "no-wall-at-pointer"
+  | "empty-stroke"
+  | "preview-hit"
+  | "preview-miss";
+
+export interface WallCommandResult {
+  changed: boolean;
+  nextWalls: Array<WallSegment>;
+  affectedKeys: Array<string>;
+  reason: WallCommandReason;
+}
+
+export interface WallPointerInput {
+  floorId: string;
+  pointer: Position;
+  snappedPoint: Position;
+}
+
+export interface WallStrokeInput {
+  floorId: string;
+  fromPointer: Position;
+  fromSnappedPoint: Position;
+  toPointer: Position;
+  toSnappedPoint: Position;
 }
 
 // Building & Floor types
@@ -91,7 +115,6 @@ export interface MapState {
   currentBuildingId: string | null;
   currentFloorId: string | null;
   selectedDeviceId: string | null;
-  selectedWallId: string | null;
   hoveredDeviceId: string | null;
   isEditMode: boolean;
   highlightedDeviceIds: Array<string>;
@@ -107,12 +130,11 @@ export interface MapActions {
   addDevice: (device: Omit<Device, "id">) => void;
   updateDevicePosition: (deviceId: string, position: Position) => void;
   deleteDevice: (deviceId: string) => void;
-  selectWall: (wallId: string | null) => void;
-  deleteWall: (wallId: string) => void;
-  addWallBlocks: (segments: Array<WallDraft>) => boolean;
-  deleteWallBlocks: (segments: Array<WallDraft>) => boolean;
-  addWallSegment: (segment: WallDraft) => boolean;
-  addRoom: (room: RoomDraft) => boolean;
+  addWallLine: (line: WallDraft) => WallCommandResult;
+  addWallRoom: (room: RoomDraft) => WallCommandResult;
+  eraseWallAtPointer: (input: WallPointerInput) => WallCommandResult;
+  eraseWallStroke: (input: WallStrokeInput) => WallCommandResult;
+  previewEraseWallAtPointer: (input: WallPointerInput) => WallCommandResult;
   toggleEditMode: () => void;
   setActiveDrawTool: (tool: DrawTool) => void;
   setSelectedWallColor: (color: WallColor) => void;
