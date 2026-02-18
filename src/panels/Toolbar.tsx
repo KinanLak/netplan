@@ -340,7 +340,7 @@ export default function Toolbar() {
   }
 
   const showWallColors = activeDrawTool === "wall" || activeDrawTool === "room";
-  const wallColorSelectionEnabled = true;
+  const wallColorSelectionEnabled = false;
   const isActionActive = (action: ToolbarAction) => {
     if (action.group === "draw") {
       return activeDrawTool === action.tool;
