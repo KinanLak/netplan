@@ -3,31 +3,21 @@ import {
   Background,
   BackgroundVariant,
   ReactFlow,
-  ViewportPortal,
   useNodesState,
   useReactFlow,
 } from "@xyflow/react";
-import { HugeiconsIcon } from "@hugeicons/react";
-import { MouseRightClick04Icon } from "@hugeicons/core-free-icons";
-import { LocateFixed, Minus, Plus } from "lucide-react";
 import { nodeTypes } from "./nodeTypes";
 import type { Node, OnNodesChange } from "@xyflow/react";
 import type { Device, Position, Size } from "@/types/map";
 import { useMapStore } from "@/store/useMapStore";
 import { useHotkeyDirect, useShortcut } from "@/hooks/use-shortcuts";
-import { Kbd } from "@/components/ui/kbd";
-import {
-  GRID_SIZE,
-  WALL_COLOR_ORDER,
-  WALL_COLOR_TONES,
-  WALL_GRID_OFFSET,
-  arePositionsEqual,
-  getWallRect,
-} from "@/lib/walls";
-import { computeMergedWallGroups } from "@/lib/wallGeometry";
-import { getWallBlockKey } from "@/walls/engine";
+import { GRID_SIZE } from "@/lib/walls";
 import { useWallToolsController } from "@/walls/useWallToolsController";
 import { cn } from "@/lib/utils";
+import { WallOverlay } from "@/canvas/components/WallOverlay";
+import { CanvasZoomControls } from "@/canvas/components/CanvasZoomControls";
+import { WallToolHelpCard } from "@/canvas/components/WallToolHelpCard";
+import { WallDebugPanel } from "@/canvas/components/WallDebugPanel";
 
 const SNAP_GRID: [number, number] = [GRID_SIZE, GRID_SIZE];
 
@@ -114,43 +104,6 @@ export default function FlowCanvas() {
   });
 
   const floorWalls = walls.filter((wall) => wall.floorId === currentFloorId);
-
-  const sortedFloorWalls = [...floorWalls].sort(
-    (a, b) =>
-      WALL_COLOR_ORDER.indexOf(a.color) - WALL_COLOR_ORDER.indexOf(b.color),
-  );
-
-  const hasPreview = wallTools.previewSegments.length > 0;
-  const mergedWallGroups = computeMergedWallGroups(floorWalls).sort(
-    (a, b) =>
-      WALL_COLOR_ORDER.indexOf(a.color) - WALL_COLOR_ORDER.indexOf(b.color),
-  );
-
-  const combinedMergedWallGroups = hasPreview
-    ? computeMergedWallGroups([
-        ...floorWalls,
-        ...wallTools.previewSegments,
-      ]).sort(
-        (a, b) =>
-          WALL_COLOR_ORDER.indexOf(a.color) - WALL_COLOR_ORDER.indexOf(b.color),
-      )
-    : mergedWallGroups;
-
-  const existingPathByColor = new Map(
-    mergedWallGroups.map((group) => [group.color, group.path]),
-  );
-
-  const wallRects = sortedFloorWalls.map((wall) => ({
-    wall,
-    key: getWallBlockKey(wall) ?? wall.id,
-    rect: getWallRect(wall),
-  }));
-
-  const erasePreviewKeySet = new Set(wallTools.erasePreviewKeys);
-  const erasePreviewRects =
-    activeDrawTool === "wall-erase"
-      ? wallRects.filter((item) => erasePreviewKeySet.has(item.key))
-      : [];
 
   const [nodes, setNodes, onNodesChange] = useNodesState<DeviceNode>([]);
 
@@ -415,46 +368,6 @@ export default function FlowCanvas() {
   const physicalWallStartPoint =
     activeDrawTool === "wall" ? wallTools.drawAnchor : null;
 
-  const formatNumber = (value: number): string => {
-    if (Number.isInteger(value)) {
-      return `${value}`;
-    }
-
-    return value.toFixed(2);
-  };
-
-  const formatPoint = (point: Position | null): string => {
-    if (!point) {
-      return "n/a";
-    }
-
-    return `${formatNumber(point.x)}, ${formatNumber(point.y)}`;
-  };
-
-  const formatCanvasGrid = (point: Position | null): string => {
-    if (!point) {
-      return "n/a";
-    }
-
-    return `${formatNumber(point.x / GRID_SIZE)}, ${formatNumber(point.y / GRID_SIZE)}`;
-  };
-
-  const formatWallGrid = (point: Position | null): string => {
-    if (!point) {
-      return "n/a";
-    }
-
-    return `${formatNumber((point.x - WALL_GRID_OFFSET) / GRID_SIZE)}, ${formatNumber((point.y - WALL_GRID_OFFSET) / GRID_SIZE)}`;
-  };
-
-  const isDifferentFromHint = (point: Position | null): boolean => {
-    if (!point || !wallHintPoint) {
-      return false;
-    }
-
-    return !arePositionsEqual(point, wallHintPoint);
-  };
-
   const editModeHaloColor = isWallDeleteTool
     ? "inset 0 0 50px 20px rgba(239, 68, 68, 0.32)"
     : "inset 0 0 50px 20px rgba(46, 126, 255, 0.3)";
@@ -505,218 +418,37 @@ export default function FlowCanvas() {
           color="#94a3b8"
         />
 
-        <ViewportPortal>
-          <div className="pointer-events-none absolute inset-0">
-            <svg className="absolute inset-0 h-full w-full overflow-visible">
-              <defs>
-                {hasPreview
-                  ? combinedMergedWallGroups.map((group) => {
-                      const existingPath = existingPathByColor.get(group.color);
-
-                      return (
-                        <mask
-                          id={`wall-preview-mask-${group.color}`}
-                          key={`wall-preview-mask-${group.color}`}
-                          maskUnits="userSpaceOnUse"
-                        >
-                          <path d={group.path} fill="#808080" />
-                          {existingPath ? (
-                            <path d={existingPath} fill="white" />
-                          ) : null}
-                        </mask>
-                      );
-                    })
-                  : null}
-              </defs>
-
-              {combinedMergedWallGroups.map((group) => {
-                const tone = WALL_COLOR_TONES[group.color];
-
-                return (
-                  <g
-                    key={`wall-fill-${group.color}`}
-                    mask={
-                      hasPreview
-                        ? `url(#wall-preview-mask-${group.color})`
-                        : undefined
-                    }
-                  >
-                    <path d={group.path} fill={tone.fill} />
-                  </g>
-                );
-              })}
-
-              {combinedMergedWallGroups.map((group) => {
-                const tone = WALL_COLOR_TONES[group.color];
-
-                return (
-                  <path
-                    key={`wall-stroke-${group.color}`}
-                    d={group.path}
-                    fill="none"
-                    stroke={tone.stroke}
-                    strokeWidth={2}
-                    strokeLinejoin="round"
-                    strokeLinecap="round"
-                  />
-                );
-              })}
-
-              {erasePreviewRects.map((item) => (
-                <rect
-                  key={`erase-preview-${item.key}`}
-                  x={item.rect.x}
-                  y={item.rect.y}
-                  width={item.rect.width}
-                  height={item.rect.height}
-                  fill="rgba(220, 38, 38, 0.28)"
-                  stroke="rgba(220, 38, 38, 0.95)"
-                  strokeWidth={1.5}
-                />
-              ))}
-
-              {wallTools.drawAnchor && activeDrawTool !== "device" ? (
-                <circle
-                  cx={wallTools.drawAnchor.x}
-                  cy={wallTools.drawAnchor.y}
-                  r={5}
-                  fill="rgba(15, 23, 42, 0.8)"
-                  stroke="#ffffff"
-                  strokeWidth={2}
-                />
-              ) : null}
-
-              {activeDrawTool === "wall" &&
-              !wallTools.drawAnchor &&
-              wallTools.hoverSnapPoint ? (
-                <circle
-                  cx={wallTools.hoverSnapPoint.x}
-                  cy={wallTools.hoverSnapPoint.y}
-                  r={4}
-                  fill={paneHoverFillColor}
-                  stroke={paneHoverStrokeColor}
-                  strokeWidth={1.5}
-                />
-              ) : null}
-            </svg>
-          </div>
-        </ViewportPortal>
+        <WallOverlay
+          floorWalls={floorWalls}
+          previewSegments={wallTools.previewSegments}
+          erasePreviewKeys={wallTools.erasePreviewKeys}
+          activeDrawTool={activeDrawTool}
+          drawAnchor={wallTools.drawAnchor}
+          hoverSnapPoint={wallTools.hoverSnapPoint}
+          paneHoverFillColor={paneHoverFillColor}
+          paneHoverStrokeColor={paneHoverStrokeColor}
+        />
       </ReactFlow>
 
-      <div className="absolute bottom-4 left-4 z-20 overflow-hidden rounded-md border border-border bg-card shadow-md">
-        <div className="flex flex-col">
-          <button
-            type="button"
-            onClick={handleZoomInClick}
-            className="grid h-8 w-8 place-items-center border-b border-border text-foreground transition-colors hover:bg-muted"
-            aria-label="Zoom avant"
-            title="Zoom avant"
-          >
-            <Plus className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={handleZoomOutClick}
-            className="grid h-8 w-8 place-items-center border-b border-border text-foreground transition-colors hover:bg-muted"
-            aria-label="Zoom arriere"
-            title="Zoom arriere"
-          >
-            <Minus className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={handleCenterViewportClick}
-            className="grid h-8 w-8 place-items-center text-foreground transition-colors hover:bg-muted"
-            aria-label="Centrer la vue"
-            title="Centrer la vue"
-          >
-            <LocateFixed className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
+      <CanvasZoomControls
+        onZoomIn={handleZoomInClick}
+        onZoomOut={handleZoomOutClick}
+        onCenterViewport={handleCenterViewportClick}
+      />
 
-      {isEditMode && activeDrawTool !== "device" ? (
-        <div className="absolute top-4 right-4 z-20 max-w-80 rounded-md border bg-card px-3 py-2 text-xs shadow-md">
-          <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
-            <Kbd>Esc</Kbd>
-            <span>ou</span>
-            <HugeiconsIcon
-              icon={MouseRightClick04Icon}
-              size={18}
-              color="currentColor"
-              strokeWidth={1.8}
-            />
-            <span>pour quitter</span>
-          </div>
-          {wallTools.drawMessage ? (
-            <p className="mt-1 text-destructive">{wallTools.drawMessage}</p>
-          ) : null}
-        </div>
-      ) : null}
+      <WallToolHelpCard
+        isVisible={isEditMode && activeDrawTool !== "device"}
+        drawMessage={wallTools.drawMessage}
+      />
 
-      {isWallDebugPanelVisible ? (
-        <div className="absolute top-24 right-4 z-20 w-[25rem] rounded-md border border-border bg-card px-3 py-2 text-[11px] shadow-md">
-          <div className="mb-2 flex items-center justify-between">
-            <p className="font-medium text-foreground">
-              Debug mur (grille canvas)
-            </p>
-            <Kbd>Shift + D</Kbd>
-          </div>
-          <div className="space-y-1 font-mono text-muted-foreground">
-            <p>
-              curseur px:{" "}
-              <span className="text-foreground">
-                {formatPoint(wallTools.pointerPosition)}
-              </span>
-            </p>
-            <p>
-              curseur grille canvas:{" "}
-              <span className="text-foreground">
-                {formatCanvasGrid(wallTools.pointerPosition)}
-              </span>
-            </p>
-            <p>
-              curseur grille mur:{" "}
-              <span className="text-foreground">
-                {formatWallGrid(wallTools.pointerPosition)}
-              </span>
-            </p>
-            <p>
-              hint debut mur:{" "}
-              <span className="text-foreground">
-                {formatPoint(wallHintPoint)}
-              </span>
-            </p>
-            <p>
-              theorique (snap):{" "}
-              <span className="text-foreground">
-                {formatPoint(theoreticalWallStartPoint)}
-              </span>
-              {isDifferentFromHint(theoreticalWallStartPoint)
-                ? " (different du hint)"
-                : ""}
-            </p>
-            <p>
-              reel (dernier clic):{" "}
-              <span className="text-foreground">
-                {formatPoint(realWallStartPoint)}
-              </span>
-              {isDifferentFromHint(realWallStartPoint)
-                ? " (different du hint)"
-                : ""}
-            </p>
-            <p>
-              physique (ancre active):{" "}
-              <span className="text-foreground">
-                {formatPoint(physicalWallStartPoint)}
-              </span>
-              {isDifferentFromHint(physicalWallStartPoint)
-                ? " (different du hint)"
-                : ""}
-            </p>
-          </div>
-        </div>
-      ) : null}
+      <WallDebugPanel
+        isVisible={isWallDebugPanelVisible}
+        pointerPosition={wallTools.pointerPosition}
+        wallHintPoint={wallHintPoint}
+        theoreticalWallStartPoint={theoreticalWallStartPoint}
+        realWallStartPoint={realWallStartPoint}
+        physicalWallStartPoint={physicalWallStartPoint}
+      />
 
       <div
         className={`pointer-events-none absolute inset-0 z-10 transition-opacity duration-300 ${

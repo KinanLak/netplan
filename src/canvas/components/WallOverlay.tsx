@@ -1,0 +1,153 @@
+import { ViewportPortal } from "@xyflow/react";
+import type { DrawTool, Position, WallDraft, WallSegment } from "@/types/map";
+import { WALL_COLOR_ORDER, WALL_COLOR_TONES, getWallRect } from "@/lib/walls";
+import { computeMergedWallGroups } from "@/lib/wallGeometry";
+import { getWallBlockKey } from "@/walls/engine";
+
+interface WallOverlayProps {
+  floorWalls: Array<WallSegment>;
+  previewSegments: Array<WallDraft>;
+  erasePreviewKeys: Array<string>;
+  activeDrawTool: DrawTool;
+  drawAnchor: Position | null;
+  hoverSnapPoint: Position | null;
+  paneHoverFillColor: string;
+  paneHoverStrokeColor: string;
+}
+
+export function WallOverlay({
+  floorWalls,
+  previewSegments,
+  erasePreviewKeys,
+  activeDrawTool,
+  drawAnchor,
+  hoverSnapPoint,
+  paneHoverFillColor,
+  paneHoverStrokeColor,
+}: WallOverlayProps) {
+  const hasPreview = previewSegments.length > 0;
+
+  const mergedWallGroups = computeMergedWallGroups(floorWalls).sort(
+    (a, b) =>
+      WALL_COLOR_ORDER.indexOf(a.color) - WALL_COLOR_ORDER.indexOf(b.color),
+  );
+
+  const combinedMergedWallGroups = hasPreview
+    ? computeMergedWallGroups([...floorWalls, ...previewSegments]).sort(
+        (a, b) =>
+          WALL_COLOR_ORDER.indexOf(a.color) - WALL_COLOR_ORDER.indexOf(b.color),
+      )
+    : mergedWallGroups;
+
+  const existingPathByColor = new Map(
+    mergedWallGroups.map((group) => [group.color, group.path]),
+  );
+
+  const floorWallRects = floorWalls.map((wall) => ({
+    key: getWallBlockKey(wall) ?? wall.id,
+    rect: getWallRect(wall),
+  }));
+
+  const erasePreviewKeySet = new Set(erasePreviewKeys);
+  const erasePreviewRects =
+    activeDrawTool === "wall-erase"
+      ? floorWallRects.filter((item) => erasePreviewKeySet.has(item.key))
+      : [];
+
+  return (
+    <ViewportPortal>
+      <div className="pointer-events-none absolute inset-0">
+        <svg className="absolute inset-0 h-full w-full overflow-visible">
+          <defs>
+            {hasPreview
+              ? combinedMergedWallGroups.map((group) => {
+                  const existingPath = existingPathByColor.get(group.color);
+
+                  return (
+                    <mask
+                      id={`wall-preview-mask-${group.color}`}
+                      key={`wall-preview-mask-${group.color}`}
+                      maskUnits="userSpaceOnUse"
+                    >
+                      <path d={group.path} fill="#808080" />
+                      {existingPath ? (
+                        <path d={existingPath} fill="white" />
+                      ) : null}
+                    </mask>
+                  );
+                })
+              : null}
+          </defs>
+
+          {combinedMergedWallGroups.map((group) => {
+            const tone = WALL_COLOR_TONES[group.color];
+
+            return (
+              <g
+                key={`wall-fill-${group.color}`}
+                mask={
+                  hasPreview
+                    ? `url(#wall-preview-mask-${group.color})`
+                    : undefined
+                }
+              >
+                <path d={group.path} fill={tone.fill} />
+              </g>
+            );
+          })}
+
+          {combinedMergedWallGroups.map((group) => {
+            const tone = WALL_COLOR_TONES[group.color];
+
+            return (
+              <path
+                key={`wall-stroke-${group.color}`}
+                d={group.path}
+                fill="none"
+                stroke={tone.stroke}
+                strokeWidth={2}
+                strokeLinejoin="round"
+                strokeLinecap="round"
+              />
+            );
+          })}
+
+          {erasePreviewRects.map((item) => (
+            <rect
+              key={`erase-preview-${item.key}`}
+              x={item.rect.x}
+              y={item.rect.y}
+              width={item.rect.width}
+              height={item.rect.height}
+              fill="rgba(220, 38, 38, 0.28)"
+              stroke="rgba(220, 38, 38, 0.95)"
+              strokeWidth={1.5}
+            />
+          ))}
+
+          {drawAnchor && activeDrawTool !== "device" ? (
+            <circle
+              cx={drawAnchor.x}
+              cy={drawAnchor.y}
+              r={5}
+              fill="rgba(15, 23, 42, 0.8)"
+              stroke="#ffffff"
+              strokeWidth={2}
+            />
+          ) : null}
+
+          {activeDrawTool === "wall" && !drawAnchor && hoverSnapPoint ? (
+            <circle
+              cx={hoverSnapPoint.x}
+              cy={hoverSnapPoint.y}
+              r={4}
+              fill={paneHoverFillColor}
+              stroke={paneHoverStrokeColor}
+              strokeWidth={1.5}
+            />
+          ) : null}
+        </svg>
+      </div>
+    </ViewportPortal>
+  );
+}
