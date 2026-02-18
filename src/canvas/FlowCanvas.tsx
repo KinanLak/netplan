@@ -253,9 +253,17 @@ export default function FlowCanvas() {
       WALL_COLOR_ORDER.indexOf(a.color) - WALL_COLOR_ORDER.indexOf(b.color),
   );
 
-  const previewMergedWallGroups = computeMergedWallGroups(previewSegments).sort(
-    (a, b) =>
-      WALL_COLOR_ORDER.indexOf(a.color) - WALL_COLOR_ORDER.indexOf(b.color),
+  const hasPreview = previewSegments.length > 0;
+
+  const combinedMergedWallGroups = hasPreview
+    ? computeMergedWallGroups([...floorWalls, ...previewSegments]).sort(
+        (a, b) =>
+          WALL_COLOR_ORDER.indexOf(a.color) - WALL_COLOR_ORDER.indexOf(b.color),
+      )
+    : mergedWallGroups;
+
+  const existingPathByColor = new Map(
+    mergedWallGroups.map((g) => [g.color, g.path] as const),
   );
 
   const selectedWallPath = (() => {
@@ -700,15 +708,45 @@ export default function FlowCanvas() {
         <ViewportPortal>
           <div className="pointer-events-none absolute inset-0">
             <svg className="absolute inset-0 h-full w-full overflow-visible">
-              {mergedWallGroups.map((group) => {
+              {/* ---- SVG defs: preview masks ---- */}
+              <defs>
+                {hasPreview &&
+                  combinedMergedWallGroups.map((group) => {
+                    const existingPath = existingPathByColor.get(group.color);
+
+                    return (
+                      <mask
+                        id={`wall-mask-${group.color}`}
+                        key={`mask-${group.color}`}
+                      >
+                        <path d={group.path} fill="#808080" />
+                        {existingPath && <path d={existingPath} fill="white" />}
+                      </mask>
+                    );
+                  })}
+              </defs>
+
+              {/* ---- Wall color layers (z-order: sand → concrete → slate) ---- */}
+              {combinedMergedWallGroups.map((group) => {
                 const tone = WALL_COLOR_TONES[group.color];
+
                 return (
                   <g key={group.color}>
-                    <path
-                      d={group.path}
-                      fill={tone.fill}
-                      shapeRendering="geometricPrecision"
-                    />
+                    {/* Fill — masked for preview opacity */}
+                    <g
+                      mask={
+                        hasPreview
+                          ? `url(#wall-mask-${group.color})`
+                          : undefined
+                      }
+                    >
+                      <path
+                        d={group.path}
+                        fill={tone.fill}
+                        shapeRendering="geometricPrecision"
+                      />
+                    </g>
+                    {/* Stroke — always fully visible (outside mask) */}
                     <path
                       d={group.path}
                       fill="none"
@@ -720,37 +758,16 @@ export default function FlowCanvas() {
                 );
               })}
 
+              {/* ---- Selected wall highlight ---- */}
               {selectedWallPath ? (
                 <path
                   d={selectedWallPath}
-                  fill="var(--primary)"
+                  fill="var(--input)"
                   fillOpacity={0.25}
                   stroke="none"
                   shapeRendering="geometricPrecision"
                 />
               ) : null}
-
-              {previewMergedWallGroups.map((group) => {
-                const tone = WALL_COLOR_TONES[group.color];
-                return (
-                  <g key={`preview-${group.color}`}>
-                    <path
-                      d={group.path}
-                      fill={tone.fill}
-                      fillOpacity={0.5}
-                      shapeRendering="geometricPrecision"
-                    />
-                    <path
-                      d={group.path}
-                      fill="none"
-                      stroke={tone.stroke}
-                      strokeOpacity={0.8}
-                      strokeWidth={2}
-                      shapeRendering="geometricPrecision"
-                    />
-                  </g>
-                );
-              })}
 
               {drawAnchor && activeDrawTool !== "device" ? (
                 <circle
