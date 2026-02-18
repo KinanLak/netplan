@@ -62,20 +62,18 @@ export function ShortcutsDialog() {
     <>
       {/* Floating help button - hidden when dialog is open */}
       {!isOpen ? (
-        <Button
-          variant="outline"
-          size="icon"
+        <button
           onClick={() => setIsOpen(true)}
-          className="fixed right-4 bottom-4 z-50 h-10 w-10 rounded-full shadow-lg"
+          className="fixed right-4 bottom-4 flex justify-center items-center h-10 w-10 rounded-full hover:shadow-lg hover:border-accent hover:bg-muted"
           title="Afficher les raccourcis clavier"
         >
           <HugeiconsIcon
             icon={HelpCircleIcon}
-            size={20}
-            color="currentColor"
+            size={25}
             strokeWidth={1.5}
+            className="text-muted-foreground"
           />
-        </Button>
+        </button>
       ) : null}
 
       <Dialog open={isOpen} onOpenChange={setIsOpen}>

@@ -153,6 +153,15 @@ function HomePageContent() {
     }
   };
 
+  const withFloorShortcutModifier =
+    (handler: () => void) => (event?: KeyboardEvent) => {
+      if (!event || (!event.ctrlKey && !event.metaKey)) {
+        return;
+      }
+
+      handler();
+    };
+
   const cycleTheme = () => {
     const themeOrder = ["light", "dark", "system"] as const;
     const currentIndex = themeOrder.indexOf(theme);
@@ -182,19 +191,46 @@ function HomePageContent() {
       toggleEditMode();
     }
   });
-  useShortcut("floor-up", navigateFloorUp);
-  useShortcut("floor-down", navigateFloorDown);
+  useShortcut("floor-up", withFloorShortcutModifier(navigateFloorUp));
+  useShortcut("floor-down", withFloorShortcutModifier(navigateFloorDown));
 
   // Floor number shortcuts (Ctrl+1 through Ctrl+9)
-  useShortcut("floor-1", () => navigateToFloorByIndex(0));
-  useShortcut("floor-2", () => navigateToFloorByIndex(1));
-  useShortcut("floor-3", () => navigateToFloorByIndex(2));
-  useShortcut("floor-4", () => navigateToFloorByIndex(3));
-  useShortcut("floor-5", () => navigateToFloorByIndex(4));
-  useShortcut("floor-6", () => navigateToFloorByIndex(5));
-  useShortcut("floor-7", () => navigateToFloorByIndex(6));
-  useShortcut("floor-8", () => navigateToFloorByIndex(7));
-  useShortcut("floor-9", () => navigateToFloorByIndex(8));
+  useShortcut(
+    "floor-1",
+    withFloorShortcutModifier(() => navigateToFloorByIndex(0)),
+  );
+  useShortcut(
+    "floor-2",
+    withFloorShortcutModifier(() => navigateToFloorByIndex(1)),
+  );
+  useShortcut(
+    "floor-3",
+    withFloorShortcutModifier(() => navigateToFloorByIndex(2)),
+  );
+  useShortcut(
+    "floor-4",
+    withFloorShortcutModifier(() => navigateToFloorByIndex(3)),
+  );
+  useShortcut(
+    "floor-5",
+    withFloorShortcutModifier(() => navigateToFloorByIndex(4)),
+  );
+  useShortcut(
+    "floor-6",
+    withFloorShortcutModifier(() => navigateToFloorByIndex(5)),
+  );
+  useShortcut(
+    "floor-7",
+    withFloorShortcutModifier(() => navigateToFloorByIndex(6)),
+  );
+  useShortcut(
+    "floor-8",
+    withFloorShortcutModifier(() => navigateToFloorByIndex(7)),
+  );
+  useShortcut(
+    "floor-9",
+    withFloorShortcutModifier(() => navigateToFloorByIndex(8)),
+  );
 
   return (
     <SidebarProvider>

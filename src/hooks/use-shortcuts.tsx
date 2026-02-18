@@ -19,6 +19,8 @@ type UseHotkeyDirectOptions = {
   enableOnFormTags?: boolean;
 };
 
+type HotkeyHandler = (event?: KeyboardEvent) => void;
+
 const DEFAULT_SHORTCUT_OPTIONS: UseShortcutOptions = {};
 const DEFAULT_HOTKEY_DIRECT_OPTIONS: UseHotkeyDirectOptions = {};
 const OVERLAY_MODIFIER_KEY = isMac ? "Meta" : "Control";
@@ -29,7 +31,7 @@ const OVERLAY_MODIFIER_KEY = isMac ? "Meta" : "Control";
  */
 export function useShortcut(
   action: ShortcutAction,
-  handler: () => void,
+  handler: HotkeyHandler,
   options: UseShortcutOptions = DEFAULT_SHORTCUT_OPTIONS,
 ) {
   const { enabled = true, enableOnFormTags = false } = options;
@@ -51,7 +53,14 @@ export function useShortcut(
       : false,
   };
 
-  useHotkeys(hotkeyString, handler, hotkeyOptions, [handler, enabled]);
+  useHotkeys(
+    hotkeyString,
+    (keyboardEvent) => {
+      handler(keyboardEvent);
+    },
+    hotkeyOptions,
+    [handler, enabled],
+  );
 }
 
 /**
@@ -59,7 +68,7 @@ export function useShortcut(
  */
 export function useHotkeyDirect(
   hotkey: string | Array<string>,
-  handler: () => void,
+  handler: HotkeyHandler,
   options: UseHotkeyDirectOptions = DEFAULT_HOTKEY_DIRECT_OPTIONS,
 ) {
   const {
@@ -79,7 +88,14 @@ export function useHotkeyDirect(
       : false,
   };
 
-  useHotkeys(hotkeyString, handler, hotkeyOptions, [handler, enabled]);
+  useHotkeys(
+    hotkeyString,
+    (keyboardEvent) => {
+      handler(keyboardEvent);
+    },
+    hotkeyOptions,
+    [handler, enabled],
+  );
 }
 
 /**
