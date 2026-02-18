@@ -9,7 +9,7 @@ import {
   PlugSocketIcon,
   ServerStack03Icon,
 } from "@hugeicons/core-free-icons";
-import { Check } from "lucide-react";
+import { Check, Eraser } from "lucide-react";
 import type { Device, DeviceType, DrawTool } from "@/types/map";
 import type { AvailableDevice } from "@/mock/availableDevices";
 import type { ShortcutAction } from "@/lib/shortcuts";
@@ -49,7 +49,7 @@ interface DeviceToolbarAction extends ToolbarActionBase {
 
 interface DrawToolbarAction extends ToolbarActionBase {
   group: "draw";
-  tool: Extract<DrawTool, "wall" | "room">;
+  tool: Extract<DrawTool, "wall" | "wall-erase" | "room">;
 }
 
 type ToolbarAction = DeviceToolbarAction | DrawToolbarAction;
@@ -88,6 +88,15 @@ const toolbarActions: Array<ToolbarAction> = [
         strokeWidth={1.5}
       />
     ),
+  },
+  {
+    group: "draw",
+    id: "wall-erase",
+    tool: "wall-erase",
+    label: "Supprimer",
+    shortcut: "tool-wall-erase",
+    title: "Supprimer des murs",
+    icon: <Eraser className={TOOLBAR_ICON_SIZE_CLASS} />,
   },
   {
     group: "device",
@@ -210,7 +219,9 @@ export default function Toolbar() {
     setSearchQuery("");
   };
 
-  const handleDrawToolClick = (tool: Extract<DrawTool, "wall" | "room">) => {
+  const handleDrawToolClick = (
+    tool: Extract<DrawTool, "wall" | "wall-erase" | "room">,
+  ) => {
     if (!currentFloorId) return;
 
     const nextTool = activeDrawTool === tool ? "device" : tool;
@@ -235,6 +246,9 @@ export default function Toolbar() {
 
   // Register keyboard shortcut handlers
   useShortcut("tool-wall", () => handleDrawToolClick("wall"), {
+    enabled: isEditMode && !!currentFloorId,
+  });
+  useShortcut("tool-wall-erase", () => handleDrawToolClick("wall-erase"), {
     enabled: isEditMode && !!currentFloorId,
   });
   useShortcut("tool-room", () => handleDrawToolClick("room"), {
@@ -339,7 +353,10 @@ export default function Toolbar() {
     return null;
   }
 
-  const showWallColors = activeDrawTool === "wall" || activeDrawTool === "room";
+  const showWallColors =
+    activeDrawTool === "wall" ||
+    activeDrawTool === "wall-erase" ||
+    activeDrawTool === "room";
   const wallColorSelectionEnabled = false;
   const isActionActive = (action: ToolbarAction) => {
     if (action.group === "draw") {
@@ -360,6 +377,10 @@ export default function Toolbar() {
 
   const renderToolbarAction = (action: ToolbarAction) => {
     const isActive = isActionActive(action);
+    const isEraseAction =
+      action.group === "draw" && action.tool === "wall-erase";
+    const isEraseActive = isEraseAction && isActive;
+
     const button = (
       <Button
         ref={
@@ -373,13 +394,14 @@ export default function Toolbar() {
               }
             : undefined
         }
-        variant={isActive ? "secondary" : "ghost"}
+        variant={isEraseActive ? "ghost" : isActive ? "secondary" : "ghost"}
         size="sm"
         onClick={() => handleToolbarActionClick(action)}
         disabled={!currentFloorId}
         className={cn(
           "-md flex h-auto flex-col items-center px-2 py-1.5",
-          isActive && "ring-2 ring-ring",
+          isActive && !isEraseActive && "ring-2 ring-ring",
+          isEraseActive && "text-destructive",
         )}
         title={action.title}
       >

@@ -7,7 +7,6 @@ import FlowCanvas from "@/canvas/FlowCanvas";
 import AppSidebar from "@/panels/Sidebar";
 import Toolbar from "@/panels/Toolbar";
 import DeviceDrawer from "@/panels/DeviceDrawer";
-import WallDrawer from "@/panels/WallDrawer";
 import { rehydrateMapStore, useMapStore } from "@/store/useMapStore";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { ThemeProvider, useTheme } from "@/components/theme-provider";
@@ -62,11 +61,9 @@ function HomePage() {
 
 function HomePageContent() {
   const selectedDeviceId = useMapStore((state) => state.selectedDeviceId);
-  const selectedWallId = useMapStore((state) => state.selectedWallId);
   const isEditMode = useMapStore((state) => state.isEditMode);
   const toggleEditMode = useMapStore((state) => state.toggleEditMode);
   const selectDevice = useMapStore((state) => state.selectDevice);
-  const selectWall = useMapStore((state) => state.selectWall);
   const activeDrawTool = useMapStore((state) => state.activeDrawTool);
   const setActiveDrawTool = useMapStore((state) => state.setActiveDrawTool);
   const setHighlightedDevices = useMapStore(
@@ -172,10 +169,9 @@ function HomePageContent() {
   useShortcut("toggle-edit-mode", toggleEditMode);
   useShortcut("cycle-theme", cycleTheme);
   useShortcut("escape", () => {
-    // First deselect any device/wall and clear highlights
-    if (selectedDeviceId || selectedWallId) {
+    // First deselect any device and clear highlights
+    if (selectedDeviceId) {
       selectDevice(null);
-      selectWall(null);
       setActiveDrawTool("device");
       setHighlightedDevices([]);
       return;
@@ -243,11 +239,7 @@ function HomePageContent() {
             <FlowCanvas />
             <Toolbar />
             {/* Device details drawer (conditional) - inside ReactFlowProvider for camera control */}
-            {selectedDeviceId ? (
-              <DeviceDrawer />
-            ) : selectedWallId ? (
-              <WallDrawer />
-            ) : null}
+            {selectedDeviceId ? <DeviceDrawer /> : null}
           </ReactFlowProvider>
 
           {/* Mode toggle button - top left */}
@@ -291,9 +283,7 @@ function HomePageContent() {
             </button>
           </div>
 
-          <ShortcutsDialog
-            hasRightDrawerOpen={Boolean(selectedDeviceId || selectedWallId)}
-          />
+          <ShortcutsDialog hasRightDrawerOpen={Boolean(selectedDeviceId)} />
         </SidebarInset>
       </div>
     </SidebarProvider>

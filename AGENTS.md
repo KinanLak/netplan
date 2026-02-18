@@ -9,7 +9,7 @@
 
 ## Tech stack
 
-React 19, TypeScript, Vite, TailwindCSS, Zustand (persisted to `localStorage`), @xyflow/react.
+React 19, TypeScript, Vite, TailwindCSS V4, Zustand (persisted to `localStorage`), @xyflow/react.
 
 ## Key files
 
@@ -39,3 +39,7 @@ FlowCanvas passes `data: { data: { ...device, selected } }`. Node components rea
 ## Boundaries
 
 - **Never** use Tailwind opacity modifiers on semantic colors (`bg-foreground/50`, `text-primary/80`). Use the right semantic color directly (`text-muted-foreground` not `text-foreground/50`). Only exception: overlays, gradients to transparent, intentional compositing.
+
+## General guidelines
+
+- This is an unreleased project, all the code need to be cannonical.

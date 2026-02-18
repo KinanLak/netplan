@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Background,
   BackgroundVariant,
@@ -12,7 +12,7 @@ import { MouseRightClick04Icon } from "@hugeicons/core-free-icons";
 import { LocateFixed, Minus, Plus } from "lucide-react";
 import { nodeTypes } from "./nodeTypes";
 import type { Node, OnNodesChange } from "@xyflow/react";
-import type { Device, Position, Size, WallSegment } from "@/types/map";
+import type { Device, Position, Size, WallColor, WallDraft } from "@/types/map";
 import { useMapStore } from "@/store/useMapStore";
 import { useHotkeyDirect, useShortcut } from "@/hooks/use-shortcuts";
 import { Kbd } from "@/components/ui/kbd";
@@ -23,19 +23,33 @@ import {
   arePositionsEqual,
   createOrthogonalWallSegment,
   createRoomWallSegments,
+  getWallIdsToDeleteFromSegments,
   getWallRect,
   snapPositionToWallGrid,
 } from "@/lib/walls";
-import {
-  computeMergedWallGroups,
-  computeSingleWallPath,
-} from "@/lib/wallGeometry";
+import { computeMergedWallGroups } from "@/lib/wallGeometry";
 import { cn } from "@/lib/utils";
 
 const SNAP_GRID: [number, number] = [GRID_SIZE, GRID_SIZE];
 
 type DeviceNode = Node<{ data: Device }>;
-type DraftWallSegment = Omit<WallSegment, "id">;
+type DraftWallSegment = WallDraft;
+type BrushDirection = "east" | "west" | "north" | "south";
+
+const getBrushDirectionFromPointer = (
+  flowPoint: Position,
+  snappedPoint: Position,
+): BrushDirection => {
+  const dx = flowPoint.x - snappedPoint.x;
+  const dy = flowPoint.y - snappedPoint.y;
+
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    return dx >= 0 ? "east" : "west";
+  }
+
+  return dy >= 0 ? "south" : "north";
+};
+
 // Find the nearest valid position when there's a collision
 const findNearestValidPosition = (
   deviceId: string,
@@ -86,13 +100,35 @@ const findNearestValidPosition = (
   return lastValidPos;
 };
 
+const createStampBlockAtPoint = (
+  point: Position,
+  floorId: string,
+  color: WallColor,
+  direction: BrushDirection,
+): DraftWallSegment | null => {
+  const stampEnd = (() => {
+    switch (direction) {
+      case "west":
+        return { x: point.x - GRID_SIZE, y: point.y };
+      case "north":
+        return { x: point.x, y: point.y - GRID_SIZE };
+      case "south":
+        return { x: point.x, y: point.y + GRID_SIZE };
+      case "east":
+      default:
+        return { x: point.x + GRID_SIZE, y: point.y };
+    }
+  })();
+
+  return createOrthogonalWallSegment(point, stampEnd, floorId, color);
+};
+
 export default function FlowCanvas() {
   // State subscriptions — granular selectors prevent re-renders from unrelated changes
   const devices = useMapStore((s) => s.devices);
   const walls = useMapStore((s) => s.walls);
   const currentFloorId = useMapStore((s) => s.currentFloorId);
   const selectedDeviceId = useMapStore((s) => s.selectedDeviceId);
-  const selectedWallId = useMapStore((s) => s.selectedWallId);
   const hoveredDeviceId = useMapStore((s) => s.hoveredDeviceId);
   const isEditMode = useMapStore((s) => s.isEditMode);
   const highlightedDeviceIds = useMapStore((s) => s.highlightedDeviceIds);
@@ -101,11 +137,11 @@ export default function FlowCanvas() {
 
   // Actions — stable references in Zustand, never trigger re-renders
   const selectDevice = useMapStore((s) => s.selectDevice);
-  const selectWall = useMapStore((s) => s.selectWall);
   const setHoveredDevice = useMapStore((s) => s.setHoveredDevice);
   const setHighlightedDevices = useMapStore((s) => s.setHighlightedDevices);
   const updateDevicePosition = useMapStore((s) => s.updateDevicePosition);
   const checkCollision = useMapStore((s) => s.checkCollision);
+  const deleteWallBlocks = useMapStore((s) => s.deleteWallBlocks);
   const addWallSegment = useMapStore((s) => s.addWallSegment);
   const addRoom = useMapStore((s) => s.addRoom);
   const setActiveDrawTool = useMapStore((s) => s.setActiveDrawTool);
@@ -119,7 +155,18 @@ export default function FlowCanvas() {
   const [pointerPreview, setPointerPreview] = useState<Position | null>(null);
   const [hoverSnapPoint, setHoverSnapPoint] = useState<Position | null>(null);
   const [drawMessage, setDrawMessage] = useState<string | null>(null);
+  const [brushPreviewDirection, setBrushPreviewDirection] =
+    useState<BrushDirection>("east");
   const [isCursorDragging, setIsCursorDragging] = useState(false);
+
+  const brushLastPoint = useRef<Position | null>(null);
+  const isBrushDrawing = useRef(false);
+  const ignoreNextBrushClick = useRef(false);
+
+  const clearBrushStrokeState = useCallback(() => {
+    brushLastPoint.current = null;
+    isBrushDrawing.current = false;
+  }, []);
 
   const canEditDevices = isEditMode && activeDrawTool === "device";
 
@@ -189,14 +236,13 @@ export default function FlowCanvas() {
     setPointerPreview(null);
     setHoverSnapPoint(null);
     setDrawMessage(null);
+    setBrushPreviewDirection("east");
   }
 
-  // Deselect wall when switching away from device tool (external state, ok in effect)
   useEffect(() => {
-    if (activeDrawTool !== "device") {
-      selectWall(null);
-    }
-  }, [activeDrawTool, currentFloorId, isEditMode, selectWall]);
+    clearBrushStrokeState();
+    ignoreNextBrushClick.current = false;
+  }, [drawContextKey, clearBrushStrokeState]);
 
   // Cancel draw tool with Escape key
   const cancelDrawTool = () => {
@@ -204,6 +250,7 @@ export default function FlowCanvas() {
     setDrawAnchor(null);
     setPointerPreview(null);
     setHoverSnapPoint(null);
+    clearBrushStrokeState();
     setDrawMessage(null);
   };
 
@@ -212,12 +259,92 @@ export default function FlowCanvas() {
     enabled: isEditMode && activeDrawTool !== "device",
   });
 
-  const getWallSnappedPanePosition = (event: React.MouseEvent): Position => {
-    const flowPosition = reactFlow.screenToFlowPosition(
+  const getWallPointerPosition = (
+    event: React.MouseEvent,
+  ): { flowPoint: Position; snappedPoint: Position } => {
+    const flowPoint = reactFlow.screenToFlowPosition(
       { x: event.clientX, y: event.clientY },
       { snapToGrid: false },
     );
-    return snapPositionToWallGrid(flowPosition);
+    return {
+      flowPoint,
+      snappedPoint: snapPositionToWallGrid(flowPoint),
+    };
+  };
+
+  const applyPaintSegment = (
+    segment: DraftWallSegment,
+    silent = false,
+  ): boolean => {
+    const changed = deleteWallBlocks([segment]);
+
+    if (silent) {
+      if (changed) {
+        setDrawMessage(null);
+      }
+      return changed;
+    }
+
+    if (!changed) {
+      setDrawMessage("Aucun bloc de mur à supprimer.");
+    } else {
+      setDrawMessage(null);
+    }
+
+    return changed;
+  };
+
+  const applyPaintPath = (
+    from: Position,
+    to: Position,
+    floorId: string,
+    color: typeof selectedWallColor,
+  ): boolean => {
+    if (arePositionsEqual(from, to)) {
+      return false;
+    }
+
+    let cursor = from;
+    let hasChanged = false;
+    let lastDirection: BrushDirection | null = null;
+
+    while (!arePositionsEqual(cursor, to)) {
+      const dx = to.x - cursor.x;
+      const dy = to.y - cursor.y;
+
+      const next =
+        Math.abs(dx) >= Math.abs(dy) && dx !== 0
+          ? { x: cursor.x + Math.sign(dx) * GRID_SIZE, y: cursor.y }
+          : { x: cursor.x, y: cursor.y + Math.sign(dy) * GRID_SIZE };
+
+      const stepDx = next.x - cursor.x;
+      const stepDy = next.y - cursor.y;
+
+      const nextDirection: BrushDirection =
+        Math.abs(stepDx) >= Math.abs(stepDy)
+          ? stepDx >= 0
+            ? "east"
+            : "west"
+          : stepDy >= 0
+            ? "south"
+            : "north";
+
+      lastDirection = nextDirection;
+
+      const segment = createOrthogonalWallSegment(cursor, next, floorId, color);
+      if (segment) {
+        const changed = applyPaintSegment(segment, true);
+        hasChanged = hasChanged || changed;
+      }
+
+      cursor = next;
+    }
+
+    if (lastDirection) {
+      setBrushPreviewDirection(lastDirection);
+    }
+
+    return hasChanged;
   };
 
   const previewSegments: Array<DraftWallSegment> = (() => {
@@ -225,7 +352,8 @@ export default function FlowCanvas() {
       !drawAnchor ||
       !pointerPreview ||
       !currentFloorId ||
-      activeDrawTool === "device"
+      activeDrawTool === "device" ||
+      activeDrawTool === "wall-erase"
     ) {
       return [];
     }
@@ -266,24 +394,49 @@ export default function FlowCanvas() {
     mergedWallGroups.map((g) => [g.color, g.path] as const),
   );
 
-  const selectedWall = (() => {
-    if (!selectedWallId) return null;
-    return floorWalls.find((w) => w.id === selectedWallId) ?? null;
+  const erasePreviewWallIds = (() => {
+    if (activeDrawTool !== "wall-erase" || !hoverSnapPoint || !currentFloorId) {
+      return new Set<string>();
+    }
+
+    const stampBlock = createStampBlockAtPoint(
+      hoverSnapPoint,
+      currentFloorId,
+      selectedWallColor,
+      brushPreviewDirection,
+    );
+
+    if (!stampBlock) {
+      return new Set<string>();
+    }
+
+    return getWallIdsToDeleteFromSegments(floorWalls, [stampBlock]);
   })();
 
-  const selectedWallPath = selectedWall
-    ? computeSingleWallPath(
-        selectedWall,
-        floorWalls.filter((wall) => wall.id !== selectedWall.id),
-      )
-    : null;
+  const erasePreviewWallRects = (() => {
+    if (erasePreviewWallIds.size === 0) {
+      return [];
+    }
+
+    return floorWalls.reduce<
+      Array<{ id: string; x: number; y: number; width: number; height: number }>
+    >((acc, wall) => {
+      if (!erasePreviewWallIds.has(wall.id)) {
+        return acc;
+      }
+
+      const rect = getWallRect(wall);
+      acc.push({ id: wall.id, ...rect });
+      return acc;
+    }, []);
+  })();
 
   const paneCursorClass = (() => {
     if (!isEditMode || activeDrawTool === "device") {
       return "canvas-cursor-default";
     }
 
-    if (activeDrawTool === "room") {
+    if (activeDrawTool === "room" || activeDrawTool === "wall-erase") {
       return "wall-cursor-crosshair";
     }
 
@@ -304,21 +457,6 @@ export default function FlowCanvas() {
 
     return dy >= 0 ? "wall-cursor-s" : "wall-cursor-n";
   })();
-
-  const getWallAtFlowPosition = (position: Position): WallSegment | null => {
-    const wallsByDrawOrder = [...floorWalls].reverse();
-    const matchingWall = wallsByDrawOrder.find((wall) => {
-      const rect = getWallRect(wall);
-      return (
-        position.x >= rect.x &&
-        position.x <= rect.x + rect.width &&
-        position.y >= rect.y &&
-        position.y <= rect.y + rect.height
-      );
-    });
-
-    return matchingWall ?? null;
-  };
 
   // Handle node changes (drag, select, etc.)
   const handleNodesChange: OnNodesChange<DeviceNode> = (changes) => {
@@ -410,7 +548,6 @@ export default function FlowCanvas() {
     if (activeDrawTool !== "device") {
       return;
     }
-    selectWall(null);
     selectDevice(node.id);
   };
 
@@ -441,18 +578,22 @@ export default function FlowCanvas() {
   };
 
   useEffect(() => {
-    const resetDraggingCursor = () => {
+    const handlePointerRelease = () => {
       setIsCursorDragging(false);
+
+      if (activeDrawTool === "wall-erase") {
+        clearBrushStrokeState();
+      }
     };
 
-    window.addEventListener("mouseup", resetDraggingCursor);
-    window.addEventListener("blur", resetDraggingCursor);
+    window.addEventListener("mouseup", handlePointerRelease);
+    window.addEventListener("blur", handlePointerRelease);
 
     return () => {
-      window.removeEventListener("mouseup", resetDraggingCursor);
-      window.removeEventListener("blur", resetDraggingCursor);
+      window.removeEventListener("mouseup", handlePointerRelease);
+      window.removeEventListener("blur", handlePointerRelease);
     };
-  }, []);
+  }, [activeDrawTool, clearBrushStrokeState]);
 
   // Handle H key to highlight connections for hovered or selected device
   const handleHighlightHoveredConnections = () => {
@@ -503,7 +644,49 @@ export default function FlowCanvas() {
       return;
     }
 
-    const snappedPoint = getWallSnappedPanePosition(event);
+    const { flowPoint, snappedPoint } = getWallPointerPosition(event);
+
+    if (activeDrawTool === "wall-erase") {
+      setBrushPreviewDirection(
+        getBrushDirectionFromPointer(flowPoint, snappedPoint),
+      );
+      setHoverSnapPoint(snappedPoint);
+      setPointerPreview(null);
+
+      const isPrimaryButtonPressed = (event.buttons & 1) === 1;
+
+      if (!isPrimaryButtonPressed) {
+        clearBrushStrokeState();
+        return;
+      }
+
+      if (!isBrushDrawing.current) {
+        isBrushDrawing.current = true;
+        brushLastPoint.current = snappedPoint;
+        return;
+      }
+
+      const previousPoint = brushLastPoint.current;
+      if (!previousPoint || arePositionsEqual(previousPoint, snappedPoint)) {
+        return;
+      }
+
+      const hasChanged = applyPaintPath(
+        previousPoint,
+        snappedPoint,
+        currentFloorId,
+        selectedWallColor,
+      );
+
+      if (hasChanged) {
+        setDrawMessage(null);
+      }
+
+      ignoreNextBrushClick.current = true;
+
+      brushLastPoint.current = snappedPoint;
+      return;
+    }
 
     if (drawAnchor) {
       setPointerPreview(snappedPoint);
@@ -523,50 +706,68 @@ export default function FlowCanvas() {
   const handlePaneClick = (event: React.MouseEvent) => {
     if (!currentFloorId) {
       selectDevice(null);
-      selectWall(null);
       return;
     }
 
     if (!isEditMode) {
       selectDevice(null);
-      selectWall(null);
       return;
     }
 
     if (activeDrawTool === "device") {
-      const flowPosition = reactFlow.screenToFlowPosition(
-        { x: event.clientX, y: event.clientY },
-        { snapToGrid: false },
-      );
-      const clickedWall = getWallAtFlowPosition(flowPosition);
-
-      if (clickedWall) {
-        selectDevice(null);
-        selectWall(clickedWall.id);
-        return;
-      }
-
       selectDevice(null);
-      selectWall(null);
       return;
     }
 
-    const clickedPoint =
+    selectDevice(null);
+
+    const { flowPoint, snappedPoint: clickedPoint } =
+      getWallPointerPosition(event);
+
+    if (activeDrawTool === "wall-erase") {
+      if (ignoreNextBrushClick.current) {
+        ignoreNextBrushClick.current = false;
+        return;
+      }
+
+      const clickDirection = getBrushDirectionFromPointer(
+        flowPoint,
+        clickedPoint,
+      );
+      setBrushPreviewDirection(clickDirection);
+
+      const stampBlock = createStampBlockAtPoint(
+        clickedPoint,
+        currentFloorId,
+        selectedWallColor,
+        clickDirection,
+      );
+
+      if (!stampBlock) {
+        setDrawMessage("Bloc de mur invalide.");
+        return;
+      }
+
+      applyPaintSegment(stampBlock);
+      setHoverSnapPoint(clickedPoint);
+      setPointerPreview(null);
+      return;
+    }
+
+    const drawPoint =
       activeDrawTool === "wall" && !drawAnchor && hoverSnapPoint
         ? hoverSnapPoint
-        : getWallSnappedPanePosition(event);
-    setPointerPreview(clickedPoint);
-    selectDevice(null);
-    selectWall(null);
+        : clickedPoint;
+    setPointerPreview(drawPoint);
 
     if (activeDrawTool === "wall") {
       if (!drawAnchor) {
-        setDrawAnchor(clickedPoint);
+        setDrawAnchor(drawPoint);
         setDrawMessage(null);
         return;
       }
 
-      if (arePositionsEqual(clickedPoint, drawAnchor)) {
+      if (arePositionsEqual(drawPoint, drawAnchor)) {
         setDrawAnchor(null);
         setPointerPreview(null);
         setDrawMessage(null);
@@ -575,7 +776,7 @@ export default function FlowCanvas() {
 
       const newSegment = createOrthogonalWallSegment(
         drawAnchor,
-        clickedPoint,
+        drawPoint,
         currentFloorId,
         selectedWallColor,
       );
@@ -599,12 +800,12 @@ export default function FlowCanvas() {
     }
 
     if (!drawAnchor) {
-      setDrawAnchor(clickedPoint);
+      setDrawAnchor(drawPoint);
       setDrawMessage(null);
       return;
     }
 
-    if (arePositionsEqual(clickedPoint, drawAnchor)) {
+    if (arePositionsEqual(drawPoint, drawAnchor)) {
       setDrawAnchor(null);
       setPointerPreview(null);
       setDrawMessage(null);
@@ -614,7 +815,7 @@ export default function FlowCanvas() {
     const created = addRoom({
       floorId: currentFloorId,
       start: drawAnchor,
-      end: clickedPoint,
+      end: drawPoint,
       color: selectedWallColor,
     });
 
@@ -641,8 +842,8 @@ export default function FlowCanvas() {
     setDrawAnchor(null);
     setPointerPreview(null);
     setHoverSnapPoint(null);
+    clearBrushStrokeState();
     setDrawMessage(null);
-    selectWall(null);
   };
 
   const handleNodeContextMenu = (event: React.MouseEvent) => {
@@ -655,8 +856,8 @@ export default function FlowCanvas() {
     setDrawAnchor(null);
     setPointerPreview(null);
     setHoverSnapPoint(null);
+    clearBrushStrokeState();
     setDrawMessage(null);
-    selectWall(null);
   };
 
   const handleZoomInClick = () => {
@@ -670,6 +871,17 @@ export default function FlowCanvas() {
   const handleCenterViewportClick = () => {
     reactFlow.fitView({ padding: 0.2, duration: 250 });
   };
+
+  const isWallDeleteTool = activeDrawTool === "wall-erase";
+  const editModeHaloColor = isWallDeleteTool
+    ? "inset 0 0 50px 20px rgba(239, 68, 68, 0.32)"
+    : "inset 0 0 50px 20px rgba(46, 126, 255, 0.3)";
+  const paneHoverFillColor = isWallDeleteTool
+    ? "rgba(220, 38, 38, 0.22)"
+    : "rgba(59, 130, 246, 0.16)";
+  const paneHoverStrokeColor = isWallDeleteTool
+    ? "rgba(220, 38, 38, 0.9)"
+    : "rgba(59, 130, 246, 0.85)";
 
   return (
     <div className="relative h-full w-full">
@@ -695,6 +907,7 @@ export default function FlowCanvas() {
         fitViewOptions={{ padding: 0.2 }}
         minZoom={0.1}
         maxZoom={2}
+        panOnDrag={activeDrawTool === "wall-erase" ? false : true}
         deleteKeyCode={null}
         nodesDraggable={canEditDevices}
         className={cn(
@@ -751,17 +964,6 @@ export default function FlowCanvas() {
                 );
               })}
 
-              {/* ---- Selected wall highlight ---- */}
-              {selectedWallPath ? (
-                <path
-                  d={selectedWallPath}
-                  fill="var(--input)"
-                  fillOpacity={0.25}
-                  stroke="none"
-                  shapeRendering="geometricPrecision"
-                />
-              ) : null}
-
               {/* ---- Wall strokes (always above highlight) ---- */}
               {combinedMergedWallGroups.map((group) => {
                 const tone = WALL_COLOR_TONES[group.color];
@@ -777,6 +979,21 @@ export default function FlowCanvas() {
                   />
                 );
               })}
+
+              {activeDrawTool === "wall-erase"
+                ? erasePreviewWallRects.map((rect) => (
+                    <rect
+                      key={`erase-preview-${rect.id}`}
+                      x={rect.x}
+                      y={rect.y}
+                      width={rect.width}
+                      height={rect.height}
+                      fill="rgba(220, 38, 38, 0.28)"
+                      stroke="rgba(220, 38, 38, 0.95)"
+                      strokeWidth={1.5}
+                    />
+                  ))
+                : null}
 
               {drawAnchor && activeDrawTool !== "device" ? (
                 <circle
@@ -794,8 +1011,8 @@ export default function FlowCanvas() {
                   cx={hoverSnapPoint.x}
                   cy={hoverSnapPoint.y}
                   r={4}
-                  fill="rgba(59, 130, 246, 0.16)"
-                  stroke="rgba(59, 130, 246, 0.85)"
+                  fill={paneHoverFillColor}
+                  stroke={paneHoverStrokeColor}
                   strokeWidth={1.5}
                 />
               ) : null}
@@ -862,7 +1079,7 @@ export default function FlowCanvas() {
           isEditMode ? "opacity-100" : "opacity-0"
         }`}
         style={{
-          boxShadow: "inset 0 0 50px 20px rgba(46, 126, 255, 0.3)",
+          boxShadow: editModeHaloColor,
         }}
       />
     </div>

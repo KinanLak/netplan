@@ -1,6 +1,6 @@
 // Device types for network equipment
 export type DeviceType = "rack" | "switch" | "pc" | "wall-port";
-export type DrawTool = "device" | "wall" | "room";
+export type DrawTool = "device" | "wall" | "wall-erase" | "room";
 export type WallColor = "sand" | "concrete" | "slate";
 
 export type DeviceStatus = "up" | "down" | "unknown";
@@ -48,7 +48,17 @@ export interface WallSegment {
   start: Position;
   end: Position;
   color: WallColor;
+  junctions: WallJunctions;
 }
+
+export interface WallJunctions {
+  left: boolean;
+  right: boolean;
+  up: boolean;
+  down: boolean;
+}
+
+export type WallDraft = Omit<WallSegment, "id" | "junctions">;
 
 export interface RoomDraft {
   floorId: string;
@@ -99,7 +109,9 @@ export interface MapActions {
   deleteDevice: (deviceId: string) => void;
   selectWall: (wallId: string | null) => void;
   deleteWall: (wallId: string) => void;
-  addWallSegment: (segment: Omit<WallSegment, "id">) => boolean;
+  addWallBlocks: (segments: Array<WallDraft>) => boolean;
+  deleteWallBlocks: (segments: Array<WallDraft>) => boolean;
+  addWallSegment: (segment: WallDraft) => boolean;
   addRoom: (room: RoomDraft) => boolean;
   toggleEditMode: () => void;
   setActiveDrawTool: (tool: DrawTool) => void;
