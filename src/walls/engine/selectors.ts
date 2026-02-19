@@ -164,28 +164,6 @@ export const buildWallIndexByKey = (
   return index;
 };
 
-const getEraseCandidatePoints = (
-  snappedPoint: Position,
-): Array<{ direction: EraseDirection; center: Position }> => [
-  { direction: "center", center: snappedPoint },
-  {
-    direction: "east",
-    center: { x: snappedPoint.x + GRID_SIZE, y: snappedPoint.y },
-  },
-  {
-    direction: "west",
-    center: { x: snappedPoint.x - GRID_SIZE, y: snappedPoint.y },
-  },
-  {
-    direction: "north",
-    center: { x: snappedPoint.x, y: snappedPoint.y - GRID_SIZE },
-  },
-  {
-    direction: "south",
-    center: { x: snappedPoint.x, y: snappedPoint.y + GRID_SIZE },
-  },
-];
-
 const pointToWallCellDistanceSquared = (
   point: Position,
   center: Position,
@@ -213,43 +191,32 @@ export const resolveEraseCandidate = (
     return null;
   }
 
-  const candidates = getEraseCandidatePoints(snappedPoint);
-  let bestCandidate: EraseCandidate | null = null;
+  const key = getWallBlockKey({
+    floorId,
+    start: snappedPoint,
+    end: snappedPoint,
+  });
 
-  for (const candidate of candidates) {
-    const key = getWallBlockKey({
-      floorId,
-      start: candidate.center,
-      end: candidate.center,
-    });
-
-    if (!key) {
-      continue;
-    }
-
-    const wall = index.get(key);
-    if (!wall) {
-      continue;
-    }
-
-    const center = getWallCenter(wall);
-    if (!center) {
-      continue;
-    }
-
-    const distanceSquared = pointToWallCellDistanceSquared(pointer, center);
-
-    if (!bestCandidate || distanceSquared < bestCandidate.distanceSquared) {
-      bestCandidate = {
-        key,
-        wall,
-        direction: candidate.direction,
-        distanceSquared,
-      };
-    }
+  if (!key) {
+    return null;
   }
 
-  return bestCandidate;
+  const wall = index.get(key);
+  if (!wall) {
+    return null;
+  }
+
+  const center = getWallCenter(wall);
+  if (!center) {
+    return null;
+  }
+
+  return {
+    key,
+    wall,
+    direction: "center",
+    distanceSquared: pointToWallCellDistanceSquared(pointer, center),
+  };
 };
 
 export const buildSnapPath = (

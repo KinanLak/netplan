@@ -1,6 +1,11 @@
 import { ViewportPortal } from "@xyflow/react";
 import type { DrawTool, Position, WallDraft, WallSegment } from "@/types/map";
-import { WALL_COLOR_ORDER, WALL_COLOR_TONES, getWallRect } from "@/lib/walls";
+import {
+  GRID_SIZE,
+  WALL_COLOR_ORDER,
+  WALL_COLOR_TONES,
+  getWallRect,
+} from "@/lib/walls";
 import { computeMergedWallGroups } from "@/lib/wallGeometry";
 import { getWallBlockKey } from "@/walls/engine";
 
@@ -53,6 +58,15 @@ export function WallOverlay({
     activeDrawTool === "wall-erase"
       ? floorWallRects.filter((item) => erasePreviewKeySet.has(item.key))
       : [];
+  const eraseHoverRect =
+    activeDrawTool === "wall-erase" && hoverSnapPoint
+      ? {
+          x: hoverSnapPoint.x - GRID_SIZE / 2,
+          y: hoverSnapPoint.y - GRID_SIZE / 2,
+          width: GRID_SIZE,
+          height: GRID_SIZE,
+        }
+      : null;
 
   return (
     <ViewportPortal>
@@ -124,6 +138,21 @@ export function WallOverlay({
               strokeWidth={1.5}
             />
           ))}
+
+          {eraseHoverRect ? (
+            <rect
+              x={eraseHoverRect.x}
+              y={eraseHoverRect.y}
+              width={eraseHoverRect.width}
+              height={eraseHoverRect.height}
+              rx={3}
+              ry={3}
+              fill="rgba(220, 38, 38, 0.16)"
+              stroke="rgba(220, 38, 38, 0.98)"
+              strokeWidth={1.6}
+              className="animate-pulse"
+            />
+          ) : null}
 
           {drawAnchor && activeDrawTool !== "device" ? (
             <circle

@@ -402,6 +402,7 @@ export default function Toolbar() {
           "-md flex h-auto flex-col items-center px-2 py-1.5",
           isActive && !isEraseActive && "ring-2 ring-ring",
           isEraseActive && "text-destructive",
+          isEraseAction && !isEraseActive && "hover:text-destructive",
         )}
         title={action.title}
       >

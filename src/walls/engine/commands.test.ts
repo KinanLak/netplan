@@ -203,4 +203,26 @@ describe("wall engine commands", () => {
     expect(result.changed).toBe(false);
     expect(result.reason).toBe("no-wall-at-pointer");
   });
+
+  it("does not erase adjacent cells when snapped cell is empty", () => {
+    const setup = addLine({
+      walls: [],
+      floorId,
+      color: "concrete",
+      start: { x: 30, y: 10 },
+      end: { x: 50, y: 10 },
+      generateWallId: createWallIdFactory(),
+    });
+
+    const result = eraseAtPointer({
+      walls: setup.nextWalls,
+      floorId,
+      pointer: { x: 14, y: 11 },
+      snappedPoint: { x: 10, y: 10 },
+    });
+
+    expect(result.changed).toBe(false);
+    expect(result.reason).toBe("no-wall-at-pointer");
+    expect(result.nextWalls).toHaveLength(2);
+  });
 });

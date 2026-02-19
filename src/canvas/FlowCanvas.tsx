@@ -178,6 +178,22 @@ export default function FlowCanvas() {
   const paneHoverStrokeColor = isWallDeleteTool
     ? "rgba(220, 38, 38, 0.9)"
     : "rgba(59, 130, 246, 0.85)";
+  const haloContextKey = `${isEditMode}:${activeDrawTool}`;
+  const [previousHaloContextKey, setPreviousHaloContextKey] =
+    useState(haloContextKey);
+  const [lastVisibleHaloColor, setLastVisibleHaloColor] =
+    useState(editModeHaloColor);
+
+  if (previousHaloContextKey !== haloContextKey) {
+    setPreviousHaloContextKey(haloContextKey);
+    if (isEditMode) {
+      setLastVisibleHaloColor(editModeHaloColor);
+    }
+  }
+
+  const editModeHaloShadow = isEditMode
+    ? editModeHaloColor
+    : lastVisibleHaloColor;
 
   return (
     <div className="relative h-full w-full">
@@ -198,6 +214,7 @@ export default function FlowCanvas() {
         onMoveEnd={handleMoveEnd}
         nodeTypes={nodeTypes}
         snapToGrid={true}
+        // panOnScroll={true} // Allow moving on the canvas horizontally and vertically by using the trackpad naturally
         snapGrid={SNAP_GRID}
         fitView
         fitViewOptions={{ padding: 0.2 }}
@@ -256,7 +273,7 @@ export default function FlowCanvas() {
           isEditMode ? "opacity-100" : "opacity-0"
         }`}
         style={{
-          boxShadow: editModeHaloColor,
+          boxShadow: editModeHaloShadow,
         }}
       />
     </div>
