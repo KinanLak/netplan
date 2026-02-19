@@ -1,4 +1,5 @@
 import type { ShortcutAction } from "@/lib/shortcuts";
+import { SHORTCUT_GROUP_HEADER_WEIGHT } from "@/lib/constants";
 
 export type ShortcutGroup = {
   id: string;
@@ -54,8 +55,6 @@ export const shortcutGroups: Array<ShortcutGroup> = [
   },
 ];
 
-const GROUP_HEADER_WEIGHT = 1;
-
 const compareGroups = (a: ShortcutGroup, b: ShortcutGroup): number => {
   const priorityDiff = (b.orderPriority ?? 0) - (a.orderPriority ?? 0);
   if (priorityDiff !== 0) {
@@ -91,7 +90,7 @@ export const buildBalancedShortcutGrid = (
     );
 
     targetColumn.groups.push(group);
-    targetColumn.weight += group.actions.length + GROUP_HEADER_WEIGHT;
+    targetColumn.weight += group.actions.length + SHORTCUT_GROUP_HEADER_WEIGHT;
   });
 
   const rowCount = Math.max(

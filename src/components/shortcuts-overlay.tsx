@@ -1,5 +1,6 @@
 import { useOptionHeld } from "@/hooks/use-shortcuts";
 import { formatHotkey, isMac, shortcuts } from "@/lib/shortcuts";
+import { SHORTCUT_GROUP_GRID_COLUMN_COUNT } from "@/lib/constants";
 import {
   buildBalancedShortcutGrid,
   shortcutGroups,
@@ -7,7 +8,10 @@ import {
 import { Kbd, KbdGroup } from "@/components/ui/kbd";
 import { cn } from "@/lib/utils";
 
-const orderedShortcutGroups = buildBalancedShortcutGrid(shortcutGroups, 2);
+const orderedShortcutGroups = buildBalancedShortcutGrid(
+  shortcutGroups,
+  SHORTCUT_GROUP_GRID_COLUMN_COUNT,
+);
 
 /**
  * Overlay panel that shows all keyboard shortcuts when the modifier key is held.

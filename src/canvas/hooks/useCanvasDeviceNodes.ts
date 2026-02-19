@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { useNodesState } from "@xyflow/react";
 import type { Node, OnNodesChange } from "@xyflow/react";
 import type { Device, DrawTool, Position, Size } from "@/types/map";
+import { CANVAS_DEVICE_NEAREST_POSITION_MAX_RADIUS } from "@/lib/constants";
 import { GRID_SIZE } from "@/lib/walls";
 
 type DeviceNode = Node<{ data: Device }>;
@@ -37,8 +38,11 @@ const findNearestValidPosition = (
     return targetPos;
   }
 
-  const maxRadius = 200;
-  for (let radius = GRID_SIZE; radius <= maxRadius; radius += GRID_SIZE) {
+  for (
+    let radius = GRID_SIZE;
+    radius <= CANVAS_DEVICE_NEAREST_POSITION_MAX_RADIUS;
+    radius += GRID_SIZE
+  ) {
     const positions: Array<Position> = [];
     for (let dx = -radius; dx <= radius; dx += GRID_SIZE) {
       for (let dy = -radius; dy <= radius; dy += GRID_SIZE) {

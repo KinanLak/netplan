@@ -20,6 +20,19 @@ import { WallDebugPanel } from "@/canvas/components/WallDebugPanel";
 import { useCanvasDeviceNodes } from "@/canvas/hooks/useCanvasDeviceNodes";
 import { useCanvasDragState } from "@/canvas/hooks/useCanvasDragState";
 import { useConnectionHighlightShortcut } from "@/canvas/hooks/useConnectionHighlightShortcut";
+import {
+  FLOW_CANVAS_BACKGROUND_COLOR,
+  FLOW_CANVAS_BACKGROUND_DOT_SIZE,
+  FLOW_CANVAS_CENTER_DURATION_MS,
+  FLOW_CANVAS_FIT_VIEW_PADDING,
+  FLOW_CANVAS_HALO_SHADOWS,
+  FLOW_CANVAS_MAX_ZOOM,
+  FLOW_CANVAS_MIN_ZOOM,
+  FLOW_CANVAS_PANE_HOVER_COLORS,
+  FLOW_CANVAS_RESET_DURATION_MS,
+  FLOW_CANVAS_TOGGLE_DEBUG_HOTKEY,
+  FLOW_CANVAS_ZOOM_DURATION_MS,
+} from "@/lib/constants";
 
 const SNAP_GRID: [number, number] = [GRID_SIZE, GRID_SIZE];
 
@@ -76,15 +89,18 @@ export default function FlowCanvas() {
   } = useCanvasDragState();
 
   useShortcut("zoom-in", () => {
-    reactFlow.zoomIn({ duration: 200 });
+    reactFlow.zoomIn({ duration: FLOW_CANVAS_ZOOM_DURATION_MS });
   });
 
   useShortcut("zoom-out", () => {
-    reactFlow.zoomOut({ duration: 200 });
+    reactFlow.zoomOut({ duration: FLOW_CANVAS_ZOOM_DURATION_MS });
   });
 
   useShortcut("zoom-reset", () => {
-    reactFlow.setViewport({ x: 0, y: 0, zoom: 1 }, { duration: 300 });
+    reactFlow.setViewport(
+      { x: 0, y: 0, zoom: 1 },
+      { duration: FLOW_CANVAS_RESET_DURATION_MS },
+    );
   });
 
   useHotkeyDirect("escape", wallTools.cancelTool, {
@@ -93,7 +109,7 @@ export default function FlowCanvas() {
   });
 
   useHotkeyDirect(
-    "shift+d",
+    FLOW_CANVAS_TOGGLE_DEBUG_HOTKEY,
     () => {
       setIsWallDebugVisible((prev) => !prev);
     },
@@ -144,15 +160,18 @@ export default function FlowCanvas() {
   };
 
   const handleZoomInClick = () => {
-    reactFlow.zoomIn({ duration: 200 });
+    reactFlow.zoomIn({ duration: FLOW_CANVAS_ZOOM_DURATION_MS });
   };
 
   const handleZoomOutClick = () => {
-    reactFlow.zoomOut({ duration: 200 });
+    reactFlow.zoomOut({ duration: FLOW_CANVAS_ZOOM_DURATION_MS });
   };
 
   const handleCenterViewportClick = () => {
-    reactFlow.fitView({ padding: 0.2, duration: 250 });
+    reactFlow.fitView({
+      padding: FLOW_CANVAS_FIT_VIEW_PADDING,
+      duration: FLOW_CANVAS_CENTER_DURATION_MS,
+    });
   };
 
   const isWallDeleteTool = activeDrawTool === "wall-erase";
@@ -171,14 +190,14 @@ export default function FlowCanvas() {
     activeDrawTool === "wall" ? wallTools.drawAnchor : null;
 
   const editModeHaloColor = isWallDeleteTool
-    ? "inset 0 0 50px 20px rgba(239, 68, 68, 0.32)"
-    : "inset 0 0 50px 20px rgba(46, 126, 255, 0.3)";
+    ? FLOW_CANVAS_HALO_SHADOWS.erase
+    : FLOW_CANVAS_HALO_SHADOWS.draw;
   const paneHoverFillColor = isWallDeleteTool
-    ? "rgba(220, 38, 38, 0.22)"
-    : "rgba(59, 130, 246, 0.16)";
+    ? FLOW_CANVAS_PANE_HOVER_COLORS.erase.fill
+    : FLOW_CANVAS_PANE_HOVER_COLORS.draw.fill;
   const paneHoverStrokeColor = isWallDeleteTool
-    ? "rgba(220, 38, 38, 0.9)"
-    : "rgba(59, 130, 246, 0.85)";
+    ? FLOW_CANVAS_PANE_HOVER_COLORS.erase.stroke
+    : FLOW_CANVAS_PANE_HOVER_COLORS.draw.stroke;
   const haloContextKey = `${isEditMode}:${activeDrawTool}`;
   const [previousHaloContextKey, setPreviousHaloContextKey] =
     useState(haloContextKey);
@@ -218,9 +237,9 @@ export default function FlowCanvas() {
         // panOnScroll={true} // Allow moving on the canvas horizontally and vertically by using the trackpad naturally
         snapGrid={SNAP_GRID}
         fitView
-        fitViewOptions={{ padding: 0.2 }}
-        minZoom={0.1}
-        maxZoom={2}
+        fitViewOptions={{ padding: FLOW_CANVAS_FIT_VIEW_PADDING }}
+        minZoom={FLOW_CANVAS_MIN_ZOOM}
+        maxZoom={FLOW_CANVAS_MAX_ZOOM}
         panOnDrag={isWallDeleteTool || isWallBrushTool ? false : true}
         deleteKeyCode={null}
         nodesDraggable={canEditDevices}
@@ -233,8 +252,8 @@ export default function FlowCanvas() {
         <Background
           variant={BackgroundVariant.Dots}
           gap={GRID_SIZE}
-          size={1.5}
-          color="#94a3b8"
+          size={FLOW_CANVAS_BACKGROUND_DOT_SIZE}
+          color={FLOW_CANVAS_BACKGROUND_COLOR}
         />
 
         <WallOverlay

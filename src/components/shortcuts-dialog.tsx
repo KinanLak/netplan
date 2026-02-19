@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { HelpCircleIcon } from "@hugeicons/core-free-icons";
+import { SHORTCUT_GROUP_GRID_COLUMN_COUNT } from "@/lib/constants";
 import { formatHotkey, isMac, shortcuts } from "@/lib/shortcuts";
 import {
   buildBalancedShortcutGrid,
@@ -14,7 +15,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-const orderedShortcutGroups = buildBalancedShortcutGrid(shortcutGroups, 2);
+const orderedShortcutGroups = buildBalancedShortcutGrid(
+  shortcutGroups,
+  SHORTCUT_GROUP_GRID_COLUMN_COUNT,
+);
 
 type ShortcutsDialogProps = {
   hasRightDrawerOpen: boolean;

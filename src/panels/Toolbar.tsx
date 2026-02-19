@@ -31,6 +31,14 @@ import {
 import { ShortcutHintAbsolute } from "@/components/ui/shortcut-hint";
 import { cn } from "@/lib/utils";
 import { availableDevicesCatalog } from "@/mock/availableDevices";
+import {
+  TOOLBAR_DEVICE_BUTTONS_INITIAL_STATE,
+  TOOLBAR_DEVICE_COLLISION_OFFSETS,
+  TOOLBAR_ICON_SIZE_CLASS,
+  TOOLBAR_WALL_COLOR_SELECTION_ENABLED,
+  UNDO_REDO_EVENT_NAME,
+  UNDO_REDO_FLASH_DURATION_MS,
+} from "@/lib/constants";
 import { GRID_SIZE, WALL_COLOR_ORDER, WALL_COLOR_TONES } from "@/lib/walls";
 
 interface ToolbarActionBase {
@@ -53,8 +61,6 @@ interface DrawToolbarAction extends ToolbarActionBase {
 }
 
 type ToolbarAction = DeviceToolbarAction | DrawToolbarAction;
-
-const TOOLBAR_ICON_SIZE_CLASS = "size-6";
 
 const toolbarActions: Array<ToolbarAction> = [
   {
@@ -202,22 +208,20 @@ export default function Toolbar() {
     const handler = (e: Event) => {
       const type = (e as CustomEvent<{ type: "undo" | "redo" }>).detail.type;
       setFlashType(type);
-      const timeout = setTimeout(() => setFlashType(null), 500);
+      const timeout = setTimeout(
+        () => setFlashType(null),
+        UNDO_REDO_FLASH_DURATION_MS,
+      );
       return () => clearTimeout(timeout);
     };
-    window.addEventListener("netplan:undo-redo", handler);
-    return () => window.removeEventListener("netplan:undo-redo", handler);
+    window.addEventListener(UNDO_REDO_EVENT_NAME, handler);
+    return () => window.removeEventListener(UNDO_REDO_EVENT_NAME, handler);
   }, []);
 
   // Track button elements as state so they can be read during render (refs cannot)
   const [buttonElements, setButtonElements] = useState<
     Record<DeviceType, HTMLButtonElement | null>
-  >({
-    rack: null,
-    switch: null,
-    pc: null,
-    "wall-port": null,
-  });
+  >(TOOLBAR_DEVICE_BUTTONS_INITIAL_STATE);
 
   const handleTypeClick = (type: DeviceType) => {
     const nextType = selectedType === type ? null : type;
@@ -300,20 +304,7 @@ export default function Toolbar() {
     let finalPosition = position;
     if (hasCollision) {
       // Try positions in a spiral pattern
-      const offsets = [
-        { x: 100, y: 0 },
-        { x: 0, y: 100 },
-        { x: -100, y: 0 },
-        { x: 0, y: -100 },
-        { x: 100, y: 100 },
-        { x: -100, y: 100 },
-        { x: -100, y: -100 },
-        { x: 100, y: -100 },
-        { x: 200, y: 0 },
-        { x: 0, y: 200 },
-      ];
-
-      for (const offset of offsets) {
+      for (const offset of TOOLBAR_DEVICE_COLLISION_OFFSETS) {
         const newPos = {
           x: Math.round((snappedX + offset.x) / GRID_SIZE) * GRID_SIZE,
           y: Math.round((snappedY + offset.y) / GRID_SIZE) * GRID_SIZE,
@@ -370,7 +361,7 @@ export default function Toolbar() {
     activeDrawTool === "wall-brush" ||
     activeDrawTool === "wall-erase" ||
     activeDrawTool === "room";
-  const wallColorSelectionEnabled = false;
+  const wallColorSelectionEnabled = TOOLBAR_WALL_COLOR_SELECTION_ENABLED;
   const isActionActive = (action: ToolbarAction) => {
     if (action.group === "draw") {
       return activeDrawTool === action.tool;

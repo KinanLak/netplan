@@ -2,6 +2,11 @@ import { useEffect, useState } from "react";
 import { useHotkeys, useHotkeysContext } from "react-hotkeys-hook";
 import type { Options } from "react-hotkeys-hook";
 import type { ShortcutAction, ShortcutScope } from "@/lib/shortcuts";
+import {
+  OVERLAY_MODIFIER_KEY_BY_PLATFORM,
+  OVERLAY_VISIBILITY_DELAY_MS,
+  SHORTCUT_FORM_TAGS,
+} from "@/lib/constants";
 import { getHotkey, getScope, isMac } from "@/lib/shortcuts";
 
 export { useHotkeysContext };
@@ -23,7 +28,9 @@ type HotkeyHandler = (event?: KeyboardEvent) => void;
 
 const DEFAULT_SHORTCUT_OPTIONS: UseShortcutOptions = {};
 const DEFAULT_HOTKEY_DIRECT_OPTIONS: UseHotkeyDirectOptions = {};
-const OVERLAY_MODIFIER_KEY = isMac ? "Meta" : "Control";
+const OVERLAY_MODIFIER_KEY = isMac
+  ? OVERLAY_MODIFIER_KEY_BY_PLATFORM.mac
+  : OVERLAY_MODIFIER_KEY_BY_PLATFORM.nonMac;
 
 /**
  * Hook to register a keyboard shortcut by action name
@@ -48,9 +55,7 @@ export function useShortcut(
     // Use produced characters instead of physical key codes so letter shortcuts
     // stay stable across keyboard layouts (e.g. W stays "w" on AZERTY/QWERTY).
     useKey: true,
-    enableOnFormTags: enableOnFormTags
-      ? ["INPUT", "TEXTAREA", "SELECT"]
-      : false,
+    enableOnFormTags: enableOnFormTags ? SHORTCUT_FORM_TAGS : false,
   };
 
   useHotkeys(
@@ -83,9 +88,7 @@ export function useHotkeyDirect(
     scopes: [scope],
     enabled,
     preventDefault: true,
-    enableOnFormTags: enableOnFormTags
-      ? ["INPUT", "TEXTAREA", "SELECT"]
-      : false,
+    enableOnFormTags: enableOnFormTags ? SHORTCUT_FORM_TAGS : false,
   };
 
   useHotkeys(
@@ -126,7 +129,7 @@ export function useDrawerScope(isOpen: boolean) {
  * Ctrl on Windows/Linux, Cmd on macOS
  * Used for showing shortcuts overlay (Linear-style)
  */
-export function useOptionHeld(delay = 50) {
+export function useOptionHeld(delay = OVERLAY_VISIBILITY_DELAY_MS) {
   const [isHeld, setIsHeld] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
 
