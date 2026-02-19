@@ -50,3 +50,4 @@ React 19, TypeScript, Vite, TailwindCSS V4, Zustand (persisted to `localStorage`
 ## General guidelines
 
 - This is an unreleased project, all code must be canonical.
+- React Compiler is enabled, so useMemo aren't needed since all components are automatically memoized.
