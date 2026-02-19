@@ -58,8 +58,9 @@ export function WallOverlay({
     activeDrawTool === "wall-erase"
       ? floorWallRects.filter((item) => erasePreviewKeySet.has(item.key))
       : [];
+  const hasErasePreview = erasePreviewRects.length > 0;
   const eraseHoverRect =
-    activeDrawTool === "wall-erase" && hoverSnapPoint
+    activeDrawTool === "wall-erase" && hoverSnapPoint && !hasErasePreview
       ? {
           x: hoverSnapPoint.x - GRID_SIZE / 2,
           y: hoverSnapPoint.y - GRID_SIZE / 2,
@@ -142,9 +143,12 @@ export function WallOverlay({
               y={item.rect.y}
               width={item.rect.width}
               height={item.rect.height}
-              fill="rgba(220, 38, 38, 0.28)"
-              stroke="rgba(220, 38, 38, 0.95)"
-              strokeWidth={1.5}
+              rx={3}
+              ry={3}
+              fill="rgba(220, 38, 38, 0.16)"
+              stroke="rgba(220, 38, 38, 0.98)"
+              strokeWidth={1.6}
+              className="animate-pulse"
             />
           ))}
 
