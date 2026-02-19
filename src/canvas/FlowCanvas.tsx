@@ -156,6 +156,7 @@ export default function FlowCanvas() {
   };
 
   const isWallDeleteTool = activeDrawTool === "wall-erase";
+  const isWallBrushTool = activeDrawTool === "wall-brush";
   const isWallDebugPanelVisible =
     isEditMode && activeDrawTool === "wall" && isWallDebugVisible;
   const wallHintPoint =
@@ -220,7 +221,7 @@ export default function FlowCanvas() {
         fitViewOptions={{ padding: 0.2 }}
         minZoom={0.1}
         maxZoom={2}
-        panOnDrag={activeDrawTool === "wall-erase" ? false : true}
+        panOnDrag={isWallDeleteTool || isWallBrushTool ? false : true}
         deleteKeyCode={null}
         nodesDraggable={canEditDevices}
         className={cn(

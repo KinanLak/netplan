@@ -67,6 +67,15 @@ export function WallOverlay({
           height: GRID_SIZE,
         }
       : null;
+  const brushHoverRect =
+    activeDrawTool === "wall-brush" && hoverSnapPoint
+      ? {
+          x: hoverSnapPoint.x - GRID_SIZE / 2,
+          y: hoverSnapPoint.y - GRID_SIZE / 2,
+          width: GRID_SIZE,
+          height: GRID_SIZE,
+        }
+      : null;
 
   return (
     <ViewportPortal>
@@ -149,6 +158,21 @@ export function WallOverlay({
               ry={3}
               fill="rgba(220, 38, 38, 0.16)"
               stroke="rgba(220, 38, 38, 0.98)"
+              strokeWidth={1.6}
+              className="animate-pulse"
+            />
+          ) : null}
+
+          {brushHoverRect ? (
+            <rect
+              x={brushHoverRect.x}
+              y={brushHoverRect.y}
+              width={brushHoverRect.width}
+              height={brushHoverRect.height}
+              rx={3}
+              ry={3}
+              fill={paneHoverFillColor}
+              stroke={paneHoverStrokeColor}
               strokeWidth={1.6}
               className="animate-pulse"
             />

@@ -96,10 +96,18 @@ export const useWallToolsController = (): WallToolsController => {
   const eraseStrokeLastSample = useRef<PointerSample | null>(null);
   const isEraseStrokeActive = useRef(false);
   const ignoreNextEraseClick = useRef(false);
+  const brushStrokeLastSample = useRef<PointerSample | null>(null);
+  const isBrushStrokeActive = useRef(false);
+  const ignoreNextBrushClick = useRef(false);
 
   const clearEraseStrokeState = useCallback(() => {
     eraseStrokeLastSample.current = null;
     isEraseStrokeActive.current = false;
+  }, []);
+
+  const clearBrushStrokeState = useCallback(() => {
+    brushStrokeLastSample.current = null;
+    isBrushStrokeActive.current = false;
   }, []);
 
   const clearDrawState = useCallback(() => {
@@ -112,8 +120,10 @@ export const useWallToolsController = (): WallToolsController => {
     setDrawMessage(null);
     setErasePreviewKeys([]);
     clearEraseStrokeState();
+    clearBrushStrokeState();
     ignoreNextEraseClick.current = false;
-  }, [clearEraseStrokeState]);
+    ignoreNextBrushClick.current = false;
+  }, [clearBrushStrokeState, clearEraseStrokeState]);
 
   const getPointerSample = useCallback(
     (event: React.MouseEvent): PointerSample => {
@@ -136,6 +146,7 @@ export const useWallToolsController = (): WallToolsController => {
       !pointerPreview ||
       !currentFloorId ||
       activeDrawTool === "device" ||
+      activeDrawTool === "wall-brush" ||
       activeDrawTool === "wall-erase"
     ) {
       return [];
@@ -186,16 +197,19 @@ export const useWallToolsController = (): WallToolsController => {
 
   useEffect(() => {
     clearEraseStrokeState();
+    clearBrushStrokeState();
     ignoreNextEraseClick.current = false;
-  }, [clearEraseStrokeState, drawContextKey]);
+    ignoreNextBrushClick.current = false;
+  }, [clearBrushStrokeState, clearEraseStrokeState, drawContextKey]);
 
   useEffect(() => {
     const handlePointerRelease = () => {
-      if (activeDrawTool !== "wall-erase") {
+      if (activeDrawTool !== "wall-erase" && activeDrawTool !== "wall-brush") {
         return;
       }
 
       clearEraseStrokeState();
+      clearBrushStrokeState();
     };
 
     window.addEventListener("mouseup", handlePointerRelease);
@@ -205,7 +219,7 @@ export const useWallToolsController = (): WallToolsController => {
       window.removeEventListener("mouseup", handlePointerRelease);
       window.removeEventListener("blur", handlePointerRelease);
     };
-  }, [activeDrawTool, clearEraseStrokeState]);
+  }, [activeDrawTool, clearBrushStrokeState, clearEraseStrokeState]);
 
   const cancelTool = useCallback(() => {
     setActiveDrawTool("device");
@@ -218,6 +232,18 @@ export const useWallToolsController = (): WallToolsController => {
       setErasePreviewKeys(preview.affectedKeys);
     },
     [previewEraseWallAtPointer],
+  );
+
+  const applyBrushAtPoint = useCallback(
+    (floorId: string, snappedPoint: Position) => {
+      return addWallLine({
+        floorId,
+        start: snappedPoint,
+        end: { x: snappedPoint.x + 1, y: snappedPoint.y },
+        color: selectedWallColor,
+      });
+    },
+    [addWallLine, selectedWallColor],
   );
 
   const handlePaneMouseMove = useCallback(
@@ -276,6 +302,49 @@ export const useWallToolsController = (): WallToolsController => {
         return;
       }
 
+      if (activeDrawTool === "wall-brush") {
+        setHoverSnapPoint(sample.snappedPoint);
+        setPointerPreview(null);
+        setErasePreviewKeys((prev) => (prev.length === 0 ? prev : []));
+
+        const isPrimaryButtonPressed = (event.buttons & 1) === 1;
+        if (!isPrimaryButtonPressed) {
+          clearBrushStrokeState();
+          return;
+        }
+
+        if (!isBrushStrokeActive.current) {
+          isBrushStrokeActive.current = true;
+          brushStrokeLastSample.current = sample;
+          applyBrushAtPoint(currentFloorId, sample.snappedPoint);
+          ignoreNextBrushClick.current = true;
+          return;
+        }
+
+        const previous = brushStrokeLastSample.current;
+        if (!previous) {
+          brushStrokeLastSample.current = sample;
+          applyBrushAtPoint(currentFloorId, sample.snappedPoint);
+          ignoreNextBrushClick.current = true;
+          return;
+        }
+
+        const strokeResult = addWallLine({
+          floorId: currentFloorId,
+          start: previous.snappedPoint,
+          end: sample.snappedPoint,
+          color: selectedWallColor,
+        });
+
+        if (strokeResult.changed) {
+          setDrawMessage(null);
+        }
+
+        ignoreNextBrushClick.current = true;
+        brushStrokeLastSample.current = sample;
+        return;
+      }
+
       setErasePreviewKeys((prev) => (prev.length === 0 ? prev : []));
 
       if (drawAnchor) {
@@ -293,13 +362,17 @@ export const useWallToolsController = (): WallToolsController => {
     },
     [
       activeDrawTool,
+      applyBrushAtPoint,
       applyErasePreview,
+      clearBrushStrokeState,
       clearEraseStrokeState,
       currentFloorId,
       drawAnchor,
+      addWallLine,
       eraseWallStroke,
       getPointerSample,
       isEditMode,
+      selectedWallColor,
     ],
   );
 
@@ -337,6 +410,28 @@ export const useWallToolsController = (): WallToolsController => {
           snappedPoint: sample.snappedPoint,
         });
 
+        return true;
+      }
+
+      if (activeDrawTool === "wall-brush") {
+        if (ignoreNextBrushClick.current) {
+          ignoreNextBrushClick.current = false;
+          return true;
+        }
+
+        const brushResult = applyBrushAtPoint(
+          currentFloorId,
+          sample.snappedPoint,
+        );
+
+        if (brushResult.reason === "collision-with-device") {
+          setDrawMessage("Mur refuse: collision avec un device.");
+        } else if (brushResult.changed) {
+          setDrawMessage(null);
+        }
+
+        setHoverSnapPoint(sample.snappedPoint);
+        setPointerPreview(null);
         return true;
       }
 
@@ -407,6 +502,7 @@ export const useWallToolsController = (): WallToolsController => {
       activeDrawTool,
       addWallLine,
       addWallRoom,
+      applyBrushAtPoint,
       applyErasePreview,
       currentFloorId,
       drawAnchor,
@@ -436,7 +532,11 @@ export const useWallToolsController = (): WallToolsController => {
       return "canvas-cursor-default";
     }
 
-    if (activeDrawTool === "room" || activeDrawTool === "wall-erase") {
+    if (
+      activeDrawTool === "room" ||
+      activeDrawTool === "wall-brush" ||
+      activeDrawTool === "wall-erase"
+    ) {
       return "wall-cursor-crosshair";
     }
 

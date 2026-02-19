@@ -40,6 +40,7 @@ export type ShortcutAction =
   | "floor-9"
   // Tools
   | "tool-wall"
+  | "tool-wall-brush"
   | "tool-wall-erase"
   | "tool-room"
   | "tool-rack"
@@ -231,8 +232,14 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
     description: "Outil de dessin de salle",
     scope: "canvas",
   },
+  "tool-wall-brush": {
+    hotkey: ["3", '"', "b"],
+    label: "Pinceau murs",
+    description: "Peindre des blocs de mur",
+    scope: "canvas",
+  },
   "tool-wall-erase": {
-    hotkey: ["3", '"', "x"],
+    hotkey: ["4", "'", "x"],
     label: "Suppression murs",
     description: "Effacer des blocs de mur",
     scope: "canvas",
@@ -240,25 +247,25 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
 
   // Tools - Devices
   "tool-rack": {
-    hotkey: ["4", "'", "r"],
+    hotkey: ["5", "(", "r"],
     label: "Rack",
     description: "Ajouter un rack serveur",
     scope: "canvas",
   },
   "tool-switch": {
-    hotkey: ["5", "(", "s"],
+    hotkey: ["6", "-", "s"],
     label: "Switch",
     description: "Ajouter un switch réseau",
     scope: "canvas",
   },
   "tool-pc": {
-    hotkey: ["6", "-", "p"],
+    hotkey: ["7", "è", "p"],
     label: "PC",
     description: "Ajouter un poste de travail",
     scope: "canvas",
   },
   "tool-wall-port": {
-    hotkey: ["7", "è", "o"],
+    hotkey: ["8", "_", "o"],
     label: "Prise",
     description: "Ajouter une prise murale",
     scope: "canvas",

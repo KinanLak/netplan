@@ -9,7 +9,7 @@ import {
   PlugSocketIcon,
   ServerStack03Icon,
 } from "@hugeicons/core-free-icons";
-import { Check, Eraser } from "lucide-react";
+import { Check, Eraser, Paintbrush } from "lucide-react";
 import type { Device, DeviceType, DrawTool } from "@/types/map";
 import type { AvailableDevice } from "@/mock/availableDevices";
 import type { ShortcutAction } from "@/lib/shortcuts";
@@ -49,7 +49,7 @@ interface DeviceToolbarAction extends ToolbarActionBase {
 
 interface DrawToolbarAction extends ToolbarActionBase {
   group: "draw";
-  tool: Extract<DrawTool, "wall" | "wall-erase" | "room">;
+  tool: Extract<DrawTool, "wall" | "wall-brush" | "wall-erase" | "room">;
 }
 
 type ToolbarAction = DeviceToolbarAction | DrawToolbarAction;
@@ -88,6 +88,15 @@ const toolbarActions: Array<ToolbarAction> = [
         strokeWidth={1.5}
       />
     ),
+  },
+  {
+    group: "draw",
+    id: "wall-brush",
+    tool: "wall-brush",
+    label: "Pinceau",
+    shortcut: "tool-wall-brush",
+    title: "Peindre des murs",
+    icon: <Paintbrush className={TOOLBAR_ICON_SIZE_CLASS} />,
   },
   {
     group: "draw",
@@ -220,7 +229,7 @@ export default function Toolbar() {
   };
 
   const handleDrawToolClick = (
-    tool: Extract<DrawTool, "wall" | "wall-erase" | "room">,
+    tool: Extract<DrawTool, "wall" | "wall-brush" | "wall-erase" | "room">,
   ) => {
     if (!currentFloorId) return;
 
@@ -249,6 +258,9 @@ export default function Toolbar() {
     enabled: isEditMode && !!currentFloorId,
   });
   useShortcut("tool-wall-erase", () => handleDrawToolClick("wall-erase"), {
+    enabled: isEditMode && !!currentFloorId,
+  });
+  useShortcut("tool-wall-brush", () => handleDrawToolClick("wall-brush"), {
     enabled: isEditMode && !!currentFloorId,
   });
   useShortcut("tool-room", () => handleDrawToolClick("room"), {
@@ -355,6 +367,7 @@ export default function Toolbar() {
 
   const showWallColors =
     activeDrawTool === "wall" ||
+    activeDrawTool === "wall-brush" ||
     activeDrawTool === "wall-erase" ||
     activeDrawTool === "room";
   const wallColorSelectionEnabled = false;

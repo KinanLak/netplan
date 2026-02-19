@@ -59,14 +59,11 @@ const normalizeActiveDrawTool = (tool: unknown): MapStore["activeDrawTool"] => {
   if (
     tool === "device" ||
     tool === "wall" ||
+    tool === "wall-brush" ||
     tool === "wall-erase" ||
     tool === "room"
   ) {
     return tool;
-  }
-
-  if (tool === "wall-brush") {
-    return "wall-erase";
   }
 
   return "device";

@@ -1,6 +1,6 @@
 // Device types for network equipment
 export type DeviceType = "rack" | "switch" | "pc" | "wall-port";
-export type DrawTool = "device" | "wall" | "wall-erase" | "room";
+export type DrawTool = "device" | "wall" | "wall-brush" | "wall-erase" | "room";
 export type WallColor = "sand" | "concrete" | "slate";
 
 export type DeviceStatus = "up" | "down" | "unknown";
