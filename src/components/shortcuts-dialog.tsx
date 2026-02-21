@@ -72,7 +72,7 @@ export function ShortcutsDialog({ hasRightDrawerOpen }: ShortcutsDialogProps) {
         <button
           onClick={() => setIsOpen(true)}
           className={`absolute bottom-4 z-30 flex h-10 w-10 items-center justify-center rounded-full transition-[right] hover:border-accent hover:bg-muted hover:shadow-lg ${
-            hasRightDrawerOpen ? "right-[calc(20rem+1rem)]" : "right-4"
+            hasRightDrawerOpen ? "right-84" : "right-4"
           }`}
           title="Afficher les raccourcis clavier"
         >
