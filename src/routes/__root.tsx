@@ -10,6 +10,7 @@ import { TanStackDevtools } from "@tanstack/react-devtools";
 import { useEffect } from "react";
 import type { ReactNode } from "react";
 import appCss from "@/styles.css?url";
+import logoCss from "@/netplan-logo.css?url";
 
 export const Route = createRootRoute({
   head: () => ({
@@ -20,6 +21,7 @@ export const Route = createRootRoute({
     ],
     links: [
       { rel: "stylesheet", href: appCss },
+      { rel: "stylesheet", href: logoCss },
       { rel: "icon", type: "image/svg+xml", href: "/favicon.ico" },
     ],
   }),

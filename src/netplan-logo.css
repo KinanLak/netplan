@@ -1,0 +1,103 @@
+.netplan-logo {
+  --netplan-logo-size: 26px;
+
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  isolation: isolate;
+
+  padding-block: calc(var(--netplan-logo-size) * 0.24);
+  padding-inline: calc(var(--netplan-logo-size) * 0.44);
+
+  font-size: var(--netplan-logo-size);
+  font-weight: 780;
+  line-height: 0.85;
+  letter-spacing: -0.036em;
+}
+
+.netplan-logo::before {
+  content: none;
+}
+
+.netplan-logo::after {
+  content: "";
+  position: absolute;
+  inset: -35% -10%;
+  z-index: -1;
+  pointer-events: none;
+
+  filter: blur(calc(var(--netplan-logo-size) * 0.4));
+  opacity: 0.75;
+}
+
+.netplan-logo__wordmark {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: baseline;
+  color: rgb(238 245 255);
+  text-shadow: 0 1px 0 rgb(0 0 0 / 44%);
+}
+
+.netplan-logo__letter {
+  --netplan-letter-glow: 0;
+  --netplan-letter-shift: calc(
+    var(--netplan-logo-size) * (0.002 + var(--netplan-letter-glow) * 0.018)
+  );
+  --netplan-letter-blur: calc(
+    var(--netplan-logo-size) * (0.002 + var(--netplan-letter-glow) * 0.028)
+  );
+
+  position: relative;
+  display: inline-block;
+  color: transparent;
+  background: linear-gradient(
+    122deg,
+    rgb(129 252 255) 0%,
+    rgb(113 190 255) 40%,
+    rgb(237 251 255) 72%,
+    rgb(255 211 247) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  text-shadow:
+    0 0 calc(var(--netplan-logo-size) * (var(--netplan-letter-glow) * 0.26))
+      rgb(137 223 255 / 38%),
+    0 0 calc(var(--netplan-logo-size) * (var(--netplan-letter-glow) * 0.12))
+      rgb(255 213 246 / 22%);
+  filter: drop-shadow(
+    0 0 calc(var(--netplan-logo-size) * (var(--netplan-letter-glow) * 0.2))
+      rgb(124 214 255 / 34%)
+  );
+}
+
+.netplan-logo__letter::before,
+.netplan-logo__letter::after {
+  content: attr(data-letter);
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+
+.netplan-logo__letter::before {
+  color: rgb(90 247 255);
+  opacity: calc(0.01 + var(--netplan-letter-glow) * 0.46);
+  transform: translate(
+    calc(var(--netplan-letter-shift) * -1),
+    calc(var(--netplan-logo-size) * -0.004)
+  );
+  filter: blur(var(--netplan-letter-blur));
+}
+
+.netplan-logo__letter::after {
+  color: rgb(255 117 230);
+  opacity: calc(0.01 + var(--netplan-letter-glow) * 0.42);
+  transform: translate(
+    var(--netplan-letter-shift),
+    calc(var(--netplan-logo-size) * 0.004)
+  );
+  filter: blur(var(--netplan-letter-blur));
+}

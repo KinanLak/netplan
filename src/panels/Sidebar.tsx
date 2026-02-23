@@ -12,6 +12,7 @@ import { isMac } from "@/lib/shortcuts";
 import { useTemporalStore, useUndoRedo } from "@/hooks/use-undo-redo";
 import { Button } from "@/components/ui/button";
 import { ShortcutHintKeys } from "@/components/ui/shortcut-hint";
+import { NetplanLogo } from "@/components/netplan-logo";
 import {
   Sidebar,
   SidebarContent,
@@ -70,11 +71,9 @@ export default function AppSidebar() {
       {/* Header */}
       <SidebarHeader className="border-b px-4 py-4">
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold tracking-tight">
-              <span className="text-primary">Net</span>Plan
-            </h1>
-          </div>
+          <h1 className="bg-[oklch(0.21_0_0)] rounded-sm pb-0.5 leading-none dark:bg-transparent ">
+            <NetplanLogo size={34} />
+          </h1>
           <ModeToggle />
         </div>
       </SidebarHeader>
