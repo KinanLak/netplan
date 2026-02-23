@@ -71,7 +71,7 @@ export default function AppSidebar() {
       {/* Header */}
       <SidebarHeader className="border-b px-4 py-4">
         <div className="flex items-center justify-between">
-          <h1 className="rounded-sm bg-[oklch(0.21_0_0)] pb-0.5 leading-none dark:bg-transparent">
+          <h1 className="pb-0.5 rounded-sm bg-transparent leading-none">
             <NetplanLogo size={34} />
           </h1>
           <ModeToggle />

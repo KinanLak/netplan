@@ -27,6 +27,7 @@ export function NetplanLogo({ size = 26, className }: NetplanLogoProps) {
 
           const letterStyle = {
             "--netplan-letter-glow": glowStrength,
+            "--netplan-letter-index": index,
           } as CSSProperties;
 
           return (
