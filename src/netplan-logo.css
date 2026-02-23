@@ -138,6 +138,10 @@
   opacity: 0.9;
 }
 
+.netplan-logo:hover {
+  cursor: pointer;
+}
+
 /* ── Hover: boosted golden glow + prismatic shimmer ── */
 
 .netplan-logo:hover .netplan-logo__letter {
@@ -209,4 +213,103 @@
       0% 0,
       0 0;
   }
+}
+
+/* ═══════════════════════════════════════════════════════ */
+/* ── Light theme: dark-steel variant                   ── */
+/* ═══════════════════════════════════════════════════════ */
+
+.light .netplan-logo__wordmark {
+  color: rgb(40 42 48);
+  text-shadow: 0 1px 0 rgb(255 255 255 / 40%);
+}
+
+.light .netplan-logo__letter {
+  background: linear-gradient(
+    122deg,
+    rgb(55 58 68) 0%,
+    rgb(30 32 40) 42%,
+    rgb(85 90 105) 74%,
+    rgb(22 24 32) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  text-shadow:
+    0 0 calc(var(--netplan-logo-size) * (var(--netplan-letter-glow) * 0.12))
+      rgb(60 65 80 / 20%),
+    0 0 calc(var(--netplan-logo-size) * (var(--netplan-letter-glow) * 0.06))
+      rgb(40 42 55 / 14%);
+  filter: drop-shadow(
+    0 0 calc(var(--netplan-logo-size) * (var(--netplan-letter-glow) * 0.08))
+      rgb(50 55 70 / 18%)
+  );
+}
+
+.light .netplan-logo__letter::before,
+.light .netplan-logo__letter::after {
+  mix-blend-mode: multiply;
+}
+
+.light .netplan-logo__letter::before {
+  color: rgb(70 80 100);
+  opacity: calc(0.01 + var(--netplan-letter-glow) * 0.22);
+}
+
+.light .netplan-logo__letter::after {
+  color: rgb(45 48 60);
+  opacity: calc(0.01 + var(--netplan-letter-glow) * 0.18);
+}
+
+/* ── Light hover: gradient underline ── */
+
+.light .netplan-logo:hover::before {
+  opacity: 1;
+}
+
+/* ── Light hover: boosted glow + prismatic shimmer ── */
+
+.light .netplan-logo:hover .netplan-logo__letter {
+  background:
+    linear-gradient(
+      90deg,
+      transparent 20%,
+      rgb(60 180 255 / 0.28) 35%,
+      rgb(100 255 160 / 0.32) 42%,
+      rgb(255 255 255 / 0.5) 50%,
+      rgb(255 200 60 / 0.32) 58%,
+      rgb(255 60 80 / 0.28) 65%,
+      transparent 80%
+    ),
+    linear-gradient(
+      122deg,
+      rgb(55 58 68) 0%,
+      rgb(30 32 40) 42%,
+      rgb(85 90 105) 74%,
+      rgb(22 24 32) 100%
+    );
+  -webkit-background-clip: text;
+  background-clip: text;
+  background-size:
+    250% 100%,
+    100% 100%;
+  animation: netplan-shimmer 0.7s
+    calc(var(--netplan-letter-index) * 0.045s + 0.1s) ease-out forwards;
+  filter: drop-shadow(
+      0 0 calc(var(--netplan-logo-size) * 0.1) rgb(60 65 80 / 28%)
+    )
+    drop-shadow(0 0 calc(var(--netplan-logo-size) * 0.05) rgb(40 42 55 / 20%));
+}
+
+/* ── Light hover: chromatic aberration – cyan fringe ── */
+
+.light .netplan-logo:hover .netplan-logo__letter::before {
+  color: rgb(40 140 220);
+  opacity: 0.4;
+}
+
+/* ── Light hover: chromatic aberration – red/magenta fringe ── */
+
+.light .netplan-logo:hover .netplan-logo__letter::after {
+  color: rgb(220 50 80);
+  opacity: 0.35;
 }

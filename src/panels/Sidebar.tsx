@@ -6,6 +6,7 @@ import {
   SolidLine01Icon,
   UndoIcon,
 } from "@hugeicons/core-free-icons";
+import { Link } from "@tanstack/react-router";
 import { useMapStore } from "@/store/useMapStore";
 import { cn } from "@/lib/utils";
 import { isMac } from "@/lib/shortcuts";
@@ -69,10 +70,12 @@ export default function AppSidebar() {
   return (
     <Sidebar collapsible="none" className="border-r">
       {/* Header */}
-      <SidebarHeader className="border-b px-4 py-4">
+      <SidebarHeader className="border-b pl-0.5 pr-4 py-4">
         <div className="flex items-center justify-between">
-          <h1 className="pb-0.5 rounded-sm bg-transparent leading-none">
-            <NetplanLogo size={34} />
+          <h1 className="rounded-sm bg-transparent pb-0.5 leading-none">
+            <Link to="/" aria-label="Retour a l'accueil">
+              <NetplanLogo size={34} />
+            </Link>
           </h1>
           <ModeToggle />
         </div>
