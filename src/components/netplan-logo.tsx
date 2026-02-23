@@ -22,7 +22,8 @@ export function NetplanLogo({ size = 26, className }: NetplanLogoProps) {
       <span className="netplan-logo__wordmark" aria-hidden="true">
         {LOGO_LETTERS.map((letter, index) => {
           const ratio = index / (LOGO_LETTERS.length - 1);
-          const glowStrength = Math.pow(ratio, 2.2).toFixed(3);
+          const easedRatio = Math.pow(ratio, 1.35);
+          const glowStrength = (0.12 + easedRatio * 0.62).toFixed(3);
 
           const letterStyle = {
             "--netplan-letter-glow": glowStrength,

@@ -7,6 +7,7 @@
   justify-content: center;
   overflow: hidden;
   isolation: isolate;
+  user-select: none;
 
   padding-block: calc(var(--netplan-logo-size) * 0.24);
   padding-inline: calc(var(--netplan-logo-size) * 0.44);
@@ -37,7 +38,7 @@
   z-index: 1;
   display: inline-flex;
   align-items: baseline;
-  color: rgb(238 245 255);
+  color: rgb(255 239 204);
   text-shadow: 0 1px 0 rgb(0 0 0 / 44%);
 }
 
@@ -55,21 +56,21 @@
   color: transparent;
   background: linear-gradient(
     122deg,
-    rgb(129 252 255) 0%,
-    rgb(113 190 255) 40%,
-    rgb(237 251 255) 72%,
-    rgb(255 211 247) 100%
+    rgb(231 188 72) 0%,
+    rgb(205 154 38) 42%,
+    rgb(245 210 126) 74%,
+    rgb(170 115 32) 100%
   );
   -webkit-background-clip: text;
   background-clip: text;
   text-shadow:
-    0 0 calc(var(--netplan-logo-size) * (var(--netplan-letter-glow) * 0.26))
-      rgb(137 223 255 / 38%),
-    0 0 calc(var(--netplan-logo-size) * (var(--netplan-letter-glow) * 0.12))
-      rgb(255 213 246 / 22%);
+    0 0 calc(var(--netplan-logo-size) * (var(--netplan-letter-glow) * 0.22))
+      rgb(224 172 56 / 42%),
+    0 0 calc(var(--netplan-logo-size) * (var(--netplan-letter-glow) * 0.1))
+      rgb(190 131 45 / 30%);
   filter: drop-shadow(
-    0 0 calc(var(--netplan-logo-size) * (var(--netplan-letter-glow) * 0.2))
-      rgb(124 214 255 / 34%)
+    0 0 calc(var(--netplan-logo-size) * (var(--netplan-letter-glow) * 0.16))
+      rgb(201 148 42 / 38%)
   );
 }
 
@@ -83,8 +84,8 @@
 }
 
 .netplan-logo__letter::before {
-  color: rgb(90 247 255);
-  opacity: calc(0.01 + var(--netplan-letter-glow) * 0.46);
+  color: rgb(242 202 102);
+  opacity: calc(0.01 + var(--netplan-letter-glow) * 0.4);
   transform: translate(
     calc(var(--netplan-letter-shift) * -1),
     calc(var(--netplan-logo-size) * -0.004)
@@ -93,8 +94,8 @@
 }
 
 .netplan-logo__letter::after {
-  color: rgb(255 117 230);
-  opacity: calc(0.01 + var(--netplan-letter-glow) * 0.42);
+  color: rgb(198 128 46);
+  opacity: calc(0.01 + var(--netplan-letter-glow) * 0.36);
   transform: translate(
     var(--netplan-letter-shift),
     calc(var(--netplan-logo-size) * 0.004)
