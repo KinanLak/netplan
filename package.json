@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
-    "lint": "eslint . --fix --concurrency=auto --cache --cache-location node_modules/.cache/eslint --cache-strategy content",
+    "lint": "eslint . --fix --cache --cache-location node_modules/.cache/eslint --cache-strategy content",
     "format": "prettier --write . --log-level warn --cache --cache-location node_modules/.cache/prettier",
     "tsc": "tsc --noEmit --pretty",
     "check": "bun run tsc && bun run lint && bun run format"
