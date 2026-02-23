@@ -2,7 +2,7 @@
 
 ## Tooling rules
 
-- Always use Context7 MCP for library/API docs, code generation, or configuration — without being asked.
+- You can use Context7 MCP for library/API docs, code generation, or configuration, without being asked.
 - Run `bun run check` (tsc + ESLint + Prettier) **after every code change**.
 - **Bun only** (not npm/yarn): `bun run dev`, `bun run build`, `bun run preview`.
 - Path alias: `@/` → `src/`.
@@ -10,21 +10,6 @@
 ## Tech stack
 
 React 19, TypeScript, Vite, TailwindCSS V4, Zustand (persisted to `localStorage`), @xyflow/react.
-
-## Key files
-
-| Path                                  | Role                                                                                                   |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `src/routes/index.tsx`                | App composition                                                                                        |
-| `src/store/useMapStore.ts`            | Zustand store (source of truth) — persists `devices`, `walls`, floor/building context and UI draw mode |
-| `src/types/map.ts`                    | `DeviceType` union                                                                                     |
-| `src/canvas/FlowCanvas.tsx`           | React Flow canvas — edges intentionally disabled                                                       |
-| `src/canvas/hooks/`                   | Canvas-specific hooks extracted from `FlowCanvas` logic                                                |
-| `src/walls/useWallToolsController.ts` | Wall tool orchestration (pointer, preview, commit, erase)                                              |
-| `src/walls/engine/`                   | Wall command engine (pure wall add/erase/preview logic)                                                |
-| `src/canvas/nodeTypes/`               | Node components; `index.ts` registers them                                                             |
-| `src/panels/`                         | `Toolbar.tsx` (add devices), `DeviceDrawer.tsx` (device details)                                       |
-| `src/mock/availableDevices.ts`        | Device catalog presets (including default sizes)                                                       |
 
 ## React Flow node data shape (critical)
 
@@ -49,5 +34,5 @@ React 19, TypeScript, Vite, TailwindCSS V4, Zustand (persisted to `localStorage`
 
 ## General guidelines
 
-- This is an unreleased project, all code must be canonical.
+- This is an unreleased project, all code must be canonical. Projet shape can be changed at any time, so avoid workarounds for backward compatibility.
 - React Compiler is enabled, so useMemo aren't needed since all components are automatically memoized.
