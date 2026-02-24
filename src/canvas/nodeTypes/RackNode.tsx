@@ -1,6 +1,7 @@
 import { Handle, Position } from "@xyflow/react";
 import { memo } from "react";
 import NetworkNode from "./NetworkNode";
+import { areDeviceNodePropsEqual } from "./memo";
 import type { Device, DeviceStatus } from "@/types/map";
 import type { Node, NodeProps } from "@xyflow/react";
 import { useMapStore } from "@/store/useMapStore";
@@ -57,4 +58,4 @@ function RackNode({ data, id }: NodeProps<RackNodeType>) {
   );
 }
 
-export default memo(RackNode);
+export default memo(RackNode, areDeviceNodePropsEqual);

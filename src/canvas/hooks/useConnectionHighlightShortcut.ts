@@ -1,23 +1,25 @@
 import { useCallback } from "react";
-import type { Device } from "@/types/map";
 import { useShortcut } from "@/hooks/use-shortcuts";
+import { useMapStore } from "@/store/useMapStore";
 
-interface UseConnectionHighlightShortcutParams {
-  devices: Array<Device>;
-  highlightedDeviceIds: Array<string>;
-  selectedDeviceId: string | null;
-  hoveredDeviceId: string | null;
-  setHighlightedDevices: (deviceIds: Array<string>) => void;
-}
-
-export function useConnectionHighlightShortcut({
-  devices,
-  highlightedDeviceIds,
-  selectedDeviceId,
-  hoveredDeviceId,
-  setHighlightedDevices,
-}: UseConnectionHighlightShortcutParams) {
+export function useConnectionHighlightShortcut() {
   const handleHighlightHoveredConnections = useCallback(() => {
+    const {
+      devices,
+      highlightedDeviceIds,
+      selectedDeviceId,
+      hoveredDeviceId,
+      setHighlightedDevices,
+    } = useMapStore.getState();
+
+    const canUseShortcut =
+      !selectedDeviceId &&
+      (hoveredDeviceId !== null || highlightedDeviceIds.length > 0);
+
+    if (!canUseShortcut) {
+      return;
+    }
+
     if (highlightedDeviceIds.length > 0 && !selectedDeviceId) {
       setHighlightedDevices([]);
       return;
@@ -45,17 +47,7 @@ export function useConnectionHighlightShortcut({
     }
 
     setHighlightedDevices(allIdsToHighlight);
-  }, [
-    devices,
-    highlightedDeviceIds,
-    hoveredDeviceId,
-    selectedDeviceId,
-    setHighlightedDevices,
-  ]);
+  }, []);
 
-  useShortcut("highlight-connections", handleHighlightHoveredConnections, {
-    enabled:
-      (!!hoveredDeviceId || highlightedDeviceIds.length > 0) &&
-      !selectedDeviceId,
-  });
+  useShortcut("highlight-connections", handleHighlightHoveredConnections);
 }

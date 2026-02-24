@@ -3,6 +3,7 @@ import { Handle, Position } from "@xyflow/react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ComputerIcon, UserIcon } from "@hugeicons/core-free-icons";
 import NetworkNode from "./NetworkNode";
+import { areDeviceNodePropsEqual } from "./memo";
 import type { Node, NodeProps } from "@xyflow/react";
 import type { Device, DeviceStatus } from "@/types/map";
 import { useMapStore } from "@/store/useMapStore";
@@ -78,4 +79,4 @@ function PcNode({ data, id }: NodeProps<PcNodeType>) {
   );
 }
 
-export default memo(PcNode);
+export default memo(PcNode, areDeviceNodePropsEqual);

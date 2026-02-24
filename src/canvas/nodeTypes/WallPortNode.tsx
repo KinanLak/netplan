@@ -3,6 +3,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { Handle, Position } from "@xyflow/react";
 import { memo } from "react";
 import NetworkNode from "./NetworkNode";
+import { areDeviceNodePropsEqual } from "./memo";
 import type { Node, NodeProps } from "@xyflow/react";
 import type { Device, DeviceStatus } from "@/types/map";
 import { useMapStore } from "@/store/useMapStore";
@@ -53,4 +54,4 @@ function WallPortNode({ data, id }: NodeProps<WallPortNodeType>) {
   );
 }
 
-export default memo(WallPortNode);
+export default memo(WallPortNode, areDeviceNodePropsEqual);

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import {
   Background,
   BackgroundVariant,
@@ -8,15 +8,13 @@ import {
 import { nodeTypes } from "./nodeTypes";
 import type { Node } from "@xyflow/react";
 import type { Device } from "@/types/map";
+import type { WallToolsLayerHandle } from "@/canvas/components/WallToolsLayer";
 import { useMapStore } from "@/store/useMapStore";
 import { useHotkeyDirect, useShortcut } from "@/hooks/use-shortcuts";
 import { GRID_SIZE } from "@/lib/walls";
-import { useWallToolsController } from "@/walls/useWallToolsController";
 import { cn } from "@/lib/utils";
-import { WallOverlay } from "@/canvas/components/WallOverlay";
 import { CanvasZoomControls } from "@/canvas/components/CanvasZoomControls";
-import { WallToolHelpCard } from "@/canvas/components/WallToolHelpCard";
-import { WallDebugPanel } from "@/canvas/components/WallDebugPanel";
+import { WallToolsLayer } from "@/canvas/components/WallToolsLayer";
 import { useCanvasDeviceNodes } from "@/canvas/hooks/useCanvasDeviceNodes";
 import { useCanvasDragState } from "@/canvas/hooks/useCanvasDragState";
 import { useConnectionHighlightShortcut } from "@/canvas/hooks/useConnectionHighlightShortcut";
@@ -43,21 +41,23 @@ export default function FlowCanvas() {
   const walls = useMapStore((s) => s.walls);
   const currentFloorId = useMapStore((s) => s.currentFloorId);
   const selectedDeviceId = useMapStore((s) => s.selectedDeviceId);
-  const hoveredDeviceId = useMapStore((s) => s.hoveredDeviceId);
   const isEditMode = useMapStore((s) => s.isEditMode);
-  const highlightedDeviceIds = useMapStore((s) => s.highlightedDeviceIds);
   const activeDrawTool = useMapStore((s) => s.activeDrawTool);
 
   const selectDevice = useMapStore((s) => s.selectDevice);
   const setHoveredDevice = useMapStore((s) => s.setHoveredDevice);
-  const setHighlightedDevices = useMapStore((s) => s.setHighlightedDevices);
   const updateDevicePosition = useMapStore((s) => s.updateDevicePosition);
   const checkCollision = useMapStore((s) => s.checkCollision);
   const reactFlow = useReactFlow();
-
-  const wallTools = useWallToolsController();
+  const wallToolsControllerRef = useRef<WallToolsLayerHandle | null>(null);
 
   const [isWallDebugVisible, setIsWallDebugVisible] = useState(false);
+  const [paneCursorClass, setPaneCursorClass] = useState(
+    "canvas-cursor-default",
+  );
+
+  const isWallDebugPanelVisible =
+    isEditMode && activeDrawTool === "wall" && isWallDebugVisible;
 
   const canEditDevices = isEditMode && activeDrawTool === "device";
   const floorWalls = walls.filter((wall) => wall.floorId === currentFloorId);
@@ -103,10 +103,16 @@ export default function FlowCanvas() {
     );
   });
 
-  useHotkeyDirect("escape", wallTools.cancelTool, {
-    scope: "canvas",
-    enabled: isEditMode && activeDrawTool !== "device",
-  });
+  useHotkeyDirect(
+    "escape",
+    () => {
+      wallToolsControllerRef.current?.cancelTool();
+    },
+    {
+      scope: "canvas",
+      enabled: isEditMode && activeDrawTool !== "device",
+    },
+  );
 
   useHotkeyDirect(
     FLOW_CANVAS_TOGGLE_DEBUG_HOTKEY,
@@ -119,45 +125,53 @@ export default function FlowCanvas() {
     },
   );
 
-  useConnectionHighlightShortcut({
-    devices,
-    highlightedDeviceIds,
-    selectedDeviceId,
-    hoveredDeviceId,
-    setHighlightedDevices,
-  });
+  useConnectionHighlightShortcut();
 
-  const handlePaneMouseMove = (event: React.MouseEvent) => {
-    wallTools.handlePaneMouseMove(event);
-  };
+  const handlePaneMouseMove = useCallback((event: React.MouseEvent) => {
+    wallToolsControllerRef.current?.handlePaneMouseMove(event);
+  }, []);
 
-  const handlePaneClick = (event: React.MouseEvent) => {
-    if (!currentFloorId) {
+  const handlePaneClick = useCallback(
+    (event: React.MouseEvent) => {
+      if (!currentFloorId) {
+        selectDevice(null);
+        return;
+      }
+
+      if (!isEditMode) {
+        selectDevice(null);
+        return;
+      }
+
+      if (activeDrawTool === "device") {
+        selectDevice(null);
+        return;
+      }
+
       selectDevice(null);
-      return;
-    }
+      wallToolsControllerRef.current?.handlePaneClick(event);
+    },
+    [activeDrawTool, currentFloorId, isEditMode, selectDevice],
+  );
 
-    if (!isEditMode) {
-      selectDevice(null);
-      return;
-    }
+  const handlePaneContextMenu = useCallback(
+    (event: React.MouseEvent | MouseEvent) => {
+      wallToolsControllerRef.current?.handleContextMenu(event);
+    },
+    [],
+  );
 
-    if (activeDrawTool === "device") {
-      selectDevice(null);
-      return;
-    }
+  const handleNodeContextMenu = useCallback((event: React.MouseEvent) => {
+    wallToolsControllerRef.current?.handleContextMenu(event);
+  }, []);
 
-    selectDevice(null);
-    wallTools.handlePaneClick(event);
-  };
-
-  const handlePaneContextMenu = (event: React.MouseEvent | MouseEvent) => {
-    wallTools.handleContextMenu(event);
-  };
-
-  const handleNodeContextMenu = (event: React.MouseEvent) => {
-    wallTools.handleContextMenu(event);
-  };
+  const handlePaneCursorClassChange = useCallback((nextCursorClass: string) => {
+    setPaneCursorClass((currentCursorClass) =>
+      currentCursorClass === nextCursorClass
+        ? currentCursorClass
+        : nextCursorClass,
+    );
+  }, []);
 
   const handleZoomInClick = () => {
     reactFlow.zoomIn({ duration: FLOW_CANVAS_ZOOM_DURATION_MS });
@@ -176,18 +190,6 @@ export default function FlowCanvas() {
 
   const isWallDeleteTool = activeDrawTool === "wall-erase";
   const isWallBrushTool = activeDrawTool === "wall-brush";
-  const isWallDebugPanelVisible =
-    isEditMode && activeDrawTool === "wall" && isWallDebugVisible;
-  const wallHintPoint =
-    activeDrawTool === "wall" && !wallTools.drawAnchor
-      ? wallTools.hoverSnapPoint
-      : null;
-  const theoreticalWallStartPoint =
-    activeDrawTool === "wall" ? wallTools.pointerSnapPoint : null;
-  const realWallStartPoint =
-    activeDrawTool === "wall" ? wallTools.lastWallStartPoint : null;
-  const physicalWallStartPoint =
-    activeDrawTool === "wall" ? wallTools.drawAnchor : null;
 
   const editModeHaloColor = isWallDeleteTool
     ? FLOW_CANVAS_HALO_SHADOWS.erase
@@ -244,7 +246,7 @@ export default function FlowCanvas() {
         deleteKeyCode={null}
         nodesDraggable={canEditDevices}
         className={cn(
-          wallTools.paneCursorClass,
+          paneCursorClass,
           isCursorDragging && "canvas-cursor-grabbing",
         )}
         proOptions={{ hideAttribution: true }}
@@ -256,15 +258,15 @@ export default function FlowCanvas() {
           color={FLOW_CANVAS_BACKGROUND_COLOR}
         />
 
-        <WallOverlay
+        <WallToolsLayer
+          controllerRef={wallToolsControllerRef}
           floorWalls={floorWalls}
-          previewSegments={wallTools.previewSegments}
-          erasePreviewKeys={wallTools.erasePreviewKeys}
           activeDrawTool={activeDrawTool}
-          drawAnchor={wallTools.drawAnchor}
-          hoverSnapPoint={wallTools.hoverSnapPoint}
+          isEditMode={isEditMode}
+          isWallDebugPanelVisible={isWallDebugPanelVisible}
           paneHoverFillColor={paneHoverFillColor}
           paneHoverStrokeColor={paneHoverStrokeColor}
+          onPaneCursorClassChange={handlePaneCursorClassChange}
         />
       </ReactFlow>
 
@@ -272,20 +274,6 @@ export default function FlowCanvas() {
         onZoomIn={handleZoomInClick}
         onZoomOut={handleZoomOutClick}
         onCenterViewport={handleCenterViewportClick}
-      />
-
-      <WallToolHelpCard
-        isVisible={isEditMode && activeDrawTool !== "device"}
-        drawMessage={wallTools.drawMessage}
-      />
-
-      <WallDebugPanel
-        isVisible={isWallDebugPanelVisible}
-        pointerPosition={wallTools.pointerPosition}
-        wallHintPoint={wallHintPoint}
-        theoreticalWallStartPoint={theoreticalWallStartPoint}
-        realWallStartPoint={realWallStartPoint}
-        physicalWallStartPoint={physicalWallStartPoint}
       />
 
       <div

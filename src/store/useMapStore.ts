@@ -115,11 +115,19 @@ export const useMapStore = create<MapStore>()(
         },
 
         selectDevice: (deviceId: string | null) => {
-          set({ selectedDeviceId: deviceId });
+          set((state) =>
+            state.selectedDeviceId === deviceId
+              ? state
+              : { selectedDeviceId: deviceId },
+          );
         },
 
         setHoveredDevice: (deviceId: string | null) => {
-          set({ hoveredDeviceId: deviceId });
+          set((state) =>
+            state.hoveredDeviceId === deviceId
+              ? state
+              : { hoveredDeviceId: deviceId },
+          );
         },
 
         addDevice: (deviceData: Omit<Device, "id">) => {

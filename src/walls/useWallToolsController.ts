@@ -21,6 +21,42 @@ interface PointerSample {
   snappedPoint: Position;
 }
 
+interface UseWallToolsControllerOptions {
+  trackPointerPosition?: boolean;
+}
+
+const areNullablePositionsEqual = (
+  a: Position | null,
+  b: Position | null,
+): boolean => {
+  if (!a || !b) {
+    return a === b;
+  }
+
+  return arePositionsEqual(a, b);
+};
+
+const areStringArraysEqual = (
+  current: Array<string>,
+  next: Array<string>,
+): boolean => {
+  if (current === next) {
+    return true;
+  }
+
+  if (current.length !== next.length) {
+    return false;
+  }
+
+  for (let index = 0; index < current.length; index += 1) {
+    if (current[index] !== next[index]) {
+      return false;
+    }
+  }
+
+  return true;
+};
+
 const toLineFailureMessage = (reason: WallCommandReason): string => {
   switch (reason) {
     case "invalid-line":
@@ -63,7 +99,10 @@ export interface WallToolsController {
   handleContextMenu: (event: React.MouseEvent | MouseEvent) => boolean;
 }
 
-export const useWallToolsController = (): WallToolsController => {
+export const useWallToolsController = (
+  options: UseWallToolsControllerOptions = {},
+): WallToolsController => {
+  const { trackPointerPosition = false } = options;
   const reactFlow = useReactFlow();
 
   const isEditMode = useMapStore((state) => state.isEditMode);
@@ -100,6 +139,36 @@ export const useWallToolsController = (): WallToolsController => {
   const isBrushStrokeActive = useRef(false);
   const ignoreNextBrushClick = useRef(false);
 
+  const setPointerPreviewIfChanged = useCallback((next: Position | null) => {
+    setPointerPreview((previous) =>
+      areNullablePositionsEqual(previous, next) ? previous : next,
+    );
+  }, []);
+
+  const setHoverSnapPointIfChanged = useCallback((next: Position | null) => {
+    setHoverSnapPoint((previous) =>
+      areNullablePositionsEqual(previous, next) ? previous : next,
+    );
+  }, []);
+
+  const setPointerPositionIfChanged = useCallback((next: Position | null) => {
+    setPointerPosition((previous) =>
+      areNullablePositionsEqual(previous, next) ? previous : next,
+    );
+  }, []);
+
+  const setPointerSnapPointIfChanged = useCallback((next: Position | null) => {
+    setPointerSnapPoint((previous) =>
+      areNullablePositionsEqual(previous, next) ? previous : next,
+    );
+  }, []);
+
+  const setErasePreviewKeysIfChanged = useCallback((next: Array<string>) => {
+    setErasePreviewKeys((previous) =>
+      areStringArraysEqual(previous, next) ? previous : next,
+    );
+  }, []);
+
   const clearEraseStrokeState = useCallback(() => {
     eraseStrokeLastSample.current = null;
     isEraseStrokeActive.current = false;
@@ -112,10 +181,10 @@ export const useWallToolsController = (): WallToolsController => {
 
   const clearDrawState = useCallback(() => {
     setDrawAnchor(null);
-    setPointerPreview(null);
-    setHoverSnapPoint(null);
-    setPointerPosition(null);
-    setPointerSnapPoint(null);
+    setPointerPreviewIfChanged(null);
+    setHoverSnapPointIfChanged(null);
+    setPointerPositionIfChanged(null);
+    setPointerSnapPointIfChanged(null);
     setLastWallStartPoint(null);
     setDrawMessage(null);
     setErasePreviewKeys([]);
@@ -123,7 +192,14 @@ export const useWallToolsController = (): WallToolsController => {
     clearBrushStrokeState();
     ignoreNextEraseClick.current = false;
     ignoreNextBrushClick.current = false;
-  }, [clearBrushStrokeState, clearEraseStrokeState]);
+  }, [
+    clearBrushStrokeState,
+    clearEraseStrokeState,
+    setHoverSnapPointIfChanged,
+    setPointerPositionIfChanged,
+    setPointerPreviewIfChanged,
+    setPointerSnapPointIfChanged,
+  ]);
 
   const getPointerSample = useCallback(
     (event: React.MouseEvent): PointerSample => {
@@ -229,9 +305,9 @@ export const useWallToolsController = (): WallToolsController => {
   const applyErasePreview = useCallback(
     (input: WallPointerInput) => {
       const preview = previewEraseWallAtPointer(input);
-      setErasePreviewKeys(preview.affectedKeys);
+      setErasePreviewKeysIfChanged(preview.affectedKeys);
     },
-    [previewEraseWallAtPointer],
+    [previewEraseWallAtPointer, setErasePreviewKeysIfChanged],
   );
 
   const applyBrushAtPoint = useCallback(
@@ -253,12 +329,14 @@ export const useWallToolsController = (): WallToolsController => {
       }
 
       const sample = getPointerSample(event);
-      setPointerPosition(sample.pointer);
-      setPointerSnapPoint(sample.snappedPoint);
+      if (trackPointerPosition) {
+        setPointerPositionIfChanged(sample.pointer);
+        setPointerSnapPointIfChanged(sample.snappedPoint);
+      }
 
       if (activeDrawTool === "wall-erase") {
-        setHoverSnapPoint(sample.snappedPoint);
-        setPointerPreview(null);
+        setHoverSnapPointIfChanged(sample.snappedPoint);
+        setPointerPreviewIfChanged(null);
 
         applyErasePreview({
           floorId: currentFloorId,
@@ -303,8 +381,8 @@ export const useWallToolsController = (): WallToolsController => {
       }
 
       if (activeDrawTool === "wall-brush") {
-        setHoverSnapPoint(sample.snappedPoint);
-        setPointerPreview(null);
+        setHoverSnapPointIfChanged(sample.snappedPoint);
+        setPointerPreviewIfChanged(null);
         setErasePreviewKeys((prev) => (prev.length === 0 ? prev : []));
 
         const isPrimaryButtonPressed = (event.buttons & 1) === 1;
@@ -348,17 +426,17 @@ export const useWallToolsController = (): WallToolsController => {
       setErasePreviewKeys((prev) => (prev.length === 0 ? prev : []));
 
       if (drawAnchor) {
-        setPointerPreview(sample.snappedPoint);
+        setPointerPreviewIfChanged(sample.snappedPoint);
       } else {
-        setPointerPreview(null);
+        setPointerPreviewIfChanged(null);
       }
 
       if (activeDrawTool === "wall" && !drawAnchor) {
-        setHoverSnapPoint(sample.snappedPoint);
+        setHoverSnapPointIfChanged(sample.snappedPoint);
         return;
       }
 
-      setHoverSnapPoint(null);
+      setHoverSnapPointIfChanged(null);
     },
     [
       activeDrawTool,
@@ -372,7 +450,12 @@ export const useWallToolsController = (): WallToolsController => {
       eraseWallStroke,
       getPointerSample,
       isEditMode,
+      setHoverSnapPointIfChanged,
+      setPointerPositionIfChanged,
+      setPointerPreviewIfChanged,
+      setPointerSnapPointIfChanged,
       selectedWallColor,
+      trackPointerPosition,
     ],
   );
 
@@ -402,8 +485,8 @@ export const useWallToolsController = (): WallToolsController => {
           setDrawMessage(null);
         }
 
-        setHoverSnapPoint(sample.snappedPoint);
-        setPointerPreview(null);
+        setHoverSnapPointIfChanged(sample.snappedPoint);
+        setPointerPreviewIfChanged(null);
         applyErasePreview({
           floorId: currentFloorId,
           pointer: sample.pointer,
@@ -430,8 +513,8 @@ export const useWallToolsController = (): WallToolsController => {
           setDrawMessage(null);
         }
 
-        setHoverSnapPoint(sample.snappedPoint);
-        setPointerPreview(null);
+        setHoverSnapPointIfChanged(sample.snappedPoint);
+        setPointerPreviewIfChanged(null);
         return true;
       }
 
@@ -440,7 +523,7 @@ export const useWallToolsController = (): WallToolsController => {
           ? hoverSnapPoint
           : sample.snappedPoint;
 
-      setPointerPreview(drawPoint);
+      setPointerPreviewIfChanged(drawPoint);
 
       if (!drawAnchor) {
         setDrawAnchor(drawPoint);
@@ -453,7 +536,7 @@ export const useWallToolsController = (): WallToolsController => {
 
       if (arePositionsEqual(drawPoint, drawAnchor)) {
         setDrawAnchor(null);
-        setPointerPreview(null);
+        setPointerPreviewIfChanged(null);
         setDrawMessage(null);
         return true;
       }
@@ -473,8 +556,8 @@ export const useWallToolsController = (): WallToolsController => {
 
         setDrawAnchor(null);
         setLastWallStartPoint(null);
-        setPointerPreview(null);
-        setHoverSnapPoint(null);
+        setPointerPreviewIfChanged(null);
+        setHoverSnapPointIfChanged(null);
         setDrawMessage(null);
         return true;
       }
@@ -493,8 +576,8 @@ export const useWallToolsController = (): WallToolsController => {
 
       setDrawAnchor(null);
       setLastWallStartPoint(null);
-      setPointerPreview(null);
-      setHoverSnapPoint(null);
+      setPointerPreviewIfChanged(null);
+      setHoverSnapPointIfChanged(null);
       setDrawMessage(null);
       return true;
     },
@@ -510,6 +593,8 @@ export const useWallToolsController = (): WallToolsController => {
       getPointerSample,
       hoverSnapPoint,
       isEditMode,
+      setHoverSnapPointIfChanged,
+      setPointerPreviewIfChanged,
       selectedWallColor,
     ],
   );
@@ -561,8 +646,8 @@ export const useWallToolsController = (): WallToolsController => {
   return {
     drawAnchor,
     hoverSnapPoint,
-    pointerPosition,
-    pointerSnapPoint,
+    pointerPosition: trackPointerPosition ? pointerPosition : null,
+    pointerSnapPoint: trackPointerPosition ? pointerSnapPoint : null,
     lastWallStartPoint,
     drawMessage,
     previewSegments,

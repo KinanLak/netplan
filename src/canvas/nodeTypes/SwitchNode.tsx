@@ -1,6 +1,7 @@
 import { memo } from "react";
 import { Handle, Position } from "@xyflow/react";
 import NetworkNode from "./NetworkNode";
+import { areDeviceNodePropsEqual } from "./memo";
 import type { Node, NodeProps } from "@xyflow/react";
 import type { Device, DeviceStatus } from "@/types/map";
 import { useMapStore } from "@/store/useMapStore";
@@ -78,4 +79,4 @@ function SwitchNode({ data, id }: NodeProps<SwitchNodeType>) {
   );
 }
 
-export default memo(SwitchNode);
+export default memo(SwitchNode, areDeviceNodePropsEqual);
