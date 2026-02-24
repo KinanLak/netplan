@@ -76,56 +76,6 @@ function HomePageContent() {
   const { theme, setTheme } = useTheme();
   const { handleUndo, handleRedo } = useUndoRedo();
 
-  useEffect(() => {
-    const isEditableTarget = (target: EventTarget | null): boolean => {
-      if (!(target instanceof HTMLElement)) {
-        return false;
-      }
-
-      const tagName = target.tagName;
-      return (
-        tagName === "INPUT" ||
-        tagName === "TEXTAREA" ||
-        tagName === "SELECT" ||
-        target.isContentEditable
-      );
-    };
-
-    const handleUndoRedoHotkeys = (event: KeyboardEvent) => {
-      if (!isEditMode) {
-        return;
-      }
-
-      if (isEditableTarget(event.target)) {
-        return;
-      }
-
-      const key = event.key.toLowerCase();
-      const modPressed = event.ctrlKey || event.metaKey;
-
-      if (!modPressed) {
-        return;
-      }
-
-      if (!event.shiftKey && key === "z") {
-        event.preventDefault();
-        handleUndo();
-        return;
-      }
-
-      if ((event.shiftKey && key === "z") || (!event.shiftKey && key === "y")) {
-        event.preventDefault();
-        handleRedo();
-      }
-    };
-
-    window.addEventListener("keydown", handleUndoRedoHotkeys, true);
-
-    return () => {
-      window.removeEventListener("keydown", handleUndoRedoHotkeys, true);
-    };
-  }, [handleUndo, handleRedo, isEditMode]);
-
   // Get current building's floors for navigation
   const currentBuilding = buildings.find((b) => b.id === currentBuildingId);
   const floors = currentBuilding?.floors ?? [];
@@ -142,21 +92,6 @@ function HomePageContent() {
       setCurrentFloor(floors[currentFloorIndex + 1].id);
     }
   };
-
-  const navigateToFloorByIndex = (index: number) => {
-    if (index >= 0 && index < floors.length) {
-      setCurrentFloor(floors[index].id);
-    }
-  };
-
-  const withFloorShortcutModifier =
-    (handler: () => void) => (event?: KeyboardEvent) => {
-      if (!event || (!event.ctrlKey && !event.metaKey)) {
-        return;
-      }
-
-      handler();
-    };
 
   const cycleTheme = () => {
     const themeOrder = ["light", "dark", "system"] as const;
@@ -186,46 +121,20 @@ function HomePageContent() {
       toggleEditMode();
     }
   });
-  useShortcut("floor-up", withFloorShortcutModifier(navigateFloorUp));
-  useShortcut("floor-down", withFloorShortcutModifier(navigateFloorDown));
 
-  // Floor number shortcuts (Ctrl+1 through Ctrl+9)
-  useShortcut(
-    "floor-1",
-    withFloorShortcutModifier(() => navigateToFloorByIndex(0)),
-  );
-  useShortcut(
-    "floor-2",
-    withFloorShortcutModifier(() => navigateToFloorByIndex(1)),
-  );
-  useShortcut(
-    "floor-3",
-    withFloorShortcutModifier(() => navigateToFloorByIndex(2)),
-  );
-  useShortcut(
-    "floor-4",
-    withFloorShortcutModifier(() => navigateToFloorByIndex(3)),
-  );
-  useShortcut(
-    "floor-5",
-    withFloorShortcutModifier(() => navigateToFloorByIndex(4)),
-  );
-  useShortcut(
-    "floor-6",
-    withFloorShortcutModifier(() => navigateToFloorByIndex(5)),
-  );
-  useShortcut(
-    "floor-7",
-    withFloorShortcutModifier(() => navigateToFloorByIndex(6)),
-  );
-  useShortcut(
-    "floor-8",
-    withFloorShortcutModifier(() => navigateToFloorByIndex(7)),
-  );
-  useShortcut(
-    "floor-9",
-    withFloorShortcutModifier(() => navigateToFloorByIndex(8)),
-  );
+  // Undo/redo via useShortcut (replaces native addEventListener handler)
+  useShortcut("undo", handleUndo, {
+    enabled: isEditMode,
+    ignoreInputs: true,
+  });
+  useShortcut("redo", handleRedo, {
+    enabled: isEditMode,
+    ignoreInputs: true,
+  });
+
+  // Floor navigation — Mod is part of the key string, no modifier check needed
+  useShortcut("floor-up", navigateFloorUp);
+  useShortcut("floor-down", navigateFloorDown);
 
   return (
     <SidebarProvider>

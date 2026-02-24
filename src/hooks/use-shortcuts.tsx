@@ -1,133 +1,107 @@
 import { useEffect, useState } from "react";
-import { useHotkeys, useHotkeysContext } from "react-hotkeys-hook";
-import type { Options } from "react-hotkeys-hook";
+import { useHotkey } from "@tanstack/react-hotkeys";
+import type {
+  HotkeyCallback,
+  RegisterableHotkey,
+  UseHotkeyOptions,
+} from "@tanstack/react-hotkeys";
 import type { ShortcutAction, ShortcutScope } from "@/lib/shortcuts";
+import { isMac, shortcuts } from "@/lib/shortcuts";
 import {
   OVERLAY_MODIFIER_KEY_BY_PLATFORM,
   OVERLAY_VISIBILITY_DELAY_MS,
-  SHORTCUT_FORM_TAGS,
 } from "@/lib/constants";
-import { getHotkey, getScope, isMac } from "@/lib/shortcuts";
-
-export { useHotkeysContext };
+import { useMapStore } from "@/store/useMapStore";
 
 type UseShortcutOptions = {
-  /** Override the enabled state */
+  /** Override the enabled state (combined with scope) */
   enabled?: boolean;
-  /** Enable on form tags (input, textarea, select) */
-  enableOnFormTags?: boolean;
+  /** Ignore hotkey when focus is in input-like elements. Defaults based on TanStack smart detection. */
+  ignoreInputs?: boolean;
 };
-
-type UseHotkeyDirectOptions = {
-  scope?: ShortcutScope;
-  enabled?: boolean;
-  enableOnFormTags?: boolean;
-};
-
-type HotkeyHandler = (event?: KeyboardEvent) => void;
 
 const DEFAULT_SHORTCUT_OPTIONS: UseShortcutOptions = {};
-const DEFAULT_HOTKEY_DIRECT_OPTIONS: UseHotkeyDirectOptions = {};
 const OVERLAY_MODIFIER_KEY = isMac
   ? OVERLAY_MODIFIER_KEY_BY_PLATFORM.mac
   : OVERLAY_MODIFIER_KEY_BY_PLATFORM.nonMac;
 
 /**
- * Hook to register a keyboard shortcut by action name
- * Automatically uses the hotkey and scope from the shortcuts config
+ * Compute whether a scope is currently active.
+ * Global → always true.
+ * Canvas → true when no device is selected (drawer closed).
+ * Drawer → true when a device is selected (drawer open).
+ */
+function useScopeEnabled(
+  scope: ShortcutScope,
+  extraEnabled: boolean = true,
+): boolean {
+  const selectedDeviceId = useMapStore((s) => s.selectedDeviceId);
+
+  if (!extraEnabled) return false;
+
+  switch (scope) {
+    case "global":
+      return true;
+    case "canvas":
+      return selectedDeviceId === null;
+    case "drawer":
+      return selectedDeviceId !== null;
+  }
+}
+
+// Sentinel for unused hotkey slots (must be a valid hotkey to satisfy types)
+const NOOP_KEY: RegisterableHotkey = "F12";
+const noop: HotkeyCallback = () => {};
+
+/**
+ * Hook to register a keyboard shortcut by action name.
+ * Automatically resolves key bindings and scope from the shortcuts config.
+ *
+ * Uses fixed-count `useHotkey` calls (MAX_KEYS_PER_ACTION = 3) to satisfy
+ * React's rules of hooks — unused slots get a disabled sentinel key.
  */
 export function useShortcut(
   action: ShortcutAction,
-  handler: HotkeyHandler,
+  handler: (event: KeyboardEvent) => void,
   options: UseShortcutOptions = DEFAULT_SHORTCUT_OPTIONS,
 ) {
-  const { enabled = true, enableOnFormTags = false } = options;
-  const hotkey = getHotkey(action);
-  const scope = getScope(action);
+  const { enabled = true, ignoreInputs } = options;
+  const config = shortcuts[action];
+  const scopeEnabled = useScopeEnabled(config.scope, enabled);
 
-  // Convert array to comma-separated string if needed
-  const hotkeyString = Array.isArray(hotkey) ? hotkey.join(", ") : hotkey;
-
-  const hotkeyOptions: Options = {
-    scopes: [scope],
-    enabled,
-    preventDefault: true,
-    // Use produced characters instead of physical key codes so letter shortcuts
-    // stay stable across keyboard layouts (e.g. W stays "w" on AZERTY/QWERTY).
-    useKey: true,
-    enableOnFormTags: enableOnFormTags ? SHORTCUT_FORM_TAGS : false,
+  const callback: HotkeyCallback = (event) => {
+    handler(event);
   };
 
-  useHotkeys(
-    hotkeyString,
-    (keyboardEvent) => {
-      handler(keyboardEvent);
-    },
-    hotkeyOptions,
-    [handler, enabled],
-  );
-}
-
-/**
- * Hook to directly use a hotkey string (for custom cases)
- */
-export function useHotkeyDirect(
-  hotkey: string | Array<string>,
-  handler: HotkeyHandler,
-  options: UseHotkeyDirectOptions = DEFAULT_HOTKEY_DIRECT_OPTIONS,
-) {
-  const {
-    scope = "global",
-    enabled = true,
-    enableOnFormTags = false,
-  } = options;
-
-  const hotkeyString = Array.isArray(hotkey) ? hotkey.join(", ") : hotkey;
-
-  const hotkeyOptions: Options = {
-    scopes: [scope],
-    enabled,
-    preventDefault: true,
-    enableOnFormTags: enableOnFormTags ? SHORTCUT_FORM_TAGS : false,
+  const baseOptions: UseHotkeyOptions = {
+    conflictBehavior: "warn",
+    enabled: scopeEnabled,
+    ...(ignoreInputs !== undefined ? { ignoreInputs } : {}),
   };
 
-  useHotkeys(
-    hotkeyString,
-    (keyboardEvent) => {
-      handler(keyboardEvent);
-    },
-    hotkeyOptions,
-    [handler, enabled],
-  );
+  // Slot 0 — always present (keys has at least one entry)
+  const key0 = config.keys[0];
+  useHotkey(key0, callback, baseOptions);
+
+  // Slot 1 — second binding or disabled sentinel
+  const key1 = config.keys.length > 1 ? config.keys[1] : NOOP_KEY;
+  const opts1: UseHotkeyOptions =
+    config.keys.length > 1 ? baseOptions : { ...baseOptions, enabled: false };
+  useHotkey(key1, config.keys.length > 1 ? callback : noop, opts1);
+
+  // Slot 2 — third binding or disabled sentinel
+  const key2 = config.keys.length > 2 ? config.keys[2] : NOOP_KEY;
+  const opts2: UseHotkeyOptions =
+    config.keys.length > 2 ? baseOptions : { ...baseOptions, enabled: false };
+  useHotkey(key2, config.keys.length > 2 ? callback : noop, opts2);
 }
 
 /**
- * Hook to enable/disable the drawer scope
- * Call this in drawer components to activate drawer-specific shortcuts
- */
-export function useDrawerScope(isOpen: boolean) {
-  const { enableScope, disableScope } = useHotkeysContext();
-
-  useEffect(() => {
-    if (isOpen) {
-      enableScope("drawer");
-      disableScope("canvas");
-    } else {
-      disableScope("drawer");
-      enableScope("canvas");
-    }
-
-    return () => {
-      disableScope("drawer");
-      enableScope("canvas");
-    };
-  }, [isOpen, enableScope, disableScope]);
-}
-
-/**
- * Hook to track if the overlay modifier key is held
- * Ctrl on Windows/Linux, Cmd on macOS
- * Used for showing shortcuts overlay (Linear-style)
+ * Hook to track if the overlay modifier key is held.
+ * Ctrl on Windows/Linux, Cmd on macOS.
+ * Used for showing shortcuts overlay (Linear-style).
+ *
+ * Kept as native addEventListener — this tracks modifier hold state, not a hotkey.
  */
 export function useOptionHeld(delay = OVERLAY_VISIBILITY_DELAY_MS) {
   const [isHeld, setIsHeld] = useState(false);
@@ -181,23 +155,4 @@ export function useOptionHeld(delay = OVERLAY_VISIBILITY_DELAY_MS) {
   }, [delay]);
 
   return { isHeld, isVisible };
-}
-
-/**
- * Hook to manage scopes imperatively
- */
-export function useScopes() {
-  const { enableScope, disableScope, activeScopes } = useHotkeysContext();
-
-  const setScope = (scope: ShortcutScope, active: boolean) => {
-    if (active) {
-      enableScope(scope);
-    } else {
-      disableScope(scope);
-    }
-  };
-
-  const isActive = (scope: ShortcutScope) => activeScopes.includes(scope);
-
-  return { setScope, isActive, activeScopes };
 }

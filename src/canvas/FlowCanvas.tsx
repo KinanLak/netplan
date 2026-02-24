@@ -1,16 +1,18 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Background,
   BackgroundVariant,
   ReactFlow,
   useReactFlow,
 } from "@xyflow/react";
+import { useHotkey } from "@tanstack/react-hotkeys";
 import { nodeTypes } from "./nodeTypes";
 import type { Node } from "@xyflow/react";
+import type { Hotkey } from "@tanstack/react-hotkeys";
 import type { Device } from "@/types/map";
 import type { WallToolsLayerHandle } from "@/canvas/components/WallToolsLayer";
 import { useMapStore } from "@/store/useMapStore";
-import { useHotkeyDirect, useShortcut } from "@/hooks/use-shortcuts";
+import { useShortcut } from "@/hooks/use-shortcuts";
 import { GRID_SIZE } from "@/lib/walls";
 import { cn } from "@/lib/utils";
 import { CanvasZoomControls } from "@/canvas/components/CanvasZoomControls";
@@ -30,6 +32,7 @@ import {
   FLOW_CANVAS_RESET_DURATION_MS,
   FLOW_CANVAS_TOGGLE_DEBUG_HOTKEY,
   FLOW_CANVAS_ZOOM_DURATION_MS,
+  PAN_AMOUNT,
 } from "@/lib/constants";
 
 const SNAP_GRID: [number, number] = [GRID_SIZE, GRID_SIZE];
@@ -88,42 +91,83 @@ export default function FlowCanvas() {
     handleNodeDragStop,
   } = useCanvasDragState();
 
-  useShortcut("zoom-in", () => {
-    reactFlow.zoomIn({ duration: FLOW_CANVAS_ZOOM_DURATION_MS });
-  });
+  useEffect(() => {
+    const handleNumpadZoom = (event: KeyboardEvent) => {
+      const modPressed = event.ctrlKey || event.metaKey;
+      if (!modPressed) {
+        return;
+      }
 
-  useShortcut("zoom-out", () => {
-    reactFlow.zoomOut({ duration: FLOW_CANVAS_ZOOM_DURATION_MS });
-  });
+      if (event.code === "NumpadAdd") {
+        event.preventDefault();
+        reactFlow.zoomIn({ duration: FLOW_CANVAS_ZOOM_DURATION_MS });
+        return;
+      }
 
-  useShortcut("zoom-reset", () => {
-    reactFlow.setViewport(
-      { x: 0, y: 0, zoom: 1 },
-      { duration: FLOW_CANVAS_RESET_DURATION_MS },
-    );
-  });
+      if (event.code === "NumpadSubtract") {
+        event.preventDefault();
+        reactFlow.zoomOut({ duration: FLOW_CANVAS_ZOOM_DURATION_MS });
+        return;
+      }
 
-  useHotkeyDirect(
-    "escape",
+      if (event.code === "Numpad0") {
+        event.preventDefault();
+        reactFlow.setViewport(
+          { x: 0, y: 0, zoom: 1 },
+          { duration: FLOW_CANVAS_RESET_DURATION_MS },
+        );
+      }
+    };
+
+    window.addEventListener("keydown", handleNumpadZoom, true);
+
+    return () => {
+      window.removeEventListener("keydown", handleNumpadZoom, true);
+    };
+  }, [reactFlow]);
+
+  useHotkey(
+    "Escape",
     () => {
       wallToolsControllerRef.current?.cancelTool();
     },
     {
-      scope: "canvas",
+      conflictBehavior: "allow",
       enabled: isEditMode && activeDrawTool !== "device",
     },
   );
 
-  useHotkeyDirect(
-    FLOW_CANVAS_TOGGLE_DEBUG_HOTKEY,
+  useHotkey(
+    FLOW_CANVAS_TOGGLE_DEBUG_HOTKEY as Hotkey,
     () => {
       setIsWallDebugVisible((prev) => !prev);
     },
     {
-      scope: "canvas",
+      conflictBehavior: "allow",
       enabled: isEditMode,
     },
   );
+
+  // Pan shortcuts — move the canvas with arrow keys
+  useShortcut("pan-up", () => {
+    const { x, y, zoom } = reactFlow.getViewport();
+    reactFlow.setViewport({ x, y: y + PAN_AMOUNT, zoom });
+  });
+
+  useShortcut("pan-down", () => {
+    const { x, y, zoom } = reactFlow.getViewport();
+    reactFlow.setViewport({ x, y: y - PAN_AMOUNT, zoom });
+  });
+
+  useShortcut("pan-left", () => {
+    const { x, y, zoom } = reactFlow.getViewport();
+    reactFlow.setViewport({ x: x + PAN_AMOUNT, y, zoom });
+  });
+
+  useShortcut("pan-right", () => {
+    const { x, y, zoom } = reactFlow.getViewport();
+    reactFlow.setViewport({ x: x - PAN_AMOUNT, y, zoom });
+  });
 
   useConnectionHighlightShortcut();
 

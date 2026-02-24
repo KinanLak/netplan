@@ -21,6 +21,7 @@ export const shortcutGroups: Array<ShortcutGroup> = [
       "delete",
       "cycle-theme",
       "show-shortcuts",
+      "sidebar-toggle",
     ],
   },
   {
@@ -36,10 +37,18 @@ export const shortcutGroups: Array<ShortcutGroup> = [
     actions: ["close-drawer", "delete-device", "highlight-connections"],
   },
   {
-    id: "zoom",
-    title: "Zoom",
+    id: "navigation",
+    title: "Navigation",
     orderPriority: 70,
-    actions: ["zoom-in", "zoom-out", "zoom-reset"],
+    actions: [
+      "zoom-in",
+      "zoom-out",
+      "zoom-reset",
+      "pan-up",
+      "pan-down",
+      "pan-left",
+      "pan-right",
+    ],
   },
   {
     id: "build-tools",

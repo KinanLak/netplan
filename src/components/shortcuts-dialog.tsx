@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { HelpCircleIcon } from "@hugeicons/core-free-icons";
 import { SHORTCUT_GROUP_GRID_COLUMN_COUNT } from "@/lib/constants";
@@ -7,6 +7,7 @@ import {
   buildBalancedShortcutGrid,
   shortcutGroups,
 } from "@/lib/shortcut-groups";
+import { useShortcut } from "@/hooks/use-shortcuts";
 import { Kbd, KbdGroup } from "@/components/ui/kbd";
 import {
   Dialog,
@@ -32,38 +33,9 @@ export function ShortcutsDialog({ hasRightDrawerOpen }: ShortcutsDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const overlayModifierLabel = isMac ? "⌘" : "Ctrl";
 
-  useEffect(() => {
-    const isEditableTarget = (target: EventTarget | null): boolean => {
-      if (!(target instanceof HTMLElement)) {
-        return false;
-      }
-
-      const tagName = target.tagName;
-      return (
-        tagName === "INPUT" ||
-        tagName === "TEXTAREA" ||
-        tagName === "SELECT" ||
-        target.isContentEditable
-      );
-    };
-
-    const handleToggleDialogShortcut = (event: KeyboardEvent) => {
-      if (isEditableTarget(event.target)) {
-        return;
-      }
-
-      if (event.key === "?") {
-        event.preventDefault();
-        setIsOpen((prev) => !prev);
-      }
-    };
-
-    window.addEventListener("keydown", handleToggleDialogShortcut, true);
-
-    return () => {
-      window.removeEventListener("keydown", handleToggleDialogShortcut, true);
-    };
-  }, []);
+  useShortcut("show-shortcuts", () => {
+    setIsOpen((prev) => !prev);
+  });
 
   return (
     <>
@@ -100,11 +72,13 @@ export function ShortcutsDialog({ hasRightDrawerOpen }: ShortcutsDialogProps) {
                 <ul className="space-y-2">
                   {group.actions.map((action) => {
                     const config = shortcuts[action];
-                    // Get first hotkey (if array, take first element)
-                    const firstHotkey = Array.isArray(config.hotkey)
-                      ? config.hotkey[0]
-                      : config.hotkey;
-                    const keyParts = formatHotkey(firstHotkey);
+                    const keyCombinations = Array.from(
+                      new Map(
+                        config.keys
+                          .map((hotkey) => formatHotkey(hotkey))
+                          .map((keys) => [keys.join("+"), keys]),
+                      ).values(),
+                    );
 
                     return (
                       <li
@@ -114,11 +88,31 @@ export function ShortcutsDialog({ hasRightDrawerOpen }: ShortcutsDialogProps) {
                         <span className="text-sm text-foreground">
                           {config.description ?? config.label}
                         </span>
-                        <KbdGroup>
-                          {keyParts.map((key, index) => (
-                            <Kbd key={index}>{key}</Kbd>
-                          ))}
-                        </KbdGroup>
+                        <span className="flex items-center gap-1">
+                          {keyCombinations.map((keys, keyGroupIndex) => {
+                            const keyGroupKey = `${action}-${keyGroupIndex}`;
+
+                            return (
+                              <span
+                                key={keyGroupKey}
+                                className="flex items-center gap-1"
+                              >
+                                {keyGroupIndex > 0 ? (
+                                  <span className="text-xs text-muted-foreground">
+                                    /
+                                  </span>
+                                ) : null}
+                                <KbdGroup>
+                                  {keys.map((key, keyIndex) => (
+                                    <Kbd key={`${keyGroupKey}-${keyIndex}`}>
+                                      {key}
+                                    </Kbd>
+                                  ))}
+                                </KbdGroup>
+                              </span>
+                            );
+                          })}
+                        </span>
                       </li>
                     );
                   })}

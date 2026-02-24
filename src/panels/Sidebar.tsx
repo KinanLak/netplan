@@ -8,11 +8,12 @@ import {
 } from "@hugeicons/core-free-icons";
 import { Link } from "@tanstack/react-router";
 import { useMapStore } from "@/store/useMapStore";
+import { useOptionHeld } from "@/hooks/use-shortcuts";
 import { cn } from "@/lib/utils";
-import { isMac } from "@/lib/shortcuts";
+import { getShortcutDisplay } from "@/lib/shortcuts";
 import { useTemporalStore, useUndoRedo } from "@/hooks/use-undo-redo";
 import { Button } from "@/components/ui/button";
-import { ShortcutHintKeys } from "@/components/ui/shortcut-hint";
+import { Kbd, KbdGroup } from "@/components/ui/kbd";
 import { NetplanLogo } from "@/components/netplan-logo";
 import {
   Sidebar,
@@ -43,6 +44,18 @@ export default function AppSidebar() {
   const { handleUndo, handleRedo } = useUndoRedo();
   const canUndo = useTemporalStore((s) => s.pastStates.length > 0);
   const canRedo = useTemporalStore((s) => s.futureStates.length > 0);
+  const { isVisible: isModifierVisible } = useOptionHeld();
+
+  const floorUpKeys = getShortcutDisplay("floor-up")[0] ?? [];
+  const floorDownKeys = getShortcutDisplay("floor-down")[0] ?? [];
+  const sharedFloorModifier =
+    floorUpKeys.length > 1 &&
+    floorDownKeys.length > 1 &&
+    floorUpKeys[0] === floorDownKeys[0]
+      ? floorUpKeys[0]
+      : null;
+  const floorUpArrow = floorUpKeys.at(-1) ?? "↑";
+  const floorDownArrow = floorDownKeys.at(-1) ?? "↓";
 
   const currentBuilding = buildings.find((b) => b.id === currentBuildingId);
 
@@ -70,7 +83,7 @@ export default function AppSidebar() {
   return (
     <Sidebar collapsible="none" className="border-r">
       {/* Header */}
-      <SidebarHeader className="border-b pl-0.5 pr-4 py-4">
+      <SidebarHeader className="border-b py-4 pr-4 pl-0.5">
         <div className="flex items-center justify-between">
           <h1 className="rounded-sm bg-transparent pb-0.5 leading-none">
             <Link to="/" aria-label="Retour a l'accueil">
@@ -84,7 +97,24 @@ export default function AppSidebar() {
       {/* Content */}
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Bâtiments</SidebarGroupLabel>
+          <div className="flex items-center justify-between px-2">
+            <SidebarGroupLabel className="px-0">Bâtiments</SidebarGroupLabel>
+            <div
+              className={cn(
+                "inline-flex items-center gap-1 text-xs text-muted-foreground transition-opacity duration-200",
+                isModifierVisible ? "opacity-100" : "opacity-0",
+              )}
+            >
+              <KbdGroup>
+                {sharedFloorModifier ? <Kbd>{sharedFloorModifier}</Kbd> : null}
+                <Kbd>{floorUpArrow}</Kbd>
+              </KbdGroup>
+              <span>/</span>
+              <KbdGroup>
+                <Kbd>{floorDownArrow}</Kbd>
+              </KbdGroup>
+            </div>
+          </div>
           <SidebarGroupContent>
             <SidebarMenu>
               {buildings.map((building) => (
@@ -108,10 +138,8 @@ export default function AppSidebar() {
                   {/* Floors (only show if building is selected) */}
                   {building.id === currentBuildingId ? (
                     <SidebarMenuSub>
-                      {building.floors.map((floor, floorIndex) => {
+                      {building.floors.map((floor) => {
                         const isActive = floor.id === currentFloorId;
-                        const shortcutNumber = floorIndex + 1;
-                        const showShortcut = shortcutNumber <= 9;
 
                         return (
                           <SidebarMenuSubItem key={floor.id}>
@@ -135,20 +163,6 @@ export default function AppSidebar() {
                                 />
                                 <span>{floor.name}</span>
                               </span>
-                              {showShortcut ? (
-                                <ShortcutHintKeys
-                                  keys={[
-                                    isMac ? "⌃" : "Ctrl",
-                                    String(shortcutNumber),
-                                  ]}
-                                  size="sm"
-                                  className="ml-auto"
-                                  kbdClassName={cn(
-                                    isActive &&
-                                      "bg-primary-foreground text-primary",
-                                  )}
-                                />
-                              ) : null}
                             </SidebarMenuSubButton>
                           </SidebarMenuSubItem>
                         );

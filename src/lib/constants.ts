@@ -1,7 +1,6 @@
 import type { DeviceType } from "@/types/map";
 
 // Shortcuts
-export const SHORTCUT_FORM_TAGS = ["INPUT", "TEXTAREA", "SELECT"] as const;
 export const OVERLAY_VISIBILITY_DELAY_MS = 50;
 export const OVERLAY_MODIFIER_KEY_BY_PLATFORM = {
   mac: "Meta",
@@ -59,7 +58,7 @@ export const FLOW_CANVAS_PANE_HOVER_COLORS = {
     stroke: "rgba(59, 130, 246, 0.85)",
   },
 } as const;
-export const FLOW_CANVAS_TOGGLE_DEBUG_HOTKEY = "shift+d";
+export const FLOW_CANVAS_TOGGLE_DEBUG_HOTKEY = "Shift+D";
 
 // Canvas devices
 export const CANVAS_DEVICE_NEAREST_POSITION_MAX_RADIUS = 200;
@@ -73,4 +72,6 @@ export const SIDEBAR_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
 export const SIDEBAR_WIDTH = "16rem";
 export const SIDEBAR_WIDTH_MOBILE = "18rem";
 export const SIDEBAR_WIDTH_ICON = "3rem";
-export const SIDEBAR_KEYBOARD_SHORTCUT = "b";
+
+// Canvas panning
+export const PAN_AMOUNT = 50;

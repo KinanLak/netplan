@@ -54,10 +54,13 @@ export function ShortcutsOverlay() {
               <ul className="space-y-2">
                 {group.actions.map((action) => {
                   const config = shortcuts[action];
-                  const firstHotkey = Array.isArray(config.hotkey)
-                    ? config.hotkey[0]
-                    : config.hotkey;
-                  const keyParts = formatHotkey(firstHotkey);
+                  const keyCombinations = Array.from(
+                    new Map(
+                      config.keys
+                        .map((hotkey) => formatHotkey(hotkey))
+                        .map((keys) => [keys.join("+"), keys]),
+                    ).values(),
+                  );
 
                   return (
                     <li
@@ -67,11 +70,31 @@ export function ShortcutsOverlay() {
                       <span className="text-sm text-foreground">
                         {config.label}
                       </span>
-                      <KbdGroup>
-                        {keyParts.map((key: string, index: number) => (
-                          <Kbd key={index}>{key}</Kbd>
-                        ))}
-                      </KbdGroup>
+                      <span className="flex items-center gap-1">
+                        {keyCombinations.map((keys, keyGroupIndex) => {
+                          const keyGroupKey = `${action}-${keyGroupIndex}`;
+
+                          return (
+                            <span
+                              key={keyGroupKey}
+                              className="flex items-center gap-1"
+                            >
+                              {keyGroupIndex > 0 ? (
+                                <span className="text-xs text-muted-foreground">
+                                  /
+                                </span>
+                              ) : null}
+                              <KbdGroup>
+                                {keys.map((key, keyIndex) => (
+                                  <Kbd key={`${keyGroupKey}-${keyIndex}`}>
+                                    {key}
+                                  </Kbd>
+                                ))}
+                              </KbdGroup>
+                            </span>
+                          );
+                        })}
+                      </span>
                     </li>
                   );
                 })}

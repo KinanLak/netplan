@@ -1,12 +1,15 @@
 /**
  * Keyboard shortcuts configuration for NetPlan
  *
- * Uses react-hotkeys-hook string format:
- * - Modifiers: meta (Cmd on Mac), alt, shift, ctrl
- * - Use 'mod' for cross-platform (Cmd on Mac, Ctrl on Windows)
- * - Combine with '+': 'meta+z', 'ctrl+shift+s'
- * - Multiple keys: 'delete, backspace' or ['delete', 'backspace']
+ * Uses @tanstack/react-hotkeys key format:
+ * - Modifiers: Mod (Cmd on Mac, Ctrl on Windows), Control, Alt, Shift, Meta
+ * - Combine with '+': 'Mod+Z', 'Mod+Shift+Z'
+ * - Keys use event.key names: 'Escape', 'ArrowUp', 'Delete', 'Backspace'
+ * - TanStack falls back to event.code for digits (0-9) and letters (A-Z),
+ *   so '1' works on both QWERTY and AZERTY without dual registration.
  */
+
+import type { RegisterableHotkey } from "@tanstack/react-hotkeys";
 
 export type ShortcutScope = "global" | "canvas" | "drawer";
 
@@ -19,6 +22,7 @@ export type ShortcutAction =
   | "redo"
   | "show-shortcuts"
   | "cycle-theme"
+  | "sidebar-toggle"
   // Navigation
   | "zoom-in"
   | "zoom-out"
@@ -29,20 +33,12 @@ export type ShortcutAction =
   | "pan-right"
   | "floor-up"
   | "floor-down"
-  | "floor-1"
-  | "floor-2"
-  | "floor-3"
-  | "floor-4"
-  | "floor-5"
-  | "floor-6"
-  | "floor-7"
-  | "floor-8"
-  | "floor-9"
-  // Tools
+  // Tools - Walls (numbers + letter aliases)
   | "tool-wall"
   | "tool-wall-brush"
   | "tool-wall-erase"
   | "tool-room"
+  // Tools - Devices (number hotbar)
   | "tool-rack"
   | "tool-switch"
   | "tool-pc"
@@ -53,219 +49,177 @@ export type ShortcutAction =
   | "highlight-connections";
 
 export type ShortcutConfig = {
-  /** Hotkey string(s) in react-hotkeys-hook format */
-  hotkey: string | Array<string>;
+  /** TanStack hotkey strings — one per binding */
+  keys: [RegisterableHotkey, ...Array<RegisterableHotkey>];
   /** Display label */
   label: string;
   /** Longer description */
   description?: string;
-  /** Scope for activation */
+  /** Logical scope (used for enabled conditions) */
   scope: ShortcutScope;
 };
+
+/**
+ * Maximum number of key bindings any single action can have.
+ * useHotkey must be called this many times per useShortcut call
+ * to satisfy React's rules of hooks.
+ */
+export const MAX_KEYS_PER_ACTION = 3;
 
 export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
   // Global actions
   "toggle-edit-mode": {
-    hotkey: "e",
+    keys: ["E"],
     label: "Mode édition",
     description: "Basculer dans le mode édition",
     scope: "global",
   },
   escape: {
-    hotkey: "escape",
+    keys: ["Escape"],
     label: "Annuler",
     description: "Annuler l'action en cours",
     scope: "global",
   },
   delete: {
-    hotkey: ["delete", "backspace"],
+    keys: ["Delete", "Backspace"],
     label: "Supprimer",
     description: "Supprimer l'élément sélectionné",
     scope: "global",
   },
   undo: {
-    hotkey: "mod+z",
+    keys: ["Mod+Z"],
     label: "Annuler",
     description: "Annuler la dernière action",
     scope: "global",
   },
   redo: {
-    hotkey: ["mod+shift+z", "mod+y"],
+    keys: ["Mod+Shift+Z", "Mod+Y"],
     label: "Rétablir",
     description: "Rétablir l'action annulée",
     scope: "global",
   },
   "show-shortcuts": {
-    hotkey: "?",
+    keys: [{ key: "?", shift: true }],
     label: "Raccourcis",
     description: "Afficher la liste des raccourcis clavier",
     scope: "global",
   },
   "cycle-theme": {
-    hotkey: "shift+t",
+    keys: ["Shift+T"],
     label: "Thème",
     description: "Changer le thème",
+    scope: "global",
+  },
+  "sidebar-toggle": {
+    keys: ["Mod+B"],
+    label: "Sidebar",
+    description: "Afficher/masquer le panneau latéral",
     scope: "global",
   },
 
   // Navigation
   "zoom-in": {
-    hotkey: ["=", "+"],
+    keys: [{ key: "Add", mod: true }],
     label: "Zoom +",
     description: "Zoomer",
-    scope: "canvas",
+    scope: "global",
   },
   "zoom-out": {
-    hotkey: "-",
+    keys: [{ key: "Subtract", mod: true }],
     label: "Zoom -",
     description: "Dézoomer",
-    scope: "canvas",
+    scope: "global",
   },
   "zoom-reset": {
-    hotkey: "0",
+    keys: [{ key: "0", mod: true }],
     label: "Réinitialiser zoom",
     description: "Remettre le zoom à 100%",
-    scope: "canvas",
+    scope: "global",
   },
   "pan-up": {
-    hotkey: "up",
+    keys: ["ArrowUp"],
     label: "Haut",
     description: "Déplacer le canvas vers le haut",
-    scope: "canvas",
+    scope: "global",
   },
   "pan-down": {
-    hotkey: "down",
+    keys: ["ArrowDown"],
     label: "Bas",
     description: "Déplacer le canvas vers le bas",
-    scope: "canvas",
+    scope: "global",
   },
   "pan-left": {
-    hotkey: "left",
+    keys: ["ArrowLeft"],
     label: "Gauche",
     description: "Déplacer le canvas vers la gauche",
-    scope: "canvas",
+    scope: "global",
   },
   "pan-right": {
-    hotkey: "right",
+    keys: ["ArrowRight"],
     label: "Droite",
     description: "Déplacer le canvas vers la droite",
-    scope: "canvas",
+    scope: "global",
   },
   "floor-up": {
-    hotkey: "ctrl+up",
+    keys: ["Mod+ArrowUp"],
     label: "Étage précédent",
     description: "Aller à l'étage précédent",
     scope: "global",
   },
   "floor-down": {
-    hotkey: "ctrl+down",
+    keys: ["Mod+ArrowDown"],
     label: "Étage suivant",
     description: "Aller à l'étage suivant",
     scope: "global",
   },
-  // Floor shortcuts - supporting both QWERTY and AZERTY layouts
-  "floor-1": {
-    hotkey: ["ctrl+1", "ctrl+&"],
-    label: "Étage 1",
-    description: "Aller à l'étage 1",
-    scope: "global",
-  },
-  "floor-2": {
-    hotkey: ["ctrl+2", "ctrl+é"],
-    label: "Étage 2",
-    description: "Aller à l'étage 2",
-    scope: "global",
-  },
-  "floor-3": {
-    hotkey: ["ctrl+3", 'ctrl+"'],
-    label: "Étage 3",
-    description: "Aller à l'étage 3",
-    scope: "global",
-  },
-  "floor-4": {
-    hotkey: ["ctrl+4", "ctrl+'"],
-    label: "Étage 4",
-    description: "Aller à l'étage 4",
-    scope: "global",
-  },
-  "floor-5": {
-    hotkey: ["ctrl+5", "ctrl+("],
-    label: "Étage 5",
-    description: "Aller à l'étage 5",
-    scope: "global",
-  },
-  "floor-6": {
-    hotkey: ["ctrl+6", "ctrl+-"],
-    label: "Étage 6",
-    description: "Aller à l'étage 6",
-    scope: "global",
-  },
-  "floor-7": {
-    hotkey: ["ctrl+7", "ctrl+è"],
-    label: "Étage 7",
-    description: "Aller à l'étage 7",
-    scope: "global",
-  },
-  "floor-8": {
-    hotkey: ["ctrl+8", "ctrl+_"],
-    label: "Étage 8",
-    description: "Aller à l'étage 8",
-    scope: "global",
-  },
-  "floor-9": {
-    hotkey: ["ctrl+9", "ctrl+ç"],
-    label: "Étage 9",
-    description: "Aller à l'étage 9",
-    scope: "global",
-  },
 
-  // Tools - Walls & Rooms (ordered left-to-right in toolbar)
+  // Tools - Walls & Rooms (hotbar numbers + letter aliases)
   "tool-wall": {
-    hotkey: ["1", "&", "w"],
+    keys: ["1", "W"],
     label: "Mur",
     description: "Outil de dessin de mur",
     scope: "canvas",
   },
   "tool-room": {
-    hotkey: ["2", "é", "l"],
+    keys: ["2", "L"],
     label: "Salle",
     description: "Outil de dessin de salle",
     scope: "canvas",
   },
   "tool-wall-brush": {
-    hotkey: ["3", '"', "b"],
+    keys: ["3", "B"],
     label: "Pinceau murs",
     description: "Peindre des blocs de mur",
     scope: "canvas",
   },
   "tool-wall-erase": {
-    hotkey: ["4", "'", "x"],
+    keys: ["4", "X"],
     label: "Suppression murs",
     description: "Effacer des blocs de mur",
     scope: "canvas",
   },
 
-  // Tools - Devices
+  // Tools - Devices (number hotbar)
   "tool-rack": {
-    hotkey: ["5", "(", "r"],
+    keys: ["5"],
     label: "Rack",
     description: "Ajouter un rack serveur",
     scope: "canvas",
   },
   "tool-switch": {
-    hotkey: ["6", "-", "s"],
+    keys: ["6"],
     label: "Switch",
     description: "Ajouter un switch réseau",
     scope: "canvas",
   },
   "tool-pc": {
-    hotkey: ["7", "è", "p"],
+    keys: ["7"],
     label: "PC",
     description: "Ajouter un poste de travail",
     scope: "canvas",
   },
   "tool-wall-port": {
-    hotkey: ["8", "_", "o"],
+    keys: ["8"],
     label: "Prise",
     description: "Ajouter une prise murale",
     scope: "canvas",
@@ -273,19 +227,19 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
 
   // Device drawer
   "close-drawer": {
-    hotkey: "escape",
+    keys: ["Escape"],
     label: "Fermer",
     description: "Fermer le panneau de détails",
     scope: "drawer",
   },
   "delete-device": {
-    hotkey: ["delete", "backspace"],
+    keys: ["Delete", "Backspace"],
     label: "Supprimer",
     description: "Supprimer l'appareil sélectionné",
     scope: "drawer",
   },
   "highlight-connections": {
-    hotkey: "h",
+    keys: ["H"],
     label: "Connexions",
     description: "Afficher/masquer les connexions",
     scope: "global",
@@ -301,92 +255,91 @@ export const isMac =
 
 /**
  * Format a hotkey string for display
- * Shows platform-appropriate symbols:
- * - 'mod' -> ⌘ on Mac, Ctrl on others
- * - 'meta' -> ⌘ (always Cmd/Win key)
- * - 'ctrl' -> ⌃ on Mac, Ctrl on others
+ * Parses TanStack key format (Mod+Shift+Z) into platform-appropriate symbols.
  */
-export function formatHotkey(hotkey: string): Array<string> {
-  const parts = hotkey.toLowerCase().split("+");
+function formatHotkeyPart(part: string): string {
+  switch (part) {
+    case "Meta":
+      return "⌘";
+    case "Mod":
+      return isMac ? "⌘" : "Ctrl";
+    case "Control":
+      return isMac ? "⌃" : "Ctrl";
+    case "Alt":
+      return isMac ? "⌥" : "Alt";
+    case "Shift":
+      return isMac ? "⇧" : "Shift";
+    case "Escape":
+      return "esc";
+    case "Delete":
+    case "Backspace":
+      return "⌫";
+    case "Enter":
+      return "↵";
+    case "ArrowUp":
+      return "↑";
+    case "ArrowDown":
+      return "↓";
+    case "ArrowLeft":
+      return "←";
+    case "ArrowRight":
+      return "→";
+    case "Space":
+      return "␣";
+    case "=":
+    case "Add":
+      return "+";
+    case "Subtract":
+      return "-";
+    default:
+      return part;
+  }
+}
+
+export function formatHotkey(hotkey: RegisterableHotkey): Array<string> {
+  if (typeof hotkey === "string") {
+    const parts = hotkey.split("+");
+    return parts.map(formatHotkeyPart);
+  }
+
   const result: Array<string> = [];
 
-  for (const part of parts) {
-    switch (part) {
-      case "meta":
-        result.push("⌘");
-        break;
-      case "mod":
-        result.push(isMac ? "⌘" : "Ctrl");
-        break;
-      case "ctrl":
-        result.push(isMac ? "⌃" : "Ctrl");
-        break;
-      case "alt":
-        result.push(isMac ? "⌥" : "Alt");
-        break;
-      case "shift":
-        result.push(isMac ? "⇧" : "Shift");
-        break;
-      case "escape":
-        result.push("esc");
-        break;
-      case "delete":
-      case "backspace":
-        result.push("⌫");
-        break;
-      case "enter":
-        result.push("↵");
-        break;
-      case "up":
-        result.push("↑");
-        break;
-      case "down":
-        result.push("↓");
-        break;
-      case "left":
-        result.push("←");
-        break;
-      case "right":
-        result.push("→");
-        break;
-      case "space":
-        result.push("␣");
-        break;
-      case "plus":
-      case "=":
-        result.push("+");
-        break;
-      default:
-        result.push(part.toUpperCase());
-    }
+  if (hotkey.mod) {
+    result.push(formatHotkeyPart("Mod"));
   }
+  if (hotkey.ctrl) {
+    result.push(formatHotkeyPart("Control"));
+  }
+  if (hotkey.alt) {
+    result.push(formatHotkeyPart("Alt"));
+  }
+  if (hotkey.shift) {
+    result.push(formatHotkeyPart("Shift"));
+  }
+  if (hotkey.meta) {
+    result.push(formatHotkeyPart("Meta"));
+  }
+
+  result.push(formatHotkeyPart(hotkey.key));
 
   return result;
 }
 
 /**
- * Get formatted display for the first hotkey of an action
+ * Get formatted display for all key bindings of an action
  */
 export function getShortcutDisplay(
   action: ShortcutAction,
 ): Array<Array<string>> {
   const config = shortcuts[action];
-  const hotkeys = Array.isArray(config.hotkey)
-    ? config.hotkey
-    : [config.hotkey];
-  return hotkeys.map(formatHotkey);
-}
+  const seen = new Set<string>();
 
-/**
- * Get the hotkey string(s) for an action
- */
-export function getHotkey(action: ShortcutAction): string | Array<string> {
-  return shortcuts[action].hotkey;
-}
-
-/**
- * Get the scope for an action
- */
-export function getScope(action: ShortcutAction): ShortcutScope {
-  return shortcuts[action].scope;
+  return config.keys.map(formatHotkey).filter((combo) => {
+    const id = combo.join("+");
+    if (seen.has(id)) {
+      return false;
+    }
+    seen.add(id);
+    return true;
+  });
 }

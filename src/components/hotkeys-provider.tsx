@@ -1,4 +1,4 @@
-import { HotkeysProvider as ReactHotkeysProvider } from "react-hotkeys-hook";
+import { HotkeysProvider as TanStackHotkeysProvider } from "@tanstack/react-hotkeys";
 import type { ReactNode } from "react";
 
 type HotkeysProviderProps = {
@@ -6,13 +6,20 @@ type HotkeysProviderProps = {
 };
 
 /**
- * Wrapper around react-hotkeys-hook's HotkeysProvider
- * Initializes with global and canvas scopes active by default
+ * Wrapper around @tanstack/react-hotkeys HotkeysProvider.
+ * Sets default options for all hotkeys in the app.
  */
 export function HotkeysProvider({ children }: HotkeysProviderProps) {
   return (
-    <ReactHotkeysProvider initiallyActiveScopes={["global", "canvas"]}>
+    <TanStackHotkeysProvider
+      defaultOptions={{
+        hotkey: {
+          conflictBehavior: "warn",
+          preventDefault: true,
+        },
+      }}
+    >
       {children}
-    </ReactHotkeysProvider>
+    </TanStackHotkeysProvider>
   );
 }
