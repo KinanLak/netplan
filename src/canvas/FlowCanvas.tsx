@@ -91,40 +91,101 @@ export default function FlowCanvas() {
     handleNodeDragStop,
   } = useCanvasDragState();
 
+  // Top-row zoom shortcuts go through TanStack (Ctrl/Cmd + = / - / 0)
+  useShortcut("zoom-in", () => {
+    reactFlow.zoomIn({ duration: FLOW_CANVAS_ZOOM_DURATION_MS });
+  });
+
+  useShortcut("zoom-out", () => {
+    reactFlow.zoomOut({ duration: FLOW_CANVAS_ZOOM_DURATION_MS });
+  });
+
+  useShortcut("zoom-reset", () => {
+    reactFlow.setViewport(
+      { x: 0, y: 0, zoom: 1 },
+      { duration: FLOW_CANVAS_RESET_DURATION_MS },
+    );
+  });
+
+  // Numpad zoom shortcuts via TanStack (code-gated to avoid top-row collisions)
+  useHotkey(
+    { key: "+" },
+    (event) => {
+      if (event.code !== "NumpadAdd") {
+        return;
+      }
+
+      event.preventDefault();
+      reactFlow.zoomIn({ duration: FLOW_CANVAS_ZOOM_DURATION_MS });
+    },
+    {
+      conflictBehavior: "allow",
+    },
+  );
+
   useEffect(() => {
-    const handleNumpadZoom = (event: KeyboardEvent) => {
-      const modPressed = event.ctrlKey || event.metaKey;
-      if (!modPressed) {
+    const handleNumpadAddFallback = (event: KeyboardEvent) => {
+      if (event.code !== "NumpadAdd") {
         return;
       }
 
-      if (event.code === "NumpadAdd") {
-        event.preventDefault();
-        reactFlow.zoomIn({ duration: FLOW_CANVAS_ZOOM_DURATION_MS });
+      if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) {
         return;
       }
 
-      if (event.code === "NumpadSubtract") {
-        event.preventDefault();
-        reactFlow.zoomOut({ duration: FLOW_CANVAS_ZOOM_DURATION_MS });
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable ||
+          target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT")
+      ) {
         return;
       }
 
-      if (event.code === "Numpad0") {
-        event.preventDefault();
-        reactFlow.setViewport(
-          { x: 0, y: 0, zoom: 1 },
-          { duration: FLOW_CANVAS_RESET_DURATION_MS },
-        );
-      }
+      event.preventDefault();
+      reactFlow.zoomIn({ duration: FLOW_CANVAS_ZOOM_DURATION_MS });
     };
 
-    window.addEventListener("keydown", handleNumpadZoom, true);
-
+    window.addEventListener("keydown", handleNumpadAddFallback, true);
     return () => {
-      window.removeEventListener("keydown", handleNumpadZoom, true);
+      window.removeEventListener("keydown", handleNumpadAddFallback, true);
     };
   }, [reactFlow]);
+
+  useHotkey(
+    { key: "-" },
+    (event) => {
+      if (event.code !== "NumpadSubtract") {
+        return;
+      }
+
+      event.preventDefault();
+      reactFlow.zoomOut({ duration: FLOW_CANVAS_ZOOM_DURATION_MS });
+    },
+    {
+      conflictBehavior: "allow",
+    },
+  );
+
+  useHotkey(
+    { key: "0" },
+    (event) => {
+      if (event.code !== "Numpad0") {
+        return;
+      }
+
+      event.preventDefault();
+      reactFlow.setViewport(
+        { x: 0, y: 0, zoom: 1 },
+        { duration: FLOW_CANVAS_RESET_DURATION_MS },
+      );
+    },
+    {
+      conflictBehavior: "allow",
+    },
+  );
 
   useHotkey(
     "Escape",

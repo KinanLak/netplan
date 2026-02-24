@@ -57,7 +57,7 @@ const noop: HotkeyCallback = () => {};
  * Hook to register a keyboard shortcut by action name.
  * Automatically resolves key bindings and scope from the shortcuts config.
  *
- * Uses fixed-count `useHotkey` calls (MAX_KEYS_PER_ACTION = 3) to satisfy
+ * Uses fixed-count `useHotkey` calls (MAX_KEYS_PER_ACTION = 2) to satisfy
  * React's rules of hooks — unused slots get a disabled sentinel key.
  */
 export function useShortcut(
@@ -88,12 +88,6 @@ export function useShortcut(
   const opts1: UseHotkeyOptions =
     config.keys.length > 1 ? baseOptions : { ...baseOptions, enabled: false };
   useHotkey(key1, config.keys.length > 1 ? callback : noop, opts1);
-
-  // Slot 2 — third binding or disabled sentinel
-  const key2 = config.keys.length > 2 ? config.keys[2] : NOOP_KEY;
-  const opts2: UseHotkeyOptions =
-    config.keys.length > 2 ? baseOptions : { ...baseOptions, enabled: false };
-  useHotkey(key2, config.keys.length > 2 ? callback : noop, opts2);
 }
 
 /**

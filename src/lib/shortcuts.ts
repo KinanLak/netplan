@@ -64,7 +64,7 @@ export type ShortcutConfig = {
  * useHotkey must be called this many times per useShortcut call
  * to satisfy React's rules of hooks.
  */
-export const MAX_KEYS_PER_ACTION = 3;
+export const MAX_KEYS_PER_ACTION = 2;
 
 export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
   // Global actions
@@ -119,19 +119,19 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
 
   // Navigation
   "zoom-in": {
-    keys: [{ key: "Add", mod: true }],
+    keys: ["Mod+=", { key: "=", mod: true, shift: true }],
     label: "Zoom +",
     description: "Zoomer",
     scope: "global",
   },
   "zoom-out": {
-    keys: [{ key: "Subtract", mod: true }],
+    keys: ["Mod+-"],
     label: "Zoom -",
     description: "Dézoomer",
     scope: "global",
   },
   "zoom-reset": {
-    keys: [{ key: "0", mod: true }],
+    keys: ["Mod+0"],
     label: "Réinitialiser zoom",
     description: "Remettre le zoom à 100%",
     scope: "global",
