@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useReactFlow } from "@xyflow/react";
-import { Check } from "lucide-react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { Tick02Icon } from "@hugeicons/core-free-icons";
 import type { Device, DeviceType, DrawTool } from "@/types/map";
 import type { AvailableDevice } from "@/mock/availableDevices";
 import type { ToolbarAction } from "@/panels/toolbar-actions";
@@ -388,7 +389,11 @@ export default function Toolbar() {
                             ) : null}
                           </p>
                         </div>
-                        <Check className="ml-2 h-4 w-4 shrink-0 opacity-0" />
+                        <HugeiconsIcon
+                          icon={Tick02Icon}
+                          className="ml-2 h-4 w-4 shrink-0 opacity-0"
+                          strokeWidth={2}
+                        />
                       </div>
                     </CommandItem>
                   ))}

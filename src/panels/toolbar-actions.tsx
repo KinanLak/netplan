@@ -3,11 +3,12 @@ import {
   ComputerIcon,
   DashedLine01Icon,
   DashedLine02Icon,
+  Eraser01Icon,
   HardDriveIcon,
+  PaintBrush03Icon,
   PlugSocketIcon,
   ServerStack03Icon,
 } from "@hugeicons/core-free-icons";
-import { Eraser, Paintbrush } from "lucide-react";
 import type { DeviceType, DrawTool } from "@/types/map";
 import type { ShortcutAction } from "@/lib/shortcuts";
 import { TOOLBAR_ICON_SIZE_CLASS } from "@/lib/constants";
@@ -73,7 +74,14 @@ export const toolbarActions: Array<ToolbarAction> = [
     label: "Pinceau",
     shortcut: "tool-wall-brush",
     title: "Peindre des murs",
-    icon: <Paintbrush className={TOOLBAR_ICON_SIZE_CLASS} />,
+    icon: (
+      <HugeiconsIcon
+        icon={PaintBrush03Icon}
+        className={TOOLBAR_ICON_SIZE_CLASS}
+        color="currentColor"
+        strokeWidth={1.5}
+      />
+    ),
   },
   {
     group: "draw",
@@ -82,7 +90,14 @@ export const toolbarActions: Array<ToolbarAction> = [
     label: "Supprimer",
     shortcut: "tool-wall-erase",
     title: "Supprimer des murs",
-    icon: <Eraser className={TOOLBAR_ICON_SIZE_CLASS} />,
+    icon: (
+      <HugeiconsIcon
+        icon={Eraser01Icon}
+        className={TOOLBAR_ICON_SIZE_CLASS}
+        color="currentColor"
+        strokeWidth={1.5}
+      />
+    ),
   },
   {
     group: "device",

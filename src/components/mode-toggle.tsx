@@ -3,8 +3,8 @@ import {
   ComputerPhoneSyncIcon,
   Moon01Icon,
   Sun01Icon,
+  Tick02Icon,
 } from "@hugeicons/core-free-icons";
-import { Check } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -74,7 +74,13 @@ export function ModeToggle() {
             />
             Clair
           </span>
-          {theme === "light" ? <Check className="h-4 w-4" /> : null}
+          {theme === "light" ? (
+            <HugeiconsIcon
+              icon={Tick02Icon}
+              className="h-4 w-4"
+              strokeWidth={2}
+            />
+          ) : null}
         </DropdownMenuItem>
         <DropdownMenuItem
           onClick={() => setTheme("dark")}
@@ -88,7 +94,13 @@ export function ModeToggle() {
             />
             Sombre
           </span>
-          {theme === "dark" ? <Check className="h-4 w-4" /> : null}
+          {theme === "dark" ? (
+            <HugeiconsIcon
+              icon={Tick02Icon}
+              className="h-4 w-4"
+              strokeWidth={2}
+            />
+          ) : null}
         </DropdownMenuItem>
         <DropdownMenuItem
           onClick={() => setTheme("system")}
@@ -102,7 +114,13 @@ export function ModeToggle() {
             />
             Système
           </span>
-          {theme === "system" ? <Check className="h-4 w-4" /> : null}
+          {theme === "system" ? (
+            <HugeiconsIcon
+              icon={Tick02Icon}
+              className="h-4 w-4"
+              strokeWidth={2}
+            />
+          ) : null}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

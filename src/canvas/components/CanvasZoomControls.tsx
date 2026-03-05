@@ -1,4 +1,9 @@
-import { LocateFixed, Minus, Plus } from "lucide-react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import {
+  CenterFocusIcon,
+  MinusSignIcon,
+  PlusSignIcon,
+} from "@hugeicons/core-free-icons";
 
 interface CanvasZoomControlsProps {
   onZoomIn: () => void;
@@ -21,7 +26,11 @@ export function CanvasZoomControls({
           aria-label="Zoom avant"
           title="Zoom avant"
         >
-          <Plus className="h-4 w-4" />
+          <HugeiconsIcon
+            icon={PlusSignIcon}
+            className="h-4 w-4"
+            strokeWidth={2}
+          />
         </button>
         <button
           type="button"
@@ -30,7 +39,11 @@ export function CanvasZoomControls({
           aria-label="Zoom arriere"
           title="Zoom arriere"
         >
-          <Minus className="h-4 w-4" />
+          <HugeiconsIcon
+            icon={MinusSignIcon}
+            className="h-4 w-4"
+            strokeWidth={2}
+          />
         </button>
         <button
           type="button"
@@ -39,7 +52,11 @@ export function CanvasZoomControls({
           aria-label="Centrer la vue"
           title="Centrer la vue"
         >
-          <LocateFixed className="h-4 w-4" />
+          <HugeiconsIcon
+            icon={CenterFocusIcon}
+            className="h-4 w-4"
+            strokeWidth={2}
+          />
         </button>
       </div>
     </div>
