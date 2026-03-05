@@ -46,6 +46,7 @@ export function DrawerConnectionsSection({
       <div className="space-y-1">
         {connectedDevices.map((connDevice) => (
           <button
+            type="button"
             key={connDevice.id}
             onClick={() => onSelectConnected(connDevice.id)}
             className="group w-full rounded-lg bg-muted px-3 py-2 text-left transition-colors hover:bg-accent"
