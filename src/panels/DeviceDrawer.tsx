@@ -3,12 +3,21 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { Cancel01Icon, UserIcon, WasteIcon } from "@hugeicons/core-free-icons";
 import type { DeviceStatus } from "@/types/map";
 import { useMapStore } from "@/store/useMapStore";
+import {
+  useDevices,
+  useHighlightedDeviceIds,
+  useIsEditMode,
+  useSelectedDeviceId,
+} from "@/store/selectors";
 import { useShortcut } from "@/hooks/use-shortcuts";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ShortcutHintInline } from "@/components/ui/shortcut-hint";
+import { StatusDot } from "@/components/StatusDot";
 import { cn } from "@/lib/utils";
+import { DrawerConnectionsSection } from "@/panels/drawer/DrawerConnectionsSection";
+import { DrawerPortsSection } from "@/panels/drawer/DrawerPortsSection";
 
 const statusLabels: Record<DeviceStatus, string> = {
   up: "En ligne",
@@ -24,10 +33,10 @@ const typeLabels: Record<string, string> = {
 };
 
 export default function DeviceDrawer() {
-  const devices = useMapStore((s) => s.devices);
-  const selectedDeviceId = useMapStore((s) => s.selectedDeviceId);
-  const isEditMode = useMapStore((s) => s.isEditMode);
-  const highlightedDeviceIds = useMapStore((s) => s.highlightedDeviceIds);
+  const devices = useDevices();
+  const selectedDeviceId = useSelectedDeviceId();
+  const isEditMode = useIsEditMode();
+  const highlightedDeviceIds = useHighlightedDeviceIds();
 
   const selectDevice = useMapStore((s) => s.selectDevice);
   const deleteDevice = useMapStore((s) => s.deleteDevice);
@@ -41,7 +50,7 @@ export default function DeviceDrawer() {
   const connectedDevices =
     device?.metadata.connectedDeviceIds
       ?.map((id) => devices.find((d) => d.id === id))
-      .filter(Boolean) ?? [];
+      .filter((d): d is (typeof devices)[number] => d !== undefined) ?? [];
 
   // Check if the currently highlighted devices belong to this device
   const isCurrentDeviceHighlighted = (() => {
@@ -147,14 +156,7 @@ export default function DeviceDrawer() {
               "border-unknown bg-unknown-background text-unknown",
           )}
         >
-          <span
-            className={cn(
-              "size-4 rounded-full",
-              status === "up" && "bg-up",
-              status === "down" && "bg-down",
-              status === "unknown" && "bg-unknown",
-            )}
-          />
+          <StatusDot status={status} className="size-4" />
           {statusLabels[status]}
         </span>
       </header>
@@ -229,101 +231,16 @@ export default function DeviceDrawer() {
           ) : null}
 
           {/* Connected devices */}
-          {connectedDevices.length > 0 ? (
-            <section>
-              <div className="mb-2 flex items-center justify-between">
-                <h3 className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-                  Connexions ({connectedDevices.length})
-                </h3>
-                <Button
-                  variant={isCurrentDeviceHighlighted ? "secondary" : "outline"}
-                  size="sm"
-                  onClick={handleHighlightConnections}
-                  className="h-6 gap-1 text-xs"
-                >
-                  {isCurrentDeviceHighlighted ? "Masquer" : "Voir sur plan"}
-                  <ShortcutHintInline action="highlight-connections" />
-                </Button>
-              </div>
-              <div className="space-y-1">
-                {connectedDevices.map(
-                  (connDevice) =>
-                    connDevice && (
-                      <button
-                        key={connDevice.id}
-                        onClick={() => handleSelectConnected(connDevice.id)}
-                        className="group w-full rounded-lg bg-muted px-3 py-2 text-left transition-colors hover:bg-accent"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="text-sm font-medium text-foreground group-hover:text-primary">
-                              {connDevice.name}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {typeLabels[connDevice.type]}
-                            </div>
-                          </div>
-                          <div
-                            className={cn(
-                              "h-2 w-2 rounded-full",
-                              connDevice.metadata.status === "up" && "bg-up",
-                              connDevice.metadata.status === "down" &&
-                                "bg-down",
-                              connDevice.metadata.status === "unknown" &&
-                                "bg-unknown",
-                            )}
-                          />
-                        </div>
-                      </button>
-                    ),
-                )}
-              </div>
-            </section>
-          ) : null}
+          <DrawerConnectionsSection
+            connectedDevices={connectedDevices}
+            isCurrentDeviceHighlighted={isCurrentDeviceHighlighted}
+            onHighlightConnections={handleHighlightConnections}
+            onSelectConnected={handleSelectConnected}
+          />
 
           {/* Ports (for switches) */}
           {device.type === "switch" && device.metadata.ports ? (
-            <section>
-              <h3 className="mb-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-                Ports ({device.metadata.ports.length})
-              </h3>
-              <div className="grid grid-cols-12 gap-1">
-                {device.metadata.ports.map((port) => (
-                  <div
-                    key={port.id}
-                    className={cn(
-                      "flex h-4 w-4 items-center justify-center rounded-sm text-[8px]",
-                      port.status === "up" && "bg-up text-primary-foreground",
-                      port.status === "down" &&
-                        "bg-down text-primary-foreground",
-                      port.status === "unknown" &&
-                        "bg-unknown text-primary-foreground",
-                    )}
-                    title={`Port ${port.number}: ${port.status}`}
-                  >
-                    {port.number}
-                  </div>
-                ))}
-              </div>
-              <div className="mt-2 flex gap-3 text-xs text-muted-foreground">
-                <span className="flex items-center gap-1">
-                  <span className="h-2 w-2 rounded-sm bg-up" />
-                  {
-                    device.metadata.ports.filter((p) => p.status === "up")
-                      .length
-                  }{" "}
-                  actifs
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="h-2 w-2 rounded-sm bg-down" />
-                  {
-                    device.metadata.ports.filter((p) => p.status === "down")
-                      .length
-                  }{" "}
-                  down
-                </span>
-              </div>
-            </section>
+            <DrawerPortsSection ports={device.metadata.ports} />
           ) : null}
 
           {/* Position */}

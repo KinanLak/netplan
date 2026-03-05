@@ -3,18 +3,16 @@ import { Handle, Position } from "@xyflow/react";
 import NetworkNode from "./NetworkNode";
 import { areDeviceNodePropsEqual } from "./memo";
 import type { Node, NodeProps } from "@xyflow/react";
-import type { Device, DeviceStatus } from "@/types/map";
-import { useMapStore } from "@/store/useMapStore";
+import type { DeviceNodeData, DeviceStatus } from "@/types/map";
+import { StatusDot } from "@/components/StatusDot";
 import { cn } from "@/lib/utils";
 
-type SwitchNodeType = Node<{ data: Device }>;
+type SwitchNodeType = Node<DeviceNodeData>;
 
 function SwitchNode({ data, id }: NodeProps<SwitchNodeType>) {
-  const device = data.data;
+  const device = data;
   const ports = device.metadata.ports ?? [];
   const status: DeviceStatus = device.metadata.status ?? "unknown";
-  const isSelected = useMapStore((s) => s.selectedDeviceId === id);
-  const isHighlighted = useMapStore((s) => s.highlightedDeviceIds.includes(id));
 
   // Generate 24 ports
   const displayPorts =
@@ -28,9 +26,8 @@ function SwitchNode({ data, id }: NodeProps<SwitchNodeType>) {
 
   return (
     <NetworkNode
+      id={id}
       status={status}
-      isSelected={isSelected}
-      isHighlighted={isHighlighted}
       width={device.size.width}
       height={device.size.height}
       className="bg-linear-to-b from-secondary to-secondary/80"
@@ -40,14 +37,7 @@ function SwitchNode({ data, id }: NodeProps<SwitchNodeType>) {
         <span className="max-w-30 truncate text-[9px] font-bold tracking-wider text-muted-foreground uppercase">
           {device.hostname ?? device.name}
         </span>
-        <div
-          className={cn(
-            "h-2 w-2 rounded-full shadow-sm",
-            status === "up" && "bg-up",
-            status === "down" && "bg-down",
-            status === "unknown" && "bg-unknown",
-          )}
-        />
+        <StatusDot status={status} className="shadow-sm" />
       </div>
 
       {/* Ports grid */}

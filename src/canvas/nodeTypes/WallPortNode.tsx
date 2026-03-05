@@ -5,23 +5,19 @@ import { memo } from "react";
 import NetworkNode from "./NetworkNode";
 import { areDeviceNodePropsEqual } from "./memo";
 import type { Node, NodeProps } from "@xyflow/react";
-import type { Device, DeviceStatus } from "@/types/map";
-import { useMapStore } from "@/store/useMapStore";
+import type { DeviceNodeData, DeviceStatus } from "@/types/map";
 import { cn } from "@/lib/utils";
 
-type WallPortNodeType = Node<{ data: Device }>;
+type WallPortNodeType = Node<DeviceNodeData>;
 
 function WallPortNode({ data, id }: NodeProps<WallPortNodeType>) {
-  const device = data.data;
+  const device = data;
   const status: DeviceStatus = device.metadata.status ?? "unknown";
-  const isSelected = useMapStore((s) => s.selectedDeviceId === id);
-  const isHighlighted = useMapStore((s) => s.highlightedDeviceIds.includes(id));
 
   return (
     <NetworkNode
+      id={id}
       status={status}
-      isSelected={isSelected}
-      isHighlighted={isHighlighted}
       width={device.size.width}
       height={device.size.height}
       className="bg-card"

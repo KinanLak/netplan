@@ -1,25 +1,30 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import {
   Background,
   BackgroundVariant,
   ReactFlow,
   useReactFlow,
 } from "@xyflow/react";
-import { useHotkey } from "@tanstack/react-hotkeys";
 import { nodeTypes } from "./nodeTypes";
 import type { Node } from "@xyflow/react";
-import type { Hotkey } from "@tanstack/react-hotkeys";
-import type { Device } from "@/types/map";
+import type { DeviceNodeData } from "@/types/map";
 import type { WallToolsLayerHandle } from "@/canvas/components/WallToolsLayer";
 import { useMapStore } from "@/store/useMapStore";
-import { useShortcut } from "@/hooks/use-shortcuts";
+import {
+  useActiveDrawTool,
+  useCurrentFloorId,
+  useDevices,
+  useIsEditMode,
+  useSelectedDeviceId,
+  useWalls,
+} from "@/store/selectors";
 import { GRID_SIZE } from "@/lib/walls";
 import { cn } from "@/lib/utils";
 import { CanvasZoomControls } from "@/canvas/components/CanvasZoomControls";
 import { WallToolsLayer } from "@/canvas/components/WallToolsLayer";
 import { useCanvasDeviceNodes } from "@/canvas/hooks/useCanvasDeviceNodes";
 import { useCanvasDragState } from "@/canvas/hooks/useCanvasDragState";
-import { useConnectionHighlightShortcut } from "@/canvas/hooks/useConnectionHighlightShortcut";
+import { useCanvasKeyboardShortcuts } from "@/canvas/hooks/useCanvasKeyboardShortcuts";
 import {
   FLOW_CANVAS_BACKGROUND_COLOR,
   FLOW_CANVAS_BACKGROUND_DOT_SIZE,
@@ -29,23 +34,20 @@ import {
   FLOW_CANVAS_MAX_ZOOM,
   FLOW_CANVAS_MIN_ZOOM,
   FLOW_CANVAS_PANE_HOVER_COLORS,
-  FLOW_CANVAS_RESET_DURATION_MS,
-  FLOW_CANVAS_TOGGLE_DEBUG_HOTKEY,
   FLOW_CANVAS_ZOOM_DURATION_MS,
-  PAN_AMOUNT,
 } from "@/lib/constants";
 
 const SNAP_GRID: [number, number] = [GRID_SIZE, GRID_SIZE];
 
-type DeviceNode = Node<{ data: Device }>;
+type DeviceNode = Node<DeviceNodeData>;
 
 export default function FlowCanvas() {
-  const devices = useMapStore((s) => s.devices);
-  const walls = useMapStore((s) => s.walls);
-  const currentFloorId = useMapStore((s) => s.currentFloorId);
-  const selectedDeviceId = useMapStore((s) => s.selectedDeviceId);
-  const isEditMode = useMapStore((s) => s.isEditMode);
-  const activeDrawTool = useMapStore((s) => s.activeDrawTool);
+  const devices = useDevices();
+  const walls = useWalls();
+  const currentFloorId = useCurrentFloorId();
+  const selectedDeviceId = useSelectedDeviceId();
+  const isEditMode = useIsEditMode();
+  const activeDrawTool = useActiveDrawTool();
 
   const selectDevice = useMapStore((s) => s.selectDevice);
   const setHoveredDevice = useMapStore((s) => s.setHoveredDevice);
@@ -54,13 +56,9 @@ export default function FlowCanvas() {
   const reactFlow = useReactFlow();
   const wallToolsControllerRef = useRef<WallToolsLayerHandle | null>(null);
 
-  const [isWallDebugVisible, setIsWallDebugVisible] = useState(false);
   const [paneCursorClass, setPaneCursorClass] = useState(
     "canvas-cursor-default",
   );
-
-  const isWallDebugPanelVisible =
-    isEditMode && activeDrawTool === "wall" && isWallDebugVisible;
 
   const canEditDevices = isEditMode && activeDrawTool === "device";
   const floorWalls = walls.filter((wall) => wall.floorId === currentFloorId);
@@ -91,146 +89,15 @@ export default function FlowCanvas() {
     handleNodeDragStop,
   } = useCanvasDragState();
 
-  // Top-row zoom shortcuts go through TanStack (Ctrl/Cmd + = / - / 0)
-  useShortcut("zoom-in", () => {
-    reactFlow.zoomIn({ duration: FLOW_CANVAS_ZOOM_DURATION_MS });
+  const { isWallDebugVisible } = useCanvasKeyboardShortcuts({
+    reactFlow,
+    wallToolsControllerRef,
+    isEditMode,
+    activeDrawTool,
   });
 
-  useShortcut("zoom-out", () => {
-    reactFlow.zoomOut({ duration: FLOW_CANVAS_ZOOM_DURATION_MS });
-  });
-
-  useShortcut("zoom-reset", () => {
-    reactFlow.setViewport(
-      { x: 0, y: 0, zoom: 1 },
-      { duration: FLOW_CANVAS_RESET_DURATION_MS },
-    );
-  });
-
-  // Numpad zoom shortcuts via TanStack (code-gated to avoid top-row collisions)
-  useHotkey(
-    { key: "+" },
-    (event) => {
-      if (event.code !== "NumpadAdd") {
-        return;
-      }
-
-      event.preventDefault();
-      reactFlow.zoomIn({ duration: FLOW_CANVAS_ZOOM_DURATION_MS });
-    },
-    {
-      conflictBehavior: "allow",
-    },
-  );
-
-  useEffect(() => {
-    const handleNumpadAddFallback = (event: KeyboardEvent) => {
-      if (event.code !== "NumpadAdd") {
-        return;
-      }
-
-      if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) {
-        return;
-      }
-
-      const target = event.target;
-      if (
-        target instanceof HTMLElement &&
-        (target.isContentEditable ||
-          target.tagName === "INPUT" ||
-          target.tagName === "TEXTAREA" ||
-          target.tagName === "SELECT")
-      ) {
-        return;
-      }
-
-      event.preventDefault();
-      reactFlow.zoomIn({ duration: FLOW_CANVAS_ZOOM_DURATION_MS });
-    };
-
-    window.addEventListener("keydown", handleNumpadAddFallback, true);
-    return () => {
-      window.removeEventListener("keydown", handleNumpadAddFallback, true);
-    };
-  }, [reactFlow]);
-
-  useHotkey(
-    { key: "-" },
-    (event) => {
-      if (event.code !== "NumpadSubtract") {
-        return;
-      }
-
-      event.preventDefault();
-      reactFlow.zoomOut({ duration: FLOW_CANVAS_ZOOM_DURATION_MS });
-    },
-    {
-      conflictBehavior: "allow",
-    },
-  );
-
-  useHotkey(
-    { key: "0" },
-    (event) => {
-      if (event.code !== "Numpad0") {
-        return;
-      }
-
-      event.preventDefault();
-      reactFlow.setViewport(
-        { x: 0, y: 0, zoom: 1 },
-        { duration: FLOW_CANVAS_RESET_DURATION_MS },
-      );
-    },
-    {
-      conflictBehavior: "allow",
-    },
-  );
-
-  useHotkey(
-    "Escape",
-    () => {
-      wallToolsControllerRef.current?.cancelTool();
-    },
-    {
-      conflictBehavior: "allow",
-      enabled: isEditMode && activeDrawTool !== "device",
-    },
-  );
-
-  useHotkey(
-    FLOW_CANVAS_TOGGLE_DEBUG_HOTKEY as Hotkey,
-    () => {
-      setIsWallDebugVisible((prev) => !prev);
-    },
-    {
-      conflictBehavior: "allow",
-      enabled: isEditMode,
-    },
-  );
-
-  // Pan shortcuts — move the canvas with arrow keys
-  useShortcut("pan-up", () => {
-    const { x, y, zoom } = reactFlow.getViewport();
-    reactFlow.setViewport({ x, y: y + PAN_AMOUNT, zoom });
-  });
-
-  useShortcut("pan-down", () => {
-    const { x, y, zoom } = reactFlow.getViewport();
-    reactFlow.setViewport({ x, y: y - PAN_AMOUNT, zoom });
-  });
-
-  useShortcut("pan-left", () => {
-    const { x, y, zoom } = reactFlow.getViewport();
-    reactFlow.setViewport({ x: x + PAN_AMOUNT, y, zoom });
-  });
-
-  useShortcut("pan-right", () => {
-    const { x, y, zoom } = reactFlow.getViewport();
-    reactFlow.setViewport({ x: x - PAN_AMOUNT, y, zoom });
-  });
-
-  useConnectionHighlightShortcut();
+  const isWallDebugPanelVisible =
+    isEditMode && activeDrawTool === "wall" && isWallDebugVisible;
 
   const handlePaneMouseMove = useCallback((event: React.MouseEvent) => {
     wallToolsControllerRef.current?.handlePaneMouseMove(event);

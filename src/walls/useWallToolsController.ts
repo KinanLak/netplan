@@ -2,86 +2,31 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useReactFlow } from "@xyflow/react";
 import type {
   Position,
-  WallCommandReason,
   WallDraft,
   WallPointerInput,
   WallStrokeInput,
 } from "@/types/map";
+import type { PointerSample } from "@/walls/wall-tools-utils";
 import { useMapStore } from "@/store/useMapStore";
+import {
+  useActiveDrawTool,
+  useCurrentFloorId,
+  useIsEditMode,
+  useSelectedWallColor,
+} from "@/store/selectors";
 import { arePositionsEqual, snapPositionToWallGrid } from "@/lib/walls";
 import {
-  createOrthogonalLineDraft,
-  createRoomWallDrafts,
-  splitWallDraftIntoBlocks,
-  splitWallDraftsIntoBlocks,
-} from "@/walls/engine";
-
-interface PointerSample {
-  pointer: Position;
-  snappedPoint: Position;
-}
+  areStringArraysEqual,
+  computePaneCursorClass,
+  computePreviewSegments,
+  toLineFailureMessage,
+  toRoomFailureMessage,
+  usePositionSetter,
+} from "@/walls/wall-tools-utils";
 
 interface UseWallToolsControllerOptions {
   trackPointerPosition?: boolean;
 }
-
-const areNullablePositionsEqual = (
-  a: Position | null,
-  b: Position | null,
-): boolean => {
-  if (!a || !b) {
-    return a === b;
-  }
-
-  return arePositionsEqual(a, b);
-};
-
-const areStringArraysEqual = (
-  current: Array<string>,
-  next: Array<string>,
-): boolean => {
-  if (current === next) {
-    return true;
-  }
-
-  if (current.length !== next.length) {
-    return false;
-  }
-
-  for (let index = 0; index < current.length; index += 1) {
-    if (current[index] !== next[index]) {
-      return false;
-    }
-  }
-
-  return true;
-};
-
-const toLineFailureMessage = (reason: WallCommandReason): string => {
-  switch (reason) {
-    case "invalid-line":
-      return "Segment de mur invalide.";
-    case "collision-with-device":
-      return "Mur refuse: collision avec un device.";
-    case "already-exists":
-      return "Aucun nouveau bloc de mur a ajouter.";
-    default:
-      return "Impossible d'ajouter ce mur.";
-  }
-};
-
-const toRoomFailureMessage = (reason: WallCommandReason): string => {
-  switch (reason) {
-    case "invalid-room":
-      return "Salle refusee: rectangle vide.";
-    case "collision-with-device":
-      return "Salle refusee: collision avec un device.";
-    case "already-exists":
-      return "Aucun nouveau bloc de mur a ajouter.";
-    default:
-      return "Impossible d'ajouter cette salle.";
-  }
-};
 
 export interface WallToolsController {
   drawAnchor: Position | null;
@@ -105,10 +50,10 @@ export const useWallToolsController = (
   const { trackPointerPosition = false } = options;
   const reactFlow = useReactFlow();
 
-  const isEditMode = useMapStore((state) => state.isEditMode);
-  const activeDrawTool = useMapStore((state) => state.activeDrawTool);
-  const currentFloorId = useMapStore((state) => state.currentFloorId);
-  const selectedWallColor = useMapStore((state) => state.selectedWallColor);
+  const isEditMode = useIsEditMode();
+  const activeDrawTool = useActiveDrawTool();
+  const currentFloorId = useCurrentFloorId();
+  const selectedWallColor = useSelectedWallColor();
 
   const setActiveDrawTool = useMapStore((state) => state.setActiveDrawTool);
   const addWallLine = useMapStore((state) => state.addWallLine);
@@ -120,12 +65,10 @@ export const useWallToolsController = (
   );
 
   const [drawAnchor, setDrawAnchor] = useState<Position | null>(null);
-  const [pointerPreview, setPointerPreview] = useState<Position | null>(null);
-  const [hoverSnapPoint, setHoverSnapPoint] = useState<Position | null>(null);
-  const [pointerPosition, setPointerPosition] = useState<Position | null>(null);
-  const [pointerSnapPoint, setPointerSnapPoint] = useState<Position | null>(
-    null,
-  );
+  const [pointerPreview, setPointerPreviewIfChanged] = usePositionSetter();
+  const [hoverSnapPoint, setHoverSnapPointIfChanged] = usePositionSetter();
+  const [pointerPosition, setPointerPositionIfChanged] = usePositionSetter();
+  const [pointerSnapPoint, setPointerSnapPointIfChanged] = usePositionSetter();
   const [lastWallStartPoint, setLastWallStartPoint] = useState<Position | null>(
     null,
   );
@@ -138,30 +81,6 @@ export const useWallToolsController = (
   const brushStrokeLastSample = useRef<PointerSample | null>(null);
   const isBrushStrokeActive = useRef(false);
   const ignoreNextBrushClick = useRef(false);
-
-  const setPointerPreviewIfChanged = useCallback((next: Position | null) => {
-    setPointerPreview((previous) =>
-      areNullablePositionsEqual(previous, next) ? previous : next,
-    );
-  }, []);
-
-  const setHoverSnapPointIfChanged = useCallback((next: Position | null) => {
-    setHoverSnapPoint((previous) =>
-      areNullablePositionsEqual(previous, next) ? previous : next,
-    );
-  }, []);
-
-  const setPointerPositionIfChanged = useCallback((next: Position | null) => {
-    setPointerPosition((previous) =>
-      areNullablePositionsEqual(previous, next) ? previous : next,
-    );
-  }, []);
-
-  const setPointerSnapPointIfChanged = useCallback((next: Position | null) => {
-    setPointerSnapPoint((previous) =>
-      areNullablePositionsEqual(previous, next) ? previous : next,
-    );
-  }, []);
 
   const setErasePreviewKeysIfChanged = useCallback((next: Array<string>) => {
     setErasePreviewKeys((previous) =>
@@ -216,44 +135,23 @@ export const useWallToolsController = (
     [reactFlow],
   );
 
-  const previewSegments = useMemo(() => {
-    if (
-      !drawAnchor ||
-      !pointerPreview ||
-      !currentFloorId ||
-      activeDrawTool === "device" ||
-      activeDrawTool === "wall-brush" ||
-      activeDrawTool === "wall-erase"
-    ) {
-      return [];
-    }
-
-    if (activeDrawTool === "wall") {
-      const segment = createOrthogonalLineDraft(
+  const previewSegments = useMemo(
+    () =>
+      computePreviewSegments(
         drawAnchor,
         pointerPreview,
         currentFloorId,
+        activeDrawTool,
         selectedWallColor,
-      );
-
-      return segment ? splitWallDraftIntoBlocks(segment) : [];
-    }
-
-    const roomDrafts = createRoomWallDrafts(
+      ),
+    [
+      activeDrawTool,
+      currentFloorId,
       drawAnchor,
       pointerPreview,
-      currentFloorId,
       selectedWallColor,
-    );
-
-    return splitWallDraftsIntoBlocks(roomDrafts);
-  }, [
-    activeDrawTool,
-    currentFloorId,
-    drawAnchor,
-    pointerPreview,
-    selectedWallColor,
-  ]);
+    ],
+  );
 
   const drawContextKey = `${activeDrawTool}:${currentFloorId}:${isEditMode}`;
   const [previousDrawContextKey, setPreviousDrawContextKey] =
@@ -262,10 +160,10 @@ export const useWallToolsController = (
   if (previousDrawContextKey !== drawContextKey) {
     setPreviousDrawContextKey(drawContextKey);
     setDrawAnchor(null);
-    setPointerPreview(null);
-    setHoverSnapPoint(null);
-    setPointerPosition(null);
-    setPointerSnapPoint(null);
+    setPointerPreviewIfChanged(null);
+    setHoverSnapPointIfChanged(null);
+    setPointerPositionIfChanged(null);
+    setPointerSnapPointIfChanged(null);
     setLastWallStartPoint(null);
     setDrawMessage(null);
     setErasePreviewKeys([]);
@@ -612,36 +510,16 @@ export const useWallToolsController = (
     [activeDrawTool, cancelTool, isEditMode],
   );
 
-  const paneCursorClass = useMemo(() => {
-    if (!isEditMode || activeDrawTool === "device") {
-      return "canvas-cursor-default";
-    }
-
-    if (
-      activeDrawTool === "room" ||
-      activeDrawTool === "wall-brush" ||
-      activeDrawTool === "wall-erase"
-    ) {
-      return "wall-cursor-crosshair";
-    }
-
-    if (!drawAnchor || !pointerPreview) {
-      return "wall-cursor-crosshair";
-    }
-
-    if (arePositionsEqual(pointerPreview, drawAnchor)) {
-      return "wall-cursor-crosshair";
-    }
-
-    const dx = pointerPreview.x - drawAnchor.x;
-    const dy = pointerPreview.y - drawAnchor.y;
-
-    if (Math.abs(dx) >= Math.abs(dy)) {
-      return dx >= 0 ? "wall-cursor-e" : "wall-cursor-w";
-    }
-
-    return dy >= 0 ? "wall-cursor-s" : "wall-cursor-n";
-  }, [activeDrawTool, drawAnchor, isEditMode, pointerPreview]);
+  const paneCursorClass = useMemo(
+    () =>
+      computePaneCursorClass(
+        isEditMode,
+        activeDrawTool,
+        drawAnchor,
+        pointerPreview,
+      ),
+    [activeDrawTool, drawAnchor, isEditMode, pointerPreview],
+  );
 
   return {
     drawAnchor,

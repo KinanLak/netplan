@@ -1,14 +1,16 @@
 import type { DeviceStatus } from "@/types/map";
 import { cn } from "@/lib/utils";
-import { useMapStore } from "@/store/useMapStore";
+import {
+  useIsDeviceHighlighted,
+  useIsDeviceSelected,
+  useIsEditMode,
+} from "@/store/selectors";
 
 export interface NetworkNodeProps {
+  /** React Flow node id — used to read selection/highlight state */
+  id: string;
   /** Device status for border and shadow color */
   status: DeviceStatus;
-  /** Whether the node is currently selected */
-  isSelected?: boolean;
-  /** Whether the node is highlighted (e.g., connected devices) */
-  isHighlighted?: boolean;
   /** Node dimensions */
   width: number;
   height: number;
@@ -30,16 +32,17 @@ export interface NetworkNodeProps {
  * - Border keeps the status color
  */
 export default function NetworkNode({
+  id,
   status,
-  isSelected = false,
-  isHighlighted = false,
   width,
   height,
   className,
   children,
   ref,
 }: NetworkNodeProps) {
-  const isEditMode = useMapStore((s) => s.isEditMode);
+  const isEditMode = useIsEditMode();
+  const isSelected = useIsDeviceSelected(id);
+  const isHighlighted = useIsDeviceHighlighted(id);
 
   return (
     <div

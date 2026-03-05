@@ -5,23 +5,19 @@ import { ComputerIcon, UserIcon } from "@hugeicons/core-free-icons";
 import NetworkNode from "./NetworkNode";
 import { areDeviceNodePropsEqual } from "./memo";
 import type { Node, NodeProps } from "@xyflow/react";
-import type { Device, DeviceStatus } from "@/types/map";
-import { useMapStore } from "@/store/useMapStore";
-import { cn } from "@/lib/utils";
+import type { DeviceNodeData, DeviceStatus } from "@/types/map";
+import { StatusDot } from "@/components/StatusDot";
 
-type PcNodeType = Node<{ data: Device }>;
+type PcNodeType = Node<DeviceNodeData>;
 
 function PcNode({ data, id }: NodeProps<PcNodeType>) {
-  const device = data.data;
+  const device = data;
   const status: DeviceStatus = device.metadata.status ?? "unknown";
-  const isSelected = useMapStore((s) => s.selectedDeviceId === id);
-  const isHighlighted = useMapStore((s) => s.highlightedDeviceIds.includes(id));
 
   return (
     <NetworkNode
+      id={id}
       status={status}
-      isSelected={isSelected}
-      isHighlighted={isHighlighted}
       width={device.size.width}
       height={device.size.height}
       className="bg-card"
@@ -38,14 +34,7 @@ function PcNode({ data, id }: NodeProps<PcNodeType>) {
               strokeWidth={1.5}
             />
           </span>
-          <div
-            className={cn(
-              "h-2 w-2 rounded-full",
-              status === "up" && "bg-up",
-              status === "down" && "bg-down",
-              status === "unknown" && "bg-unknown",
-            )}
-          />
+          <StatusDot status={status} />
         </div>
 
         {/* Middle: hostname */}

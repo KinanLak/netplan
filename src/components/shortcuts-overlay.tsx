@@ -1,11 +1,12 @@
 import { useOptionHeld } from "@/hooks/use-shortcuts";
-import { formatHotkey, isMac, shortcuts } from "@/lib/shortcuts";
+import { isMac } from "@/lib/shortcuts";
 import { SHORTCUT_GROUP_GRID_COLUMN_COUNT } from "@/lib/constants";
 import {
   buildBalancedShortcutGrid,
   shortcutGroups,
 } from "@/lib/shortcut-groups";
-import { Kbd, KbdGroup } from "@/components/ui/kbd";
+import { Kbd } from "@/components/ui/kbd";
+import { ShortcutGroupGrid } from "@/components/ShortcutGroupGrid";
 import { cn } from "@/lib/utils";
 
 const orderedShortcutGroups = buildBalancedShortcutGrid(
@@ -45,63 +46,7 @@ export function ShortcutsOverlay() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-6">
-          {orderedShortcutGroups.map((group) => (
-            <div key={group.id}>
-              <h3 className="mb-3 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-                {group.title}
-              </h3>
-              <ul className="space-y-2">
-                {group.actions.map((action) => {
-                  const config = shortcuts[action];
-                  const keyCombinations = Array.from(
-                    new Map(
-                      config.keys
-                        .map((hotkey) => formatHotkey(hotkey))
-                        .map((keys) => [keys.join("+"), keys]),
-                    ).values(),
-                  );
-
-                  return (
-                    <li
-                      key={action}
-                      className="flex items-center justify-between gap-2"
-                    >
-                      <span className="text-sm text-foreground">
-                        {config.label}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        {keyCombinations.map((keys, keyGroupIndex) => {
-                          const keyGroupKey = `${action}-${keyGroupIndex}`;
-
-                          return (
-                            <span
-                              key={keyGroupKey}
-                              className="flex items-center gap-1"
-                            >
-                              {keyGroupIndex > 0 ? (
-                                <span className="text-xs text-muted-foreground">
-                                  /
-                                </span>
-                              ) : null}
-                              <KbdGroup>
-                                {keys.map((key, keyIndex) => (
-                                  <Kbd key={`${keyGroupKey}-${keyIndex}`}>
-                                    {key}
-                                  </Kbd>
-                                ))}
-                              </KbdGroup>
-                            </span>
-                          );
-                        })}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ))}
-        </div>
+        <ShortcutGroupGrid groups={orderedShortcutGroups} />
 
         <div className="mt-6 border-t border-border pt-4">
           <p className="text-center text-xs text-muted-foreground">
