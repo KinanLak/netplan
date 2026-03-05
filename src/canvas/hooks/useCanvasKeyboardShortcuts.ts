@@ -161,24 +161,25 @@ export function useCanvasKeyboardShortcuts({
   );
 
   // Pan shortcuts — move the canvas with arrow keys
-  useShortcut("pan-up", () => {
+  const applyPan = (dx: number, dy: number) => {
     const { x, y, zoom } = reactFlow.getViewport();
-    reactFlow.setViewport({ x, y: y + PAN_AMOUNT, zoom });
+    reactFlow.setViewport({ x: x + dx, y: y + dy, zoom });
+  };
+
+  useShortcut("pan-up", () => {
+    applyPan(0, PAN_AMOUNT);
   });
 
   useShortcut("pan-down", () => {
-    const { x, y, zoom } = reactFlow.getViewport();
-    reactFlow.setViewport({ x, y: y - PAN_AMOUNT, zoom });
+    applyPan(0, -PAN_AMOUNT);
   });
 
   useShortcut("pan-left", () => {
-    const { x, y, zoom } = reactFlow.getViewport();
-    reactFlow.setViewport({ x: x + PAN_AMOUNT, y, zoom });
+    applyPan(PAN_AMOUNT, 0);
   });
 
   useShortcut("pan-right", () => {
-    const { x, y, zoom } = reactFlow.getViewport();
-    reactFlow.setViewport({ x: x - PAN_AMOUNT, y, zoom });
+    applyPan(-PAN_AMOUNT, 0);
   });
 
   useConnectionHighlightShortcut();
