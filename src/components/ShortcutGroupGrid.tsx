@@ -18,7 +18,7 @@ export function ShortcutGroupGrid({
   labelKey = "label",
 }: ShortcutGroupGridProps) {
   return (
-    <div className="grid grid-cols-2 gap-6">
+    <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
       {groups.map((group) => (
         <div key={group.id}>
           <h3 className="mb-3 text-xs font-semibold tracking-wider text-muted-foreground uppercase">

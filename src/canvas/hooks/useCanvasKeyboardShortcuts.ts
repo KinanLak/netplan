@@ -54,6 +54,10 @@ export function useCanvasKeyboardShortcuts({
   useHotkey(
     { key: "+" },
     (event) => {
+      if (event.defaultPrevented) {
+        return;
+      }
+
       if (event.code !== "NumpadAdd") {
         return;
       }
@@ -68,6 +72,10 @@ export function useCanvasKeyboardShortcuts({
 
   useEffect(() => {
     const handleNumpadAddFallback = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) {
+        return;
+      }
+
       if (event.code !== "NumpadAdd") {
         return;
       }

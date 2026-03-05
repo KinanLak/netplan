@@ -58,7 +58,7 @@ export function DrawerConnectionsSection({
                   {connDevice.name}
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  {typeLabels[connDevice.type]}
+                  {typeLabels[connDevice.type] || "Autre"}
                 </div>
               </div>
               <StatusDot status={connDevice.metadata.status ?? "unknown"} />
