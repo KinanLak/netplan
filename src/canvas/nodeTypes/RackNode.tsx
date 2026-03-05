@@ -2,24 +2,20 @@ import { Handle, Position } from "@xyflow/react";
 import { memo } from "react";
 import NetworkNode from "./NetworkNode";
 import { areDeviceNodePropsEqual } from "./memo";
-import type { Device, DeviceStatus } from "@/types/map";
+import type { DeviceNodeData, DeviceStatus } from "@/types/map";
 import type { Node, NodeProps } from "@xyflow/react";
-import { useMapStore } from "@/store/useMapStore";
-import { cn } from "@/lib/utils";
+import { StatusDot } from "@/components/StatusDot";
 
-type RackNodeType = Node<{ data: Device }>;
+type RackNodeType = Node<DeviceNodeData>;
 
 function RackNode({ data, id }: NodeProps<RackNodeType>) {
-  const device = data.data;
+  const device = data;
   const status: DeviceStatus = device.metadata.status ?? "unknown";
-  const isSelected = useMapStore((s) => s.selectedDeviceId === id);
-  const isHighlighted = useMapStore((s) => s.highlightedDeviceIds.includes(id));
 
   return (
     <NetworkNode
+      id={id}
       status={status}
-      isSelected={isSelected}
-      isHighlighted={isHighlighted}
       width={device.size.width}
       height={device.size.height}
       className="bg-linear-to-b from-secondary to-secondary/80"
@@ -32,14 +28,7 @@ function RackNode({ data, id }: NodeProps<RackNodeType>) {
         <span className="truncate text-[8px] font-medium text-foreground">
           {device.name}
         </span>
-        <div
-          className={cn(
-            "h-2 w-2 shrink-0 rounded-full",
-            status === "up" && "bg-up",
-            status === "down" && "bg-down",
-            status === "unknown" && "bg-unknown",
-          )}
-        />
+        <StatusDot status={status} />
       </div>
 
       {/* Rack slots visualization */}

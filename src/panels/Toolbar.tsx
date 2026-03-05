@@ -1,19 +1,16 @@
 import { useEffect, useState } from "react";
 import { useReactFlow } from "@xyflow/react";
-import { HugeiconsIcon } from "@hugeicons/react";
-import {
-  ComputerIcon,
-  DashedLine01Icon,
-  DashedLine02Icon,
-  HardDriveIcon,
-  PlugSocketIcon,
-  ServerStack03Icon,
-} from "@hugeicons/core-free-icons";
-import { Check, Eraser, Paintbrush } from "lucide-react";
+import { Check } from "lucide-react";
 import type { Device, DeviceType, DrawTool } from "@/types/map";
 import type { AvailableDevice } from "@/mock/availableDevices";
-import type { ShortcutAction } from "@/lib/shortcuts";
+import type { ToolbarAction } from "@/panels/toolbar-actions";
 import { useMapStore } from "@/store/useMapStore";
+import {
+  useActiveDrawTool,
+  useCurrentFloorId,
+  useIsEditMode,
+  useSelectedWallColor,
+} from "@/store/selectors";
 import { useShortcut } from "@/hooks/use-shortcuts";
 import { Button } from "@/components/ui/button";
 import {
@@ -34,163 +31,21 @@ import { availableDevicesCatalog } from "@/mock/availableDevices";
 import {
   TOOLBAR_DEVICE_BUTTONS_INITIAL_STATE,
   TOOLBAR_DEVICE_COLLISION_OFFSETS,
-  TOOLBAR_ICON_SIZE_CLASS,
   TOOLBAR_WALL_COLOR_SELECTION_ENABLED,
   UNDO_REDO_EVENT_NAME,
   UNDO_REDO_FLASH_DURATION_MS,
 } from "@/lib/constants";
 import { GRID_SIZE, WALL_COLOR_ORDER, WALL_COLOR_TONES } from "@/lib/walls";
-
-interface ToolbarActionBase {
-  group: "draw" | "device";
-  id: string;
-  label: string;
-  icon: React.ReactNode;
-  shortcut: ShortcutAction;
-  title: string;
-}
-
-interface DeviceToolbarAction extends ToolbarActionBase {
-  group: "device";
-  type: DeviceType;
-}
-
-interface DrawToolbarAction extends ToolbarActionBase {
-  group: "draw";
-  tool: Extract<DrawTool, "wall" | "wall-brush" | "wall-erase" | "room">;
-}
-
-type ToolbarAction = DeviceToolbarAction | DrawToolbarAction;
-
-const toolbarActions: Array<ToolbarAction> = [
-  {
-    group: "draw",
-    id: "wall",
-    tool: "wall",
-    label: "Mur",
-    shortcut: "tool-wall",
-    title: "Tracer mur",
-    icon: (
-      <HugeiconsIcon
-        icon={DashedLine01Icon}
-        className={TOOLBAR_ICON_SIZE_CLASS}
-        color="currentColor"
-        strokeWidth={1.5}
-      />
-    ),
-  },
-  {
-    group: "draw",
-    id: "room",
-    tool: "room",
-    label: "Salle",
-    shortcut: "tool-room",
-    title: "Tracer salle",
-    icon: (
-      <HugeiconsIcon
-        icon={DashedLine02Icon}
-        className={TOOLBAR_ICON_SIZE_CLASS}
-        color="currentColor"
-        strokeWidth={1.5}
-      />
-    ),
-  },
-  {
-    group: "draw",
-    id: "wall-brush",
-    tool: "wall-brush",
-    label: "Pinceau",
-    shortcut: "tool-wall-brush",
-    title: "Peindre des murs",
-    icon: <Paintbrush className={TOOLBAR_ICON_SIZE_CLASS} />,
-  },
-  {
-    group: "draw",
-    id: "wall-erase",
-    tool: "wall-erase",
-    label: "Supprimer",
-    shortcut: "tool-wall-erase",
-    title: "Supprimer des murs",
-    icon: <Eraser className={TOOLBAR_ICON_SIZE_CLASS} />,
-  },
-  {
-    group: "device",
-    id: "rack",
-    type: "rack",
-    label: "Rack",
-    shortcut: "tool-rack",
-    title: "Ajouter Rack",
-    icon: (
-      <HugeiconsIcon
-        icon={ServerStack03Icon}
-        className={TOOLBAR_ICON_SIZE_CLASS}
-        color="currentColor"
-        strokeWidth={1.5}
-      />
-    ),
-  },
-  {
-    group: "device",
-    id: "switch",
-    type: "switch",
-    label: "Switch",
-    shortcut: "tool-switch",
-    title: "Ajouter Switch",
-    icon: (
-      <HugeiconsIcon
-        icon={HardDriveIcon}
-        className={TOOLBAR_ICON_SIZE_CLASS}
-        color="currentColor"
-        strokeWidth={1.5}
-      />
-    ),
-  },
-  {
-    group: "device",
-    id: "pc",
-    type: "pc",
-    label: "PC",
-    shortcut: "tool-pc",
-    title: "Ajouter PC",
-    icon: (
-      <HugeiconsIcon
-        icon={ComputerIcon}
-        className={TOOLBAR_ICON_SIZE_CLASS}
-        color="currentColor"
-        strokeWidth={1.5}
-      />
-    ),
-  },
-  {
-    group: "device",
-    id: "wall-port",
-    type: "wall-port",
-    label: "Prise",
-    shortcut: "tool-wall-port",
-    title: "Ajouter Prise",
-    icon: (
-      <HugeiconsIcon
-        icon={PlugSocketIcon}
-        className={TOOLBAR_ICON_SIZE_CLASS}
-        color="currentColor"
-        strokeWidth={1.5}
-      />
-    ),
-  },
-];
-
-const drawToolbarActions = toolbarActions.filter(
-  (action): action is DrawToolbarAction => action.group === "draw",
-);
-const deviceToolbarActions = toolbarActions.filter(
-  (action): action is DeviceToolbarAction => action.group === "device",
-);
+import {
+  deviceToolbarActions,
+  drawToolbarActions,
+} from "@/panels/toolbar-actions";
 
 export default function Toolbar() {
-  const currentFloorId = useMapStore((s) => s.currentFloorId);
-  const isEditMode = useMapStore((s) => s.isEditMode);
-  const activeDrawTool = useMapStore((s) => s.activeDrawTool);
-  const selectedWallColor = useMapStore((s) => s.selectedWallColor);
+  const currentFloorId = useCurrentFloorId();
+  const isEditMode = useIsEditMode();
+  const activeDrawTool = useActiveDrawTool();
+  const selectedWallColor = useSelectedWallColor();
 
   const addDevice = useMapStore((s) => s.addDevice);
   const checkCollision = useMapStore((s) => s.checkCollision);

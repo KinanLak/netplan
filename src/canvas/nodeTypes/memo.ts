@@ -1,11 +1,11 @@
 import type { Node, NodeProps } from "@xyflow/react";
-import type { Device } from "@/types/map";
+import type { DeviceNodeData } from "@/types/map";
 
-type DeviceNodeType = Node<{ data: Device }>;
+type DeviceNodeType = Node<DeviceNodeData>;
 
 export const areDeviceNodePropsEqual = (
   previous: NodeProps<DeviceNodeType>,
   next: NodeProps<DeviceNodeType>,
 ): boolean => {
-  return previous.id === next.id && previous.data.data === next.data.data;
+  return previous.id === next.id && previous.data === next.data;
 };

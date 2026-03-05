@@ -1,11 +1,17 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useNodesState } from "@xyflow/react";
 import type { Node, OnNodesChange } from "@xyflow/react";
-import type { Device, DrawTool, Position, Size } from "@/types/map";
+import type {
+  Device,
+  DeviceNodeData,
+  DrawTool,
+  Position,
+  Size,
+} from "@/types/map";
 import { CANVAS_DEVICE_NEAREST_POSITION_MAX_RADIUS } from "@/lib/constants";
 import { GRID_SIZE } from "@/lib/walls";
 
-type DeviceNode = Node<{ data: Device }>;
+type DeviceNode = Node<DeviceNodeData>;
 
 interface UseCanvasDeviceNodesParams {
   devices: Array<Device>;
@@ -97,7 +103,7 @@ export function useCanvasDeviceNodes({
         id: device.id,
         type: device.type,
         position: device.position,
-        data: { data: device },
+        data: device as DeviceNodeData,
         selected: device.id === selectedDeviceId,
         draggable: canEditDevices,
       });
