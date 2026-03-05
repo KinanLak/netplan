@@ -81,11 +81,11 @@ export const toLineFailureMessage = (reason: WallCommandReason): string => {
 export const toRoomFailureMessage = (reason: WallCommandReason): string => {
   switch (reason) {
     case "invalid-room":
-      return "Salle refusee: rectangle vide.";
+      return "Salle refusée: rectangle vide.";
     case "collision-with-device":
-      return "Salle refusee: collision avec un device.";
+      return "Salle refusée: collision avec un device.";
     case "already-exists":
-      return "Aucun nouveau bloc de mur a ajouter.";
+      return "Aucun nouveau bloc de mur à ajouter.";
     default:
       return "Impossible d'ajouter cette salle.";
   }

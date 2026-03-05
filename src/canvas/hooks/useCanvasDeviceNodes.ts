@@ -103,7 +103,7 @@ export function useCanvasDeviceNodes({
         id: device.id,
         type: device.type,
         position: device.position,
-        data: device as DeviceNodeData,
+        data: device,
         selected: device.id === selectedDeviceId,
         draggable: canEditDevices,
       });
