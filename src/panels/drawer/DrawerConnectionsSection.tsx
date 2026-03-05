@@ -34,6 +34,7 @@ export function DrawerConnectionsSection({
           Connexions ({connectedDevices.length})
         </h3>
         <Button
+          type="button"
           variant={isCurrentDeviceHighlighted ? "secondary" : "outline"}
           size="sm"
           onClick={onHighlightConnections}
