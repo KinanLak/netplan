@@ -8,6 +8,7 @@ import type {
 } from "@/types/map";
 import type { PointerSample } from "@/walls/wall-tools-utils";
 import { useMapStore } from "@/store/useMapStore";
+import { useMapUiStore } from "@/store/useMapUiStore";
 import {
   useActiveDrawTool,
   useCurrentFloorId,
@@ -55,7 +56,7 @@ export const useWallToolsController = (
   const currentFloorId = useCurrentFloorId();
   const selectedWallColor = useSelectedWallColor();
 
-  const setActiveDrawTool = useMapStore((state) => state.setActiveDrawTool);
+  const setActiveDrawTool = useMapUiStore((state) => state.setActiveDrawTool);
   const addWallLine = useMapStore((state) => state.addWallLine);
   const addWallRoom = useMapStore((state) => state.addWallRoom);
   const eraseWallAtPointer = useMapStore((state) => state.eraseWallAtPointer);
@@ -154,20 +155,31 @@ export const useWallToolsController = (
   );
 
   const drawContextKey = `${activeDrawTool}:${currentFloorId}:${isEditMode}`;
-  const [previousDrawContextKey, setPreviousDrawContextKey] =
-    useState(drawContextKey);
+  const previousDrawContextKeyRef = useRef(drawContextKey);
 
-  if (previousDrawContextKey !== drawContextKey) {
-    setPreviousDrawContextKey(drawContextKey);
-    setDrawAnchor(null);
-    setPointerPreviewIfChanged(null);
-    setHoverSnapPointIfChanged(null);
-    setPointerPositionIfChanged(null);
-    setPointerSnapPointIfChanged(null);
-    setLastWallStartPoint(null);
-    setDrawMessage(null);
-    setErasePreviewKeys([]);
-  }
+  useEffect(() => {
+    if (previousDrawContextKeyRef.current === drawContextKey) {
+      return;
+    }
+
+    previousDrawContextKeyRef.current = drawContextKey;
+    queueMicrotask(() => {
+      setDrawAnchor(null);
+      setPointerPreviewIfChanged(null);
+      setHoverSnapPointIfChanged(null);
+      setPointerPositionIfChanged(null);
+      setPointerSnapPointIfChanged(null);
+      setLastWallStartPoint(null);
+      setDrawMessage(null);
+      setErasePreviewKeys([]);
+    });
+  }, [
+    drawContextKey,
+    setHoverSnapPointIfChanged,
+    setPointerPositionIfChanged,
+    setPointerPreviewIfChanged,
+    setPointerSnapPointIfChanged,
+  ]);
 
   useEffect(() => {
     clearEraseStrokeState();
@@ -209,14 +221,15 @@ export const useWallToolsController = (
   );
 
   const applyBrushAtPoint = useCallback(
-    (floorId: string, snappedPoint: Position) => {
-      return addWallLine({
-        floorId,
-        start: snappedPoint,
-        end: { x: snappedPoint.x + 1, y: snappedPoint.y },
-        color: selectedWallColor,
-      });
-    },
+    (floorId: string, snappedPoint: Position) =>
+      addWallLine({
+        wall: {
+          floorId,
+          start: snappedPoint,
+          end: { x: snappedPoint.x + 1, y: snappedPoint.y },
+          color: selectedWallColor,
+        },
+      }),
     [addWallLine, selectedWallColor],
   );
 
@@ -268,8 +281,8 @@ export const useWallToolsController = (
           toSnappedPoint: sample.snappedPoint,
         };
 
-        const strokeResult = eraseWallStroke(strokeInput);
-        if (strokeResult.changed) {
+        const strokeResult = eraseWallStroke({ input: strokeInput });
+        if (strokeResult.ok) {
           setDrawMessage(null);
         }
 
@@ -281,7 +294,9 @@ export const useWallToolsController = (
       if (activeDrawTool === "wall-brush") {
         setHoverSnapPointIfChanged(sample.snappedPoint);
         setPointerPreviewIfChanged(null);
-        setErasePreviewKeys((prev) => (prev.length === 0 ? prev : []));
+        setErasePreviewKeys((previous) =>
+          previous.length === 0 ? previous : [],
+        );
 
         const isPrimaryButtonPressed = (event.buttons & 1) === 1;
         if (!isPrimaryButtonPressed) {
@@ -306,13 +321,15 @@ export const useWallToolsController = (
         }
 
         const strokeResult = addWallLine({
-          floorId: currentFloorId,
-          start: previous.snappedPoint,
-          end: sample.snappedPoint,
-          color: selectedWallColor,
+          wall: {
+            floorId: currentFloorId,
+            start: previous.snappedPoint,
+            end: sample.snappedPoint,
+            color: selectedWallColor,
+          },
         });
 
-        if (strokeResult.changed) {
+        if (strokeResult.ok) {
           setDrawMessage(null);
         }
 
@@ -321,7 +338,9 @@ export const useWallToolsController = (
         return;
       }
 
-      setErasePreviewKeys((prev) => (prev.length === 0 ? prev : []));
+      setErasePreviewKeys((previous) =>
+        previous.length === 0 ? previous : [],
+      );
 
       if (drawAnchor) {
         setPointerPreviewIfChanged(sample.snappedPoint);
@@ -338,21 +357,21 @@ export const useWallToolsController = (
     },
     [
       activeDrawTool,
+      addWallLine,
       applyBrushAtPoint,
       applyErasePreview,
       clearBrushStrokeState,
       clearEraseStrokeState,
       currentFloorId,
       drawAnchor,
-      addWallLine,
       eraseWallStroke,
       getPointerSample,
       isEditMode,
+      selectedWallColor,
       setHoverSnapPointIfChanged,
       setPointerPositionIfChanged,
       setPointerPreviewIfChanged,
       setPointerSnapPointIfChanged,
-      selectedWallColor,
       trackPointerPosition,
     ],
   );
@@ -372,12 +391,14 @@ export const useWallToolsController = (
         }
 
         const eraseResult = eraseWallAtPointer({
-          floorId: currentFloorId,
-          pointer: sample.pointer,
-          snappedPoint: sample.snappedPoint,
+          input: {
+            floorId: currentFloorId,
+            pointer: sample.pointer,
+            snappedPoint: sample.snappedPoint,
+          },
         });
 
-        if (!eraseResult.changed) {
+        if (!eraseResult.ok) {
           setDrawMessage("Aucun bloc de mur a supprimer.");
         } else {
           setDrawMessage(null);
@@ -405,9 +426,9 @@ export const useWallToolsController = (
           sample.snappedPoint,
         );
 
-        if (brushResult.reason === "collision-with-device") {
+        if (!brushResult.ok && brushResult.reason === "collision-with-device") {
           setDrawMessage("Mur refuse: collision avec un device.");
-        } else if (brushResult.changed) {
+        } else if (brushResult.ok) {
           setDrawMessage(null);
         }
 
@@ -441,14 +462,20 @@ export const useWallToolsController = (
 
       if (activeDrawTool === "wall") {
         const result = addWallLine({
-          floorId: currentFloorId,
-          start: drawAnchor,
-          end: drawPoint,
-          color: selectedWallColor,
+          wall: {
+            floorId: currentFloorId,
+            start: drawAnchor,
+            end: drawPoint,
+            color: selectedWallColor,
+          },
         });
 
-        if (!result.changed) {
-          setDrawMessage(toLineFailureMessage(result.reason));
+        if (!result.ok) {
+          setDrawMessage(
+            result.reason === "floor-not-found"
+              ? "Étage introuvable."
+              : toLineFailureMessage(result.reason),
+          );
           return true;
         }
 
@@ -461,14 +488,20 @@ export const useWallToolsController = (
       }
 
       const roomResult = addWallRoom({
-        floorId: currentFloorId,
-        start: drawAnchor,
-        end: drawPoint,
-        color: selectedWallColor,
+        room: {
+          floorId: currentFloorId,
+          start: drawAnchor,
+          end: drawPoint,
+          color: selectedWallColor,
+        },
       });
 
-      if (!roomResult.changed) {
-        setDrawMessage(toRoomFailureMessage(roomResult.reason));
+      if (!roomResult.ok) {
+        setDrawMessage(
+          roomResult.reason === "floor-not-found"
+            ? "Étage introuvable."
+            : toRoomFailureMessage(roomResult.reason),
+        );
         return true;
       }
 
@@ -491,9 +524,9 @@ export const useWallToolsController = (
       getPointerSample,
       hoverSnapPoint,
       isEditMode,
+      selectedWallColor,
       setHoverSnapPointIfChanged,
       setPointerPreviewIfChanged,
-      selectedWallColor,
     ],
   );
 

@@ -1,16 +1,18 @@
 import { useCallback } from "react";
+import { getConnectedDeviceIds } from "@/domain/map/selectors";
 import { useShortcut } from "@/hooks/use-shortcuts";
 import { useMapStore } from "@/store/useMapStore";
+import { useMapUiStore } from "@/store/useMapUiStore";
 
 export function useConnectionHighlightShortcut() {
   const handleHighlightHoveredConnections = useCallback(() => {
+    const { document } = useMapStore.getState();
     const {
-      devices,
       highlightedDeviceIds,
       selectedDeviceId,
       hoveredDeviceId,
       setHighlightedDevices,
-    } = useMapStore.getState();
+    } = useMapUiStore.getState();
 
     const canUseShortcut =
       !selectedDeviceId &&
@@ -30,12 +32,11 @@ export function useConnectionHighlightShortcut() {
       return;
     }
 
-    const device = devices.find((candidate) => candidate.id === targetDeviceId);
-    if (!device?.metadata.connectedDeviceIds?.length) {
+    const connectedIds = getConnectedDeviceIds(document, targetDeviceId);
+    if (connectedIds.length === 0) {
       return;
     }
 
-    const connectedIds = device.metadata.connectedDeviceIds;
     const allIdsToHighlight = [targetDeviceId, ...connectedIds];
     const isCurrentlyHighlighted = allIdsToHighlight.every((id) =>
       highlightedDeviceIds.includes(id),

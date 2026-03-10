@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 type WallPortNodeType = Node<DeviceNodeData>;
 
 function WallPortNode({ data, id }: NodeProps<WallPortNodeType>) {
-  const device = data;
+  const device = data.data;
   const status: DeviceStatus = device.metadata.status ?? "unknown";
 
   return (

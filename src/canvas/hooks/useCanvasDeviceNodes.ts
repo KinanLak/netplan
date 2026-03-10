@@ -8,6 +8,10 @@ import type {
   Position,
   Size,
 } from "@/types/map";
+import type {
+  CheckDeviceCollisionInput,
+  MoveDeviceInput,
+} from "@/domain/map/types";
 import { CANVAS_DEVICE_NEAREST_POSITION_MAX_RADIUS } from "@/lib/constants";
 import { GRID_SIZE } from "@/lib/walls";
 
@@ -19,8 +23,8 @@ interface UseCanvasDeviceNodesParams {
   selectedDeviceId: string | null;
   activeDrawTool: DrawTool;
   canEditDevices: boolean;
-  checkCollision: (deviceId: string, position: Position, size: Size) => boolean;
-  updateDevicePosition: (deviceId: string, position: Position) => void;
+  checkCollision: (input: CheckDeviceCollisionInput) => boolean;
+  updateDevicePosition: (input: MoveDeviceInput) => void;
   selectDevice: (deviceId: string | null) => void;
   setHoveredDevice: (deviceId: string | null) => void;
 }
@@ -35,12 +39,20 @@ interface UseCanvasDeviceNodesResult {
 
 const findNearestValidPosition = (
   deviceId: string,
+  floorId: string,
   targetPos: Position,
   size: Size,
   lastValidPos: Position,
-  checkCollision: (id: string, pos: Position, size: Size) => boolean,
+  checkCollision: (input: CheckDeviceCollisionInput) => boolean,
 ): Position => {
-  if (!checkCollision(deviceId, targetPos, size)) {
+  if (
+    !checkCollision({
+      floorId,
+      deviceId,
+      position: targetPos,
+      size,
+    })
+  ) {
     return targetPos;
   }
 
@@ -68,9 +80,16 @@ const findNearestValidPosition = (
       return distA - distB;
     });
 
-    for (const pos of positions) {
-      if (!checkCollision(deviceId, pos, size)) {
-        return pos;
+    for (const position of positions) {
+      if (
+        !checkCollision({
+          floorId,
+          deviceId,
+          position,
+          size,
+        })
+      ) {
+        return position;
       }
     }
   }
@@ -94,22 +113,25 @@ export function useCanvasDeviceNodes({
   const lastGridCell = useRef<Map<string, string>>(new Map());
 
   useEffect(() => {
-    const nextNodes = devices.reduce<Array<DeviceNode>>((acc, device) => {
-      if (device.floorId !== currentFloorId) {
-        return acc;
-      }
+    const nextNodes = devices.reduce<Array<DeviceNode>>(
+      (accumulator, device) => {
+        if (device.floorId !== currentFloorId) {
+          return accumulator;
+        }
 
-      acc.push({
-        id: device.id,
-        type: device.type,
-        position: device.position,
-        data: device,
-        selected: device.id === selectedDeviceId,
-        draggable: canEditDevices,
-      });
+        accumulator.push({
+          id: device.id,
+          type: device.type,
+          position: device.position,
+          data: { data: device },
+          selected: device.id === selectedDeviceId,
+          draggable: canEditDevices,
+        });
 
-      return acc;
-    }, []);
+        return accumulator;
+      },
+      [],
+    );
 
     nextNodes.forEach((node) => {
       lastValidPositions.current.set(node.id, node.position);
@@ -142,6 +164,7 @@ export function useCanvasDeviceNodes({
 
               const validPosition = findNearestValidPosition(
                 change.id,
+                device.floorId,
                 snappedPosition,
                 device.size,
                 lastValid,
@@ -188,7 +211,18 @@ export function useCanvasDeviceNodes({
             change.position &&
             !change.dragging
           ) {
-            updateDevicePosition(change.id, change.position);
+            const device = devices.find(
+              (candidate) => candidate.id === change.id,
+            );
+            if (!device) {
+              return;
+            }
+
+            updateDevicePosition({
+              deviceId: change.id,
+              floorId: device.floorId,
+              position: change.position,
+            });
           }
         });
       }
