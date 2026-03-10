@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   Background,
   BackgroundVariant,
@@ -38,6 +38,7 @@ import {
 } from "@/lib/constants";
 
 const SNAP_GRID: [number, number] = [GRID_SIZE, GRID_SIZE];
+const EMPTY_EDGES: Array<never> = [];
 
 type DeviceNode = Node<DeviceNodeData>;
 
@@ -61,7 +62,10 @@ export default function FlowCanvas() {
   );
 
   const canEditDevices = isEditMode && activeDrawTool === "device";
-  const floorWalls = walls.filter((wall) => wall.floorId === currentFloorId);
+  const floorWalls = useMemo(
+    () => walls.filter((wall) => wall.floorId === currentFloorId),
+    [walls, currentFloorId],
+  );
 
   const {
     nodes,
@@ -193,7 +197,7 @@ export default function FlowCanvas() {
     <div className="relative h-full w-full">
       <ReactFlow<DeviceNode>
         nodes={nodes}
-        edges={[]}
+        edges={EMPTY_EDGES}
         onNodesChange={handleNodesChange}
         onNodeClick={handleNodeClick}
         onNodeMouseEnter={handleNodeMouseEnter}

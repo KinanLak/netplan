@@ -120,6 +120,7 @@ export interface MapState {
   hoveredDeviceId: string | null;
   isEditMode: boolean;
   highlightedDeviceIds: Array<string>;
+  highlightedDeviceIdSet: ReadonlySet<string>;
   activeDrawTool: DrawTool;
   selectedWallColor: WallColor;
 }

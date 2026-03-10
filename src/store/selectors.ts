@@ -18,4 +18,4 @@ export const useHighlightedDeviceIds = () =>
 export const useIsDeviceSelected = (id: string) =>
   useMapStore((s) => s.selectedDeviceId === id);
 export const useIsDeviceHighlighted = (id: string) =>
-  useMapStore((s) => s.highlightedDeviceIds.includes(id));
+  useMapStore((s) => s.highlightedDeviceIdSet.has(id));

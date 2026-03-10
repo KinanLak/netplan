@@ -41,6 +41,75 @@ const normalizeActiveDrawTool = (tool: unknown): MapStore["activeDrawTool"] => {
   return "device";
 };
 
+const toHighlightedDeviceIdSet = (
+  deviceIds: ReadonlyArray<string>,
+): ReadonlySet<string> => new Set(deviceIds);
+
+type CollisionState = Pick<MapStore, "currentFloorId" | "devices" | "walls">;
+
+interface FloorCollisionCache {
+  floorId: string;
+  devicesRef: Array<Device>;
+  wallsRef: Array<WallSegment>;
+  floorDevices: Array<Pick<Device, "id" | "position" | "size">>;
+  floorWallRects: Array<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }>;
+}
+
+let floorCollisionCache: FloorCollisionCache | null = null;
+
+const getFloorCollisionCache = (
+  state: CollisionState,
+): FloorCollisionCache | null => {
+  if (!state.currentFloorId) {
+    return null;
+  }
+
+  if (
+    floorCollisionCache &&
+    floorCollisionCache.floorId === state.currentFloorId &&
+    floorCollisionCache.devicesRef === state.devices &&
+    floorCollisionCache.wallsRef === state.walls
+  ) {
+    return floorCollisionCache;
+  }
+
+  const floorDevices: Array<Pick<Device, "id" | "position" | "size">> = [];
+  for (const device of state.devices) {
+    if (device.floorId === state.currentFloorId) {
+      floorDevices.push(device);
+    }
+  }
+
+  const floorWallRects: Array<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }> = [];
+  for (const wall of state.walls) {
+    if (wall.floorId !== state.currentFloorId) {
+      continue;
+    }
+
+    floorWallRects.push(getWallRect(wall));
+  }
+
+  floorCollisionCache = {
+    floorId: state.currentFloorId,
+    devicesRef: state.devices,
+    wallsRef: state.walls,
+    floorDevices,
+    floorWallRects,
+  };
+
+  return floorCollisionCache;
+};
+
 const applyWallCommand = (
   result: WallCommandResult,
   setWalls: (nextWalls: Array<WallSegment>) => void,
@@ -65,6 +134,7 @@ export const useMapStore = create<MapStore>()(
         hoveredDeviceId: null,
         isEditMode: true,
         highlightedDeviceIds: [],
+        highlightedDeviceIdSet: toHighlightedDeviceIdSet([]),
         activeDrawTool: "device",
         selectedWallColor: "concrete",
 
@@ -75,6 +145,7 @@ export const useMapStore = create<MapStore>()(
             currentFloorId: building?.floors[0]?.id ?? null,
             selectedDeviceId: null,
             highlightedDeviceIds: [],
+            highlightedDeviceIdSet: toHighlightedDeviceIdSet([]),
           });
         },
 
@@ -83,6 +154,7 @@ export const useMapStore = create<MapStore>()(
             currentFloorId: floorId,
             selectedDeviceId: null,
             highlightedDeviceIds: [],
+            highlightedDeviceIdSet: toHighlightedDeviceIdSet([]),
           });
         },
 
@@ -137,16 +209,22 @@ export const useMapStore = create<MapStore>()(
         },
 
         deleteDevice: (deviceId: string) => {
-          set((state) => ({
-            devices: state.devices.filter((d) => d.id !== deviceId),
-            selectedDeviceId:
-              state.selectedDeviceId === deviceId
-                ? null
-                : state.selectedDeviceId,
-            highlightedDeviceIds: state.highlightedDeviceIds.filter(
+          set((state) => {
+            const highlightedDeviceIds = state.highlightedDeviceIds.filter(
               (id) => id !== deviceId,
-            ),
-          }));
+            );
+
+            return {
+              devices: state.devices.filter((d) => d.id !== deviceId),
+              selectedDeviceId:
+                state.selectedDeviceId === deviceId
+                  ? null
+                  : state.selectedDeviceId,
+              highlightedDeviceIds,
+              highlightedDeviceIdSet:
+                toHighlightedDeviceIdSet(highlightedDeviceIds),
+            };
+          });
         },
 
         addWallLine: (line: WallDraft) => {
@@ -252,37 +330,63 @@ export const useMapStore = create<MapStore>()(
         },
 
         setHighlightedDevices: (deviceIds: Array<string>) => {
-          set({ highlightedDeviceIds: deviceIds });
+          set((state) => {
+            const isSameHighlightState =
+              state.highlightedDeviceIds.length === deviceIds.length &&
+              state.highlightedDeviceIds.every(
+                (deviceId, index) => deviceId === deviceIds[index],
+              );
+
+            if (isSameHighlightState) {
+              return state;
+            }
+
+            return {
+              highlightedDeviceIds: deviceIds,
+              highlightedDeviceIdSet: toHighlightedDeviceIdSet(deviceIds),
+            };
+          });
         },
 
         checkCollision: (deviceId: string, position: Position, size: Size) => {
           const state = get();
-          const currentFloorId = state.currentFloorId;
+          const collisionCache = getFloorCollisionCache(state);
 
-          const otherDevices = state.devices.filter(
-            (d) => d.id !== deviceId && d.floorId === currentFloorId,
-          );
-
-          const deviceCollision = otherDevices.some((other) =>
-            rectanglesOverlap(position, size, other.position, other.size),
-          );
-          if (deviceCollision) {
-            return true;
+          if (!collisionCache) {
+            return false;
           }
 
-          const floorWalls = state.walls.filter(
-            (wall) => wall.floorId === currentFloorId,
-          );
+          for (const otherDevice of collisionCache.floorDevices) {
+            if (otherDevice.id === deviceId) {
+              continue;
+            }
 
-          return floorWalls.some((wall) => {
-            const wallRect = getWallRect(wall);
-            return rectanglesOverlap(
-              position,
-              size,
-              { x: wallRect.x, y: wallRect.y },
-              { width: wallRect.width, height: wallRect.height },
-            );
-          });
+            if (
+              rectanglesOverlap(
+                position,
+                size,
+                otherDevice.position,
+                otherDevice.size,
+              )
+            ) {
+              return true;
+            }
+          }
+
+          for (const wallRect of collisionCache.floorWallRects) {
+            if (
+              rectanglesOverlap(
+                position,
+                size,
+                { x: wallRect.x, y: wallRect.y },
+                { width: wallRect.width, height: wallRect.height },
+              )
+            ) {
+              return true;
+            }
+          }
+
+          return false;
         },
       }),
       {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useReactFlow } from "@xyflow/react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Tick02Icon } from "@hugeicons/core-free-icons";
@@ -57,6 +57,8 @@ export default function Toolbar() {
   const [selectedType, setSelectedType] = useState<DeviceType | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [open, setOpen] = useState(false);
+  const [activeAnchorElement, setActiveAnchorElement] =
+    useState<HTMLButtonElement | null>(null);
   const [flashType, setFlashType] = useState<"undo" | "redo" | null>(null);
 
   // Listen for undo/redo events and flash the toolbar background
@@ -74,16 +76,23 @@ export default function Toolbar() {
     return () => window.removeEventListener(UNDO_REDO_EVENT_NAME, handler);
   }, []);
 
-  // Track button elements as state so they can be read during render (refs cannot)
-  const [buttonElements, setButtonElements] = useState<
+  // Track button elements in a ref to avoid toolbar re-renders during mount.
+  const buttonElementsRef = useRef<
     Record<DeviceType, HTMLButtonElement | null>
-  >(TOOLBAR_DEVICE_BUTTONS_INITIAL_STATE);
+  >({
+    ...TOOLBAR_DEVICE_BUTTONS_INITIAL_STATE,
+  });
 
   const handleTypeClick = (type: DeviceType) => {
     const nextType = selectedType === type ? null : type;
+    const nextAnchorElement = nextType
+      ? buttonElementsRef.current[nextType]
+      : null;
+
     setActiveDrawTool("device");
     selectDevice(null);
     setSelectedType(nextType);
+    setActiveAnchorElement(nextAnchorElement);
     setOpen(nextType !== null);
     setSearchQuery("");
   };
@@ -97,6 +106,7 @@ export default function Toolbar() {
     setActiveDrawTool(nextTool);
     selectDevice(null);
     setSelectedType(null);
+    setActiveAnchorElement(null);
     setOpen(false);
     setSearchQuery("");
   };
@@ -109,6 +119,7 @@ export default function Toolbar() {
     setOpen(newOpen);
     if (!newOpen) {
       setSelectedType(null);
+      setActiveAnchorElement(null);
       setSearchQuery("");
     }
   };
@@ -188,6 +199,7 @@ export default function Toolbar() {
     addDevice(newDevice);
     setActiveDrawTool("device");
     setSelectedType(null);
+    setActiveAnchorElement(null);
     setSearchQuery("");
     setOpen(false);
   };
@@ -246,11 +258,7 @@ export default function Toolbar() {
         ref={
           action.group === "device"
             ? (el: HTMLButtonElement | null) => {
-                setButtonElements((prev) =>
-                  prev[action.type] === el
-                    ? prev
-                    : { ...prev, [action.type]: el },
-                );
+                buttonElementsRef.current[action.type] = el;
               }
             : undefined
         }
@@ -353,7 +361,7 @@ export default function Toolbar() {
           align="center"
           className="w-72 p-0"
           sideOffset={8}
-          anchor={selectedType ? buttonElements[selectedType] : undefined}
+          anchor={activeAnchorElement ?? undefined}
         >
           <Command shouldFilter={false}>
             <CommandInput

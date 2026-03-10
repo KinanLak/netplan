@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { ViewportPortal } from "@xyflow/react";
 import type { DrawTool, Position, WallDraft, WallSegment } from "@/types/map";
 import {
@@ -32,32 +33,48 @@ export function WallOverlay({
 }: WallOverlayProps) {
   const hasPreview = previewSegments.length > 0;
 
-  const mergedWallGroups = computeMergedWallGroups(floorWalls).sort(
-    (a, b) =>
-      WALL_COLOR_ORDER.indexOf(a.color) - WALL_COLOR_ORDER.indexOf(b.color),
-  );
-
-  const combinedMergedWallGroups = hasPreview
-    ? computeMergedWallGroups([...floorWalls, ...previewSegments]).sort(
+  const mergedWallGroups = useMemo(
+    () =>
+      computeMergedWallGroups(floorWalls).sort(
         (a, b) =>
           WALL_COLOR_ORDER.indexOf(a.color) - WALL_COLOR_ORDER.indexOf(b.color),
-      )
-    : mergedWallGroups;
-
-  const existingPathByColor = new Map(
-    mergedWallGroups.map((group) => [group.color, group.path]),
+      ),
+    [floorWalls],
   );
 
-  const floorWallRects = floorWalls.map((wall) => ({
-    key: getWallBlockKey(wall) ?? wall.id,
-    rect: getWallRect(wall),
-  }));
+  const combinedMergedWallGroups = useMemo(() => {
+    if (!hasPreview) {
+      return mergedWallGroups;
+    }
 
-  const erasePreviewKeySet = new Set(erasePreviewKeys);
-  const erasePreviewRects =
-    activeDrawTool === "wall-erase"
-      ? floorWallRects.filter((item) => erasePreviewKeySet.has(item.key))
-      : [];
+    return computeMergedWallGroups([...floorWalls, ...previewSegments]).sort(
+      (a, b) =>
+        WALL_COLOR_ORDER.indexOf(a.color) - WALL_COLOR_ORDER.indexOf(b.color),
+    );
+  }, [hasPreview, floorWalls, mergedWallGroups, previewSegments]);
+
+  const existingPathByColor = useMemo(
+    () => new Map(mergedWallGroups.map((group) => [group.color, group.path])),
+    [mergedWallGroups],
+  );
+
+  const floorWallRects = useMemo(
+    () =>
+      floorWalls.map((wall) => ({
+        key: getWallBlockKey(wall) ?? wall.id,
+        rect: getWallRect(wall),
+      })),
+    [floorWalls],
+  );
+
+  const erasePreviewRects = useMemo(() => {
+    if (activeDrawTool !== "wall-erase" || erasePreviewKeys.length === 0) {
+      return [];
+    }
+
+    const erasePreviewKeySet = new Set(erasePreviewKeys);
+    return floorWallRects.filter((item) => erasePreviewKeySet.has(item.key));
+  }, [activeDrawTool, erasePreviewKeys, floorWallRects]);
   const hasErasePreview = erasePreviewRects.length > 0;
   const eraseHoverRect =
     activeDrawTool === "wall-erase" && hoverSnapPoint && !hasErasePreview
