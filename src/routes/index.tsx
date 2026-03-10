@@ -7,7 +7,16 @@ import FlowCanvas from "@/canvas/FlowCanvas";
 import AppSidebar from "@/panels/Sidebar";
 import Toolbar from "@/panels/Toolbar";
 import DeviceDrawer from "@/panels/DeviceDrawer";
-import { rehydrateMapStore, useMapStore } from "@/store/useMapStore";
+import { rehydrateMapStore } from "@/store/useMapStore";
+import { useMapUiStore } from "@/store/useMapUiStore";
+import {
+  useActiveDrawTool,
+  useBuildings,
+  useCurrentBuildingId,
+  useCurrentFloorId,
+  useIsEditMode,
+  useSelectedDeviceId,
+} from "@/store/selectors";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { ThemeProvider, useTheme } from "@/components/theme-provider";
 import { HotkeysProvider } from "@/components/hotkeys-provider";
@@ -48,9 +57,7 @@ function HomePage() {
     <ThemeProvider defaultTheme="system" storageKey="netplan-ui-theme">
       <HotkeysProvider>
         {isStoreHydrated ? (
-          <>
-            <HomePageContent />
-          </>
+          <HomePageContent />
         ) : (
           <div className="h-screen w-screen bg-background" />
         )}
@@ -60,26 +67,29 @@ function HomePage() {
 }
 
 function HomePageContent() {
-  const selectedDeviceId = useMapStore((state) => state.selectedDeviceId);
-  const isEditMode = useMapStore((state) => state.isEditMode);
-  const toggleEditMode = useMapStore((state) => state.toggleEditMode);
-  const selectDevice = useMapStore((state) => state.selectDevice);
-  const activeDrawTool = useMapStore((state) => state.activeDrawTool);
-  const setActiveDrawTool = useMapStore((state) => state.setActiveDrawTool);
-  const setHighlightedDevices = useMapStore(
+  const selectedDeviceId = useSelectedDeviceId();
+  const isEditMode = useIsEditMode();
+  const activeDrawTool = useActiveDrawTool();
+  const buildings = useBuildings();
+  const currentBuildingId = useCurrentBuildingId();
+  const currentFloorId = useCurrentFloorId();
+  const toggleEditMode = useMapUiStore((state) => state.toggleEditMode);
+  const selectDevice = useMapUiStore((state) => state.selectDevice);
+  const setActiveDrawTool = useMapUiStore((state) => state.setActiveDrawTool);
+  const setHighlightedDevices = useMapUiStore(
     (state) => state.setHighlightedDevices,
   );
-  const buildings = useMapStore((state) => state.buildings);
-  const currentBuildingId = useMapStore((state) => state.currentBuildingId);
-  const currentFloorId = useMapStore((state) => state.currentFloorId);
-  const setCurrentFloor = useMapStore((state) => state.setCurrentFloor);
+  const setCurrentFloor = useMapUiStore((state) => state.setCurrentFloor);
   const { theme, setTheme } = useTheme();
   const { handleUndo, handleRedo } = useUndoRedo();
 
-  // Get current building's floors for navigation
-  const currentBuilding = buildings.find((b) => b.id === currentBuildingId);
+  const currentBuilding = buildings.find(
+    (building) => building.id === currentBuildingId,
+  );
   const floors = currentBuilding?.floors ?? [];
-  const currentFloorIndex = floors.findIndex((f) => f.id === currentFloorId);
+  const currentFloorIndex = floors.findIndex(
+    (floor) => floor.id === currentFloorId,
+  );
 
   const navigateFloorUp = () => {
     if (currentFloorIndex > 0) {
@@ -100,29 +110,26 @@ function HomePageContent() {
     setTheme(themeOrder[nextIndex]);
   };
 
-  // Register global shortcuts
   useShortcut("toggle-edit-mode", toggleEditMode);
   useShortcut("cycle-theme", cycleTheme);
   useShortcut("escape", () => {
-    // First deselect any device and clear highlights
     if (selectedDeviceId) {
       selectDevice(null);
       setActiveDrawTool("device");
       setHighlightedDevices([]);
       return;
     }
-    // Then cancel any active draw tool (wall/room) without leaving edit mode
+
     if (activeDrawTool !== "device") {
       setActiveDrawTool("device");
       return;
     }
-    // Then exit edit mode if active
+
     if (isEditMode) {
       toggleEditMode();
     }
   });
 
-  // Undo/redo via useShortcut (replaces native addEventListener handler)
   useShortcut("undo", handleUndo, {
     enabled: isEditMode,
     ignoreInputs: true,
@@ -131,27 +138,21 @@ function HomePageContent() {
     enabled: isEditMode,
     ignoreInputs: true,
   });
-
-  // Floor navigation — Mod is part of the key string, no modifier check needed
   useShortcut("floor-up", navigateFloorUp);
   useShortcut("floor-down", navigateFloorDown);
 
   return (
     <SidebarProvider>
       <div className="flex h-screen w-screen overflow-hidden bg-background">
-        {/* Sidebar */}
         <AppSidebar />
 
-        {/* Main canvas area */}
         <SidebarInset className="relative">
           <ReactFlowProvider>
             <FlowCanvas />
             <Toolbar />
-            {/* Device details drawer (conditional) - inside ReactFlowProvider for camera control */}
             {selectedDeviceId ? <DeviceDrawer /> : null}
           </ReactFlowProvider>
 
-          {/* Mode toggle button - top left */}
           <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
             <button
               onClick={toggleEditMode}

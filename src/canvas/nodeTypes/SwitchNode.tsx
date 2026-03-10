@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 type SwitchNodeType = Node<DeviceNodeData>;
 
 function SwitchNode({ data, id }: NodeProps<SwitchNodeType>) {
-  const device = data;
+  const device = data.data;
   const ports = device.metadata.ports ?? [];
   const status: DeviceStatus = device.metadata.status ?? "unknown";
 

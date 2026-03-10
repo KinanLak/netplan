@@ -7,5 +7,5 @@ export const areDeviceNodePropsEqual = (
   previous: NodeProps<DeviceNodeType>,
   next: NodeProps<DeviceNodeType>,
 ): boolean => {
-  return previous.id === next.id && previous.data === next.data;
+  return previous.id === next.id && previous.data.data === next.data.data;
 };

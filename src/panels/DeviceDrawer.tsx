@@ -2,7 +2,9 @@ import { useReactFlow } from "@xyflow/react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Cancel01Icon, UserIcon, WasteIcon } from "@hugeicons/core-free-icons";
 import type { DeviceStatus } from "@/types/map";
+import { getConnectedDeviceIds } from "@/domain/map/selectors";
 import { useMapStore } from "@/store/useMapStore";
+import { useMapUiStore } from "@/store/useMapUiStore";
 import {
   useDevices,
   useHighlightedDeviceIds,
@@ -38,48 +40,44 @@ export default function DeviceDrawer() {
   const isEditMode = useIsEditMode();
   const highlightedDeviceIds = useHighlightedDeviceIds();
 
-  const selectDevice = useMapStore((s) => s.selectDevice);
-  const deleteDevice = useMapStore((s) => s.deleteDevice);
-  const setHighlightedDevices = useMapStore((s) => s.setHighlightedDevices);
+  const document = useMapStore((state) => state.document);
+  const deleteDevice = useMapStore((state) => state.deleteDevice);
+  const selectDevice = useMapUiStore((state) => state.selectDevice);
+  const setHighlightedDevices = useMapUiStore(
+    (state) => state.setHighlightedDevices,
+  );
 
   const reactFlow = useReactFlow();
+  const device = devices.find((candidate) => candidate.id === selectedDeviceId);
+  const connectedDeviceIds = device
+    ? getConnectedDeviceIds(document, device.id)
+    : [];
+  const connectedDevices = connectedDeviceIds
+    .map((deviceId) => devices.find((candidate) => candidate.id === deviceId))
+    .filter((candidate): candidate is (typeof devices)[number] =>
+      Boolean(candidate),
+    );
 
-  const device = devices.find((d) => d.id === selectedDeviceId);
-
-  // Get connected devices
-  const connectedDevices =
-    device?.metadata.connectedDeviceIds
-      ?.map((id) => devices.find((d) => d.id === id))
-      .filter((d): d is (typeof devices)[number] => d !== undefined) ?? [];
-
-  // Check if the currently highlighted devices belong to this device
-  const isCurrentDeviceHighlighted = (() => {
-    if (
-      !device?.metadata.connectedDeviceIds ||
-      highlightedDeviceIds.length === 0
-    )
-      return false;
-    // Check if highlighted devices include this device and its connections
-    const allIds = [device.id, ...device.metadata.connectedDeviceIds];
-    return allIds.every((id) => highlightedDeviceIds.includes(id));
-  })();
+  const isCurrentDeviceHighlighted =
+    device !== undefined &&
+    highlightedDeviceIds.length > 0 &&
+    [device.id, ...connectedDeviceIds].every((id) =>
+      highlightedDeviceIds.includes(id),
+    );
 
   const handleHighlightConnections = () => {
-    if (!device?.metadata.connectedDeviceIds) return;
+    if (!device || connectedDeviceIds.length === 0) return;
 
-    // If this device's connections are highlighted, hide them. Otherwise, show this device's connections.
     if (isCurrentDeviceHighlighted) {
       setHighlightedDevices([]);
     } else {
-      // Include the device itself and its connections
-      setHighlightedDevices([device.id, ...device.metadata.connectedDeviceIds]);
+      setHighlightedDevices([device.id, ...connectedDeviceIds]);
     }
   };
 
   const handleSelectConnected = (deviceId: string) => {
-    const targetDevice = devices.find((d) => d.id === deviceId);
+    const targetDevice = devices.find((candidate) => candidate.id === deviceId);
     if (targetDevice) {
-      // Smooth camera movement to the target device
       const centerX = targetDevice.position.x + targetDevice.size.width / 2;
       const centerY = targetDevice.position.y + targetDevice.size.height / 2;
       const currentZoom = reactFlow.getZoom();
@@ -89,6 +87,7 @@ export default function DeviceDrawer() {
         zoom: currentZoom,
       });
     }
+
     setHighlightedDevices([]);
     selectDevice(deviceId);
   };
@@ -100,15 +99,13 @@ export default function DeviceDrawer() {
 
   const handleDeleteDevice = () => {
     if (!device) return;
-    deleteDevice(device.id);
-    selectDevice(null);
+    deleteDevice({ deviceId: device.id });
   };
 
-  // Register keyboard shortcuts (scope is automatic via useScopeEnabled)
   useShortcut("close-drawer", handleCloseDrawer);
   useShortcut("delete-device", handleDeleteDevice, { enabled: isEditMode });
   useShortcut("highlight-connections", handleHighlightConnections, {
-    enabled: (device?.metadata.connectedDeviceIds?.length ?? 0) > 0,
+    enabled: connectedDeviceIds.length > 0,
   });
 
   if (!device) {
@@ -119,7 +116,6 @@ export default function DeviceDrawer() {
 
   return (
     <aside className="absolute top-0 right-0 z-20 flex h-full w-80 flex-col border-l border-border bg-card shadow-xl">
-      {/* Header */}
       <header className="space-y-3 bg-linear-to-t from-muted to-card px-4 py-4">
         <div className="flex items-start justify-between">
           <div className="min-w-0 flex-1">
@@ -146,7 +142,6 @@ export default function DeviceDrawer() {
           </Button>
         </div>
 
-        {/* Status badge */}
         <span
           className={cn(
             "inline-flex w-fit items-center gap-2 rounded-full border py-1.5 pr-3 pl-2 text-sm font-medium",
@@ -161,10 +156,8 @@ export default function DeviceDrawer() {
         </span>
       </header>
 
-      {/* Content */}
       <ScrollArea className="flex-1">
         <div className="space-y-4 px-4 py-4">
-          {/* Hostname & IP */}
           {device.hostname || device.metadata.ip ? (
             <section>
               <h3 className="mb-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
@@ -191,7 +184,6 @@ export default function DeviceDrawer() {
             </section>
           ) : null}
 
-          {/* Last user (for PCs) */}
           {device.type === "pc" && device.metadata.lastUser ? (
             <section>
               <h3 className="mb-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
@@ -218,19 +210,6 @@ export default function DeviceDrawer() {
             </section>
           ) : null}
 
-          {/* Model */}
-          {device.metadata.model ? (
-            <section>
-              <h3 className="mb-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-                Matériel
-              </h3>
-              <div className="text-sm">
-                <span className="text-foreground">{device.metadata.model}</span>
-              </div>
-            </section>
-          ) : null}
-
-          {/* Connected devices */}
           <DrawerConnectionsSection
             connectedDevices={connectedDevices}
             isCurrentDeviceHighlighted={isCurrentDeviceHighlighted}
@@ -238,45 +217,22 @@ export default function DeviceDrawer() {
             onSelectConnected={handleSelectConnected}
           />
 
-          {/* Ports (for switches) */}
-          {device.type === "switch" && device.metadata.ports ? (
+          {device.metadata.ports ? (
             <DrawerPortsSection ports={device.metadata.ports} />
           ) : null}
-
-          {/* Position */}
-          <section>
-            <h3 className="mb-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-              Position
-            </h3>
-            <div className="flex gap-4 text-sm">
-              <div>
-                <span className="text-muted-foreground">X:</span>{" "}
-                <span className="font-mono text-foreground">
-                  {device.position.x}
-                </span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Y:</span>{" "}
-                <span className="font-mono text-foreground">
-                  {device.position.y}
-                </span>
-              </div>
-            </div>
-          </section>
         </div>
       </ScrollArea>
 
-      {/* Footer actions */}
       {isEditMode ? (
-        <footer className="space-y-2 border-t border-border bg-muted p-4">
+        <footer className="border-t p-4">
           <Button
             variant="destructive"
+            className="w-full"
             onClick={handleDeleteDevice}
-            className="w-full gap-2"
           >
             <HugeiconsIcon
               icon={WasteIcon}
-              size={16}
+              size={18}
               color="currentColor"
               strokeWidth={1.5}
             />

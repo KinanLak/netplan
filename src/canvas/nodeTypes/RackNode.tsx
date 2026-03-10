@@ -9,7 +9,7 @@ import { StatusDot } from "@/components/StatusDot";
 type RackNodeType = Node<DeviceNodeData>;
 
 function RackNode({ data, id }: NodeProps<RackNodeType>) {
-  const device = data;
+  const device = data.data;
   const status: DeviceStatus = device.metadata.status ?? "unknown";
 
   return (

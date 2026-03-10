@@ -6,11 +6,11 @@ import type { Device, DeviceType, DrawTool } from "@/types/map";
 import type { AvailableDevice } from "@/mock/availableDevices";
 import type { ToolbarAction } from "@/panels/toolbar-actions";
 import { useMapStore } from "@/store/useMapStore";
+import { useMapUiStore } from "@/store/useMapUiStore";
 import {
   useActiveDrawTool,
   useCurrentFloorId,
   useIsEditMode,
-  useSelectedWallColor,
 } from "@/store/selectors";
 import { useShortcut } from "@/hooks/use-shortcuts";
 import { Button } from "@/components/ui/button";
@@ -32,11 +32,10 @@ import { availableDevicesCatalog } from "@/mock/availableDevices";
 import {
   TOOLBAR_DEVICE_BUTTONS_INITIAL_STATE,
   TOOLBAR_DEVICE_COLLISION_OFFSETS,
-  TOOLBAR_WALL_COLOR_SELECTION_ENABLED,
   UNDO_REDO_EVENT_NAME,
   UNDO_REDO_FLASH_DURATION_MS,
 } from "@/lib/constants";
-import { GRID_SIZE, WALL_COLOR_ORDER, WALL_COLOR_TONES } from "@/lib/walls";
+import { GRID_SIZE } from "@/lib/walls";
 import {
   deviceToolbarActions,
   drawToolbarActions,
@@ -46,13 +45,11 @@ export default function Toolbar() {
   const currentFloorId = useCurrentFloorId();
   const isEditMode = useIsEditMode();
   const activeDrawTool = useActiveDrawTool();
-  const selectedWallColor = useSelectedWallColor();
 
-  const addDevice = useMapStore((s) => s.addDevice);
-  const checkCollision = useMapStore((s) => s.checkCollision);
-  const setActiveDrawTool = useMapStore((s) => s.setActiveDrawTool);
-  const setSelectedWallColor = useMapStore((s) => s.setSelectedWallColor);
-  const selectDevice = useMapStore((s) => s.selectDevice);
+  const addDevice = useMapStore((state) => state.addDevice);
+  const checkCollision = useMapStore((state) => state.checkCollision);
+  const setActiveDrawTool = useMapUiStore((state) => state.setActiveDrawTool);
+  const selectDevice = useMapUiStore((state) => state.selectDevice);
   const reactFlow = useReactFlow();
   const [selectedType, setSelectedType] = useState<DeviceType | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -60,23 +57,25 @@ export default function Toolbar() {
   const [activeAnchorElement, setActiveAnchorElement] =
     useState<HTMLButtonElement | null>(null);
   const [flashType, setFlashType] = useState<"undo" | "redo" | null>(null);
+  const [placementError, setPlacementError] = useState<string | null>(null);
 
-  // Listen for undo/redo events and flash the toolbar background
   useEffect(() => {
-    const handler = (e: Event) => {
-      const type = (e as CustomEvent<{ type: "undo" | "redo" }>).detail.type;
+    const handler = (event: Event) => {
+      const type = (event as CustomEvent<{ type: "undo" | "redo" }>).detail
+        .type;
       setFlashType(type);
       const timeout = setTimeout(
         () => setFlashType(null),
         UNDO_REDO_FLASH_DURATION_MS,
       );
+
       return () => clearTimeout(timeout);
     };
+
     window.addEventListener(UNDO_REDO_EVENT_NAME, handler);
     return () => window.removeEventListener(UNDO_REDO_EVENT_NAME, handler);
   }, []);
 
-  // Track button elements in a ref to avoid toolbar re-renders during mount.
   const buttonElementsRef = useRef<
     Record<DeviceType, HTMLButtonElement | null>
   >({
@@ -95,6 +94,7 @@ export default function Toolbar() {
     setActiveAnchorElement(nextAnchorElement);
     setOpen(nextType !== null);
     setSearchQuery("");
+    setPlacementError(null);
   };
 
   const handleDrawToolClick = (
@@ -109,22 +109,19 @@ export default function Toolbar() {
     setActiveAnchorElement(null);
     setOpen(false);
     setSearchQuery("");
+    setPlacementError(null);
   };
 
-  const handleSelectWallColor = (color: typeof selectedWallColor) => {
-    setSelectedWallColor(color);
-  };
-
-  const handleOpenChange = (newOpen: boolean) => {
-    setOpen(newOpen);
-    if (!newOpen) {
+  const handleOpenChange = (nextOpen: boolean) => {
+    setOpen(nextOpen);
+    if (!nextOpen) {
       setSelectedType(null);
       setActiveAnchorElement(null);
       setSearchQuery("");
+      setPlacementError(null);
     }
   };
 
-  // Register keyboard shortcut handlers
   useShortcut("tool-wall", () => handleDrawToolClick("wall"), {
     enabled: isEditMode && !!currentFloorId,
   });
@@ -153,33 +150,28 @@ export default function Toolbar() {
   const handleAddDevice = (catalogDevice: AvailableDevice) => {
     if (!currentFloorId) return;
 
-    // Get center of viewport
     const { x, y, zoom } = reactFlow.getViewport();
     const centerX = (-x + window.innerWidth / 2) / zoom;
     const centerY = (-y + window.innerHeight / 2) / zoom;
 
-    // Snap to grid
     const snappedX = Math.round(centerX / GRID_SIZE) * GRID_SIZE;
     const snappedY = Math.round(centerY / GRID_SIZE) * GRID_SIZE;
-
     const position = { x: snappedX, y: snappedY };
+    const candidatePositions = [position];
 
-    // Check collision at this position
-    const hasCollision = checkCollision("", position, catalogDevice.size);
+    const hasCollision = checkCollision({
+      floorId: currentFloorId,
+      deviceId: "",
+      position,
+      size: catalogDevice.size,
+    });
 
-    // If collision, try to find a free spot nearby
-    let finalPosition = position;
     if (hasCollision) {
-      // Try positions in a spiral pattern
       for (const offset of TOOLBAR_DEVICE_COLLISION_OFFSETS) {
-        const newPos = {
+        candidatePositions.push({
           x: Math.round((snappedX + offset.x) / GRID_SIZE) * GRID_SIZE,
           y: Math.round((snappedY + offset.y) / GRID_SIZE) * GRID_SIZE,
-        };
-        if (!checkCollision("", newPos, catalogDevice.size)) {
-          finalPosition = newPos;
-          break;
-        }
+        });
       }
     }
 
@@ -188,7 +180,7 @@ export default function Toolbar() {
       name: catalogDevice.name,
       hostname: catalogDevice.hostname,
       floorId: currentFloorId,
-      position: finalPosition,
+      position,
       size: catalogDevice.size,
       metadata: {
         ...catalogDevice.metadata,
@@ -196,7 +188,18 @@ export default function Toolbar() {
       },
     };
 
-    addDevice(newDevice);
+    const result = addDevice({
+      device: newDevice,
+      candidatePositions,
+    });
+    if (!result.ok) {
+      setPlacementError(
+        "Impossible d'ajouter l'équipement ici: toutes les positions candidates collisionnent.",
+      );
+      return;
+    }
+
+    setPlacementError(null);
     setActiveDrawTool("device");
     setSelectedType(null);
     setActiveAnchorElement(null);
@@ -204,7 +207,6 @@ export default function Toolbar() {
     setOpen(false);
   };
 
-  // Filter devices based on search query
   const availableDevices =
     activeDrawTool === "device" && selectedType
       ? availableDevicesCatalog[selectedType]
@@ -224,12 +226,6 @@ export default function Toolbar() {
     return null;
   }
 
-  const showWallColors =
-    activeDrawTool === "wall" ||
-    activeDrawTool === "wall-brush" ||
-    activeDrawTool === "wall-erase" ||
-    activeDrawTool === "room";
-  const wallColorSelectionEnabled = TOOLBAR_WALL_COLOR_SELECTION_ENABLED;
   const isActionActive = (action: ToolbarAction) => {
     if (action.group === "draw") {
       return activeDrawTool === action.tool;
@@ -257,8 +253,8 @@ export default function Toolbar() {
       <Button
         ref={
           action.group === "device"
-            ? (el: HTMLButtonElement | null) => {
-                buttonElementsRef.current[action.type] = el;
+            ? (element: HTMLButtonElement | null) => {
+                buttonElementsRef.current[action.type] = element;
               }
             : undefined
         }
@@ -312,42 +308,6 @@ export default function Toolbar() {
           <div className="flex items-center gap-1">
             {drawToolbarActions.map((action) => renderToolbarAction(action))}
           </div>
-
-          {showWallColors ? (
-            <div
-              className={cn(
-                "flex items-center gap-1",
-                // eslint-disable-next-line
-                wallColorSelectionEnabled ? "" : "hidden",
-              )}
-              aria-hidden={!wallColorSelectionEnabled}
-            >
-              <div className="h-6 w-px bg-border" aria-hidden />
-              {WALL_COLOR_ORDER.map((color) => {
-                const tone = WALL_COLOR_TONES[color];
-                const isActive = selectedWallColor === color;
-
-                return (
-                  <button
-                    key={color}
-                    type="button"
-                    onClick={() => handleSelectWallColor(color)}
-                    disabled={!currentFloorId || !wallColorSelectionEnabled}
-                    className={cn(
-                      "h-6 w-6 rounded-full ring-ring transition-all",
-                      isActive &&
-                        "ring-offset-0.5 ring-2 ring-muted-foreground",
-                    )}
-                    style={{
-                      backgroundColor: tone.fill,
-                      borderColor: tone.stroke,
-                    }}
-                    title={`Couleur mur: ${tone.label}`}
-                  />
-                );
-              })}
-            </div>
-          ) : null}
 
           <div className="h-6 w-px bg-border" aria-hidden />
 
@@ -408,6 +368,11 @@ export default function Toolbar() {
                 </CommandGroup>
               ) : null}
             </CommandList>
+            {placementError ? (
+              <div className="border-t px-3 py-2 text-xs text-destructive">
+                {placementError}
+              </div>
+            ) : null}
           </Command>
         </PopoverContent>
       </Popover>

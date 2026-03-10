@@ -11,12 +11,10 @@ import {
   OVERLAY_MODIFIER_KEY_BY_PLATFORM,
   OVERLAY_VISIBILITY_DELAY_MS,
 } from "@/lib/constants";
-import { useMapStore } from "@/store/useMapStore";
+import { useMapUiStore } from "@/store/useMapUiStore";
 
 type UseShortcutOptions = {
-  /** Override the enabled state (combined with scope) */
   enabled?: boolean;
-  /** Ignore hotkey when focus is in input-like elements. Defaults based on TanStack smart detection. */
   ignoreInputs?: boolean;
 };
 
@@ -25,17 +23,11 @@ const OVERLAY_MODIFIER_KEY = isMac
   ? OVERLAY_MODIFIER_KEY_BY_PLATFORM.mac
   : OVERLAY_MODIFIER_KEY_BY_PLATFORM.nonMac;
 
-/**
- * Compute whether a scope is currently active.
- * Global → always true.
- * Canvas → true when no device is selected (drawer closed).
- * Drawer → true when a device is selected (drawer open).
- */
 function useScopeEnabled(
   scope: ShortcutScope,
   extraEnabled: boolean = true,
 ): boolean {
-  const selectedDeviceId = useMapStore((s) => s.selectedDeviceId);
+  const selectedDeviceId = useMapUiStore((state) => state.selectedDeviceId);
 
   if (!extraEnabled) return false;
 
@@ -49,17 +41,9 @@ function useScopeEnabled(
   }
 }
 
-// Sentinel for unused hotkey slots (must be a valid hotkey to satisfy types)
 const NOOP_KEY: RegisterableHotkey = "F12";
 const noop: HotkeyCallback = () => {};
 
-/**
- * Hook to register a keyboard shortcut by action name.
- * Automatically resolves key bindings and scope from the shortcuts config.
- *
- * Uses fixed-count `useHotkey` calls (MAX_KEYS_PER_ACTION = 2) to satisfy
- * React's rules of hooks — unused slots get a disabled sentinel key.
- */
 export function useShortcut(
   action: ShortcutAction,
   handler: (event: KeyboardEvent) => void,
@@ -79,24 +63,15 @@ export function useShortcut(
     ...(ignoreInputs !== undefined ? { ignoreInputs } : {}),
   };
 
-  // Slot 0 — always present (keys has at least one entry)
   const key0 = config.keys[0];
   useHotkey(key0, callback, baseOptions);
 
-  // Slot 1 — second binding or disabled sentinel
   const key1 = config.keys.length > 1 ? config.keys[1] : NOOP_KEY;
   const opts1: UseHotkeyOptions =
     config.keys.length > 1 ? baseOptions : { ...baseOptions, enabled: false };
   useHotkey(key1, config.keys.length > 1 ? callback : noop, opts1);
 }
 
-/**
- * Hook to track if the overlay modifier key is held.
- * Ctrl on Windows/Linux, Cmd on macOS.
- * Used for showing shortcuts overlay (Linear-style).
- *
- * Kept as native addEventListener — this tracks modifier hold state, not a hotkey.
- */
 export function useOptionHeld(delay = OVERLAY_VISIBILITY_DELAY_MS) {
   const [isHeld, setIsHeld] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
@@ -107,7 +82,6 @@ export function useOptionHeld(delay = OVERLAY_VISIBILITY_DELAY_MS) {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === OVERLAY_MODIFIER_KEY && !event.repeat) {
         setIsHeld(true);
-        // Delay before showing overlay
         timeoutId = setTimeout(() => {
           setIsVisible(true);
         }, delay);
