@@ -11,7 +11,7 @@ import { StatusDot } from "@/components/StatusDot";
 type PcNodeType = Node<DeviceNodeData>;
 
 function PcNode({ data, id }: NodeProps<PcNodeType>) {
-  const device = data;
+  const device = data.data;
   const status: DeviceStatus = device.metadata.status ?? "unknown";
 
   return (

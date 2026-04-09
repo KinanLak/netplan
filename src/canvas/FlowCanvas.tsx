@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Background,
   BackgroundVariant,
@@ -10,6 +10,7 @@ import type { Node } from "@xyflow/react";
 import type { DeviceNodeData } from "@/types/map";
 import type { WallToolsLayerHandle } from "@/canvas/components/WallToolsLayer";
 import { useMapStore } from "@/store/useMapStore";
+import { useMapUiStore } from "@/store/useMapUiStore";
 import {
   useActiveDrawTool,
   useCurrentFloorId,
@@ -50,10 +51,12 @@ export default function FlowCanvas() {
   const isEditMode = useIsEditMode();
   const activeDrawTool = useActiveDrawTool();
 
-  const selectDevice = useMapStore((s) => s.selectDevice);
-  const setHoveredDevice = useMapStore((s) => s.setHoveredDevice);
-  const updateDevicePosition = useMapStore((s) => s.updateDevicePosition);
-  const checkCollision = useMapStore((s) => s.checkCollision);
+  const selectDevice = useMapUiStore((state) => state.selectDevice);
+  const setHoveredDevice = useMapUiStore((state) => state.setHoveredDevice);
+  const updateDevicePosition = useMapStore(
+    (state) => state.updateDevicePosition,
+  );
+  const checkCollision = useMapStore((state) => state.checkCollision);
   const reactFlow = useReactFlow();
   const wallToolsControllerRef = useRef<WallToolsLayerHandle | null>(null);
 
@@ -109,17 +112,7 @@ export default function FlowCanvas() {
 
   const handlePaneClick = useCallback(
     (event: React.MouseEvent) => {
-      if (!currentFloorId) {
-        selectDevice(null);
-        return;
-      }
-
-      if (!isEditMode) {
-        selectDevice(null);
-        return;
-      }
-
-      if (activeDrawTool === "device") {
+      if (!currentFloorId || !isEditMode || activeDrawTool === "device") {
         selectDevice(null);
         return;
       }
@@ -176,18 +169,18 @@ export default function FlowCanvas() {
   const paneHoverStrokeColor = isWallDeleteTool
     ? FLOW_CANVAS_PANE_HOVER_COLORS.erase.stroke
     : FLOW_CANVAS_PANE_HOVER_COLORS.draw.stroke;
-  const haloContextKey = `${isEditMode}:${activeDrawTool}`;
-  const [previousHaloContextKey, setPreviousHaloContextKey] =
-    useState(haloContextKey);
   const [lastVisibleHaloColor, setLastVisibleHaloColor] =
     useState(editModeHaloColor);
 
-  if (previousHaloContextKey !== haloContextKey) {
-    setPreviousHaloContextKey(haloContextKey);
-    if (isEditMode) {
-      setLastVisibleHaloColor(editModeHaloColor);
+  useEffect(() => {
+    if (!isEditMode) {
+      return;
     }
-  }
+
+    queueMicrotask(() => {
+      setLastVisibleHaloColor(editModeHaloColor);
+    });
+  }, [editModeHaloColor, isEditMode]);
 
   const editModeHaloShadow = isEditMode
     ? editModeHaloColor
@@ -212,7 +205,6 @@ export default function FlowCanvas() {
         onMoveEnd={handleMoveEnd}
         nodeTypes={nodeTypes}
         snapToGrid={true}
-        // panOnScroll={true} // Allow moving on the canvas horizontally and vertically by using the trackpad naturally
         snapGrid={SNAP_GRID}
         fitView
         fitViewOptions={{ padding: FLOW_CANVAS_FIT_VIEW_PADDING }}
