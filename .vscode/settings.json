@@ -1,0 +1,4 @@
+{
+    "js/ts.tsdk.path": "node_modules/typescript/lib",
+    "typescript.native-preview.tsdk": "/home/kinanl/repos/netplan/node_modules/@typescript/native-preview"
+}
