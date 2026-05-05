@@ -3,9 +3,10 @@
 ## Tooling rules
 
 - You can use Context7 MCP for library/API docs, code generation, or configuration, without being asked.
-- Run `bun run check` (tsc + ESLint + Prettier) **after every code change**.
+- Run `bun run check` (tsgo + oxlint + oxfmt) **after the end of every code change**.
 - **Bun only** (not npm/yarn): `bun run dev`, `bun run build`, `bun run preview`.
 - Path alias: `@/` → `src/`.
+- Don't manually edit package.json. Use `bun add` or `bun remove` to update dependencies.
 
 ## Tech stack
 
@@ -36,3 +37,4 @@ React 19, TypeScript, Vite, TailwindCSS V4, Zustand (persisted to `localStorage`
 
 - This is an unreleased project, all code must be canonical. Projet shape can be changed at any time, so avoid workarounds for backward compatibility.
 - React Compiler is enabled, so useMemo aren't needed since all components are automatically memoized.
+- If you encounter an unusual or hard-to-fix pattern, consider proposing an addition to AGENTS.md only when it would genuinely help share knowledge and prevent future issues.
