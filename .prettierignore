@@ -1,5 +1,0 @@
-package-lock.json
-package.json
-bun.lock
-src/routeTree.gen.ts
-.agents/skills/**/*.md

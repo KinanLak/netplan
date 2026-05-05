@@ -1,0 +1,18 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "sortTailwindcss": {
+    "stylesheet": "./src/styles.css"
+  },
+  "semi": true,
+  "singleQuote": false,
+  "trailingComma": "all",
+  "printWidth": 80,
+  "sortPackageJson": false,
+  "ignorePatterns": [
+    "package-lock.json",
+    "package.json",
+    "bun.lock",
+    "src/routeTree.gen.ts",
+    ".agents/skills/**/*.md"
+  ]
+}
