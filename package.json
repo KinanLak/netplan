@@ -6,7 +6,7 @@
     "dev": "vite dev",
     "build": "vite build",
     "lint": "oxlint --fix",
-    "format": "oxfmt",
+    "format": "oxfmt --write",
     "tsc": "tsgo --noEmit --pretty",
     "check": "bun run tsc && bun run lint && bun run format"
   },
@@ -54,7 +54,6 @@
     "oxlint": "^1.62.0",
     "oxlint-tsgolint": "^0.22.1",
     "react-scan": "^0.5.3",
-    "typescript": "^5.9.3",
     "vite": "npm:rolldown-vite@latest"
   }
 }
