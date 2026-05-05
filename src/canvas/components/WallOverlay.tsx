@@ -210,7 +210,9 @@ export function WallOverlay({
             />
           ) : null}
 
-          {activeDrawTool === "wall" && !drawAnchor && hoverSnapPoint ? (
+          {(activeDrawTool === "wall" || activeDrawTool === "room") &&
+          !drawAnchor &&
+          hoverSnapPoint ? (
             <circle
               cx={hoverSnapPoint.x}
               cy={hoverSnapPoint.y}

@@ -58,7 +58,10 @@ export const FLOW_CANVAS_PANE_HOVER_COLORS = {
     stroke: "rgba(59, 130, 246, 0.85)",
   },
 } as const;
-export const FLOW_CANVAS_TOGGLE_DEBUG_HOTKEY = "Shift+D";
+export const FLOW_CANVAS_TOGGLE_DEBUG_HOTKEY = {
+  key: "D",
+  shift: true,
+} as const;
 
 // Canvas devices
 export const CANVAS_DEVICE_NEAREST_POSITION_MAX_RADIUS = 200;

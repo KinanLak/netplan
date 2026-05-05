@@ -101,7 +101,7 @@ export default function FlowCanvas() {
   });
 
   const isWallDebugPanelVisible =
-    isEditMode && activeDrawTool === "wall" && isWallDebugVisible;
+    isEditMode && activeDrawTool !== "device" && isWallDebugVisible;
 
   const handlePaneMouseMove = useCallback((event: React.MouseEvent) => {
     wallToolsControllerRef.current?.handlePaneMouseMove(event);

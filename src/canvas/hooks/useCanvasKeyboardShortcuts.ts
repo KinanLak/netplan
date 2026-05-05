@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useHotkey } from "@tanstack/react-hotkeys";
 import type { ReactFlowInstance } from "@xyflow/react";
-import type { Hotkey } from "@tanstack/react-hotkeys";
 import type { DrawTool } from "@/types/map";
 import type { WallToolsLayerHandle } from "@/canvas/components/WallToolsLayer";
 import { useShortcut } from "@/hooks/use-shortcuts";
@@ -150,7 +149,7 @@ export function useCanvasKeyboardShortcuts({
   );
 
   useHotkey(
-    FLOW_CANVAS_TOGGLE_DEBUG_HOTKEY as Hotkey,
+    FLOW_CANVAS_TOGGLE_DEBUG_HOTKEY,
     () => {
       setIsWallDebugVisible((prev) => !prev);
     },

@@ -329,12 +329,8 @@ export const useWallToolsController = (
         setPointerPreviewIfChanged(null);
       }
 
-      if (activeDrawTool === "wall" && !drawAnchor) {
-        setHoverSnapPointIfChanged(sample.snappedPoint);
-        return;
-      }
-
-      setHoverSnapPointIfChanged(null);
+      setHoverSnapPointIfChanged(sample.snappedPoint);
+      return;
     },
     [
       activeDrawTool,

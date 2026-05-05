@@ -62,17 +62,6 @@ export function WallToolsLayer({
     onPaneCursorClassChange(wallTools.paneCursorClass);
   }, [onPaneCursorClassChange, wallTools.paneCursorClass]);
 
-  const wallHintPoint =
-    activeDrawTool === "wall" && !wallTools.drawAnchor
-      ? wallTools.hoverSnapPoint
-      : null;
-  const theoreticalWallStartPoint =
-    activeDrawTool === "wall" ? wallTools.pointerSnapPoint : null;
-  const realWallStartPoint =
-    activeDrawTool === "wall" ? wallTools.lastWallStartPoint : null;
-  const physicalWallStartPoint =
-    activeDrawTool === "wall" ? wallTools.drawAnchor : null;
-
   return (
     <>
       <WallOverlay
@@ -93,11 +82,14 @@ export function WallToolsLayer({
 
       <WallDebugPanel
         isVisible={isWallDebugPanelVisible}
+        activeDrawTool={activeDrawTool}
         pointerPosition={wallTools.pointerPosition}
-        wallHintPoint={wallHintPoint}
-        theoreticalWallStartPoint={theoreticalWallStartPoint}
-        realWallStartPoint={realWallStartPoint}
-        physicalWallStartPoint={physicalWallStartPoint}
+        hoverSnapPoint={wallTools.hoverSnapPoint}
+        pointerSnapPoint={wallTools.pointerSnapPoint}
+        drawAnchor={wallTools.drawAnchor}
+        lastWallStartPoint={wallTools.lastWallStartPoint}
+        erasePreviewCount={wallTools.erasePreviewKeys.length}
+        drawMessage={wallTools.drawMessage}
       />
     </>
   );
