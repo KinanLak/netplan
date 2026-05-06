@@ -14,11 +14,7 @@ import {
 } from "@/store/selectors";
 import { useShortcut } from "@/hooks/use-shortcuts";
 import { Button } from "@/components/ui/button";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { Popover, PopoverContent } from "@/components/ui/popover";
 import {
   Command,
   CommandGroup,
@@ -58,6 +54,9 @@ export default function Toolbar() {
   const [selectedType, setSelectedType] = useState<DeviceType | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [open, setOpen] = useState(false);
+  const [lastSelectedType, setLastSelectedType] = useState<DeviceType | null>(
+    null,
+  );
   const [activeAnchorElement, setActiveAnchorElement] =
     useState<HTMLButtonElement | null>(null);
   const [flashType, setFlashType] = useState<"undo" | "redo" | null>(null);
@@ -86,14 +85,17 @@ export default function Toolbar() {
     const nextType = selectedType === type ? null : type;
     const nextAnchorElement = nextType
       ? buttonElementsRef.current[nextType]
-      : null;
+      : activeAnchorElement;
 
     setActiveDrawTool("device");
     selectDevice(null);
     setSelectedType(nextType);
+    if (nextType) {
+      setLastSelectedType(nextType);
+      setSearchQuery("");
+    }
     setActiveAnchorElement(nextAnchorElement);
     setOpen(nextType !== null);
-    setSearchQuery("");
   };
 
   const handleDrawToolClick = (
@@ -105,9 +107,7 @@ export default function Toolbar() {
     setActiveDrawTool(nextTool);
     selectDevice(null);
     setSelectedType(null);
-    setActiveAnchorElement(null);
     setOpen(false);
-    setSearchQuery("");
   };
 
   const handleSelectWallColor = (color: typeof selectedWallColor) => {
@@ -118,8 +118,6 @@ export default function Toolbar() {
     setOpen(newOpen);
     if (!newOpen) {
       setSelectedType(null);
-      setActiveAnchorElement(null);
-      setSearchQuery("");
     }
   };
 
@@ -190,15 +188,14 @@ export default function Toolbar() {
     addDevice(newDevice);
     setActiveDrawTool("device");
     setSelectedType(null);
-    setActiveAnchorElement(null);
-    setSearchQuery("");
     setOpen(false);
   };
 
   // Filter devices based on search query
+  const visibleDeviceType = selectedType ?? lastSelectedType;
   const availableDevices =
-    activeDrawTool === "device" && selectedType
-      ? availableDevicesCatalog[selectedType]
+    activeDrawTool === "device" && visibleDeviceType
+      ? availableDevicesCatalog[visibleDeviceType]
       : [];
   const filteredDevices = !searchQuery.trim()
     ? availableDevices
@@ -271,11 +268,7 @@ export default function Toolbar() {
 
     return (
       <div key={action.id} className="relative">
-        {action.group === "device" ? (
-          <PopoverTrigger render={button} />
-        ) : (
-          button
-        )}
+        {button}
         <ShortcutHintAbsolute
           action={action.shortcut}
           position="bottom-center"
