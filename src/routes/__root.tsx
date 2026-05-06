@@ -52,7 +52,7 @@ function RootDocument({ children }: { children: ReactNode }) {
       </head>
       <body>
         {children}
-        <SpeedInsights />
+        <SpeedInsights debug={false} />
         <TanStackDevtools
           config={{
             position: "middle-left",
