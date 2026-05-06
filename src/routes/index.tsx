@@ -103,24 +103,28 @@ function HomePageContent() {
   // Register global shortcuts
   useShortcut("toggle-edit-mode", toggleEditMode);
   useShortcut("cycle-theme", cycleTheme);
-  useShortcut("escape", () => {
-    // First deselect any device and clear highlights
-    if (selectedDeviceId) {
-      selectDevice(null);
-      setActiveDrawTool("device");
-      setHighlightedDevices([]);
-      return;
-    }
-    // Then cancel any active draw tool (wall/room) without leaving edit mode
-    if (activeDrawTool !== "device") {
-      setActiveDrawTool("device");
-      return;
-    }
-    // Then exit edit mode if active
-    if (isEditMode) {
-      toggleEditMode();
-    }
-  });
+  useShortcut(
+    "escape",
+    () => {
+      // First deselect any device and clear highlights
+      if (selectedDeviceId) {
+        selectDevice(null);
+        setActiveDrawTool("device");
+        setHighlightedDevices([]);
+        return;
+      }
+      // Then cancel any active draw tool (wall/room) without leaving edit mode
+      if (activeDrawTool !== "device") {
+        setActiveDrawTool("device");
+        return;
+      }
+      // Then exit edit mode if active
+      if (isEditMode) {
+        toggleEditMode();
+      }
+    },
+    { conflictBehavior: "allow" },
+  );
 
   // Undo/redo via useShortcut (replaces native addEventListener handler)
   useShortcut("undo", handleUndo, {

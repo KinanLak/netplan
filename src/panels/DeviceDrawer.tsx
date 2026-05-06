@@ -105,9 +105,12 @@ export default function DeviceDrawer() {
   };
 
   // Register keyboard shortcuts (scope is automatic via useScopeEnabled)
-  useShortcut("close-drawer", handleCloseDrawer);
+  useShortcut("close-drawer", handleCloseDrawer, {
+    conflictBehavior: "allow",
+  });
   useShortcut("delete-device", handleDeleteDevice, { enabled: isEditMode });
   useShortcut("highlight-connections", handleHighlightConnections, {
+    conflictBehavior: "allow",
     enabled: (device?.metadata.connectedDeviceIds?.length ?? 0) > 0,
   });
 

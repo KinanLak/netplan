@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useHotkey } from "@tanstack/react-hotkeys";
 import type {
   HotkeyCallback,
@@ -18,6 +18,8 @@ type UseShortcutOptions = {
   enabled?: boolean;
   /** Ignore hotkey when focus is in input-like elements. Defaults based on TanStack smart detection. */
   ignoreInputs?: boolean;
+  /** Override conflict handling for intentional key overlaps. */
+  conflictBehavior?: UseHotkeyOptions["conflictBehavior"];
 };
 
 const DEFAULT_SHORTCUT_OPTIONS: UseShortcutOptions = {};
@@ -49,8 +51,6 @@ function useScopeEnabled(
   }
 }
 
-// Sentinel for unused hotkey slots (must be a valid hotkey to satisfy types)
-const NOOP_KEY: RegisterableHotkey = "F12";
 const noop: HotkeyCallback = () => {};
 
 /**
@@ -65,16 +65,19 @@ export function useShortcut(
   handler: (event: KeyboardEvent) => void,
   options: UseShortcutOptions = DEFAULT_SHORTCUT_OPTIONS,
 ) {
-  const { enabled = true, ignoreInputs } = options;
+  const { enabled = true, ignoreInputs, conflictBehavior = "warn" } = options;
   const config = shortcuts[action];
   const scopeEnabled = useScopeEnabled(config.scope, enabled);
+  const noopKeyId = useId();
+  const noopKey =
+    `ShortcutNoop${noopKeyId.replaceAll(":", "")}` as RegisterableHotkey;
 
   const callback: HotkeyCallback = (event) => {
     handler(event);
   };
 
   const baseOptions: UseHotkeyOptions = {
-    conflictBehavior: "warn",
+    conflictBehavior,
     enabled: scopeEnabled,
     ...(ignoreInputs !== undefined ? { ignoreInputs } : {}),
   };
@@ -84,9 +87,11 @@ export function useShortcut(
   useHotkey(key0, callback, baseOptions);
 
   // Slot 1 — second binding or disabled sentinel
-  const key1 = config.keys.length > 1 ? config.keys[1] : NOOP_KEY;
+  const key1 = config.keys.length > 1 ? config.keys[1] : noopKey;
   const opts1: UseHotkeyOptions =
-    config.keys.length > 1 ? baseOptions : { ...baseOptions, enabled: false };
+    config.keys.length > 1
+      ? baseOptions
+      : { ...baseOptions, enabled: false, conflictBehavior: "allow" };
   useHotkey(key1, config.keys.length > 1 ? callback : noop, opts1);
 }
 
