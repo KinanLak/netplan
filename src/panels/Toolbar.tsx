@@ -27,10 +27,11 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { ShortcutHintAbsolute } from "@/components/ui/shortcut-hint";
+import { createDeviceKindRecord } from "@/devices/deviceKindRegistry";
+import { useDeviceToolShortcuts } from "@/devices/useDeviceToolShortcuts";
 import { cn } from "@/lib/utils";
 import { availableDevicesCatalog } from "@/mock/availableDevices";
 import {
-  TOOLBAR_DEVICE_BUTTONS_INITIAL_STATE,
   TOOLBAR_DEVICE_COLLISION_OFFSETS,
   TOOLBAR_WALL_COLOR_SELECTION_ENABLED,
   UNDO_REDO_EVENT_NAME,
@@ -79,9 +80,7 @@ export default function Toolbar() {
   // Track button elements in a ref to avoid toolbar re-renders during mount.
   const buttonElementsRef = useRef<
     Record<DeviceType, HTMLButtonElement | null>
-  >({
-    ...TOOLBAR_DEVICE_BUTTONS_INITIAL_STATE,
-  });
+  >(createDeviceKindRecord(() => null));
 
   const handleTypeClick = (type: DeviceType) => {
     const nextType = selectedType === type ? null : type;
@@ -137,17 +136,9 @@ export default function Toolbar() {
   useShortcut("tool-room", () => handleDrawToolClick("room"), {
     enabled: isEditMode && !!currentFloorId,
   });
-  useShortcut("tool-rack", () => handleTypeClick("rack"), {
+  useDeviceToolShortcuts({
     enabled: isEditMode && !!currentFloorId,
-  });
-  useShortcut("tool-switch", () => handleTypeClick("switch"), {
-    enabled: isEditMode && !!currentFloorId,
-  });
-  useShortcut("tool-pc", () => handleTypeClick("pc"), {
-    enabled: isEditMode && !!currentFloorId,
-  });
-  useShortcut("tool-wall-port", () => handleTypeClick("wall-port"), {
-    enabled: isEditMode && !!currentFloorId,
+    onSelectDeviceType: handleTypeClick,
   });
 
   const handleAddDevice = (catalogDevice: AvailableDevice) => {

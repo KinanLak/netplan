@@ -104,10 +104,11 @@ export interface Building {
   floors: Array<Floor>;
 }
 
-// React Flow node data — the Device is passed as-is via node.data.
-// Selection/highlight state is read from the store by NetworkNode.
-// Mapped type so it satisfies React Flow's Record<string, unknown> constraint.
-export type DeviceNodeData = { [K in keyof Device]: Device[K] };
+// React Flow node data keeps the Device nested so the React Flow shape cannot
+// be confused with the domain Device shape.
+export interface DeviceNodeData extends Record<string, unknown> {
+  data: Device;
+}
 
 // Store types
 export interface MapState {

@@ -1,5 +1,3 @@
-import type { DeviceType } from "@/types/map";
-
 // Shortcuts
 export const OVERLAY_VISIBILITY_DELAY_MS = 50;
 export const OVERLAY_MODIFIER_KEY_BY_PLATFORM = {
@@ -28,13 +26,6 @@ export const TOOLBAR_DEVICE_COLLISION_OFFSETS = [
   { x: 200, y: 0 },
   { x: 0, y: 200 },
 ] as const;
-export const TOOLBAR_DEVICE_BUTTONS_INITIAL_STATE: Record<DeviceType, null> = {
-  rack: null,
-  switch: null,
-  pc: null,
-  "wall-port": null,
-};
-
 // Flow canvas
 export const FLOW_CANVAS_ZOOM_DURATION_MS = 200;
 export const FLOW_CANVAS_RESET_DURATION_MS = 300;

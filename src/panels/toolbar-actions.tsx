@@ -1,14 +1,11 @@
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
-  ComputerIcon,
   DashedLine01Icon,
   DashedLine02Icon,
   Eraser01Icon,
-  HardDriveIcon,
   PaintBrush03Icon,
-  PlugSocketIcon,
-  ServerStack03Icon,
 } from "@hugeicons/core-free-icons";
+import { deviceKinds } from "@/devices/deviceKindRegistry";
 import type { DeviceType, DrawTool } from "@/types/map";
 import type { ShortcutAction } from "@/lib/shortcuts";
 import { TOOLBAR_ICON_SIZE_CLASS } from "@/lib/constants";
@@ -99,70 +96,17 @@ export const toolbarActions: Array<ToolbarAction> = [
       />
     ),
   },
-  {
-    group: "device",
-    id: "rack",
-    type: "rack",
-    label: "Rack",
-    shortcut: "tool-rack",
-    title: "Ajouter Rack",
-    icon: (
-      <HugeiconsIcon
-        icon={ServerStack03Icon}
-        className={TOOLBAR_ICON_SIZE_CLASS}
-        color="currentColor"
-        strokeWidth={1.5}
-      />
-    ),
-  },
-  {
-    group: "device",
-    id: "switch",
-    type: "switch",
-    label: "Switch",
-    shortcut: "tool-switch",
-    title: "Ajouter Switch",
-    icon: (
-      <HugeiconsIcon
-        icon={HardDriveIcon}
-        className={TOOLBAR_ICON_SIZE_CLASS}
-        color="currentColor"
-        strokeWidth={1.5}
-      />
-    ),
-  },
-  {
-    group: "device",
-    id: "pc",
-    type: "pc",
-    label: "PC",
-    shortcut: "tool-pc",
-    title: "Ajouter PC",
-    icon: (
-      <HugeiconsIcon
-        icon={ComputerIcon}
-        className={TOOLBAR_ICON_SIZE_CLASS}
-        color="currentColor"
-        strokeWidth={1.5}
-      />
-    ),
-  },
-  {
-    group: "device",
-    id: "wall-port",
-    type: "wall-port",
-    label: "Prise",
-    shortcut: "tool-wall-port",
-    title: "Ajouter Prise",
-    icon: (
-      <HugeiconsIcon
-        icon={PlugSocketIcon}
-        className={TOOLBAR_ICON_SIZE_CLASS}
-        color="currentColor"
-        strokeWidth={1.5}
-      />
-    ),
-  },
+  ...deviceKinds.map((kind): DeviceToolbarAction => {
+    return {
+      group: "device",
+      id: kind.toolbar.id,
+      type: kind.type,
+      label: kind.toolbar.label,
+      shortcut: kind.toolbar.shortcut,
+      title: kind.toolbar.title,
+      icon: kind.toolbar.icon,
+    };
+  }),
 ];
 
 export const drawToolbarActions = toolbarActions.filter(

@@ -15,6 +15,7 @@ import { Kbd } from "@/components/ui/kbd";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ShortcutHintInline } from "@/components/ui/shortcut-hint";
 import { StatusDot } from "@/components/StatusDot";
+import { getDeviceKindLabel } from "@/devices/deviceKindRegistry";
 import { cn } from "@/lib/utils";
 import { DrawerConnectionsSection } from "@/panels/drawer/DrawerConnectionsSection";
 import { DrawerPortsSection } from "@/panels/drawer/DrawerPortsSection";
@@ -23,13 +24,6 @@ const statusLabels: Record<DeviceStatus, string> = {
   up: "En ligne",
   down: "Hors ligne",
   unknown: "Inconnu",
-};
-
-const typeLabels: Record<string, string> = {
-  rack: "Rack Serveur",
-  switch: "Switch Réseau",
-  pc: "Poste de travail",
-  "wall-port": "Prise murale",
 };
 
 export default function DeviceDrawer() {
@@ -130,7 +124,7 @@ export default function DeviceDrawer() {
               {device.name}
             </h2>
             <p className="text-sm text-muted-foreground">
-              {typeLabels[device.type]}
+              {getDeviceKindLabel(device.type)}
             </p>
           </div>
           <Button

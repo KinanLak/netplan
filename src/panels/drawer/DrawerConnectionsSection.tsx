@@ -1,14 +1,8 @@
-import type { Device, DeviceType } from "@/types/map";
+import type { Device } from "@/types/map";
 import { Button } from "@/components/ui/button";
 import { ShortcutHintInline } from "@/components/ui/shortcut-hint";
 import { StatusDot } from "@/components/StatusDot";
-
-const typeLabels: Record<DeviceType, string> = {
-  rack: "Rack Serveur",
-  switch: "Switch Réseau",
-  pc: "Poste de travail",
-  "wall-port": "Prise murale",
-};
+import { getDeviceKindLabel } from "@/devices/deviceKindRegistry";
 
 interface DrawerConnectionsSectionProps {
   connectedDevices: Array<Device>;
@@ -58,7 +52,7 @@ export function DrawerConnectionsSection({
                   {connDevice.name}
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  {typeLabels[connDevice.type] || "Autre"}
+                  {getDeviceKindLabel(connDevice.type)}
                 </div>
               </div>
               <StatusDot status={connDevice.metadata.status ?? "unknown"} />

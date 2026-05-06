@@ -1,17 +1,11 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useNodesState } from "@xyflow/react";
-import type { Node, OnNodesChange } from "@xyflow/react";
-import type {
-  Device,
-  DeviceNodeData,
-  DrawTool,
-  Position,
-  Size,
-} from "@/types/map";
+import type { OnNodesChange } from "@xyflow/react";
+import type { Device, DrawTool, Position, Size } from "@/types/map";
+import { toDeviceNodes } from "@/devices/reactFlowDeviceAdapter";
+import type { DeviceNode } from "@/devices/reactFlowDeviceAdapter";
 import { CANVAS_DEVICE_NEAREST_POSITION_MAX_RADIUS } from "@/lib/constants";
 import { GRID_SIZE } from "@/lib/walls";
-
-type DeviceNode = Node<DeviceNodeData>;
 
 interface UseCanvasDeviceNodesParams {
   devices: Array<Device>;
@@ -94,22 +88,12 @@ export function useCanvasDeviceNodes({
   const lastGridCell = useRef<Map<string, string>>(new Map());
 
   useEffect(() => {
-    const nextNodes = devices.reduce<Array<DeviceNode>>((acc, device) => {
-      if (device.floorId !== currentFloorId) {
-        return acc;
-      }
-
-      acc.push({
-        id: device.id,
-        type: device.type,
-        position: device.position,
-        data: device,
-        selected: device.id === selectedDeviceId,
-        draggable: canEditDevices,
-      });
-
-      return acc;
-    }, []);
+    const nextNodes = toDeviceNodes(
+      devices,
+      currentFloorId,
+      selectedDeviceId,
+      canEditDevices,
+    );
 
     nextNodes.forEach((node) => {
       lastValidPositions.current.set(node.id, node.position);

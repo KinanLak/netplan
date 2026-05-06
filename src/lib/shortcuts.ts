@@ -10,6 +10,8 @@
  */
 
 import type { RegisterableHotkey } from "@tanstack/react-hotkeys";
+import { deviceKinds } from "@/devices/deviceKindRegistry";
+import type { DeviceToolShortcutAction } from "@/devices/deviceKindRegistry";
 
 export type ShortcutScope = "global" | "canvas" | "drawer";
 
@@ -39,10 +41,7 @@ export type ShortcutAction =
   | "tool-wall-erase"
   | "tool-room"
   // Tools - Devices (number hotbar)
-  | "tool-rack"
-  | "tool-switch"
-  | "tool-pc"
-  | "tool-wall-port"
+  | DeviceToolShortcutAction
   // Device drawer
   | "close-drawer"
   | "delete-device"
@@ -65,6 +64,19 @@ export type ShortcutConfig = {
  * to satisfy React's rules of hooks.
  */
 export const MAX_KEYS_PER_ACTION = 2;
+
+const deviceToolShortcuts = deviceKinds.reduce(
+  (acc, kind) => {
+    acc[kind.shortcut.action] = {
+      keys: kind.shortcut.keys,
+      label: kind.shortcut.label,
+      description: kind.shortcut.description,
+      scope: "canvas",
+    };
+    return acc;
+  },
+  {} as Record<DeviceToolShortcutAction, ShortcutConfig>,
+);
 
 export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
   // Global actions
@@ -200,30 +212,7 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
   },
 
   // Tools - Devices (number hotbar)
-  "tool-rack": {
-    keys: ["5"],
-    label: "Rack",
-    description: "Ajouter un rack serveur",
-    scope: "canvas",
-  },
-  "tool-switch": {
-    keys: ["6"],
-    label: "Switch",
-    description: "Ajouter un switch réseau",
-    scope: "canvas",
-  },
-  "tool-pc": {
-    keys: ["7"],
-    label: "PC",
-    description: "Ajouter un poste de travail",
-    scope: "canvas",
-  },
-  "tool-wall-port": {
-    keys: ["8"],
-    label: "Prise",
-    description: "Ajouter une prise murale",
-    scope: "canvas",
-  },
+  ...deviceToolShortcuts,
 
   // Device drawer
   "close-drawer": {

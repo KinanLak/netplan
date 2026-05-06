@@ -1,4 +1,5 @@
 import type { ShortcutAction } from "@/lib/shortcuts";
+import { deviceToolShortcutActions } from "@/devices/deviceKindRegistry";
 import { SHORTCUT_GROUP_HEADER_WEIGHT } from "@/lib/constants";
 
 export type ShortcutGroup = {
@@ -28,7 +29,7 @@ export const shortcutGroups: Array<ShortcutGroup> = [
     id: "device-tools",
     title: "Outils - Équipements",
     orderPriority: 90,
-    actions: ["tool-rack", "tool-switch", "tool-pc", "tool-wall-port"],
+    actions: deviceToolShortcutActions,
   },
   {
     id: "device-drawer",

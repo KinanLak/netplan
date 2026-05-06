@@ -6,9 +6,8 @@ import {
   useReactFlow,
 } from "@xyflow/react";
 import { nodeTypes } from "./nodeTypes";
-import type { Node } from "@xyflow/react";
-import type { DeviceNodeData } from "@/types/map";
 import type { WallToolsLayerHandle } from "@/canvas/components/WallToolsLayer";
+import type { DeviceNode } from "@/devices/reactFlowDeviceAdapter";
 import { useMapStore } from "@/store/useMapStore";
 import {
   useActiveDrawTool,
@@ -39,8 +38,6 @@ import {
 
 const SNAP_GRID: [number, number] = [GRID_SIZE, GRID_SIZE];
 const EMPTY_EDGES: Array<never> = [];
-
-type DeviceNode = Node<DeviceNodeData>;
 
 export default function FlowCanvas() {
   const devices = useDevices();
