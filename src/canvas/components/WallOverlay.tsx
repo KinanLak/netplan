@@ -10,6 +10,10 @@ import {
 import { computeMergedWallGroups } from "@/lib/wallGeometry";
 import { getWallBlockKey } from "@/walls/engine";
 
+const WALL_MASK_PADDING = GRID_SIZE;
+
+type WallBoundsSource = Pick<WallSegment, "start" | "end">;
+
 interface WallOverlayProps {
   floorWalls: Array<WallSegment>;
   previewSegments: Array<WallDraft>;
@@ -67,6 +71,11 @@ export function WallOverlay({
     [floorWalls],
   );
 
+  const wallMaskBounds = useMemo(
+    () => computeWallMaskBounds([...floorWalls, ...previewSegments]),
+    [floorWalls, previewSegments],
+  );
+
   const erasePreviewRects = useMemo(() => {
     if (activeDrawTool !== "wall-erase" || erasePreviewKeys.length === 0) {
       return [];
@@ -109,6 +118,10 @@ export function WallOverlay({
                       id={`wall-preview-mask-${group.color}`}
                       key={`wall-preview-mask-${group.color}`}
                       maskUnits="userSpaceOnUse"
+                      x={wallMaskBounds?.x}
+                      y={wallMaskBounds?.y}
+                      width={wallMaskBounds?.width}
+                      height={wallMaskBounds?.height}
                     >
                       <path d={group.path} fill="#808080" />
                       {existingPath ? (
@@ -226,4 +239,37 @@ export function WallOverlay({
       </div>
     </ViewportPortal>
   );
+}
+
+function computeWallMaskBounds(walls: Array<WallBoundsSource>):
+  | {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    }
+  | undefined {
+  if (walls.length === 0) {
+    return undefined;
+  }
+
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+
+  for (const wall of walls) {
+    const rect = getWallRect(wall);
+    minX = Math.min(minX, rect.x - WALL_MASK_PADDING);
+    minY = Math.min(minY, rect.y - WALL_MASK_PADDING);
+    maxX = Math.max(maxX, rect.x + rect.width + WALL_MASK_PADDING);
+    maxY = Math.max(maxY, rect.y + rect.height + WALL_MASK_PADDING);
+  }
+
+  return {
+    x: minX,
+    y: minY,
+    width: maxX - minX,
+    height: maxY - minY,
+  };
 }
