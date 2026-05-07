@@ -1,4 +1,3 @@
-import { scan } from "react-scan";
 import {
   HeadContent,
   Outlet,
@@ -39,12 +38,18 @@ function RootComponent() {
 
 function RootDocument({ children }: { children: ReactNode }) {
   useEffect(() => {
-    // Make sure to run this only after hydration
-    scan({
-      enabled: false,
-      showToolbar: true,
+    if (!import.meta.env.DEV) {
+      return;
+    }
+
+    void import("react-scan").then(({ scan }) => {
+      scan({
+        enabled: false,
+        showToolbar: true,
+      });
     });
   }, []);
+
   return (
     <html lang="fr">
       <head>
