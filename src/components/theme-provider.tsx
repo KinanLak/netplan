@@ -25,6 +25,8 @@ const ThemeProviderContext =
   React.createContext<ThemeProviderState>(initialState);
 
 const isBrowser = typeof window !== "undefined";
+const colorSchemeQuery = "(prefers-color-scheme: dark)";
+const themeStorageEvent = "netplan-theme-storage-change";
 
 const isTheme = (value: string | null): value is Theme => {
   return value === "light" || value === "dark" || value === "system";
@@ -47,25 +49,60 @@ const resolveTheme = (theme: Theme, prefersDark: boolean): ResolvedTheme => {
   return theme;
 };
 
+const getPrefersDarkSnapshot = () => {
+  return isBrowser && window.matchMedia(colorSchemeQuery).matches;
+};
+
+const subscribeToColorScheme = (onStoreChange: () => void) => {
+  if (!isBrowser) {
+    return () => {};
+  }
+
+  const mediaQuery = window.matchMedia(colorSchemeQuery);
+  mediaQuery.addEventListener("change", onStoreChange);
+
+  return () => {
+    mediaQuery.removeEventListener("change", onStoreChange);
+  };
+};
+
+const subscribeToTheme = (storageKey: string, onStoreChange: () => void) => {
+  if (!isBrowser) {
+    return () => {};
+  }
+
+  const handleStorage = (event: StorageEvent) => {
+    if (event.key === storageKey) {
+      onStoreChange();
+    }
+  };
+
+  window.addEventListener("storage", handleStorage);
+  window.addEventListener(themeStorageEvent, onStoreChange);
+
+  return () => {
+    window.removeEventListener("storage", handleStorage);
+    window.removeEventListener(themeStorageEvent, onStoreChange);
+  };
+};
+
 export function ThemeProvider({
   children,
   defaultTheme = "system",
   storageKey = "netplan-ui-theme",
   ...props
 }: ThemeProviderProps) {
-  const [theme, setThemeState] = React.useState<Theme>(defaultTheme);
-  const [resolvedTheme, setResolvedTheme] = React.useState<ResolvedTheme>(
-    defaultTheme === "dark" ? "dark" : "light",
+  const theme = React.useSyncExternalStore(
+    (onStoreChange) => subscribeToTheme(storageKey, onStoreChange),
+    () => getStoredTheme(storageKey, defaultTheme),
+    () => defaultTheme,
   );
-
-  React.useEffect(() => {
-    if (!isBrowser) {
-      return;
-    }
-
-    const storedTheme = getStoredTheme(storageKey, defaultTheme);
-    setThemeState(storedTheme);
-  }, [defaultTheme, storageKey]);
+  const prefersDark = React.useSyncExternalStore(
+    subscribeToColorScheme,
+    getPrefersDarkSnapshot,
+    () => false,
+  );
+  const resolvedTheme = resolveTheme(theme, prefersDark);
 
   React.useEffect(() => {
     if (!isBrowser) {
@@ -73,29 +110,9 @@ export function ThemeProvider({
     }
 
     const root = window.document.documentElement;
-    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-
-    const applyTheme = () => {
-      const nextResolvedTheme = resolveTheme(theme, mediaQuery.matches);
-      setResolvedTheme(nextResolvedTheme);
-
-      root.classList.remove("light", "dark");
-      root.classList.add(nextResolvedTheme);
-    };
-
-    const handleMediaChange = () => {
-      if (theme === "system") {
-        applyTheme();
-      }
-    };
-
-    applyTheme();
-    mediaQuery.addEventListener("change", handleMediaChange);
-
-    return () => {
-      mediaQuery.removeEventListener("change", handleMediaChange);
-    };
-  }, [theme]);
+    root.classList.remove("light", "dark");
+    root.classList.add(resolvedTheme);
+  }, [resolvedTheme]);
 
   const value = {
     theme,
@@ -103,9 +120,8 @@ export function ThemeProvider({
     setTheme: (newTheme: Theme) => {
       if (isBrowser) {
         window.localStorage.setItem(storageKey, newTheme);
+        window.dispatchEvent(new Event(themeStorageEvent));
       }
-
-      setThemeState(newTheme);
     },
   };
 

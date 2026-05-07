@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useReactFlow } from "@xyflow/react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Tick02Icon } from "@hugeicons/core-free-icons";
+import type { ComponentProps } from "react";
 import type { DeviceType, DrawTool } from "@/types/map";
 import { useDevicePlacement } from "@/devices/useDevicePlacement";
 import type { AvailableDevice } from "@/mock/availableDevices";
@@ -61,6 +62,7 @@ export default function Toolbar() {
   const [activeAnchorElement, setActiveAnchorElement] =
     useState<HTMLButtonElement | null>(null);
   const [flashType, setFlashType] = useState<"undo" | "redo" | null>(null);
+  const suppressNextTypeToggleRef = useRef<DeviceType | null>(null);
 
   // Listen for undo/redo events and flash the toolbar background
   useEffect(() => {
@@ -83,6 +85,15 @@ export default function Toolbar() {
   >(createDeviceKindRecord(() => null));
 
   const handleTypeClick = (type: DeviceType) => {
+    if (suppressNextTypeToggleRef.current) {
+      const suppressedType = suppressNextTypeToggleRef.current;
+      suppressNextTypeToggleRef.current = null;
+
+      if (suppressedType === type) {
+        return;
+      }
+    }
+
     const nextType = selectedType === type ? null : type;
     const nextAnchorElement = nextType
       ? buttonElementsRef.current[nextType]
@@ -115,7 +126,20 @@ export default function Toolbar() {
     setSelectedWallColor(color);
   };
 
-  const handleOpenChange = (newOpen: boolean) => {
+  const handleOpenChange: NonNullable<
+    ComponentProps<typeof Popover>["onOpenChange"]
+  > = (newOpen, eventDetails) => {
+    const target = eventDetails.event.target;
+    const isActiveButtonOutsidePress =
+      !newOpen &&
+      eventDetails.reason === "outside-press" &&
+      target instanceof Node &&
+      activeAnchorElement?.contains(target);
+
+    if (isActiveButtonOutsidePress) {
+      suppressNextTypeToggleRef.current = selectedType;
+    }
+
     setOpen(newOpen);
     if (!newOpen) {
       setSelectedType(null);
