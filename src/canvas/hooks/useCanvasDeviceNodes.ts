@@ -5,7 +5,7 @@ import type { Device, DrawTool, Position, Size } from "@/types/map";
 import { toDeviceNodes } from "@/devices/reactFlowDeviceAdapter";
 import type { DeviceNode } from "@/devices/reactFlowDeviceAdapter";
 import { CANVAS_DEVICE_NEAREST_POSITION_MAX_RADIUS } from "@/lib/constants";
-import { GRID_SIZE } from "@/lib/walls";
+import { GRID_SIZE } from "@/lib/grid";
 
 interface UseCanvasDeviceNodesParams {
   devices: Array<Device>;

@@ -12,8 +12,11 @@ import type {
 } from "@/types/map";
 import { mockBuildings } from "@/mock/buildings";
 import { mockDevices } from "@/mock/devices";
-import { getWallRect } from "@/lib/walls";
-import { rectanglesOverlap, wallCollidesWithDevices } from "@/lib/geometry";
+import { rectanglesOverlap } from "@/lib/geometry";
+import {
+  getWallCollisionRect,
+  wallCollidesWithDevices,
+} from "@/walls/gridGeometry";
 import {
   addLine,
   addRoom,
@@ -98,7 +101,7 @@ const getFloorCollisionCache = (
       continue;
     }
 
-    floorWallRects.push(getWallRect(wall));
+    floorWallRects.push(getWallCollisionRect(wall));
   }
 
   floorCollisionCache = {

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { DrawTool, Position } from "@/types/map";
-import { WALL_GRID_OFFSET, GRID_SIZE } from "@/lib/walls";
+import { GRID_SIZE } from "@/lib/grid";
+import { WALL_GRID_OFFSET } from "@/walls/gridGeometry";
 import { Kbd } from "@/components/ui/kbd";
 import { Separator } from "@/components/ui/separator";
 import { useSelectedWallColor } from "@/store/selectors";

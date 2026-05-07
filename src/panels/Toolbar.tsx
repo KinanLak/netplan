@@ -33,7 +33,8 @@ import {
   UNDO_REDO_EVENT_NAME,
   UNDO_REDO_FLASH_DURATION_MS,
 } from "@/lib/constants";
-import { GRID_SIZE, WALL_COLOR_ORDER, WALL_COLOR_TONES } from "@/lib/walls";
+import { GRID_SIZE } from "@/lib/grid";
+import { WALL_COLOR_ORDER, WALL_COLOR_TONES } from "@/lib/walls";
 import {
   deviceToolbarActions,
   drawToolbarActions,

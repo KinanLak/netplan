@@ -1,12 +1,14 @@
-import { getWallBlockKey } from "./keys";
+import { getWallBlockKey } from "@/walls/gridGeometry/cells";
 import {
-  buildSnapPath,
-  createOrthogonalLineDraft,
+  createOrthogonalWallDraft,
   createRoomWallDrafts,
-  resolveEraseCandidate,
   splitWallDraftIntoBlocks,
   splitWallDraftsIntoBlocks,
-} from "./selectors";
+} from "@/walls/gridGeometry/drafts";
+import {
+  buildWallSnapPath,
+  resolveWallEraseCandidate,
+} from "@/walls/gridGeometry/erase";
 import type { WallCommandReason, WallDraft, WallSegment } from "@/types/map";
 import type {
   AddLineCommandInput,
@@ -92,7 +94,7 @@ const addBlocks = (
 };
 
 export const addLine = (input: AddLineCommandInput): EngineResult => {
-  const line = createOrthogonalLineDraft(
+  const line = createOrthogonalWallDraft(
     input.start,
     input.end,
     input.floorId,
@@ -141,7 +143,7 @@ const eraseAtPointerCore = (
   input: EraseAtPointerCommandInput,
   previewOnly: boolean,
 ): EngineResult => {
-  const candidate = resolveEraseCandidate(
+  const candidate = resolveWallEraseCandidate(
     input.walls,
     input.floorId,
     input.pointer,
@@ -179,7 +181,10 @@ export const eraseAtPointer = (
 ): EngineResult => eraseAtPointerCore(input, false);
 
 export const eraseStroke = (input: EraseStrokeCommandInput): EngineResult => {
-  const snapPath = buildSnapPath(input.fromSnappedPoint, input.toSnappedPoint);
+  const snapPath = buildWallSnapPath(
+    input.fromSnappedPoint,
+    input.toSnappedPoint,
+  );
   if (snapPath.length === 0) {
     return unchangedResult(input.walls, "empty-stroke");
   }

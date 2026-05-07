@@ -17,7 +17,7 @@ import {
   useSelectedDeviceId,
   useWalls,
 } from "@/store/selectors";
-import { GRID_SIZE } from "@/lib/walls";
+import { GRID_SIZE } from "@/lib/grid";
 import { cn } from "@/lib/utils";
 import { CanvasZoomControls } from "@/canvas/components/CanvasZoomControls";
 import { WallToolsLayer } from "@/canvas/components/WallToolsLayer";

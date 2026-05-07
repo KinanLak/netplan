@@ -1,18 +1,14 @@
 import { useMemo } from "react";
 import { ViewportPortal } from "@xyflow/react";
 import type { DrawTool, Position, WallDraft, WallSegment } from "@/types/map";
+import { WALL_COLOR_ORDER, WALL_COLOR_TONES } from "@/lib/walls";
 import {
-  GRID_SIZE,
-  WALL_COLOR_ORDER,
-  WALL_COLOR_TONES,
-  getWallRect,
-} from "@/lib/walls";
-import { computeMergedWallGroups } from "@/lib/wallGeometry";
-import { getWallBlockKey } from "@/walls/engine";
-
-const WALL_MASK_PADDING = GRID_SIZE;
-
-type WallBoundsSource = Pick<WallSegment, "start" | "end">;
+  computeMergedWallGroups,
+  computeWallMaskBounds,
+  getWallBlockKey,
+  getWallCellRect,
+  getWallCollisionRect,
+} from "@/walls/gridGeometry";
 
 interface WallOverlayProps {
   floorWalls: Array<WallSegment>;
@@ -66,7 +62,7 @@ export function WallOverlay({
     () =>
       floorWalls.map((wall) => ({
         key: getWallBlockKey(wall) ?? wall.id,
-        rect: getWallRect(wall),
+        rect: getWallCollisionRect(wall),
       })),
     [floorWalls],
   );
@@ -87,21 +83,11 @@ export function WallOverlay({
   const hasErasePreview = erasePreviewRects.length > 0;
   const eraseHoverRect =
     activeDrawTool === "wall-erase" && hoverSnapPoint && !hasErasePreview
-      ? {
-          x: hoverSnapPoint.x - GRID_SIZE / 2,
-          y: hoverSnapPoint.y - GRID_SIZE / 2,
-          width: GRID_SIZE,
-          height: GRID_SIZE,
-        }
+      ? getWallCellRect(hoverSnapPoint)
       : null;
   const brushHoverRect =
     activeDrawTool === "wall-brush" && hoverSnapPoint
-      ? {
-          x: hoverSnapPoint.x - GRID_SIZE / 2,
-          y: hoverSnapPoint.y - GRID_SIZE / 2,
-          width: GRID_SIZE,
-          height: GRID_SIZE,
-        }
+      ? getWallCellRect(hoverSnapPoint)
       : null;
 
   return (
@@ -239,37 +225,4 @@ export function WallOverlay({
       </div>
     </ViewportPortal>
   );
-}
-
-function computeWallMaskBounds(walls: Array<WallBoundsSource>):
-  | {
-      x: number;
-      y: number;
-      width: number;
-      height: number;
-    }
-  | undefined {
-  if (walls.length === 0) {
-    return undefined;
-  }
-
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
-
-  for (const wall of walls) {
-    const rect = getWallRect(wall);
-    minX = Math.min(minX, rect.x - WALL_MASK_PADDING);
-    minY = Math.min(minY, rect.y - WALL_MASK_PADDING);
-    maxX = Math.max(maxX, rect.x + rect.width + WALL_MASK_PADDING);
-    maxY = Math.max(maxY, rect.y + rect.height + WALL_MASK_PADDING);
-  }
-
-  return {
-    x: minX,
-    y: minY,
-    width: maxX - minX,
-    height: maxY - minY,
-  };
 }

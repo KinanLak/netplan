@@ -1,31 +1,19 @@
-import type { Position, WallColor, WallSegment } from "@/types/map";
-import { GRID_SIZE, WALL_THICKNESS } from "@/lib/walls";
-
-export interface MergedWallGroup {
-  color: WallColor;
-  path: string;
-}
+import type { Position, WallColor } from "@/types/map";
+import { arePositionsEqual, getWallCellRect, WALL_THICKNESS } from "./cells";
+import type {
+  ColoredWallShape,
+  DirectedEdge,
+  MergedWallGroup,
+  Rect,
+  WallShape,
+} from "./types";
 
 const CORNER_RADIUS = 8;
 
-interface Rect {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
-interface DirectedEdge {
-  from: Position;
-  to: Position;
-}
-
-type WallLike = Pick<WallSegment, "start" | "end" | "color">;
-
 export function computeMergedWallGroups(
-  walls: ReadonlyArray<WallLike>,
+  walls: ReadonlyArray<ColoredWallShape>,
 ): Array<MergedWallGroup> {
-  const groups = new Map<WallColor, Array<WallLike>>();
+  const groups = new Map<WallColor, Array<ColoredWallShape>>();
 
   for (const wall of walls) {
     const list = groups.get(wall.color);
@@ -49,20 +37,13 @@ export function computeMergedWallGroups(
   return merged;
 }
 
-export function computeSingleWallPath(
-  wall: Pick<WallSegment, "start" | "end">,
-): string | null {
+export function computeSingleWallPath(wall: WallShape): string | null {
   return computeRectUnionPath([getWallRenderRect(wall)], 0);
 }
 
-function getWallRenderRect(wall: Pick<WallSegment, "start" | "end">): Rect {
-  if (wall.start.x === wall.end.x && wall.start.y === wall.end.y) {
-    return {
-      x: wall.start.x - GRID_SIZE / 2,
-      y: wall.start.y - GRID_SIZE / 2,
-      width: GRID_SIZE,
-      height: GRID_SIZE,
-    };
+export function getWallRenderRect(wall: WallShape): Rect {
+  if (arePositionsEqual(wall.start, wall.end)) {
+    return getWallCellRect(wall.start);
   }
 
   const half = WALL_THICKNESS / 2;

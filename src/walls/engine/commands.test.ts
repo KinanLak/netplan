@@ -5,9 +5,9 @@ import {
   addRoom,
   eraseAtPointer,
   eraseStroke,
-  getWallBlockKey,
   previewEraseAtPointer,
 } from "@/walls/engine";
+import { getWallBlockKey } from "@/walls/gridGeometry";
 
 const floorId = "floor-a";
 
