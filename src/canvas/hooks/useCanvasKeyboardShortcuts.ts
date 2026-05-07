@@ -1,32 +1,22 @@
-import { useState } from "react";
 import type { ReactFlowInstance } from "@xyflow/react";
-import type { WallToolsLayerHandle } from "@/canvas/components/WallToolsLayer";
 import { useShortcutIntentEffect } from "@/hooks/use-shortcuts";
 import {
   FLOW_CANVAS_RESET_DURATION_MS,
   FLOW_CANVAS_ZOOM_DURATION_MS,
   PAN_AMOUNT,
 } from "@/lib/constants";
-import { useMapStore } from "@/store/useMapStore";
 
 interface UseCanvasKeyboardShortcutsOptions {
   reactFlow: ReactFlowInstance;
-  wallToolsControllerRef: React.RefObject<WallToolsLayerHandle | null>;
+  cancelWallTool: () => void;
+  toggleWallDebugPanel: () => void;
 }
 
-/**
- * Registers all keyboard shortcuts for the canvas: zoom, pan, numpad,
- * escape (cancel tool), debug toggle, and connection highlight.
- *
- * Returns `isWallDebugVisible` so the parent can pass it to the wall layer.
- */
 export function useCanvasKeyboardShortcuts({
   reactFlow,
-  wallToolsControllerRef,
+  cancelWallTool,
+  toggleWallDebugPanel,
 }: UseCanvasKeyboardShortcutsOptions) {
-  const [isWallDebugVisible, setIsWallDebugVisible] = useState(false);
-  const setActiveDrawTool = useMapStore((state) => state.setActiveDrawTool);
-
   useShortcutIntentEffect("zoom-in", () => {
     reactFlow.zoomIn({ duration: FLOW_CANVAS_ZOOM_DURATION_MS });
   });
@@ -43,12 +33,11 @@ export function useCanvasKeyboardShortcuts({
   });
 
   useShortcutIntentEffect("cancel-wall-tool", () => {
-    wallToolsControllerRef.current?.cancelTool();
-    setActiveDrawTool("device");
+    cancelWallTool();
   });
 
   useShortcutIntentEffect("toggle-wall-debug", () => {
-    setIsWallDebugVisible((prev) => !prev);
+    toggleWallDebugPanel();
   });
 
   // Pan shortcuts — move the canvas with arrow keys
@@ -72,6 +61,4 @@ export function useCanvasKeyboardShortcuts({
   useShortcutIntentEffect("pan-right", () => {
     applyPan(-PAN_AMOUNT, 0);
   });
-
-  return { isWallDebugVisible };
 }

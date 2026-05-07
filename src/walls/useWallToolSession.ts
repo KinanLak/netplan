@@ -27,11 +27,7 @@ import type {
 } from "@/walls/wallInteraction";
 import type { WallInteractionState } from "@/walls/wallInteraction/types";
 
-interface UseWallToolsControllerOptions {
-  trackPointerPosition?: boolean;
-}
-
-export interface WallToolsController {
+export interface WallToolSession {
   drawAnchor: Position | null;
   hoverSnapPoint: Position | null;
   pointerPosition: Position | null;
@@ -41,22 +37,24 @@ export interface WallToolsController {
   previewSegments: Array<WallDraft>;
   erasePreviewKeys: Array<string>;
   paneCursorClass: string;
+  isDebugPanelVisible: boolean;
+  toggleDebugPanel: () => void;
   cancelTool: () => void;
   handlePaneMouseMove: (event: ReactMouseEvent) => void;
   handlePaneClick: (event: ReactMouseEvent) => boolean;
   handleContextMenu: (event: ReactMouseEvent | MouseEvent) => boolean;
 }
 
-export const useWallToolsController = (
-  options: UseWallToolsControllerOptions = {},
-): WallToolsController => {
-  const { trackPointerPosition = false } = options;
+export const useWallToolSession = (): WallToolSession => {
   const reactFlow = useReactFlow();
 
   const isEditMode = useIsEditMode();
   const activeDrawTool = useActiveDrawTool();
   const currentFloorId = useCurrentFloorId();
   const selectedWallColor = useSelectedWallColor();
+  const [isDebugVisible, setIsDebugVisible] = useState(false);
+  const isDebugPanelVisible =
+    isEditMode && activeDrawTool !== "device" && isDebugVisible;
 
   const setActiveDrawTool = useMapStore((state) => state.setActiveDrawTool);
   const addWallLine = useMapStore((state) => state.addWallLine);
@@ -81,7 +79,7 @@ export const useWallToolsController = (
     activeDrawTool,
     currentFloorId,
     selectedWallColor,
-    trackPointerPosition,
+    trackPointerPosition: isDebugPanelVisible,
   };
 
   const adapter: WallInteractionAdapter = {
@@ -126,7 +124,7 @@ export const useWallToolsController = (
       activeDrawTool,
       currentFloorId,
       selectedWallColor,
-      trackPointerPosition,
+      trackPointerPosition: isDebugPanelVisible,
     };
 
     const handlePointerRelease = () => {
@@ -145,10 +143,14 @@ export const useWallToolsController = (
   }, [
     activeDrawTool,
     currentFloorId,
+    isDebugPanelVisible,
     isEditMode,
     selectedWallColor,
-    trackPointerPosition,
   ]);
+
+  const toggleDebugPanel = () => {
+    setIsDebugVisible((currentVisibility) => !currentVisibility);
+  };
 
   const cancelTool = () => {
     commitInteractionState(cancelWallTool(adapter));
@@ -195,6 +197,8 @@ export const useWallToolsController = (
 
   return {
     ...getWallInteractionViewModel(interactionState, context),
+    isDebugPanelVisible,
+    toggleDebugPanel,
     cancelTool,
     handlePaneMouseMove,
     handlePaneClick,

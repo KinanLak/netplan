@@ -1,95 +1,54 @@
-import { useEffect } from "react";
-import type { MutableRefObject } from "react";
 import type { DrawTool, WallSegment } from "@/types/map";
-import type { WallToolsController } from "@/walls/useWallToolsController";
+import type { WallToolSession } from "@/walls/useWallToolSession";
 import { WallOverlay } from "@/canvas/components/WallOverlay";
 import { WallToolHelpCard } from "@/canvas/components/WallToolHelpCard";
 import { WallDebugPanel } from "@/canvas/components/WallDebugPanel";
-import { useWallToolsController } from "@/walls/useWallToolsController";
-
-export interface WallToolsLayerHandle {
-  cancelTool: WallToolsController["cancelTool"];
-  handlePaneMouseMove: WallToolsController["handlePaneMouseMove"];
-  handlePaneClick: WallToolsController["handlePaneClick"];
-  handleContextMenu: WallToolsController["handleContextMenu"];
-}
 
 interface WallToolsLayerProps {
-  controllerRef: MutableRefObject<WallToolsLayerHandle | null>;
+  session: WallToolSession;
   floorWalls: Array<WallSegment>;
   activeDrawTool: DrawTool;
   isEditMode: boolean;
-  isWallDebugPanelVisible: boolean;
   paneHoverFillColor: string;
   paneHoverStrokeColor: string;
-  onPaneCursorClassChange: (paneCursorClass: string) => void;
 }
 
 export function WallToolsLayer({
-  controllerRef,
+  session,
   floorWalls,
   activeDrawTool,
   isEditMode,
-  isWallDebugPanelVisible,
   paneHoverFillColor,
   paneHoverStrokeColor,
-  onPaneCursorClassChange,
 }: WallToolsLayerProps) {
-  const wallTools = useWallToolsController({
-    trackPointerPosition: isWallDebugPanelVisible,
-  });
-
-  useEffect(() => {
-    controllerRef.current = {
-      cancelTool: wallTools.cancelTool,
-      handlePaneMouseMove: wallTools.handlePaneMouseMove,
-      handlePaneClick: wallTools.handlePaneClick,
-      handleContextMenu: wallTools.handleContextMenu,
-    };
-
-    return () => {
-      controllerRef.current = null;
-    };
-  }, [
-    controllerRef,
-    wallTools.cancelTool,
-    wallTools.handleContextMenu,
-    wallTools.handlePaneClick,
-    wallTools.handlePaneMouseMove,
-  ]);
-
-  useEffect(() => {
-    onPaneCursorClassChange(wallTools.paneCursorClass);
-  }, [onPaneCursorClassChange, wallTools.paneCursorClass]);
-
   return (
     <>
       <WallOverlay
         floorWalls={floorWalls}
-        previewSegments={wallTools.previewSegments}
-        erasePreviewKeys={wallTools.erasePreviewKeys}
+        previewSegments={session.previewSegments}
+        erasePreviewKeys={session.erasePreviewKeys}
         activeDrawTool={activeDrawTool}
-        drawAnchor={wallTools.drawAnchor}
-        hoverSnapPoint={wallTools.hoverSnapPoint}
+        drawAnchor={session.drawAnchor}
+        hoverSnapPoint={session.hoverSnapPoint}
         paneHoverFillColor={paneHoverFillColor}
         paneHoverStrokeColor={paneHoverStrokeColor}
       />
 
       <WallToolHelpCard
         isVisible={isEditMode && activeDrawTool !== "device"}
-        drawMessage={wallTools.drawMessage}
+        drawMessage={session.drawMessage}
       />
 
       <WallDebugPanel
-        isVisible={isWallDebugPanelVisible}
+        isVisible={session.isDebugPanelVisible}
         activeDrawTool={activeDrawTool}
-        pointerPosition={wallTools.pointerPosition}
-        hoverSnapPoint={wallTools.hoverSnapPoint}
-        pointerSnapPoint={wallTools.pointerSnapPoint}
-        drawAnchor={wallTools.drawAnchor}
-        lastWallStartPoint={wallTools.lastWallStartPoint}
-        erasePreviewCount={wallTools.erasePreviewKeys.length}
-        drawMessage={wallTools.drawMessage}
+        pointerPosition={session.pointerPosition}
+        hoverSnapPoint={session.hoverSnapPoint}
+        pointerSnapPoint={session.pointerSnapPoint}
+        drawAnchor={session.drawAnchor}
+        lastWallStartPoint={session.lastWallStartPoint}
+        erasePreviewCount={session.erasePreviewKeys.length}
+        drawMessage={session.drawMessage}
       />
     </>
   );
