@@ -8,7 +8,6 @@ import {
   deviceTypes,
 } from "./deviceKindRegistry";
 import { deviceNodeTypes, toDeviceNode } from "./reactFlowDeviceAdapter";
-import { resolveDeviceToolShortcut } from "./useDeviceToolShortcuts";
 import type { Device, DeviceType } from "@/types/map";
 import type { DeviceKind } from "./deviceKindRegistry";
 
@@ -83,59 +82,6 @@ describe("device kind registry", () => {
     expect(node.data).toEqual({ data: device });
     expect(node.data.data).toBe(device);
     expect("selected" in node.data).toBe(false);
-  });
-
-  it("routes device tool shortcuts from registry metadata", () => {
-    deviceTypes.forEach((type) => {
-      const key = deviceKindRegistry[type].shortcut.keys[0];
-      if (typeof key !== "string") {
-        throw new TypeError("Device tool shortcut test expects string hotkeys");
-      }
-
-      expect(
-        resolveDeviceToolShortcut({
-          altKey: false,
-          code: `Digit${key}`,
-          ctrlKey: false,
-          key,
-          metaKey: false,
-          shiftKey: false,
-        }),
-      ).toBe(type);
-    });
-
-    expect(
-      resolveDeviceToolShortcut({
-        altKey: false,
-        code: "Digit5",
-        ctrlKey: true,
-        key: "5",
-        metaKey: false,
-        shiftKey: false,
-      }),
-    ).toBe(null);
-  });
-
-  it("routes AZERTY top-row device tool shortcuts by physical digit code", () => {
-    const azertyTopRowEvents = [
-      { code: "Digit5", key: "(", type: "rack" },
-      { code: "Digit6", key: "-", type: "switch" },
-      { code: "Digit7", key: "è", type: "pc" },
-      { code: "Digit8", key: "_", type: "wall-port" },
-    ] as const;
-
-    azertyTopRowEvents.forEach(({ code, key, type }) => {
-      expect(
-        resolveDeviceToolShortcut({
-          altKey: false,
-          code,
-          ctrlKey: false,
-          key,
-          metaKey: false,
-          shiftKey: false,
-        }),
-      ).toBe(type);
-    });
   });
 });
 

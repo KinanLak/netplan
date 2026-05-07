@@ -1,98 +1,166 @@
-import { useEffect, useId, useState } from "react";
-import { useHotkey } from "@tanstack/react-hotkeys";
-import type {
-  HotkeyCallback,
-  RegisterableHotkey,
-  UseHotkeyOptions,
-} from "@tanstack/react-hotkeys";
-import type { ShortcutAction, ShortcutScope } from "@/lib/shortcuts";
-import { isMac, shortcuts } from "@/lib/shortcuts";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from "react";
+import type { ReactNode } from "react";
+import type { ShortcutAction } from "@/lib/shortcuts";
+import { isMac } from "@/lib/shortcuts";
+import {
+  isShortcutInputTarget,
+  isShortcutModalTarget,
+  resolveShortcutIntent,
+} from "@/lib/shortcut-intents";
+import type { ShortcutIntentRegistration } from "@/lib/shortcut-intents";
 import {
   OVERLAY_MODIFIER_KEY_BY_PLATFORM,
   OVERLAY_VISIBILITY_DELAY_MS,
 } from "@/lib/constants";
 import { useMapStore } from "@/store/useMapStore";
 
-type UseShortcutOptions = {
-  /** Override the enabled state (combined with scope) */
-  enabled?: boolean;
-  /** Ignore hotkey when focus is in input-like elements. Defaults based on TanStack smart detection. */
-  ignoreInputs?: boolean;
-  /** Override conflict handling for intentional key overlaps. */
-  conflictBehavior?: UseHotkeyOptions["conflictBehavior"];
+type ShortcutEffect = ShortcutIntentRegistration & {
+  run: (event: KeyboardEvent) => void;
 };
 
-const DEFAULT_SHORTCUT_OPTIONS: UseShortcutOptions = {};
+type ShortcutIntentRegistry = {
+  register: (effect: ShortcutEffect) => () => void;
+};
+
+type ShortcutIntentProviderProps = {
+  children: ReactNode;
+};
+
+type UseShortcutIntentEffectOptions = {
+  enabled?: boolean;
+};
+
+type ShortcutIntentEffectAdapter = {
+  action: ShortcutAction;
+  enabled?: boolean;
+  run: (event: KeyboardEvent) => void;
+};
+
+const ShortcutIntentContext = createContext<ShortcutIntentRegistry | null>(
+  null,
+);
+
+const DEFAULT_SHORTCUT_INTENT_EFFECT_OPTIONS: UseShortcutIntentEffectOptions =
+  {};
+
 const OVERLAY_MODIFIER_KEY = isMac
   ? OVERLAY_MODIFIER_KEY_BY_PLATFORM.mac
   : OVERLAY_MODIFIER_KEY_BY_PLATFORM.nonMac;
 
-/**
- * Compute whether a scope is currently active.
- * Global → always true.
- * Canvas → true when no device is selected (drawer closed).
- * Drawer → true when a device is selected (drawer open).
- */
-function useScopeEnabled(
-  scope: ShortcutScope,
-  extraEnabled: boolean = true,
-): boolean {
-  const selectedDeviceId = useMapStore((s) => s.selectedDeviceId);
+export function ShortcutIntentProvider({
+  children,
+}: ShortcutIntentProviderProps) {
+  const effectsRef = useRef(new Map<string, ShortcutEffect>());
 
-  if (!extraEnabled) return false;
+  const register = useCallback((effect: ShortcutEffect) => {
+    effectsRef.current.set(effect.id, effect);
 
-  switch (scope) {
-    case "global":
-      return true;
-    case "canvas":
-      return selectedDeviceId === null;
-    case "drawer":
-      return selectedDeviceId !== null;
-  }
+    return () => {
+      effectsRef.current.delete(effect.id);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) {
+        return;
+      }
+
+      const state = useMapStore.getState();
+      const effects = Array.from(effectsRef.current.values());
+      const match = resolveShortcutIntent({
+        event,
+        registrations: effects,
+        runtime: {
+          activeDrawTool: state.activeDrawTool,
+          currentFloorId: state.currentFloorId,
+          isEditMode: state.isEditMode,
+          isInputFocused: isShortcutInputTarget(event.target),
+          isModalFocused: isShortcutModalTarget(event.target),
+          selectedDeviceId: state.selectedDeviceId,
+        },
+      });
+
+      if (!match) {
+        return;
+      }
+
+      const effect = effectsRef.current.get(match.registrationId);
+      if (!effect?.enabled) {
+        return;
+      }
+
+      event.preventDefault();
+      effect.run(event);
+    };
+
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown, true);
+    };
+  }, []);
+
+  return (
+    <ShortcutIntentContext.Provider value={{ register }}>
+      {children}
+    </ShortcutIntentContext.Provider>
+  );
 }
 
-const noop: HotkeyCallback = () => {};
-
-/**
- * Hook to register a keyboard shortcut by action name.
- * Automatically resolves key bindings and scope from the shortcuts config.
- *
- * Uses fixed-count `useHotkey` calls (MAX_KEYS_PER_ACTION = 2) to satisfy
- * React's rules of hooks — unused slots get a disabled sentinel key.
- */
-export function useShortcut(
+export function useShortcutIntentEffect(
   action: ShortcutAction,
-  handler: (event: KeyboardEvent) => void,
-  options: UseShortcutOptions = DEFAULT_SHORTCUT_OPTIONS,
+  run: (event: KeyboardEvent) => void,
+  options: UseShortcutIntentEffectOptions = DEFAULT_SHORTCUT_INTENT_EFFECT_OPTIONS,
 ) {
-  const { enabled = true, ignoreInputs, conflictBehavior = "warn" } = options;
-  const config = shortcuts[action];
-  const scopeEnabled = useScopeEnabled(config.scope, enabled);
-  const noopKeyId = useId();
-  const noopKey =
-    `ShortcutNoop${noopKeyId.replaceAll(":", "")}` as RegisterableHotkey;
+  const registry = useContext(ShortcutIntentContext);
+  const id = useId();
+  const enabled = options.enabled ?? true;
 
-  const callback: HotkeyCallback = (event) => {
-    handler(event);
-  };
+  if (!registry) {
+    throw new Error(
+      "useShortcutIntentEffect must be used within ShortcutIntentProvider.",
+    );
+  }
 
-  const baseOptions: UseHotkeyOptions = {
-    conflictBehavior,
-    enabled: scopeEnabled,
-    ...(ignoreInputs !== undefined ? { ignoreInputs } : {}),
-  };
+  useEffect(() => {
+    return registry.register({ action, enabled, id, run });
+  }, [action, enabled, id, registry, run]);
+}
 
-  // Slot 0 — always present (keys has at least one entry)
-  const key0 = config.keys[0];
-  useHotkey(key0, callback, baseOptions);
+export function useShortcutIntentEffects(
+  effects: Array<ShortcutIntentEffectAdapter>,
+) {
+  const registry = useContext(ShortcutIntentContext);
+  const idPrefix = useId();
 
-  // Slot 1 — second binding or disabled sentinel
-  const key1 = config.keys.length > 1 ? config.keys[1] : noopKey;
-  const opts1: UseHotkeyOptions =
-    config.keys.length > 1
-      ? baseOptions
-      : { ...baseOptions, enabled: false, conflictBehavior: "allow" };
-  useHotkey(key1, config.keys.length > 1 ? callback : noop, opts1);
+  if (!registry) {
+    throw new Error(
+      "useShortcutIntentEffects must be used within ShortcutIntentProvider.",
+    );
+  }
+
+  useEffect(() => {
+    const unregister = effects.map((effect, index) =>
+      registry.register({
+        action: effect.action,
+        enabled: effect.enabled ?? true,
+        id: `${idPrefix}-${index}`,
+        run: effect.run,
+      }),
+    );
+
+    return () => {
+      unregister.forEach((unregisterEffect) => unregisterEffect());
+    };
+  }, [effects, idPrefix, registry]);
 }
 
 /**
@@ -112,7 +180,6 @@ export function useOptionHeld(delay = OVERLAY_VISIBILITY_DELAY_MS) {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === OVERLAY_MODIFIER_KEY && !event.repeat) {
         setIsHeld(true);
-        // Delay before showing overlay
         timeoutId = setTimeout(() => {
           setIsVisible(true);
         }, delay);

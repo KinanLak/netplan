@@ -7,7 +7,7 @@ import {
   buildBalancedShortcutGrid,
   shortcutGroups,
 } from "@/lib/shortcut-groups";
-import { useShortcut } from "@/hooks/use-shortcuts";
+import { useShortcutIntentEffect } from "@/hooks/use-shortcuts";
 import { Kbd, KbdGroup } from "@/components/ui/kbd";
 import { ShortcutGroupGrid } from "@/components/ShortcutGroupGrid";
 import {
@@ -34,7 +34,7 @@ export function ShortcutsDialog({ hasRightDrawerOpen }: ShortcutsDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const overlayModifierLabel = isMac ? "⌘" : "Ctrl";
 
-  useShortcut("show-shortcuts", () => {
+  useShortcutIntentEffect("show-shortcuts", () => {
     setIsOpen((prev) => !prev);
   });
 

@@ -9,13 +9,13 @@ import {
   useIsEditMode,
   useSelectedDeviceId,
 } from "@/store/selectors";
-import { useShortcut } from "@/hooks/use-shortcuts";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ShortcutHintInline } from "@/components/ui/shortcut-hint";
 import { StatusDot } from "@/components/StatusDot";
 import { getDeviceKindLabel } from "@/devices/deviceKindRegistry";
+import { getNextConnectionHighlightIds } from "@/lib/shortcut-intents";
 import { cn } from "@/lib/utils";
 import { DrawerConnectionsSection } from "@/panels/drawer/DrawerConnectionsSection";
 import { DrawerPortsSection } from "@/panels/drawer/DrawerPortsSection";
@@ -59,14 +59,15 @@ export default function DeviceDrawer() {
   })();
 
   const handleHighlightConnections = () => {
-    if (!device?.metadata.connectedDeviceIds) return;
+    const nextHighlightedDeviceIds = getNextConnectionHighlightIds({
+      devices,
+      highlightedDeviceIds,
+      hoveredDeviceId: null,
+      selectedDeviceId,
+    });
 
-    // If this device's connections are highlighted, hide them. Otherwise, show this device's connections.
-    if (isCurrentDeviceHighlighted) {
-      setHighlightedDevices([]);
-    } else {
-      // Include the device itself and its connections
-      setHighlightedDevices([device.id, ...device.metadata.connectedDeviceIds]);
+    if (nextHighlightedDeviceIds) {
+      setHighlightedDevices(nextHighlightedDeviceIds);
     }
   };
 
@@ -97,16 +98,6 @@ export default function DeviceDrawer() {
     deleteDevice(device.id);
     selectDevice(null);
   };
-
-  // Register keyboard shortcuts (scope is automatic via useScopeEnabled)
-  useShortcut("close-drawer", handleCloseDrawer, {
-    conflictBehavior: "allow",
-  });
-  useShortcut("delete-device", handleDeleteDevice, { enabled: isEditMode });
-  useShortcut("highlight-connections", handleHighlightConnections, {
-    conflictBehavior: "allow",
-    enabled: (device?.metadata.connectedDeviceIds?.length ?? 0) > 0,
-  });
 
   if (!device) {
     return null;

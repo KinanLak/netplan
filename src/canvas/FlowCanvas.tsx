@@ -93,8 +93,6 @@ export default function FlowCanvas() {
   const { isWallDebugVisible } = useCanvasKeyboardShortcuts({
     reactFlow,
     wallToolsControllerRef,
-    isEditMode,
-    activeDrawTool,
   });
 
   const isWallDebugPanelVisible =

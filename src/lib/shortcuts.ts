@@ -1,17 +1,17 @@
 /**
  * Keyboard shortcuts configuration for NetPlan
  *
- * Uses @tanstack/react-hotkeys key format:
+ * Uses NetPlan's shortcut key format:
  * - Modifiers: Mod (Cmd on Mac, Ctrl on Windows), Control, Alt, Shift, Meta
  * - Combine with '+': 'Mod+Z', 'Mod+Shift+Z'
  * - Keys use event.key names: 'Escape', 'ArrowUp', 'Delete', 'Backspace'
- * - TanStack falls back to event.code for digits (0-9) and letters (A-Z),
- *   so '1' works on both QWERTY and AZERTY without dual registration.
+ * - Single character keys also match physical event.code for letters, digits,
+ *   and numpad digits so hotbar shortcuts survive layout changes.
  */
 
-import type { RegisterableHotkey } from "@tanstack/react-hotkeys";
 import { deviceKinds } from "@/devices/deviceKindRegistry";
 import type { DeviceToolShortcutAction } from "@/devices/deviceKindRegistry";
+import type { ShortcutKeyBinding } from "@/lib/shortcut-types";
 
 export type ShortcutScope = "global" | "canvas" | "drawer";
 
@@ -25,6 +25,7 @@ export type ShortcutAction =
   | "show-shortcuts"
   | "cycle-theme"
   | "sidebar-toggle"
+  | "toggle-wall-debug"
   // Navigation
   | "zoom-in"
   | "zoom-out"
@@ -35,6 +36,7 @@ export type ShortcutAction =
   | "pan-right"
   | "floor-up"
   | "floor-down"
+  | "cancel-wall-tool"
   // Tools - Walls (numbers + letter aliases)
   | "tool-wall"
   | "tool-wall-brush"
@@ -48,8 +50,8 @@ export type ShortcutAction =
   | "highlight-connections";
 
 export type ShortcutConfig = {
-  /** TanStack hotkey strings — one per binding */
-  keys: [RegisterableHotkey, ...Array<RegisterableHotkey>];
+  /** Shortcut key bindings — one per physical/logical binding */
+  keys: [ShortcutKeyBinding, ...Array<ShortcutKeyBinding>];
   /** Display label */
   label: string;
   /** Longer description */
@@ -57,13 +59,6 @@ export type ShortcutConfig = {
   /** Logical scope (used for enabled conditions) */
   scope: ShortcutScope;
 };
-
-/**
- * Maximum number of key bindings any single action can have.
- * useHotkey must be called this many times per useShortcut call
- * to satisfy React's rules of hooks.
- */
-export const MAX_KEYS_PER_ACTION = 2;
 
 const deviceToolShortcuts = deviceKinds.reduce(
   (acc, kind) => {
@@ -128,22 +123,32 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
     description: "Afficher/masquer le panneau latéral",
     scope: "global",
   },
+  "toggle-wall-debug": {
+    keys: [{ key: "D", shift: true }],
+    label: "Debug murs",
+    description: "Afficher/masquer le debug des murs",
+    scope: "canvas",
+  },
 
   // Navigation
   "zoom-in": {
-    keys: ["Mod+=", { key: "=", mod: true, shift: true }],
+    keys: [
+      "Mod+=",
+      { key: "=", mod: true, shift: true },
+      { key: "+", code: "NumpadAdd", display: "Num +" },
+    ],
     label: "Zoom +",
     description: "Zoomer",
     scope: "global",
   },
   "zoom-out": {
-    keys: ["Mod+-"],
+    keys: ["Mod+-", { key: "-", code: "NumpadSubtract", display: "Num -" }],
     label: "Zoom -",
     description: "Dézoomer",
     scope: "global",
   },
   "zoom-reset": {
-    keys: ["Mod+0"],
+    keys: ["Mod+0", { key: "0", code: "Numpad0", display: "Num 0" }],
     label: "Réinitialiser zoom",
     description: "Remettre le zoom à 100%",
     scope: "global",
@@ -183,6 +188,12 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
     label: "Étage suivant",
     description: "Aller à l'étage suivant",
     scope: "global",
+  },
+  "cancel-wall-tool": {
+    keys: ["Escape"],
+    label: "Annuler outil",
+    description: "Annuler l'outil de dessin en cours",
+    scope: "canvas",
   },
 
   // Tools - Walls & Rooms (hotbar numbers + letter aliases)
@@ -285,10 +296,14 @@ function formatHotkeyPart(part: string): string {
   }
 }
 
-export function formatHotkey(hotkey: RegisterableHotkey): Array<string> {
+export function formatHotkey(hotkey: ShortcutKeyBinding): Array<string> {
   if (typeof hotkey === "string") {
     const parts = hotkey.split("+");
     return parts.map(formatHotkeyPart);
+  }
+
+  if (hotkey.display) {
+    return [hotkey.display];
   }
 
   const result: Array<string> = [];
@@ -323,12 +338,17 @@ export function getShortcutDisplay(
   const config = shortcuts[action];
   const seen = new Set<string>();
 
-  return config.keys.map(formatHotkey).filter((combo) => {
-    const id = combo.join("+");
-    if (seen.has(id)) {
-      return false;
-    }
-    seen.add(id);
-    return true;
-  });
+  return config.keys
+    .filter((hotkey) => {
+      return typeof hotkey === "string" || !hotkey.hiddenFromDisplay;
+    })
+    .map(formatHotkey)
+    .filter((combo) => {
+      const id = combo.join("+");
+      if (seen.has(id)) {
+        return false;
+      }
+      seen.add(id);
+      return true;
+    });
 }

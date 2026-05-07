@@ -10,11 +10,14 @@ import DeviceDrawer from "@/panels/DeviceDrawer";
 import { rehydrateMapStore, useMapStore } from "@/store/useMapStore";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { ThemeProvider, useTheme } from "@/components/theme-provider";
-import { HotkeysProvider } from "@/components/hotkeys-provider";
-import { useShortcut } from "@/hooks/use-shortcuts";
+import {
+  ShortcutIntentProvider,
+  useShortcutIntentEffect,
+} from "@/hooks/use-shortcuts";
 import { useUndoRedo } from "@/hooks/use-undo-redo";
 import { ShortcutsDialog } from "@/components/shortcuts-dialog";
 import { ShortcutHintAbsolute } from "@/components/ui/shortcut-hint";
+import { getNextConnectionHighlightIds } from "@/lib/shortcut-intents";
 
 export const Route = createFileRoute("/")({
   ssr: true,
@@ -46,7 +49,7 @@ function HomePage() {
 
   return (
     <ThemeProvider defaultTheme="system" storageKey="netplan-ui-theme">
-      <HotkeysProvider>
+      <ShortcutIntentProvider>
         {isStoreHydrated ? (
           <>
             <HomePageContent />
@@ -54,7 +57,7 @@ function HomePage() {
         ) : (
           <div className="h-screen w-screen bg-background" />
         )}
-      </HotkeysProvider>
+      </ShortcutIntentProvider>
     </ThemeProvider>
   );
 }
@@ -64,6 +67,7 @@ function HomePageContent() {
   const isEditMode = useMapStore((state) => state.isEditMode);
   const toggleEditMode = useMapStore((state) => state.toggleEditMode);
   const selectDevice = useMapStore((state) => state.selectDevice);
+  const deleteDevice = useMapStore((state) => state.deleteDevice);
   const activeDrawTool = useMapStore((state) => state.activeDrawTool);
   const setActiveDrawTool = useMapStore((state) => state.setActiveDrawTool);
   const setHighlightedDevices = useMapStore(
@@ -100,45 +104,49 @@ function HomePageContent() {
     setTheme(themeOrder[nextIndex]);
   };
 
-  // Register global shortcuts
-  useShortcut("toggle-edit-mode", toggleEditMode);
-  useShortcut("cycle-theme", cycleTheme);
-  useShortcut(
-    "escape",
-    () => {
-      // First deselect any device and clear highlights
-      if (selectedDeviceId) {
-        selectDevice(null);
-        setActiveDrawTool("device");
-        setHighlightedDevices([]);
-        return;
-      }
-      // Then cancel any active draw tool (wall/room) without leaving edit mode
-      if (activeDrawTool !== "device") {
-        setActiveDrawTool("device");
-        return;
-      }
-      // Then exit edit mode if active
-      if (isEditMode) {
-        toggleEditMode();
-      }
-    },
-    { conflictBehavior: "allow" },
-  );
+  const closeDrawer = () => {
+    selectDevice(null);
+    setActiveDrawTool("device");
+    setHighlightedDevices([]);
+  };
 
-  // Undo/redo via useShortcut (replaces native addEventListener handler)
-  useShortcut("undo", handleUndo, {
-    enabled: isEditMode,
-    ignoreInputs: true,
-  });
-  useShortcut("redo", handleRedo, {
-    enabled: isEditMode,
-    ignoreInputs: true,
-  });
+  const deleteSelectedDevice = () => {
+    if (!selectedDeviceId) {
+      return;
+    }
 
-  // Floor navigation — Mod is part of the key string, no modifier check needed
-  useShortcut("floor-up", navigateFloorUp);
-  useShortcut("floor-down", navigateFloorDown);
+    deleteDevice(selectedDeviceId);
+    selectDevice(null);
+  };
+
+  const highlightConnections = () => {
+    const state = useMapStore.getState();
+    const nextHighlightedDeviceIds = getNextConnectionHighlightIds({
+      devices: state.devices,
+      highlightedDeviceIds: state.highlightedDeviceIds,
+      hoveredDeviceId: state.hoveredDeviceId,
+      selectedDeviceId: state.selectedDeviceId,
+    });
+
+    if (nextHighlightedDeviceIds) {
+      state.setHighlightedDevices(nextHighlightedDeviceIds);
+    }
+  };
+
+  useShortcutIntentEffect("toggle-edit-mode", toggleEditMode);
+  useShortcutIntentEffect("cycle-theme", cycleTheme);
+  useShortcutIntentEffect("close-drawer", closeDrawer);
+  useShortcutIntentEffect("delete-device", deleteSelectedDevice);
+  useShortcutIntentEffect("highlight-connections", highlightConnections);
+  useShortcutIntentEffect("escape", () => {
+    if (isEditMode && activeDrawTool === "device") {
+      toggleEditMode();
+    }
+  });
+  useShortcutIntentEffect("undo", handleUndo);
+  useShortcutIntentEffect("redo", handleRedo);
+  useShortcutIntentEffect("floor-up", navigateFloorUp);
+  useShortcutIntentEffect("floor-down", navigateFloorDown);
 
   return (
     <SidebarProvider>

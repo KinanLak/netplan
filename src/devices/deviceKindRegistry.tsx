@@ -5,13 +5,13 @@ import {
   ServerStack03Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import type { RegisterableHotkey } from "@tanstack/react-hotkeys";
 import type { NodeTypes } from "@xyflow/react";
 import PcNode from "@/canvas/nodeTypes/PcNode";
 import RackNode from "@/canvas/nodeTypes/RackNode";
 import SwitchNode from "@/canvas/nodeTypes/SwitchNode";
 import WallPortNode from "@/canvas/nodeTypes/WallPortNode";
 import { TOOLBAR_ICON_SIZE_CLASS } from "@/lib/constants";
+import type { ShortcutKeyBinding } from "@/lib/shortcut-types";
 import type { DeviceType, Size } from "@/types/map";
 
 export type DeviceToolShortcutAction = `tool-${DeviceType}`;
@@ -32,7 +32,7 @@ export interface DeviceKind<TType extends DeviceType = DeviceType> {
   };
   shortcut: {
     action: DeviceToolShortcutAction;
-    keys: [RegisterableHotkey, ...Array<RegisterableHotkey>];
+    keys: [ShortcutKeyBinding, ...Array<ShortcutKeyBinding>];
     label: string;
     description: string;
   };

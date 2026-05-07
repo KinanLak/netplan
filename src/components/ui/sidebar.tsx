@@ -16,7 +16,7 @@ import {
   SIDEBAR_WIDTH_ICON,
   SIDEBAR_WIDTH_MOBILE,
 } from "@/lib/constants";
-import { useShortcut } from "@/hooks/use-shortcuts";
+import { useShortcutIntentEffect } from "@/hooks/use-shortcuts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
@@ -97,7 +97,7 @@ function SidebarProvider({
   }, [isMobile, setOpen, setOpenMobile]);
 
   // Toggle the sidebar with Mod+B
-  useShortcut("sidebar-toggle", toggleSidebar, { ignoreInputs: true });
+  useShortcutIntentEffect("sidebar-toggle", toggleSidebar);
 
   // We add a state so that we can do data-state="expanded" or "collapsed".
   // This makes it easier to style the sidebar with Tailwind classes.

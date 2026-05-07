@@ -12,7 +12,7 @@ import {
   useIsEditMode,
   useSelectedWallColor,
 } from "@/store/selectors";
-import { useShortcut } from "@/hooks/use-shortcuts";
+import { useShortcutIntentEffect } from "@/hooks/use-shortcuts";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent } from "@/components/ui/popover";
 import {
@@ -124,20 +124,16 @@ export default function Toolbar() {
   };
 
   // Register keyboard shortcut handlers
-  useShortcut("tool-wall", () => handleDrawToolClick("wall"), {
-    enabled: isEditMode && !!currentFloorId,
-  });
-  useShortcut("tool-wall-erase", () => handleDrawToolClick("wall-erase"), {
-    enabled: isEditMode && !!currentFloorId,
-  });
-  useShortcut("tool-wall-brush", () => handleDrawToolClick("wall-brush"), {
-    enabled: isEditMode && !!currentFloorId,
-  });
-  useShortcut("tool-room", () => handleDrawToolClick("room"), {
-    enabled: isEditMode && !!currentFloorId,
-  });
+  useShortcutIntentEffect("tool-wall", () => handleDrawToolClick("wall"));
+  useShortcutIntentEffect("tool-wall-erase", () =>
+    handleDrawToolClick("wall-erase"),
+  );
+  useShortcutIntentEffect("tool-wall-brush", () =>
+    handleDrawToolClick("wall-brush"),
+  );
+  useShortcutIntentEffect("tool-room", () => handleDrawToolClick("room"));
   useDeviceToolShortcuts({
-    enabled: isEditMode && !!currentFloorId,
+    enabled: true,
     onSelectDeviceType: handleTypeClick,
   });
 
