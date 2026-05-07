@@ -106,6 +106,14 @@ const matchesKey = (
     return true;
   }
 
+  if (
+    key.length === 1 &&
+    event.key.length === 1 &&
+    event.key.toLowerCase() === key.toLowerCase()
+  ) {
+    return true;
+  }
+
   if (key.length !== 1) {
     return false;
   }

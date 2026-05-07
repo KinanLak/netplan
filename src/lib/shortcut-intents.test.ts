@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { deviceKinds } from "@/devices/deviceKindRegistry";
 import {
   getNextConnectionHighlightIds,
+  matchesShortcutBinding,
   resolveShortcutIntent,
 } from "@/lib/shortcut-intents";
 import type {
@@ -147,6 +148,12 @@ describe("shortcut intents", () => {
         event: keyEvent({ code: "Digit5", ctrlKey: true, key: "5" }),
       }),
     ).toBe(null);
+  });
+
+  it("matches single character shortcuts case-insensitively before physical code fallback", () => {
+    expect(
+      matchesShortcutBinding(keyEvent({ code: "KeyW", key: "z" }), "Z"),
+    ).toBe(true);
   });
 
   it("routes every device tool shortcut from registry metadata", () => {
