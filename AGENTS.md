@@ -14,20 +14,19 @@ React 19, TypeScript, Vite, TailwindCSS V4, Zustand (persisted to `localStorage`
 
 ## React Flow node data shape (critical)
 
-`useCanvasDeviceNodes` builds nodes with `data: { data: device }`. Node components read `const device = data.data`. Keep this nesting consistent or update all node components + typings together.
+`src/devices/reactFlowDeviceAdapter.ts` builds nodes with `data: { data: device }`. Node components read `const device = data.data`. Keep this nesting consistent or update all node components + typings together.
 
 `selected` is a React Flow node field (not nested inside `data`).
 
-`nodeTypes` keys in `src/canvas/nodeTypes/index.ts` must match `DeviceType` strings exactly.
+`deviceKindRegistry` keys in `src/devices/deviceKindRegistry.tsx` must match `DeviceType` strings exactly.
 
 ## Adding a new device type
 
 1. Extend `DeviceType` in `src/types/map.ts`
 2. Create component in `src/canvas/nodeTypes/<Name>.tsx`
-3. Register in `src/canvas/nodeTypes/index.ts`
-4. Add device presets (including default size) in `src/mock/availableDevices.ts`
-5. Add toolbar action in `src/panels/Toolbar.tsx`
-6. Add label in `src/panels/DeviceDrawer.tsx`
+3. Register labels, default size, toolbar metadata, shortcut metadata, and the node adapter in `src/devices/deviceKindRegistry.tsx`
+4. Add device presets in `src/mock/availableDevices.ts`
+5. Keep `src/devices/deviceKindRegistry.test.ts` passing so every device-kind seam stays exhaustive
 
 ## Boundaries
 
@@ -38,3 +37,4 @@ React 19, TypeScript, Vite, TailwindCSS V4, Zustand (persisted to `localStorage`
 - This is an unreleased project, all code must be canonical. Projet shape can be changed at any time, so avoid workarounds for backward compatibility.
 - React Compiler is enabled, so useMemo aren't needed since all components are automatically memoized.
 - If you encounter an unusual or hard-to-fix pattern, consider proposing an addition to AGENTS.md only when it would genuinely help share knowledge and prevent future issues.
+- Avoid using `any` or `unknown` in TypeScript. If you find a case where it's necessary, consider if it indicates a missing type definition or if the code can be refactored for better type safety. `unknown` is allowed in catch blocks.
