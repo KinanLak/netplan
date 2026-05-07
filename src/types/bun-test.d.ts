@@ -3,13 +3,13 @@ declare module "bun:test" {
   export function it(name: string, fn: () => void): void;
 
   export interface Matchers {
-    toBe: (expected: unknown) => void;
-    toEqual: (expected: unknown) => void;
+    toBe: <TExpected>(expected: TExpected) => void;
+    toEqual: <TExpected>(expected: TExpected) => void;
     toBeTruthy: () => void;
     toBeFalsy: () => void;
     toHaveLength: (length: number) => void;
-    toContain: (expected: unknown) => void;
+    toContain: <TExpected>(expected: TExpected) => void;
   }
 
-  export function expect(value: unknown): Matchers;
+  export function expect<TActual>(value: TActual): Matchers;
 }

@@ -10,6 +10,7 @@ import {
 import { deviceNodeTypes, toDeviceNode } from "./reactFlowDeviceAdapter";
 import { resolveDeviceToolShortcut } from "./useDeviceToolShortcuts";
 import type { Device, DeviceType } from "@/types/map";
+import type { DeviceKind } from "./deviceKindRegistry";
 
 const sorted = (values: Array<string>): Array<string> => values.toSorted();
 
@@ -138,6 +139,6 @@ describe("device kind registry", () => {
   });
 });
 
-const registryCoversDeviceType: Record<DeviceType, unknown> =
+const registryCoversDeviceType: Record<DeviceType, DeviceKind> =
   deviceKindRegistry;
 void registryCoversDeviceType;

@@ -27,7 +27,9 @@ const generateDeviceId = () =>
 const generateWallId = () =>
   `wall-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
-const normalizeActiveDrawTool = (tool: unknown): MapStore["activeDrawTool"] => {
+const normalizeActiveDrawTool = (
+  tool: string | undefined,
+): MapStore["activeDrawTool"] => {
   if (
     tool === "device" ||
     tool === "wall" ||
@@ -414,13 +416,14 @@ export const useMapStore = create<MapStore>()(
           return persistedState;
         }
 
-        const typedState = persistedState as Partial<MapStore> & {
-          activeDrawTool?: unknown;
-        };
+        const typedState = persistedState as Partial<MapStore>;
+        const activeDrawTool =
+          "activeDrawTool" in persistedState &&
+          typeof persistedState.activeDrawTool === "string"
+            ? persistedState.activeDrawTool
+            : undefined;
 
-        typedState.activeDrawTool = normalizeActiveDrawTool(
-          typedState.activeDrawTool,
-        );
+        typedState.activeDrawTool = normalizeActiveDrawTool(activeDrawTool);
 
         if (version < 3) {
           typedState.walls = [];

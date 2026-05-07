@@ -106,9 +106,9 @@ export interface Building {
 
 // React Flow node data keeps the Device nested so the React Flow shape cannot
 // be confused with the domain Device shape.
-export interface DeviceNodeData extends Record<string, unknown> {
+export type DeviceNodeData = {
   data: Device;
-}
+};
 
 // Store types
 export interface MapState {
