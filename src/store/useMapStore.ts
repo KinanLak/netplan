@@ -45,7 +45,7 @@ export const useMapStore = create<MapStore>()(
       {
         partialize: partializeMapHistory,
         equality: areMapHistorySnapshotsEqual,
-        limit: 100,
+        limit: 500,
       },
     ),
     {

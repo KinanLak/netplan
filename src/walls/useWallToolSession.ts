@@ -69,6 +69,7 @@ export const useWallToolSession = (): WallToolSession => {
     createWallInteractionState,
   );
   const stateRef = useRef(interactionState);
+  const isHistoryGroupOpenRef = useRef(false);
 
   useLayoutEffect(() => {
     stateRef.current = interactionState;
@@ -96,6 +97,37 @@ export const useWallToolSession = (): WallToolSession => {
     setInteractionState(nextState);
   };
 
+  const closeHistoryGroup = () => {
+    if (!isHistoryGroupOpenRef.current) {
+      return;
+    }
+
+    useMapStore.temporal.getState().resume();
+    isHistoryGroupOpenRef.current = false;
+  };
+
+  const syncStrokeHistoryGroup = (
+    nextState: WallInteractionState,
+    previousWalls: ReturnType<typeof useMapStore.getState>["walls"],
+  ) => {
+    const isStrokeActive =
+      nextState.isBrushStrokeActive || nextState.isEraseStrokeActive;
+
+    if (!isStrokeActive) {
+      closeHistoryGroup();
+      return;
+    }
+
+    if (isHistoryGroupOpenRef.current) {
+      return;
+    }
+
+    if (previousWalls !== useMapStore.getState().walls) {
+      useMapStore.temporal.getState().pause();
+      isHistoryGroupOpenRef.current = true;
+    }
+  };
+
   const getPointerSample = (event: ReactMouseEvent): PointerSample => {
     const pointer = reactFlow.screenToFlowPosition(
       { x: event.clientX, y: event.clientY },
@@ -111,6 +143,13 @@ export const useWallToolSession = (): WallToolSession => {
   const drawContextKey = `${activeDrawTool}:${currentFloorId}:${isEditMode}`;
   const [previousDrawContextKey, setPreviousDrawContextKey] =
     useState(drawContextKey);
+
+  useEffect(
+    () => () => {
+      closeHistoryGroup();
+    },
+    [drawContextKey],
+  );
 
   if (previousDrawContextKey !== drawContextKey) {
     const resetState = resetWallInteractionState();
@@ -131,6 +170,7 @@ export const useWallToolSession = (): WallToolSession => {
       commitInteractionState(
         releaseWallPointer(stateRef.current, releaseContext),
       );
+      closeHistoryGroup();
     };
 
     window.addEventListener("mouseup", handlePointerRelease);
@@ -153,19 +193,22 @@ export const useWallToolSession = (): WallToolSession => {
   };
 
   const cancelTool = () => {
+    closeHistoryGroup();
     commitInteractionState(cancelWallTool(adapter));
   };
 
   const handlePaneMouseMove = (event: ReactMouseEvent) => {
-    commitInteractionState(
-      moveWallPointer(
-        stateRef.current,
-        context,
-        adapter,
-        getPointerSample(event),
-        event.buttons,
-      ),
+    const previousWalls = useMapStore.getState().walls;
+    const nextState = moveWallPointer(
+      stateRef.current,
+      context,
+      adapter,
+      getPointerSample(event),
+      event.buttons,
     );
+
+    syncStrokeHistoryGroup(nextState, previousWalls);
+    commitInteractionState(nextState);
   };
 
   const handlePaneClick = (event: ReactMouseEvent): boolean => {
@@ -189,6 +232,7 @@ export const useWallToolSession = (): WallToolSession => {
 
     if (result.handled) {
       event.preventDefault();
+      closeHistoryGroup();
     }
 
     commitInteractionState(result.state);
