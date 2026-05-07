@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { useReactFlow } from "@xyflow/react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Tick02Icon } from "@hugeicons/core-free-icons";
-import type { DeviceType, DrawTool, Position } from "@/types/map";
+import type { DeviceType, DrawTool } from "@/types/map";
+import { useDevicePlacement } from "@/devices/useDevicePlacement";
 import type { AvailableDevice } from "@/mock/availableDevices";
 import type { ToolbarAction } from "@/panels/toolbar-actions";
 import { useMapStore } from "@/store/useMapStore";
@@ -28,12 +29,10 @@ import { useDeviceToolShortcuts } from "@/devices/useDeviceToolShortcuts";
 import { cn } from "@/lib/utils";
 import { availableDevicesCatalog } from "@/mock/availableDevices";
 import {
-  TOOLBAR_DEVICE_COLLISION_OFFSETS,
   TOOLBAR_WALL_COLOR_SELECTION_ENABLED,
   UNDO_REDO_EVENT_NAME,
   UNDO_REDO_FLASH_DURATION_MS,
 } from "@/lib/constants";
-import { GRID_SIZE } from "@/lib/grid";
 import { WALL_COLOR_ORDER, WALL_COLOR_TONES } from "@/lib/walls";
 import {
   deviceToolbarActions,
@@ -46,12 +45,12 @@ export default function Toolbar() {
   const activeDrawTool = useActiveDrawTool();
   const selectedWallColor = useSelectedWallColor();
 
-  const addDeviceAtFirstAvailablePosition = useMapStore(
-    (s) => s.addDeviceAtFirstAvailablePosition,
-  );
+  const addDevice = useMapStore((s) => s.addDevice);
+  const checkCollision = useMapStore((s) => s.checkCollision);
   const setActiveDrawTool = useMapStore((s) => s.setActiveDrawTool);
   const setSelectedWallColor = useMapStore((s) => s.setSelectedWallColor);
   const selectDevice = useMapStore((s) => s.selectDevice);
+  const devicePlacement = useDevicePlacement(checkCollision);
   const reactFlow = useReactFlow();
   const [selectedType, setSelectedType] = useState<DeviceType | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -145,17 +144,16 @@ export default function Toolbar() {
     const centerX = (-x + window.innerWidth / 2) / zoom;
     const centerY = (-y + window.innerHeight / 2) / zoom;
 
-    // Snap to grid
-    const snappedX = Math.round(centerX / GRID_SIZE) * GRID_SIZE;
-    const snappedY = Math.round(centerY / GRID_SIZE) * GRID_SIZE;
+    const placement = devicePlacement.resolve({
+      kind: "add",
+      floorId: currentFloorId,
+      requestedPosition: { x: centerX, y: centerY },
+      size: catalogDevice.size,
+    });
 
-    const candidatePositions: Array<Position> = [
-      { x: snappedX, y: snappedY },
-      ...TOOLBAR_DEVICE_COLLISION_OFFSETS.map((offset) => ({
-        x: Math.round((snappedX + offset.x) / GRID_SIZE) * GRID_SIZE,
-        y: Math.round((snappedY + offset.y) / GRID_SIZE) * GRID_SIZE,
-      })),
-    ];
+    if (!placement.ok) {
+      return;
+    }
 
     const newDevice = {
       type: catalogDevice.type,
@@ -167,9 +165,10 @@ export default function Toolbar() {
         ...catalogDevice.metadata,
         ip: catalogDevice.ip,
       },
+      position: placement.position,
     };
 
-    addDeviceAtFirstAvailablePosition(newDevice, candidatePositions);
+    addDevice(newDevice);
     setActiveDrawTool("device");
     setSelectedType(null);
     setOpen(false);

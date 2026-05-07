@@ -26,7 +26,6 @@ const createMapStoreState = (overrides: Partial<MapStore> = {}): MapStore => ({
   selectDevice: () => {},
   setHoveredDevice: () => {},
   addDevice: () => {},
-  addDeviceAtFirstAvailablePosition: () => null,
   updateDevicePosition: () => {},
   deleteDevice: () => {},
   addWallLine: () => ({

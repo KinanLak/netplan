@@ -137,10 +137,6 @@ export interface MapActions {
   selectDevice: (deviceId: string | null) => void;
   setHoveredDevice: (deviceId: string | null) => void;
   addDevice: (device: Omit<Device, "id">) => void;
-  addDeviceAtFirstAvailablePosition: (
-    device: Omit<Device, "id" | "position">,
-    candidatePositions: Array<Position>,
-  ) => Device | null;
   updateDevicePosition: (deviceId: string, position: Position) => void;
   deleteDevice: (deviceId: string) => void;
   addWallLine: (line: WallDraft) => WallCommandResult;
@@ -152,7 +148,12 @@ export interface MapActions {
   setActiveDrawTool: (tool: DrawTool) => void;
   setSelectedWallColor: (color: WallColor) => void;
   setHighlightedDevices: (deviceIds: Array<string>) => void;
-  checkCollision: (deviceId: string, position: Position, size: Size) => boolean;
+  checkCollision: (
+    floorId: string,
+    deviceId: string,
+    position: Position,
+    size: Size,
+  ) => boolean;
 }
 
 export type MapStore = MapState & MapActions;

@@ -14,18 +14,6 @@ export const TOOLBAR_ICON_SIZE_CLASS = "size-6";
 export const UNDO_REDO_EVENT_NAME = "netplan:undo-redo";
 export const UNDO_REDO_FLASH_DURATION_MS = 500;
 export const TOOLBAR_WALL_COLOR_SELECTION_ENABLED = false;
-export const TOOLBAR_DEVICE_COLLISION_OFFSETS = [
-  { x: 100, y: 0 },
-  { x: 0, y: 100 },
-  { x: -100, y: 0 },
-  { x: 0, y: -100 },
-  { x: 100, y: 100 },
-  { x: -100, y: 100 },
-  { x: -100, y: -100 },
-  { x: 100, y: -100 },
-  { x: 200, y: 0 },
-  { x: 0, y: 200 },
-] as const;
 // Flow canvas
 export const FLOW_CANVAS_ZOOM_DURATION_MS = 200;
 export const FLOW_CANVAS_RESET_DURATION_MS = 300;

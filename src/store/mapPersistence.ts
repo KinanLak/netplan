@@ -3,7 +3,6 @@ import type { DrawTool, MapStore } from "@/types/map";
 
 export const MAP_STORAGE_NAME = "netplan-storage";
 export const MAP_STORAGE_VERSION = 3;
-export const MAP_TEMPORAL_STORAGE_NAME = "netplan-temporal-v3";
 
 type PersistedMapState = Partial<
   Pick<

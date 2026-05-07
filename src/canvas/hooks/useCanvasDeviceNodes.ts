@@ -1,11 +1,10 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect } from "react";
 import { useNodesState } from "@xyflow/react";
 import type { OnNodesChange } from "@xyflow/react";
 import type { Device, DrawTool, Position, Size } from "@/types/map";
+import { useDevicePlacement } from "@/devices/useDevicePlacement";
 import { toDeviceNodes } from "@/devices/reactFlowDeviceAdapter";
 import type { DeviceNode } from "@/devices/reactFlowDeviceAdapter";
-import { CANVAS_DEVICE_NEAREST_POSITION_MAX_RADIUS } from "@/lib/constants";
-import { GRID_SIZE } from "@/lib/grid";
 
 interface UseCanvasDeviceNodesParams {
   devices: Array<Device>;
@@ -13,7 +12,12 @@ interface UseCanvasDeviceNodesParams {
   selectedDeviceId: string | null;
   activeDrawTool: DrawTool;
   canEditDevices: boolean;
-  checkCollision: (deviceId: string, position: Position, size: Size) => boolean;
+  checkCollision: (
+    floorId: string,
+    deviceId: string,
+    position: Position,
+    size: Size,
+  ) => boolean;
   updateDevicePosition: (deviceId: string, position: Position) => void;
   selectDevice: (deviceId: string | null) => void;
   setHoveredDevice: (deviceId: string | null) => void;
@@ -27,51 +31,6 @@ interface UseCanvasDeviceNodesResult {
   handleNodeMouseLeave: () => void;
 }
 
-const findNearestValidPosition = (
-  deviceId: string,
-  targetPos: Position,
-  size: Size,
-  lastValidPos: Position,
-  checkCollision: (id: string, pos: Position, size: Size) => boolean,
-): Position => {
-  if (!checkCollision(deviceId, targetPos, size)) {
-    return targetPos;
-  }
-
-  for (
-    let radius = GRID_SIZE;
-    radius <= CANVAS_DEVICE_NEAREST_POSITION_MAX_RADIUS;
-    radius += GRID_SIZE
-  ) {
-    const positions: Array<Position> = [];
-    for (let dx = -radius; dx <= radius; dx += GRID_SIZE) {
-      for (let dy = -radius; dy <= radius; dy += GRID_SIZE) {
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist >= radius - GRID_SIZE && dist < radius + GRID_SIZE) {
-          positions.push({
-            x: Math.round((targetPos.x + dx) / GRID_SIZE) * GRID_SIZE,
-            y: Math.round((targetPos.y + dy) / GRID_SIZE) * GRID_SIZE,
-          });
-        }
-      }
-    }
-
-    positions.sort((a, b) => {
-      const distA = Math.abs(a.x - targetPos.x) + Math.abs(a.y - targetPos.y);
-      const distB = Math.abs(b.x - targetPos.x) + Math.abs(b.y - targetPos.y);
-      return distA - distB;
-    });
-
-    for (const pos of positions) {
-      if (!checkCollision(deviceId, pos, size)) {
-        return pos;
-      }
-    }
-  }
-
-  return lastValidPos;
-};
-
 export function useCanvasDeviceNodes({
   devices,
   currentFloorId,
@@ -84,8 +43,7 @@ export function useCanvasDeviceNodes({
   setHoveredDevice,
 }: UseCanvasDeviceNodesParams): UseCanvasDeviceNodesResult {
   const [nodes, setNodes, onNodesChange] = useNodesState<DeviceNode>([]);
-  const lastValidPositions = useRef<Map<string, Position>>(new Map());
-  const lastGridCell = useRef<Map<string, string>>(new Map());
+  const devicePlacement = useDevicePlacement(checkCollision);
 
   useEffect(() => {
     const nextNodes = toDeviceNodes(
@@ -95,67 +53,43 @@ export function useCanvasDeviceNodes({
       canEditDevices,
     );
 
-    nextNodes.forEach((node) => {
-      lastValidPositions.current.set(node.id, node.position);
-    });
-
     setNodes(nextNodes);
   }, [devices, currentFloorId, selectedDeviceId, canEditDevices, setNodes]);
 
   const handleNodesChange: OnNodesChange<DeviceNode> = useCallback(
     (changes) => {
+      const committedPositions = new Map<string, Position>();
       const processedChanges = changes.map((change) => {
         if (change.type === "position" && change.position && change.dragging) {
-          const snappedPosition = {
-            x: Math.round(change.position.x / GRID_SIZE) * GRID_SIZE,
-            y: Math.round(change.position.y / GRID_SIZE) * GRID_SIZE,
-          };
+          const device = devices.find(
+            (candidate) => candidate.id === change.id,
+          );
+          if (device) {
+            const result = devicePlacement.resolve({
+              kind: "drag",
+              deviceId: change.id,
+              floorId: device.floorId,
+              requestedPosition: change.position,
+              size: device.size,
+              startPosition: device.position,
+            });
 
-          const currentCell = `${Math.floor(snappedPosition.x / GRID_SIZE)},${Math.floor(snappedPosition.y / GRID_SIZE)}`;
-          const previousCell = lastGridCell.current.get(change.id);
-
-          if (currentCell !== previousCell) {
-            lastGridCell.current.set(change.id, currentCell);
-
-            const device = devices.find(
-              (candidate) => candidate.id === change.id,
-            );
-            if (device) {
-              const lastValid =
-                lastValidPositions.current.get(change.id) ?? device.position;
-
-              const validPosition = findNearestValidPosition(
-                change.id,
-                snappedPosition,
-                device.size,
-                lastValid,
-                checkCollision,
-              );
-
-              lastValidPositions.current.set(change.id, validPosition);
-
+            if (result.ok) {
               return {
                 ...change,
-                position: validPosition,
-              };
-            }
-          } else {
-            const lastValid = lastValidPositions.current.get(change.id);
-            if (lastValid) {
-              return {
-                ...change,
-                position: lastValid,
+                position: result.position,
               };
             }
           }
         }
 
         if (change.type === "position" && change.position && !change.dragging) {
-          const lastValid = lastValidPositions.current.get(change.id);
-          if (lastValid) {
+          const committedPosition = devicePlacement.commitDrag(change.id);
+          if (committedPosition) {
+            committedPositions.set(change.id, committedPosition);
             return {
               ...change,
-              position: lastValid,
+              position: committedPosition,
             };
           }
         }
@@ -166,20 +100,14 @@ export function useCanvasDeviceNodes({
       onNodesChange(processedChanges);
 
       if (canEditDevices) {
-        processedChanges.forEach((change) => {
-          if (
-            change.type === "position" &&
-            change.position &&
-            !change.dragging
-          ) {
-            updateDevicePosition(change.id, change.position);
-          }
+        committedPositions.forEach((position, deviceId) => {
+          updateDevicePosition(deviceId, position);
         });
       }
     },
     [
       canEditDevices,
-      checkCollision,
+      devicePlacement,
       devices,
       onNodesChange,
       updateDevicePosition,

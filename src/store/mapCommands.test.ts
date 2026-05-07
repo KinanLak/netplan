@@ -93,31 +93,6 @@ describe("map commands", () => {
     expect(harness.state.highlightedDeviceIdSet.has("device-b")).toBe(true);
   });
 
-  it("adds a device at the first non-colliding candidate position", () => {
-    const harness = createHarness({
-      devices: [createDevice("device-a", { x: 0, y: 0 })],
-      currentFloorId: floorB,
-    });
-
-    const addedDevice = harness.commands.addDeviceAtFirstAvailablePosition(
-      {
-        type: "switch",
-        name: "Switch",
-        floorId: floorA,
-        size: { width: 20, height: 20 },
-        metadata: {},
-      },
-      [
-        { x: 10, y: 10 },
-        { x: 40, y: 0 },
-      ],
-    );
-
-    expect(addedDevice?.position).toEqual({ x: 40, y: 0 });
-    expect(harness.state.devices).toHaveLength(2);
-    expect(harness.state.devices[1]).toBe(addedDevice);
-  });
-
   it("rejects wall commands that collide with devices", () => {
     const harness = createHarness({
       devices: [createDevice("device-a", { x: 20, y: 0 })],

@@ -216,38 +216,6 @@ export const createMapCommands = ({
     }));
   },
 
-  addDeviceAtFirstAvailablePosition: (deviceData, candidatePositions) => {
-    const state = get();
-    const position = candidatePositions.find(
-      (candidatePosition) =>
-        !checkMapCollision(
-          state,
-          deviceData.floorId,
-          "",
-          candidatePosition,
-          deviceData.size,
-        ),
-    );
-
-    if (!position) {
-      return null;
-    }
-
-    const newDevice = createDevice(
-      {
-        ...deviceData,
-        position,
-      },
-      generateDeviceId,
-    );
-
-    set((currentState) => ({
-      devices: [...currentState.devices, newDevice],
-    }));
-
-    return newDevice;
-  },
-
   updateDevicePosition: (deviceId, position) => {
     const state = get();
     const device = state.devices.find((d) => d.id === deviceId);
@@ -410,14 +378,8 @@ export const createMapCommands = ({
     });
   },
 
-  checkCollision: (deviceId, position, size) => {
+  checkCollision: (floorId, deviceId, position, size) => {
     const state = get();
-    return checkMapCollision(
-      state,
-      state.currentFloorId,
-      deviceId,
-      position,
-      size,
-    );
+    return checkMapCollision(state, floorId, deviceId, position, size);
   },
 });

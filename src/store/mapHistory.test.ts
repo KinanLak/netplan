@@ -95,7 +95,6 @@ const createStoreHarness = (overrides: Partial<MapStore> = {}) => {
     selectDevice,
     setHoveredDevice: () => {},
     addDevice: () => {},
-    addDeviceAtFirstAvailablePosition: () => null,
     updateDevicePosition: () => {},
     deleteDevice: () => {},
     addWallLine: () => ({

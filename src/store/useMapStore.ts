@@ -8,7 +8,6 @@ import { createMapCommands, toHighlightedDeviceIdSet } from "./mapCommands";
 import {
   MAP_STORAGE_NAME,
   MAP_STORAGE_VERSION,
-  MAP_TEMPORAL_STORAGE_NAME,
   areMapHistorySnapshotsEqual,
   migrateMapState,
   partializeMapHistory,
@@ -47,11 +46,6 @@ export const useMapStore = create<MapStore>()(
         partialize: partializeMapHistory,
         equality: areMapHistorySnapshotsEqual,
         limit: 100,
-        wrapTemporal: (storeInitializer) =>
-          persist(storeInitializer, {
-            name: MAP_TEMPORAL_STORAGE_NAME,
-            skipHydration: true,
-          }),
       },
     ),
     {
@@ -64,18 +58,11 @@ export const useMapStore = create<MapStore>()(
   ),
 );
 
-type PersistApi = {
-  rehydrate: () => Promise<void>;
-};
-
-const temporalStoreWithPersist =
-  useMapStore.temporal as typeof useMapStore.temporal & {
-    persist?: PersistApi;
-  };
+const LEGACY_TEMPORAL_STORAGE_KEY = "netplan-temporal-v3";
 
 export async function rehydrateMapStore() {
-  await Promise.all([
-    useMapStore.persist.rehydrate(),
-    temporalStoreWithPersist.persist?.rehydrate() ?? Promise.resolve(),
-  ]);
+  if (typeof window !== "undefined") {
+    window.localStorage.removeItem(LEGACY_TEMPORAL_STORAGE_KEY);
+  }
+  await useMapStore.persist.rehydrate();
 }
