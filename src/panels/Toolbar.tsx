@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useReactFlow } from "@xyflow/react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Tick02Icon } from "@hugeicons/core-free-icons";
-import type { Device, DeviceType, DrawTool } from "@/types/map";
+import type { DeviceType, DrawTool, Position } from "@/types/map";
 import type { AvailableDevice } from "@/mock/availableDevices";
 import type { ToolbarAction } from "@/panels/toolbar-actions";
 import { useMapStore } from "@/store/useMapStore";
@@ -46,8 +46,9 @@ export default function Toolbar() {
   const activeDrawTool = useActiveDrawTool();
   const selectedWallColor = useSelectedWallColor();
 
-  const addDevice = useMapStore((s) => s.addDevice);
-  const checkCollision = useMapStore((s) => s.checkCollision);
+  const addDeviceAtFirstAvailablePosition = useMapStore(
+    (s) => s.addDeviceAtFirstAvailablePosition,
+  );
   const setActiveDrawTool = useMapStore((s) => s.setActiveDrawTool);
   const setSelectedWallColor = useMapStore((s) => s.setSelectedWallColor);
   const selectDevice = useMapStore((s) => s.selectDevice);
@@ -152,33 +153,19 @@ export default function Toolbar() {
     const snappedX = Math.round(centerX / GRID_SIZE) * GRID_SIZE;
     const snappedY = Math.round(centerY / GRID_SIZE) * GRID_SIZE;
 
-    const position = { x: snappedX, y: snappedY };
+    const candidatePositions: Array<Position> = [
+      { x: snappedX, y: snappedY },
+      ...TOOLBAR_DEVICE_COLLISION_OFFSETS.map((offset) => ({
+        x: Math.round((snappedX + offset.x) / GRID_SIZE) * GRID_SIZE,
+        y: Math.round((snappedY + offset.y) / GRID_SIZE) * GRID_SIZE,
+      })),
+    ];
 
-    // Check collision at this position
-    const hasCollision = checkCollision("", position, catalogDevice.size);
-
-    // If collision, try to find a free spot nearby
-    let finalPosition = position;
-    if (hasCollision) {
-      // Try positions in a spiral pattern
-      for (const offset of TOOLBAR_DEVICE_COLLISION_OFFSETS) {
-        const newPos = {
-          x: Math.round((snappedX + offset.x) / GRID_SIZE) * GRID_SIZE,
-          y: Math.round((snappedY + offset.y) / GRID_SIZE) * GRID_SIZE,
-        };
-        if (!checkCollision("", newPos, catalogDevice.size)) {
-          finalPosition = newPos;
-          break;
-        }
-      }
-    }
-
-    const newDevice: Omit<Device, "id"> = {
+    const newDevice = {
       type: catalogDevice.type,
       name: catalogDevice.name,
       hostname: catalogDevice.hostname,
       floorId: currentFloorId,
-      position: finalPosition,
       size: catalogDevice.size,
       metadata: {
         ...catalogDevice.metadata,
@@ -186,7 +173,7 @@ export default function Toolbar() {
       },
     };
 
-    addDevice(newDevice);
+    addDeviceAtFirstAvailablePosition(newDevice, candidatePositions);
     setActiveDrawTool("device");
     setSelectedType(null);
     setOpen(false);

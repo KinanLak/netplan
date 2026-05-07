@@ -111,12 +111,15 @@ export type DeviceNodeData = {
 };
 
 // Store types
-export interface MapState {
+export interface DurableMapState {
   buildings: Array<Building>;
   devices: Array<Device>;
   walls: Array<WallSegment>;
   currentBuildingId: string | null;
   currentFloorId: string | null;
+}
+
+export interface MapInteractionState {
   selectedDeviceId: string | null;
   hoveredDeviceId: string | null;
   isEditMode: boolean;
@@ -126,12 +129,18 @@ export interface MapState {
   selectedWallColor: WallColor;
 }
 
+export type MapState = DurableMapState & MapInteractionState;
+
 export interface MapActions {
   setCurrentBuilding: (buildingId: string) => void;
   setCurrentFloor: (floorId: string) => void;
   selectDevice: (deviceId: string | null) => void;
   setHoveredDevice: (deviceId: string | null) => void;
   addDevice: (device: Omit<Device, "id">) => void;
+  addDeviceAtFirstAvailablePosition: (
+    device: Omit<Device, "id" | "position">,
+    candidatePositions: Array<Position>,
+  ) => Device | null;
   updateDevicePosition: (deviceId: string, position: Position) => void;
   deleteDevice: (deviceId: string) => void;
   addWallLine: (line: WallDraft) => WallCommandResult;
