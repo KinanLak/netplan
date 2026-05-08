@@ -61,7 +61,7 @@ export function WallOverlay({
   const floorWallRects = useMemo(
     () =>
       floorWalls.map((wall) => ({
-        key: getWallBlockKey(wall) ?? wall.id,
+        key: getWallBlockKey(wall) ?? wall._id,
         rect: getWallCollisionRect(wall),
       })),
     [floorWalls],

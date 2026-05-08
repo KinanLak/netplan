@@ -1,10 +1,10 @@
 import { useState } from "react";
-import type { Position, Size } from "@/types/map";
+import type { DeviceId, FloorId, Position, Size } from "@/types/map";
 import { createDevicePlacement } from "./devicePlacement";
 
 type CheckCollision = (
-  floorId: string,
-  deviceId: string,
+  floorId: FloorId,
+  deviceId: DeviceId | string,
   position: Position,
   size: Size,
 ) => boolean;

@@ -1,14 +1,21 @@
-import type { Device } from "@/types/map";
+import type { DeviceId, DeviceStatus, DeviceType } from "@/types/map";
 import { Button } from "@/components/ui/button";
 import { ShortcutHintInline } from "@/components/ui/shortcut-hint";
 import { StatusDot } from "@/components/StatusDot";
 import { getDeviceKindLabel } from "@/devices/deviceKindRegistry";
 
+export interface ConnectedDeviceSummary {
+  _id: DeviceId;
+  name: string;
+  type: DeviceType;
+  status: DeviceStatus;
+}
+
 interface DrawerConnectionsSectionProps {
-  connectedDevices: Array<Device>;
+  connectedDevices: Array<ConnectedDeviceSummary>;
   isCurrentDeviceHighlighted: boolean;
   onHighlightConnections: () => void;
-  onSelectConnected: (deviceId: string) => void;
+  onSelectConnected: (deviceId: DeviceId) => void;
 }
 
 export function DrawerConnectionsSection({
@@ -42,8 +49,8 @@ export function DrawerConnectionsSection({
         {connectedDevices.map((connDevice) => (
           <button
             type="button"
-            key={connDevice.id}
-            onClick={() => onSelectConnected(connDevice.id)}
+            key={connDevice._id}
+            onClick={() => onSelectConnected(connDevice._id)}
             className="group w-full rounded-lg bg-muted px-3 py-2 text-left transition-colors hover:bg-accent"
           >
             <div className="flex items-center justify-between">
@@ -55,7 +62,7 @@ export function DrawerConnectionsSection({
                   {getDeviceKindLabel(connDevice.type)}
                 </div>
               </div>
-              <StatusDot status={connDevice.metadata.status ?? "unknown"} />
+              <StatusDot status={connDevice.status} />
             </div>
           </button>
         ))}

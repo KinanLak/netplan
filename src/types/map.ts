@@ -1,25 +1,23 @@
-// Device types for network equipment
+import type { Doc, Id } from "../../convex/_generated/dataModel";
+
+// ── Re-exports of Convex types for app-wide use ──────────────────────────────
+export type Device = Doc<"devices">;
+export type WallSegment = Doc<"walls">;
+export type Floor = Doc<"floors">;
+export type Building = Doc<"buildings">;
+export type LinkDoc = Doc<"links">;
+
+export type DeviceId = Id<"devices">;
+export type WallId = Id<"walls">;
+export type FloorId = Id<"floors">;
+export type BuildingId = Id<"buildings">;
+export type LinkId = Id<"links">;
+
+// ── Domain enums ─────────────────────────────────────────────────────────────
 export type DeviceType = "rack" | "switch" | "pc" | "wall-port";
 export type DrawTool = "device" | "wall" | "wall-brush" | "wall-erase" | "room";
 export type WallColor = "sand" | "concrete" | "slate";
-
 export type DeviceStatus = "up" | "down" | "unknown";
-
-export interface DeviceMetadata {
-  ip?: string;
-  status?: DeviceStatus;
-  model?: string;
-  ports?: Array<PortInfo>;
-  lastUser?: string;
-  connectedDeviceIds?: Array<string>;
-}
-
-export interface PortInfo {
-  id: string;
-  number: number;
-  status: DeviceStatus;
-  connectedTo?: string;
-}
 
 export interface Position {
   x: number;
@@ -31,34 +29,40 @@ export interface Size {
   height: number;
 }
 
-export type Device = {
+export interface PortInfo {
   id: string;
+  number: number;
+  status: DeviceStatus;
+}
+
+export type DeviceMetadata = Device["metadata"];
+
+// ── Drafts (input shapes for mutations / engine) ─────────────────────────────
+export interface DeviceDraft {
+  floorId: FloorId;
   type: DeviceType;
   name: string;
   hostname?: string;
-  floorId: string;
   position: Position;
   size: Size;
   metadata: DeviceMetadata;
-};
+}
 
-export interface WallSegment {
-  id: string;
-  floorId: string;
+export interface WallDraft {
+  floorId: FloorId;
   start: Position;
   end: Position;
   color: WallColor;
 }
-
-export type WallDraft = Omit<WallSegment, "id">;
 
 export interface RoomDraft {
-  floorId: string;
+  floorId: FloorId;
   start: Position;
   end: Position;
   color: WallColor;
 }
 
+// ── Wall command results (consumed by the wall interaction state machine) ───
 export type WallCommandReason =
   | "applied"
   | "invalid-line"
@@ -78,76 +82,41 @@ export interface WallCommandResult {
 }
 
 export interface WallPointerInput {
-  floorId: string;
+  floorId: FloorId;
   pointer: Position;
   snappedPoint: Position;
 }
 
 export interface WallStrokeInput {
-  floorId: string;
+  floorId: FloorId;
   fromPointer: Position;
   fromSnappedPoint: Position;
   toPointer: Position;
   toSnappedPoint: Position;
 }
 
-// Building & Floor types
-export interface Floor {
-  id: string;
-  name: string;
-  backgroundImage?: string;
-}
-
-export interface Building {
-  id: string;
-  name: string;
-  floors: Array<Floor>;
-}
-
-// Store types
-export interface DurableMapState {
-  buildings: Array<Building>;
-  devices: Array<Device>;
-  walls: Array<WallSegment>;
-  currentBuildingId: string | null;
-  currentFloorId: string | null;
-}
-
+// ── UI store (Zustand): only ephemeral interaction state ─────────────────────
 export interface MapInteractionState {
-  selectedDeviceId: string | null;
-  hoveredDeviceId: string | null;
+  currentBuildingId: BuildingId | null;
+  currentFloorId: FloorId | null;
+  selectedDeviceId: DeviceId | null;
+  hoveredDeviceId: DeviceId | null;
   isEditMode: boolean;
-  highlightedDeviceIds: Array<string>;
-  highlightedDeviceIdSet: ReadonlySet<string>;
+  highlightedDeviceIds: Array<DeviceId>;
+  highlightedDeviceIdSet: ReadonlySet<DeviceId>;
   activeDrawTool: DrawTool;
   selectedWallColor: WallColor;
 }
 
-export type MapState = DurableMapState & MapInteractionState;
-
-export interface MapActions {
-  setCurrentBuilding: (buildingId: string) => void;
-  setCurrentFloor: (floorId: string) => void;
-  selectDevice: (deviceId: string | null) => void;
-  setHoveredDevice: (deviceId: string | null) => void;
-  addDevice: (device: Omit<Device, "id">) => void;
-  updateDevicePosition: (deviceId: string, position: Position) => void;
-  deleteDevice: (deviceId: string) => void;
-  addWallLine: (line: WallDraft) => WallCommandResult;
-  addWallRoom: (room: RoomDraft) => WallCommandResult;
-  eraseWallAtPointer: (input: WallPointerInput) => WallCommandResult;
-  eraseWallStroke: (input: WallStrokeInput) => WallCommandResult;
-  previewEraseWallAtPointer: (input: WallPointerInput) => WallCommandResult;
+export interface MapInteractionActions {
+  setCurrentBuilding: (buildingId: BuildingId | null) => void;
+  setCurrentFloor: (floorId: FloorId | null) => void;
+  selectDevice: (deviceId: DeviceId | null) => void;
+  setHoveredDevice: (deviceId: DeviceId | null) => void;
   toggleEditMode: () => void;
   setActiveDrawTool: (tool: DrawTool) => void;
   setSelectedWallColor: (color: WallColor) => void;
-  setHighlightedDevices: (deviceIds: Array<string>) => void;
-  checkCollision: (
-    floorId: string,
-    deviceId: string,
-    position: Position,
-    size: Size,
-  ) => boolean;
+  setHighlightedDevices: (deviceIds: Array<DeviceId>) => void;
 }
 
-export type MapStore = MapState & MapActions;
+export type MapStore = MapInteractionState & MapInteractionActions;

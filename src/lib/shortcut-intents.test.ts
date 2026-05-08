@@ -11,6 +11,9 @@ import type {
   ShortcutIntentRuntime,
 } from "@/lib/shortcut-intents";
 import type { ShortcutAction } from "@/lib/shortcuts";
+import type { DeviceId } from "@/types/map";
+
+const did = (s: string) => s as DeviceId;
 
 const baseRuntime: ShortcutIntentRuntime = {
   activeDrawTool: "device",
@@ -173,44 +176,43 @@ describe("shortcut intents", () => {
   });
 
   it("computes connection highlights for selected and hovered devices", () => {
-    const devices = [
-      { id: "a", metadata: { connectedDeviceIds: ["b", "c"] } },
-      { id: "b", metadata: {} },
-      { id: "c", metadata: {} },
+    const links = [
+      { fromDeviceId: did("a"), toDeviceId: did("b") },
+      { fromDeviceId: did("a"), toDeviceId: did("c") },
     ];
 
     expect(
       getNextConnectionHighlightIds({
-        devices,
+        links,
         highlightedDeviceIds: [],
         hoveredDeviceId: null,
-        selectedDeviceId: "a",
+        selectedDeviceId: did("a"),
       }),
-    ).toEqual(["a", "b", "c"]);
+    ).toEqual([did("a"), did("b"), did("c")]);
 
     expect(
       getNextConnectionHighlightIds({
-        devices,
+        links,
         highlightedDeviceIds: [],
-        hoveredDeviceId: "a",
+        hoveredDeviceId: did("a"),
         selectedDeviceId: null,
       }),
-    ).toEqual(["a", "b", "c"]);
+    ).toEqual([did("a"), did("b"), did("c")]);
 
     expect(
       getNextConnectionHighlightIds({
-        devices,
-        highlightedDeviceIds: ["a", "b", "c"],
-        hoveredDeviceId: "a",
+        links,
+        highlightedDeviceIds: [did("a"), did("b"), did("c")],
+        hoveredDeviceId: did("a"),
         selectedDeviceId: null,
       }),
     ).toEqual([]);
 
     expect(
       getNextConnectionHighlightIds({
-        devices,
-        highlightedDeviceIds: ["a", "b", "c"],
-        hoveredDeviceId: "b",
+        links,
+        highlightedDeviceIds: [did("a"), did("b"), did("c")],
+        hoveredDeviceId: did("b"),
         selectedDeviceId: null,
       }),
     ).toEqual([]);

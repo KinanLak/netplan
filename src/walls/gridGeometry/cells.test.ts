@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import type { Device, WallSegment } from "@/types/map";
+import type { Device, DeviceId, FloorId, WallSegment } from "@/types/map";
+import type { Id } from "../../../convex/_generated/dataModel";
 import {
   arePositionsEqual,
   computeWallMaskBounds,
@@ -18,9 +19,10 @@ import {
 const wall = (
   start: { x: number; y: number },
   end: { x: number; y: number },
-  floorId = "floor-a",
+  floorId: FloorId = "floor-a" as FloorId,
 ): WallSegment => ({
-  id: "wall",
+  _id: "wall" as Id<"walls">,
+  _creationTime: 0,
   floorId,
   start,
   end,
@@ -31,10 +33,11 @@ const device = (
   position: { x: number; y: number },
   size = { width: 20, height: 20 },
 ): Device => ({
-  id: "device",
+  _id: "device" as DeviceId,
+  _creationTime: 0,
   type: "pc",
   name: "PC",
-  floorId: "floor-a",
+  floorId: "floor-a" as FloorId,
   position,
   size,
   metadata: {},
@@ -97,8 +100,16 @@ describe("wall grid cell math", () => {
   });
 
   it("scopes wall block keys by floor id", () => {
-    const onFloorA = wall({ x: 10, y: 10 }, { x: 10, y: 10 }, "floor-a");
-    const onFloorB = wall({ x: 10, y: 10 }, { x: 10, y: 10 }, "floor-b");
+    const onFloorA = wall(
+      { x: 10, y: 10 },
+      { x: 10, y: 10 },
+      "floor-a" as FloorId,
+    );
+    const onFloorB = wall(
+      { x: 10, y: 10 },
+      { x: 10, y: 10 },
+      "floor-b" as FloorId,
+    );
 
     const keyA = getWallBlockKey(onFloorA);
     const keyB = getWallBlockKey(onFloorB);

@@ -2,7 +2,7 @@ import { deviceToolShortcutActions } from "@/devices/deviceKindRegistry";
 import { isMac, shortcuts } from "@/lib/shortcuts";
 import type { ShortcutAction, ShortcutScope } from "@/lib/shortcuts";
 import type { ShortcutKeyBinding } from "@/lib/shortcut-types";
-import type { Device, DrawTool } from "@/types/map";
+import type { DeviceId, DrawTool, LinkDoc } from "@/types/map";
 
 export type ShortcutIntentEvent = Pick<
   KeyboardEvent,
@@ -30,10 +30,10 @@ export type ShortcutIntentMatch = {
 };
 
 export type ConnectionHighlightShortcutState = {
-  devices: Array<Pick<Device, "id" | "metadata">>;
-  highlightedDeviceIds: Array<string>;
-  hoveredDeviceId: string | null;
-  selectedDeviceId: string | null;
+  links: ReadonlyArray<Pick<LinkDoc, "fromDeviceId" | "toDeviceId">>;
+  highlightedDeviceIds: ReadonlyArray<DeviceId>;
+  hoveredDeviceId: DeviceId | null;
+  selectedDeviceId: DeviceId | null;
 };
 
 type ShortcutModifiers = {
@@ -311,21 +311,33 @@ export const isPlainShortcutEvent = (event: ShortcutIntentEvent): boolean => {
 };
 
 export const getNextConnectionHighlightIds = ({
-  devices,
+  links,
   highlightedDeviceIds,
   hoveredDeviceId,
   selectedDeviceId,
-}: ConnectionHighlightShortcutState): Array<string> | null => {
+}: ConnectionHighlightShortcutState): Array<DeviceId> | null => {
   const targetDeviceId = selectedDeviceId ?? hoveredDeviceId;
 
   if (!targetDeviceId) {
     return highlightedDeviceIds.length > 0 ? [] : null;
   }
 
-  const device = devices.find((candidate) => candidate.id === targetDeviceId);
-  const connectedDeviceIds = device?.metadata.connectedDeviceIds;
+  const seen = new Set<DeviceId>();
+  const connectedDeviceIds: Array<DeviceId> = [];
+  for (const link of links) {
+    let other: DeviceId | null = null;
+    if (link.fromDeviceId === targetDeviceId) {
+      other = link.toDeviceId;
+    } else if (link.toDeviceId === targetDeviceId) {
+      other = link.fromDeviceId;
+    }
+    if (other && !seen.has(other)) {
+      seen.add(other);
+      connectedDeviceIds.push(other);
+    }
+  }
 
-  if (!connectedDeviceIds?.length) {
+  if (connectedDeviceIds.length === 0) {
     return highlightedDeviceIds.length > 0 ? [] : null;
   }
 

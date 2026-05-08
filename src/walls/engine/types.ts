@@ -1,4 +1,5 @@
 import type {
+  FloorId,
   Position,
   WallColor,
   WallCommandResult,
@@ -10,7 +11,7 @@ export type EngineResult = WallCommandResult;
 
 export interface AddLineCommandInput {
   walls: ReadonlyArray<WallSegment>;
-  floorId: string;
+  floorId: FloorId;
   color: WallColor;
   start: Position;
   end: Position;
@@ -20,7 +21,7 @@ export interface AddLineCommandInput {
 
 export interface AddRoomCommandInput {
   walls: ReadonlyArray<WallSegment>;
-  floorId: string;
+  floorId: FloorId;
   color: WallColor;
   start: Position;
   end: Position;
@@ -30,14 +31,14 @@ export interface AddRoomCommandInput {
 
 export interface EraseAtPointerCommandInput {
   walls: ReadonlyArray<WallSegment>;
-  floorId: string;
+  floorId: FloorId;
   pointer: Position;
   snappedPoint: Position;
 }
 
 export interface EraseStrokeCommandInput {
   walls: ReadonlyArray<WallSegment>;
-  floorId: string;
+  floorId: FloorId;
   fromPointer: Position;
   fromSnappedPoint: Position;
   toPointer: Position;

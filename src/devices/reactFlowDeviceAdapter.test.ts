@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import type { Device } from "@/types/map";
+import type { Device, DeviceId, FloorId } from "@/types/map";
 import {
   deviceNodeTypes,
   toDeviceNode,
@@ -7,11 +7,15 @@ import {
 } from "./reactFlowDeviceAdapter";
 import { deviceTypes } from "./deviceKindRegistry";
 
+const did = (s: string) => s as DeviceId;
+const fid = (s: string) => s as FloorId;
+
 const createDevice = (overrides: Partial<Device> = {}): Device => ({
-  id: "device-1",
+  _id: did("device-1"),
+  _creationTime: 0,
   type: "pc",
   name: "PC 1",
-  floorId: "floor-a",
+  floorId: fid("floor-a"),
   position: { x: 80, y: 120 },
   size: { width: 80, height: 80 },
   metadata: {},
@@ -49,26 +53,32 @@ describe("react flow device adapter", () => {
     expect(
       toDeviceNode({
         device,
-        selectedDeviceId: device.id,
+        selectedDeviceId: device._id,
         canEditDevices: true,
       }).selected,
     ).toBe(true);
     expect(
       toDeviceNode({
         device,
-        selectedDeviceId: "other-device",
+        selectedDeviceId: did("other-device"),
         canEditDevices: true,
       }).selected,
     ).toBe(false);
   });
 
   it("filters devices by current floor when adapting the collection", () => {
-    const onFloor = createDevice({ id: "device-1", floorId: "floor-a" });
-    const onAnotherFloor = createDevice({ id: "device-2", floorId: "floor-b" });
+    const onFloor = createDevice({
+      _id: did("device-1"),
+      floorId: fid("floor-a"),
+    });
+    const onAnotherFloor = createDevice({
+      _id: did("device-2"),
+      floorId: fid("floor-b"),
+    });
 
     const nodes = toDeviceNodes(
       [onFloor, onAnotherFloor],
-      "floor-a",
+      fid("floor-a"),
       null,
       true,
     );

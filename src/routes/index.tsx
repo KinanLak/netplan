@@ -2,12 +2,23 @@ import { createFileRoute } from "@tanstack/react-router";
 import { ReactFlowProvider } from "@xyflow/react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Edit01Icon, Tick01Icon } from "@hugeicons/core-free-icons";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { useQuery } from "convex/react";
 import FlowCanvas from "@/canvas/FlowCanvas";
 import AppSidebar from "@/panels/Sidebar";
 import Toolbar from "@/panels/Toolbar";
 import DeviceDrawer from "@/panels/DeviceDrawer";
-import { rehydrateMapStore, useMapStore } from "@/store/useMapStore";
+import { useMapStore } from "@/store/useMapStore";
+import { useMapCommands } from "@/store/useMapCommands";
+import {
+  useActiveDrawTool,
+  useCurrentBuildingId,
+  useCurrentFloorId,
+  useHighlightedDeviceIds,
+  useHoveredDeviceId,
+  useIsEditMode,
+  useSelectedDeviceId,
+} from "@/store/selectors";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { ThemeProvider, useTheme } from "@/components/theme-provider";
 import {
@@ -18,6 +29,7 @@ import { useUndoRedo } from "@/hooks/use-undo-redo";
 import { ShortcutsDialog } from "@/components/shortcuts-dialog";
 import { ShortcutHintAbsolute } from "@/components/ui/shortcut-hint";
 import { getNextConnectionHighlightIds } from "@/lib/shortcut-intents";
+import { api } from "../../convex/_generated/api";
 
 export const Route = createFileRoute("/")({
   ssr: true,
@@ -25,75 +37,75 @@ export const Route = createFileRoute("/")({
 });
 
 function HomePage() {
-  const [isStoreHydrated, setIsStoreHydrated] = useState(false);
-
-  useEffect(() => {
-    let mounted = true;
-
-    const hydrateStore = async () => {
-      try {
-        await rehydrateMapStore();
-      } finally {
-        if (mounted) {
-          setIsStoreHydrated(true);
-        }
-      }
-    };
-
-    void hydrateStore();
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
   return (
     <ThemeProvider defaultTheme="system" storageKey="netplan-ui-theme">
       <ShortcutIntentProvider>
-        {isStoreHydrated ? (
-          <>
-            <HomePageContent />
-          </>
-        ) : (
-          <div className="h-screen w-screen bg-background" />
-        )}
+        <HomePageContent />
       </ShortcutIntentProvider>
     </ThemeProvider>
   );
 }
 
 function HomePageContent() {
-  const selectedDeviceId = useMapStore((state) => state.selectedDeviceId);
-  const isEditMode = useMapStore((state) => state.isEditMode);
-  const toggleEditMode = useMapStore((state) => state.toggleEditMode);
-  const selectDevice = useMapStore((state) => state.selectDevice);
-  const deleteDevice = useMapStore((state) => state.deleteDevice);
-  const activeDrawTool = useMapStore((state) => state.activeDrawTool);
-  const setActiveDrawTool = useMapStore((state) => state.setActiveDrawTool);
-  const setHighlightedDevices = useMapStore(
-    (state) => state.setHighlightedDevices,
+  const buildings = useQuery(api.buildings.list);
+  const currentBuildingId = useCurrentBuildingId();
+  const currentFloorId = useCurrentFloorId();
+  const selectedDeviceId = useSelectedDeviceId();
+  const hoveredDeviceId = useHoveredDeviceId();
+  const highlightedDeviceIds = useHighlightedDeviceIds();
+  const isEditMode = useIsEditMode();
+  const activeDrawTool = useActiveDrawTool();
+
+  const setCurrentBuilding = useMapStore((s) => s.setCurrentBuilding);
+  const setCurrentFloor = useMapStore((s) => s.setCurrentFloor);
+  const toggleEditMode = useMapStore((s) => s.toggleEditMode);
+  const selectDevice = useMapStore((s) => s.selectDevice);
+  const setActiveDrawTool = useMapStore((s) => s.setActiveDrawTool);
+  const setHighlightedDevices = useMapStore((s) => s.setHighlightedDevices);
+
+  const floors = useQuery(
+    api.floors.listForBuilding,
+    currentBuildingId ? { buildingId: currentBuildingId } : "skip",
   );
-  const buildings = useMapStore((state) => state.buildings);
-  const currentBuildingId = useMapStore((state) => state.currentBuildingId);
-  const currentFloorId = useMapStore((state) => state.currentFloorId);
-  const setCurrentFloor = useMapStore((state) => state.setCurrentFloor);
+
+  const links = useQuery(
+    api.links.listForFloor,
+    currentFloorId ? { floorId: currentFloorId } : "skip",
+  );
+
+  const commands = useMapCommands(currentFloorId);
+
   const { theme, setTheme } = useTheme();
   const { handleUndo, handleRedo } = useUndoRedo();
 
-  // Get current building's floors for navigation
-  const currentBuilding = buildings.find((b) => b.id === currentBuildingId);
-  const floors = currentBuilding?.floors ?? [];
-  const currentFloorIndex = floors.findIndex((f) => f.id === currentFloorId);
+  useEffect(() => {
+    if (currentBuildingId !== null) return;
+    if (!buildings || buildings.length === 0) return;
+    setCurrentBuilding(buildings[0]._id);
+  }, [buildings, currentBuildingId, setCurrentBuilding]);
+
+  useEffect(() => {
+    if (!floors) return;
+    if (currentFloorId && floors.some((f) => f._id === currentFloorId)) return;
+    setCurrentFloor(floors[0]?._id ?? null);
+  }, [floors, currentFloorId, setCurrentFloor]);
+
+  const sortedFloors = floors
+    ? [...floors].sort((a, b) => a.order - b.order)
+    : [];
+  const currentFloorIndex = sortedFloors.findIndex(
+    (f) => f._id === currentFloorId,
+  );
 
   const navigateFloorUp = () => {
     if (currentFloorIndex > 0) {
-      setCurrentFloor(floors[currentFloorIndex - 1].id);
+      setCurrentFloor(sortedFloors[currentFloorIndex - 1]._id);
     }
   };
 
   const navigateFloorDown = () => {
-    if (currentFloorIndex < floors.length - 1) {
-      setCurrentFloor(floors[currentFloorIndex + 1].id);
+    if (currentFloorIndex >= 0 && currentFloorIndex < sortedFloors.length - 1) {
+      setCurrentFloor(sortedFloors[currentFloorIndex + 1]._id);
     }
   };
 
@@ -111,25 +123,21 @@ function HomePageContent() {
   };
 
   const deleteSelectedDevice = () => {
-    if (!selectedDeviceId) {
-      return;
-    }
-
-    deleteDevice(selectedDeviceId);
+    if (!selectedDeviceId) return;
+    commands.deleteDevice(selectedDeviceId);
     selectDevice(null);
   };
 
   const highlightConnections = () => {
-    const state = useMapStore.getState();
-    const nextHighlightedDeviceIds = getNextConnectionHighlightIds({
-      devices: state.devices,
-      highlightedDeviceIds: state.highlightedDeviceIds,
-      hoveredDeviceId: state.hoveredDeviceId,
-      selectedDeviceId: state.selectedDeviceId,
+    const next = getNextConnectionHighlightIds({
+      links: links ?? [],
+      highlightedDeviceIds,
+      hoveredDeviceId,
+      selectedDeviceId,
     });
 
-    if (nextHighlightedDeviceIds) {
-      state.setHighlightedDevices(nextHighlightedDeviceIds);
+    if (next) {
+      setHighlightedDevices(next);
     }
   };
 
@@ -151,19 +159,15 @@ function HomePageContent() {
   return (
     <SidebarProvider>
       <div className="flex h-screen w-screen overflow-hidden bg-background">
-        {/* Sidebar */}
         <AppSidebar />
 
-        {/* Main canvas area */}
         <SidebarInset className="relative">
           <ReactFlowProvider>
             <FlowCanvas />
             <Toolbar />
-            {/* Device details drawer (conditional) - inside ReactFlowProvider for camera control */}
             {selectedDeviceId ? <DeviceDrawer /> : null}
           </ReactFlowProvider>
 
-          {/* Mode toggle button - top left */}
           <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
             <button
               onClick={toggleEditMode}

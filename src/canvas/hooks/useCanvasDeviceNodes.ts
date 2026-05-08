@@ -1,26 +1,33 @@
 import { useCallback, useEffect } from "react";
 import { useNodesState } from "@xyflow/react";
 import type { OnNodesChange } from "@xyflow/react";
-import type { Device, DrawTool, Position, Size } from "@/types/map";
+import type {
+  Device,
+  DeviceId,
+  DrawTool,
+  FloorId,
+  Position,
+  Size,
+} from "@/types/map";
 import { useDevicePlacement } from "@/devices/useDevicePlacement";
 import { toDeviceNodes } from "@/devices/reactFlowDeviceAdapter";
 import type { DeviceNode } from "@/devices/reactFlowDeviceAdapter";
 
 interface UseCanvasDeviceNodesParams {
   devices: Array<Device>;
-  currentFloorId: string | null;
-  selectedDeviceId: string | null;
+  currentFloorId: FloorId | null;
+  selectedDeviceId: DeviceId | null;
   activeDrawTool: DrawTool;
   canEditDevices: boolean;
   checkCollision: (
-    floorId: string,
-    deviceId: string,
+    floorId: FloorId,
+    deviceId: DeviceId | string,
     position: Position,
     size: Size,
   ) => boolean;
-  updateDevicePosition: (deviceId: string, position: Position) => void;
-  selectDevice: (deviceId: string | null) => void;
-  setHoveredDevice: (deviceId: string | null) => void;
+  updateDevicePosition: (deviceId: DeviceId, position: Position) => void;
+  selectDevice: (deviceId: DeviceId | null) => void;
+  setHoveredDevice: (deviceId: DeviceId | null) => void;
 }
 
 interface UseCanvasDeviceNodesResult {
@@ -58,16 +65,16 @@ export function useCanvasDeviceNodes({
 
   const handleNodesChange: OnNodesChange<DeviceNode> = useCallback(
     (changes) => {
-      const committedPositions = new Map<string, Position>();
+      const committedPositions = new Map<DeviceId, Position>();
       const processedChanges = changes.map((change) => {
         if (change.type === "position" && change.position && change.dragging) {
           const device = devices.find(
-            (candidate) => candidate.id === change.id,
+            (candidate) => candidate._id === change.id,
           );
           if (device) {
             const result = devicePlacement.resolve({
               kind: "drag",
-              deviceId: change.id,
+              deviceId: change.id as DeviceId,
               floorId: device.floorId,
               requestedPosition: change.position,
               size: device.size,
@@ -84,9 +91,11 @@ export function useCanvasDeviceNodes({
         }
 
         if (change.type === "position" && change.position && !change.dragging) {
-          const committedPosition = devicePlacement.commitDrag(change.id);
+          const committedPosition = devicePlacement.commitDrag(
+            change.id as DeviceId,
+          );
           if (committedPosition) {
-            committedPositions.set(change.id, committedPosition);
+            committedPositions.set(change.id as DeviceId, committedPosition);
             return {
               ...change,
               position: committedPosition,
@@ -120,14 +129,14 @@ export function useCanvasDeviceNodes({
         return;
       }
 
-      selectDevice(node.id);
+      selectDevice(node.id as DeviceId);
     },
     [activeDrawTool, selectDevice],
   );
 
   const handleNodeMouseEnter = useCallback(
     (_: React.MouseEvent, node: DeviceNode) => {
-      setHoveredDevice(node.id);
+      setHoveredDevice(node.id as DeviceId);
     },
     [setHoveredDevice],
   );

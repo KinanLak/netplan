@@ -9,6 +9,7 @@ import {
   useIsEditMode,
   useSelectedWallColor,
 } from "@/store/selectors";
+import { useMapCommands } from "@/store/useMapCommands";
 import { snapPositionToWallGrid } from "@/walls/gridGeometry";
 import {
   cancelWallTool,
@@ -57,19 +58,12 @@ export const useWallToolSession = (): WallToolSession => {
     isEditMode && activeDrawTool !== "device" && isDebugVisible;
 
   const setActiveDrawTool = useMapStore((state) => state.setActiveDrawTool);
-  const addWallLine = useMapStore((state) => state.addWallLine);
-  const addWallRoom = useMapStore((state) => state.addWallRoom);
-  const eraseWallAtPointer = useMapStore((state) => state.eraseWallAtPointer);
-  const eraseWallStroke = useMapStore((state) => state.eraseWallStroke);
-  const previewEraseWallAtPointer = useMapStore(
-    (state) => state.previewEraseWallAtPointer,
-  );
+  const commands = useMapCommands(currentFloorId);
 
   const [interactionState, setInteractionState] = useState(
     createWallInteractionState,
   );
   const stateRef = useRef(interactionState);
-  const isHistoryGroupOpenRef = useRef(false);
 
   useLayoutEffect(() => {
     stateRef.current = interactionState;
@@ -85,47 +79,16 @@ export const useWallToolSession = (): WallToolSession => {
 
   const adapter: WallInteractionAdapter = {
     setActiveDrawTool,
-    addWallLine,
-    addWallRoom,
-    eraseWallAtPointer,
-    eraseWallStroke,
-    previewEraseWallAtPointer,
+    addWallLine: commands.addWallLine,
+    addWallRoom: commands.addWallRoom,
+    eraseWallAtPointer: commands.eraseWallAtPointer,
+    eraseWallStroke: commands.eraseWallStroke,
+    previewEraseWallAtPointer: commands.previewEraseWallAtPointer,
   };
 
   const commitInteractionState = (nextState: WallInteractionState) => {
     stateRef.current = nextState;
     setInteractionState(nextState);
-  };
-
-  const closeHistoryGroup = () => {
-    if (!isHistoryGroupOpenRef.current) {
-      return;
-    }
-
-    useMapStore.temporal.getState().resume();
-    isHistoryGroupOpenRef.current = false;
-  };
-
-  const syncStrokeHistoryGroup = (
-    nextState: WallInteractionState,
-    previousWalls: ReturnType<typeof useMapStore.getState>["walls"],
-  ) => {
-    const isStrokeActive =
-      nextState.isBrushStrokeActive || nextState.isEraseStrokeActive;
-
-    if (!isStrokeActive) {
-      closeHistoryGroup();
-      return;
-    }
-
-    if (isHistoryGroupOpenRef.current) {
-      return;
-    }
-
-    if (previousWalls !== useMapStore.getState().walls) {
-      useMapStore.temporal.getState().pause();
-      isHistoryGroupOpenRef.current = true;
-    }
   };
 
   const getPointerSample = (event: ReactMouseEvent): PointerSample => {
@@ -143,13 +106,6 @@ export const useWallToolSession = (): WallToolSession => {
   const drawContextKey = `${activeDrawTool}:${currentFloorId}:${isEditMode}`;
   const [previousDrawContextKey, setPreviousDrawContextKey] =
     useState(drawContextKey);
-
-  useEffect(
-    () => () => {
-      closeHistoryGroup();
-    },
-    [drawContextKey],
-  );
 
   if (previousDrawContextKey !== drawContextKey) {
     const resetState = resetWallInteractionState();
@@ -170,7 +126,6 @@ export const useWallToolSession = (): WallToolSession => {
       commitInteractionState(
         releaseWallPointer(stateRef.current, releaseContext),
       );
-      closeHistoryGroup();
     };
 
     window.addEventListener("mouseup", handlePointerRelease);
@@ -193,12 +148,10 @@ export const useWallToolSession = (): WallToolSession => {
   };
 
   const cancelTool = () => {
-    closeHistoryGroup();
     commitInteractionState(cancelWallTool(adapter));
   };
 
   const handlePaneMouseMove = (event: ReactMouseEvent) => {
-    const previousWalls = useMapStore.getState().walls;
     const nextState = moveWallPointer(
       stateRef.current,
       context,
@@ -207,7 +160,6 @@ export const useWallToolSession = (): WallToolSession => {
       event.buttons,
     );
 
-    syncStrokeHistoryGroup(nextState, previousWalls);
     commitInteractionState(nextState);
   };
 
@@ -232,7 +184,6 @@ export const useWallToolSession = (): WallToolSession => {
 
     if (result.handled) {
       event.preventDefault();
-      closeHistoryGroup();
     }
 
     commitInteractionState(result.state);

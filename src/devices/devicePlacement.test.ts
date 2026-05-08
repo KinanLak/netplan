@@ -1,8 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import type { Position } from "@/types/map";
+import type { DeviceId, FloorId, Position } from "@/types/map";
 import { createDevicePlacement } from "./devicePlacement";
 
-const floorId = "floor-a";
+const floorId = "floor-a" as FloorId;
+const deviceId1 = "device-1" as DeviceId;
 const size = { width: 20, height: 20 };
 
 const toKey = (position: Position): string => `${position.x},${position.y}`;
@@ -89,7 +90,7 @@ describe("device placement", () => {
 
     const firstDrag = placement.resolve({
       kind: "drag",
-      deviceId: "device-1",
+      deviceId: deviceId1,
       floorId,
       requestedPosition: { x: 21, y: 20 },
       size,
@@ -97,7 +98,7 @@ describe("device placement", () => {
     });
     const secondDrag = placement.resolve({
       kind: "drag",
-      deviceId: "device-1",
+      deviceId: deviceId1,
       floorId,
       requestedPosition: { x: 80, y: 20 },
       size,
@@ -114,8 +115,8 @@ describe("device placement", () => {
       position: { x: 20, y: 20 },
       status: "reused-last-valid",
     });
-    expect(placement.commitDrag("device-1")).toEqual({ x: 20, y: 20 });
-    expect(placement.commitDrag("device-1")).toBe(null);
+    expect(placement.commitDrag(deviceId1)).toEqual({ x: 20, y: 20 });
+    expect(placement.commitDrag(deviceId1)).toBe(null);
   });
 
   it("reuses the last valid drag position while the pointer stays in the same grid cell", () => {
@@ -125,7 +126,7 @@ describe("device placement", () => {
 
     const firstDrag = placement.resolve({
       kind: "drag",
-      deviceId: "device-1",
+      deviceId: deviceId1,
       floorId,
       requestedPosition: { x: 21, y: 20 },
       size,
@@ -133,7 +134,7 @@ describe("device placement", () => {
     });
     const secondDrag = placement.resolve({
       kind: "drag",
-      deviceId: "device-1",
+      deviceId: deviceId1,
       floorId,
       requestedPosition: { x: 24, y: 20 },
       size,

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import type { FloorId } from "@/types/map";
 import { createWallInteractionState } from "./state";
 import { getWallInteractionViewModel } from "./viewModel";
 import type { WallInteractionContext, WallInteractionState } from "./types";
@@ -8,7 +9,7 @@ const makeContext = (
 ): WallInteractionContext => ({
   isEditMode: true,
   activeDrawTool: "wall",
-  currentFloorId: "floor-1",
+  currentFloorId: "floor-1" as FloorId,
   selectedWallColor: "concrete",
   trackPointerPosition: true,
   ...overrides,

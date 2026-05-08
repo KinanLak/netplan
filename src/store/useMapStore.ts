@@ -1,68 +1,117 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
 import { temporal } from "zundo";
-import type { MapStore } from "@/types/map";
-import { mockBuildings } from "@/mock/buildings";
-import { mockDevices } from "@/mock/devices";
-import { createMapCommands, toHighlightedDeviceIdSet } from "./mapCommands";
-import {
-  MAP_STORAGE_NAME,
-  MAP_STORAGE_VERSION,
-  areMapHistorySnapshotsEqual,
-  migrateMapState,
-  partializeMapHistory,
-  partializePersistedMapState,
-} from "./mapPersistence";
+import type {
+  BuildingId,
+  DeviceId,
+  DrawTool,
+  FloorId,
+  MapStore,
+  WallColor,
+} from "@/types/map";
 
-const generateDeviceId = () =>
-  `device-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-const generateWallId = () =>
-  `wall-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+const EMPTY_HIGHLIGHT_SET: ReadonlySet<DeviceId> = new Set<DeviceId>();
+const toHighlightedDeviceIdSet = (
+  deviceIds: ReadonlyArray<DeviceId>,
+): ReadonlySet<DeviceId> => {
+  return deviceIds.length === 0 ? EMPTY_HIGHLIGHT_SET : new Set(deviceIds);
+};
+
+// Inverse-command undo/redo stack lives here. The full implementation lands in
+// step 9; for now both stacks stay empty so the temporal middleware and the
+// undo/redo UI keep wiring without errors.
+interface MapHistorySnapshot {
+  undoStackLength: number;
+  redoStackLength: number;
+}
+
+const partializeHistory = (_state: MapStore): MapHistorySnapshot => ({
+  undoStackLength: 0,
+  redoStackLength: 0,
+});
+
+const areMapHistorySnapshotsEqual = (
+  a: MapHistorySnapshot,
+  b: MapHistorySnapshot,
+): boolean =>
+  a.undoStackLength === b.undoStackLength &&
+  a.redoStackLength === b.redoStackLength;
 
 export const useMapStore = create<MapStore>()(
-  persist(
-    temporal(
-      (set, get) => ({
-        buildings: mockBuildings,
-        devices: mockDevices,
-        walls: [],
-        currentBuildingId: mockBuildings[0]?.id ?? null,
-        currentFloorId: mockBuildings[0]?.floors[0]?.id ?? null,
-        selectedDeviceId: null,
-        hoveredDeviceId: null,
-        isEditMode: true,
-        highlightedDeviceIds: [],
-        highlightedDeviceIdSet: toHighlightedDeviceIdSet([]),
-        activeDrawTool: "device",
-        selectedWallColor: "concrete",
-        ...createMapCommands({
-          set,
-          get,
-          generateDeviceId,
-          generateWallId,
-        }),
-      }),
-      {
-        partialize: partializeMapHistory,
-        equality: areMapHistorySnapshotsEqual,
-        limit: 500,
+  temporal(
+    (set) => ({
+      currentBuildingId: null,
+      currentFloorId: null,
+      selectedDeviceId: null,
+      hoveredDeviceId: null,
+      isEditMode: true,
+      highlightedDeviceIds: [],
+      highlightedDeviceIdSet: toHighlightedDeviceIdSet([]),
+      activeDrawTool: "device" as DrawTool,
+      selectedWallColor: "concrete" as WallColor,
+
+      setCurrentBuilding: (buildingId: BuildingId | null) => {
+        set({
+          currentBuildingId: buildingId,
+          selectedDeviceId: null,
+          highlightedDeviceIds: [],
+          highlightedDeviceIdSet: toHighlightedDeviceIdSet([]),
+        });
       },
-    ),
+      setCurrentFloor: (floorId: FloorId | null) => {
+        set({
+          currentFloorId: floorId,
+          selectedDeviceId: null,
+          highlightedDeviceIds: [],
+          highlightedDeviceIdSet: toHighlightedDeviceIdSet([]),
+        });
+      },
+      selectDevice: (deviceId) => {
+        set((state) =>
+          state.selectedDeviceId === deviceId
+            ? state
+            : { selectedDeviceId: deviceId },
+        );
+      },
+      setHoveredDevice: (deviceId) => {
+        set((state) =>
+          state.hoveredDeviceId === deviceId
+            ? state
+            : { hoveredDeviceId: deviceId },
+        );
+      },
+      toggleEditMode: () => {
+        set((state) => ({
+          isEditMode: !state.isEditMode,
+          activeDrawTool: state.isEditMode ? "device" : state.activeDrawTool,
+        }));
+      },
+      setActiveDrawTool: (tool) => {
+        set({ activeDrawTool: tool });
+      },
+      setSelectedWallColor: (color) => {
+        set({ selectedWallColor: color });
+      },
+      setHighlightedDevices: (deviceIds) => {
+        set((state) => {
+          const isSameHighlightState =
+            state.highlightedDeviceIds.length === deviceIds.length &&
+            state.highlightedDeviceIds.every(
+              (id, index) => id === deviceIds[index],
+            );
+          if (isSameHighlightState) {
+            return state;
+          }
+          return {
+            highlightedDeviceIds: deviceIds,
+            highlightedDeviceIdSet: toHighlightedDeviceIdSet(deviceIds),
+          };
+        });
+      },
+    }),
     {
-      name: MAP_STORAGE_NAME,
-      version: MAP_STORAGE_VERSION,
-      skipHydration: true,
-      migrate: migrateMapState,
-      partialize: partializePersistedMapState,
+      partialize: partializeHistory,
+      equality: areMapHistorySnapshotsEqual,
+      limit: 500,
     },
   ),
 );
-
-const LEGACY_TEMPORAL_STORAGE_KEY = "netplan-temporal-v3";
-
-export async function rehydrateMapStore() {
-  if (typeof window !== "undefined") {
-    window.localStorage.removeItem(LEGACY_TEMPORAL_STORAGE_KEY);
-  }
-  await useMapStore.persist.rehydrate();
-}

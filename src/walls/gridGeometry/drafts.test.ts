@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import type { FloorId } from "@/types/map";
 import {
   createBrushWallDraft,
   createOrthogonalWallDraft,
@@ -6,7 +7,7 @@ import {
   splitWallDraftIntoBlocks,
 } from "./drafts";
 
-const floorId = "floor-a";
+const floorId = "floor-a" as FloorId;
 
 describe("wall draft geometry", () => {
   it("projects freeform wall drags to the dominant orthogonal axis", () => {

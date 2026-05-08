@@ -3,13 +3,13 @@ import {
   createDeviceKindRecord,
   deviceKindRegistry,
 } from "@/devices/deviceKindRegistry";
-import type { Device } from "@/types/map";
+import type { Device, DeviceId, FloorId } from "@/types/map";
 
 export type DeviceNode = Node<Device>;
 
 interface DeviceNodeInput {
   device: Device;
-  selectedDeviceId: string | null;
+  selectedDeviceId: DeviceId | null;
   canEditDevices: boolean;
 }
 
@@ -23,19 +23,19 @@ export const toDeviceNode = ({
   canEditDevices,
 }: DeviceNodeInput): DeviceNode => {
   return {
-    id: device.id,
+    id: device._id,
     type: device.type,
     position: device.position,
     data: device,
-    selected: device.id === selectedDeviceId,
+    selected: device._id === selectedDeviceId,
     draggable: canEditDevices,
   };
 };
 
 export const toDeviceNodes = (
   devices: Array<Device>,
-  currentFloorId: string | null,
-  selectedDeviceId: string | null,
+  currentFloorId: FloorId | null,
+  selectedDeviceId: DeviceId | null,
   canEditDevices: boolean,
 ): Array<DeviceNode> => {
   return devices.reduce<Array<DeviceNode>>((acc, device) => {

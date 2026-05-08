@@ -7,7 +7,11 @@ import {
   useShortcutIntentEffect,
   useShortcutIntentEffects,
 } from "@/hooks/use-shortcuts";
+import type { DeviceId, FloorId } from "@/types/map";
 import { seedMapStore } from "../../test/storeHarness";
+
+const did = (s: string) => s as DeviceId;
+const fid = (s: string) => s as FloorId;
 
 const dispatchKeyDown = (init: KeyboardEventInit) => {
   window.dispatchEvent(
@@ -34,7 +38,7 @@ describe("ShortcutIntentProvider", () => {
   it("invokes the registered effect when its key combo fires in canvas scope", () => {
     seedMapStore({
       activeDrawTool: "device",
-      currentFloorId: "floor-1",
+      currentFloorId: fid("floor-1"),
       isEditMode: true,
       selectedDeviceId: null,
     });
@@ -55,9 +59,9 @@ describe("ShortcutIntentProvider", () => {
   it("does not invoke shortcuts while a device is selected (drawer scope)", () => {
     seedMapStore({
       activeDrawTool: "device",
-      currentFloorId: "floor-1",
+      currentFloorId: fid("floor-1"),
       isEditMode: true,
-      selectedDeviceId: "device-1",
+      selectedDeviceId: did("device-1"),
     });
 
     const onWall = mock(() => {});
@@ -76,7 +80,7 @@ describe("ShortcutIntentProvider", () => {
   it("requires edit mode for tool shortcuts", () => {
     seedMapStore({
       activeDrawTool: "device",
-      currentFloorId: "floor-1",
+      currentFloorId: fid("floor-1"),
       isEditMode: false,
       selectedDeviceId: null,
     });
@@ -97,7 +101,7 @@ describe("ShortcutIntentProvider", () => {
   it("ignores keydown events whose default has already been prevented", () => {
     seedMapStore({
       activeDrawTool: "device",
-      currentFloorId: "floor-1",
+      currentFloorId: fid("floor-1"),
       isEditMode: true,
       selectedDeviceId: null,
     });
@@ -125,7 +129,7 @@ describe("ShortcutIntentProvider", () => {
   it("skips effects whose enabled flag is false", () => {
     seedMapStore({
       activeDrawTool: "device",
-      currentFloorId: "floor-1",
+      currentFloorId: fid("floor-1"),
       isEditMode: true,
       selectedDeviceId: null,
     });
@@ -161,7 +165,7 @@ describe("useShortcutIntentEffects", () => {
   it("registers each adapter and routes the matching key", () => {
     seedMapStore({
       activeDrawTool: "device",
-      currentFloorId: "floor-1",
+      currentFloorId: fid("floor-1"),
       isEditMode: true,
       selectedDeviceId: null,
     });

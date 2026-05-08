@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import type { WallSegment } from "@/types/map";
+import type { FloorId, WallSegment } from "@/types/map";
 import {
   addLine,
   addRoom,
@@ -9,7 +9,7 @@ import {
 } from "@/walls/engine";
 import { getWallBlockKey } from "@/walls/gridGeometry";
 
-const floorId = "floor-a";
+const floorId = "floor-a" as FloorId;
 
 const createWallIdFactory = () => {
   let index = 0;

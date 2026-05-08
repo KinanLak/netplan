@@ -6,6 +6,7 @@ import {
   releaseWallPointer,
   resetWallInteractionState,
 } from "./state";
+import type { FloorId } from "@/types/map";
 import type {
   WallInteractionAdapter,
   WallInteractionContext,
@@ -17,7 +18,7 @@ const makeContext = (
 ): WallInteractionContext => ({
   isEditMode: true,
   activeDrawTool: "wall",
-  currentFloorId: "floor-1",
+  currentFloorId: "floor-1" as FloorId,
   selectedWallColor: "concrete",
   trackPointerPosition: true,
   ...overrides,

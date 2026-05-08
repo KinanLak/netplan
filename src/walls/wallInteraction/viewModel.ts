@@ -1,4 +1,10 @@
-import type { DrawTool, Position, WallColor, WallDraft } from "@/types/map";
+import type {
+  DrawTool,
+  FloorId,
+  Position,
+  WallColor,
+  WallDraft,
+} from "@/types/map";
 import { arePositionsEqual } from "@/walls/gridGeometry/cells";
 import {
   createOrthogonalWallDraft,
@@ -43,7 +49,7 @@ export const getWallInteractionViewModel = (
 const computePreviewSegments = (
   drawAnchor: Position | null,
   pointerPreview: Position | null,
-  currentFloorId: string | null,
+  currentFloorId: FloorId | null,
   activeDrawTool: DrawTool,
   selectedWallColor: WallColor,
 ): Array<WallDraft> => {

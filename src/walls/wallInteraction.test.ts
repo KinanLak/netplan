@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import type {
   DrawTool,
+  FloorId,
   WallCommandReason,
   WallCommandResult,
   RoomDraft,
@@ -21,7 +22,7 @@ import type {
   WallInteractionContext,
 } from "@/walls/wallInteraction";
 
-const floorId = "floor-a";
+const floorId = "floor-a" as FloorId;
 
 interface AdapterCalls {
   setActiveDrawTool: Array<DrawTool>;

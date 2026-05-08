@@ -7,12 +7,17 @@ import {
   UndoIcon,
 } from "@hugeicons/core-free-icons";
 import { Link } from "@tanstack/react-router";
+import { useQuery } from "convex/react";
 import { useMapStore } from "@/store/useMapStore";
+import {
+  useCurrentBuildingId,
+  useCurrentFloorId,
+  useIsEditMode,
+} from "@/store/selectors";
 import { useOptionHeld } from "@/hooks/use-shortcuts";
 import { cn } from "@/lib/utils";
 import { getShortcutDisplay } from "@/lib/shortcuts";
 import { useTemporalStore, useUndoRedo } from "@/hooks/use-undo-redo";
-import { Button } from "@/components/ui/button";
 import { Kbd, KbdGroup } from "@/components/ui/kbd";
 import { NetplanLogo } from "@/components/netplan-logo";
 import {
@@ -31,15 +36,21 @@ import {
   SidebarMenuSubItem,
 } from "@/components/ui/sidebar";
 import { ModeToggle } from "@/components/mode-toggle";
+import { api } from "../../convex/_generated/api";
 
 export default function AppSidebar() {
-  const buildings = useMapStore((s) => s.buildings);
-  const currentBuildingId = useMapStore((s) => s.currentBuildingId);
-  const currentFloorId = useMapStore((s) => s.currentFloorId);
-  const isEditMode = useMapStore((s) => s.isEditMode);
+  const buildings = useQuery(api.buildings.list) ?? [];
+  const currentBuildingId = useCurrentBuildingId();
+  const currentFloorId = useCurrentFloorId();
+  const isEditMode = useIsEditMode();
 
   const setCurrentBuilding = useMapStore((s) => s.setCurrentBuilding);
   const setCurrentFloor = useMapStore((s) => s.setCurrentFloor);
+
+  const floorsForCurrent = useQuery(
+    api.floors.listForBuilding,
+    currentBuildingId ? { buildingId: currentBuildingId } : "skip",
+  );
 
   const { handleUndo, handleRedo } = useUndoRedo();
   const canUndo = useTemporalStore((s) => s.pastStates.length > 0);
@@ -57,32 +68,13 @@ export default function AppSidebar() {
   const floorUpArrow = floorUpKeys.at(-1) ?? "↑";
   const floorDownArrow = floorDownKeys.at(-1) ?? "↓";
 
-  const currentBuilding = buildings.find((b) => b.id === currentBuildingId);
-
-  const handleResetCanvasStorage = () => {
-    const keysToRemove: Array<string> = [];
-
-    for (let index = 0; index < localStorage.length; index += 1) {
-      const key = localStorage.key(index);
-      if (!key) {
-        continue;
-      }
-
-      if (key.startsWith("netplan-") && key !== "netplan-ui-theme") {
-        keysToRemove.push(key);
-      }
-    }
-
-    keysToRemove.forEach((key) => {
-      localStorage.removeItem(key);
-    });
-
-    window.location.reload();
-  };
+  const currentBuilding = buildings.find((b) => b._id === currentBuildingId);
+  const sortedFloors = floorsForCurrent
+    ? [...floorsForCurrent].sort((a, b) => a.order - b.order)
+    : [];
 
   return (
     <Sidebar collapsible="none" className="border-r">
-      {/* Header */}
       <SidebarHeader className="border-b py-4 pr-4 pl-0.5">
         <div className="flex items-center justify-between">
           <h1 className="rounded-sm bg-transparent pb-0.5 leading-none">
@@ -94,7 +86,6 @@ export default function AppSidebar() {
         </div>
       </SidebarHeader>
 
-      {/* Content */}
       <SidebarContent>
         <SidebarGroup>
           <div className="flex items-center justify-between px-2">
@@ -118,12 +109,12 @@ export default function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {buildings.map((building) => (
-                <SidebarMenuItem key={building.id}>
+                <SidebarMenuItem key={building._id}>
                   <SidebarMenuButton
-                    onClick={() => setCurrentBuilding(building.id)}
+                    onClick={() => setCurrentBuilding(building._id)}
                     className={cn(
                       "cursor-pointer",
-                      building.id === currentBuildingId &&
+                      building._id === currentBuildingId &&
                         "font-medium text-foreground",
                     )}
                   >
@@ -135,16 +126,15 @@ export default function AppSidebar() {
                     <span>{building.name}</span>
                   </SidebarMenuButton>
 
-                  {/* Floors (only show if building is selected) */}
-                  {building.id === currentBuildingId ? (
+                  {building._id === currentBuildingId ? (
                     <SidebarMenuSub>
-                      {building.floors.map((floor) => {
-                        const isActive = floor.id === currentFloorId;
+                      {sortedFloors.map((floor) => {
+                        const isActive = floor._id === currentFloorId;
 
                         return (
-                          <SidebarMenuSubItem key={floor.id}>
+                          <SidebarMenuSubItem key={floor._id}>
                             <SidebarMenuSubButton
-                              onClick={() => setCurrentFloor(floor.id)}
+                              onClick={() => setCurrentFloor(floor._id)}
                               className={cn(
                                 "cursor-pointer justify-between",
                                 isActive &&
@@ -176,7 +166,6 @@ export default function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      {/* Undo / Redo */}
       <div className={`border-t ${isEditMode ? "" : "hidden"}`}>
         <div className="flex h-10 w-full">
           <button
@@ -206,20 +195,11 @@ export default function AppSidebar() {
         </div>
       </div>
 
-      {/* Footer */}
       <SidebarFooter className="border-t px-4 py-3">
         <div className="flex items-center justify-between gap-2">
           <div className="truncate text-xs text-muted-foreground">
             {currentBuilding?.name ?? "Aucun bâtiment"}
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleResetCanvasStorage}
-            className="h-7 px-2 text-xs"
-          >
-            Vider plan
-          </Button>
         </div>
       </SidebarFooter>
     </Sidebar>

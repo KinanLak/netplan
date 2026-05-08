@@ -10,6 +10,7 @@ import {
   resolveWallEraseCandidate,
 } from "@/walls/gridGeometry/erase";
 import type { WallCommandReason, WallDraft, WallSegment } from "@/types/map";
+import type { Id } from "../../../convex/_generated/dataModel";
 import type {
   AddLineCommandInput,
   AddRoomCommandInput,
@@ -84,10 +85,13 @@ const addBlocks = (
 
   const nextWalls = [
     ...walls,
-    ...Array.from(stagedByKey.values()).map((block) => ({
-      ...block,
-      id: generateWallId(),
-    })),
+    ...Array.from(stagedByKey.values()).map(
+      (block): WallSegment => ({
+        ...block,
+        _id: generateWallId() as unknown as Id<"walls">,
+        _creationTime: Date.now(),
+      }),
+    ),
   ];
 
   return changedResult(nextWalls, [...stagedByKey.keys()]);

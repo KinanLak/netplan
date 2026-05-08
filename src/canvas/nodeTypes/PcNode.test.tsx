@@ -24,7 +24,7 @@ const renderPcNode = (overrides: Partial<Device> = {}) => {
   return render(
     <ReactFlowProvider>
       <PcNode
-        id={device.id}
+        id={device._id}
         type={device.type}
         data={device}
         positionAbsoluteX={0}

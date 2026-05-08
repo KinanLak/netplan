@@ -1,54 +1,42 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { cleanup, renderHook } from "@testing-library/react";
-import type { WallSegment } from "@/types/map";
-import { buildDevice, seedMapStore } from "../../test/storeHarness";
+import type { DeviceId, FloorId } from "@/types/map";
+import { seedMapStore } from "../../test/storeHarness";
 import {
   useActiveDrawTool,
   useCurrentFloorId,
-  useDevices,
   useHighlightedDeviceIds,
   useIsDeviceHighlighted,
   useIsDeviceSelected,
   useIsEditMode,
   useSelectedDeviceId,
   useSelectedWallColor,
-  useWalls,
 } from "./selectors";
+
+const did = (s: string) => s as DeviceId;
+const fid = (s: string) => s as FloorId;
 
 afterEach(() => {
   cleanup();
 });
 
 describe("map store selectors", () => {
-  it("reads state and derived device flags from the map store", () => {
-    const device = buildDevice({ id: "device-a" });
-    const wall: WallSegment = {
-      id: "wall-a",
-      floorId: "floor-1",
-      start: { x: 10, y: 10 },
-      end: { x: 30, y: 10 },
-      color: "slate",
-    };
-
+  it("reads UI slices and derived device flags from the map store", () => {
     seedMapStore({
-      devices: [device],
-      walls: [wall],
-      currentFloorId: "floor-1",
-      selectedDeviceId: "device-a",
+      currentFloorId: fid("floor-1"),
+      selectedDeviceId: did("device-a"),
       isEditMode: false,
       activeDrawTool: "wall",
       selectedWallColor: "slate",
-      highlightedDeviceIds: ["device-a"],
-      highlightedDeviceIdSet: new Set(["device-a"]),
+      highlightedDeviceIds: [did("device-a")],
+      highlightedDeviceIdSet: new Set([did("device-a")]),
     });
 
-    expect(renderHook(() => useDevices()).result.current).toEqual([device]);
-    expect(renderHook(() => useWalls()).result.current).toEqual([wall]);
     expect(renderHook(() => useCurrentFloorId()).result.current).toBe(
-      "floor-1",
+      fid("floor-1"),
     );
     expect(renderHook(() => useSelectedDeviceId()).result.current).toBe(
-      "device-a",
+      did("device-a"),
     );
     expect(renderHook(() => useIsEditMode()).result.current).toBe(false);
     expect(renderHook(() => useActiveDrawTool()).result.current).toBe("wall");
@@ -56,19 +44,19 @@ describe("map store selectors", () => {
       "slate",
     );
     expect(renderHook(() => useHighlightedDeviceIds()).result.current).toEqual([
-      "device-a",
+      did("device-a"),
     ]);
     expect(
-      renderHook(() => useIsDeviceSelected("device-a")).result.current,
+      renderHook(() => useIsDeviceSelected(did("device-a"))).result.current,
     ).toBe(true);
     expect(
-      renderHook(() => useIsDeviceHighlighted("device-a")).result.current,
+      renderHook(() => useIsDeviceHighlighted(did("device-a"))).result.current,
     ).toBe(true);
     expect(
-      renderHook(() => useIsDeviceSelected("device-b")).result.current,
+      renderHook(() => useIsDeviceSelected(did("device-b"))).result.current,
     ).toBe(false);
     expect(
-      renderHook(() => useIsDeviceHighlighted("device-b")).result.current,
+      renderHook(() => useIsDeviceHighlighted(did("device-b"))).result.current,
     ).toBe(false);
   });
 });

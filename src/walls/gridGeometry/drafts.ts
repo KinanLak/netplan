@@ -1,11 +1,11 @@
-import type { Position, WallColor, WallDraft } from "@/types/map";
+import type { FloorId, Position, WallColor, WallDraft } from "@/types/map";
 import { GRID_SIZE } from "@/lib/grid";
 import { arePositionsEqual, normalizeWallBlockPoints } from "./cells";
 
 export const createOrthogonalWallDraft = (
   start: Position,
   end: Position,
-  floorId: string,
+  floorId: FloorId,
   color: WallColor,
 ): WallDraft | null => {
   const dx = Math.abs(end.x - start.x);
@@ -31,7 +31,7 @@ export const createOrthogonalWallDraft = (
 };
 
 export const createBrushWallDraft = (
-  floorId: string,
+  floorId: FloorId,
   snappedPoint: Position,
   color: WallColor,
 ): WallDraft => ({
@@ -44,7 +44,7 @@ export const createBrushWallDraft = (
 export const createRoomWallDrafts = (
   start: Position,
   end: Position,
-  floorId: string,
+  floorId: FloorId,
   color: WallColor,
 ): Array<WallDraft> => {
   if (start.x === end.x || start.y === end.y) {

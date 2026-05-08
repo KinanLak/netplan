@@ -1,11 +1,11 @@
-import type { Position, WallSegment } from "@/types/map";
+import type { FloorId, Position, WallSegment } from "@/types/map";
 import { GRID_SIZE } from "@/lib/grid";
 import { arePositionsEqual, getWallBlockKey, getWallCenter } from "./cells";
 import type { WallEraseCandidate } from "./types";
 
 export const selectFloorWalls = (
   walls: ReadonlyArray<WallSegment>,
-  floorId: string,
+  floorId: FloorId,
 ): Array<WallSegment> => walls.filter((wall) => wall.floorId === floorId);
 
 export const buildWallIndexByKey = (
@@ -38,7 +38,7 @@ const pointToWallCellDistanceSquared = (
 
 export const resolveWallEraseCandidate = (
   walls: ReadonlyArray<WallSegment>,
-  floorId: string,
+  floorId: FloorId,
   pointer: Position,
   snappedPoint: Position,
 ): WallEraseCandidate | null => {

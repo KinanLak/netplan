@@ -11,11 +11,10 @@ import { useMapStore } from "@/store/useMapStore";
 import {
   useActiveDrawTool,
   useCurrentFloorId,
-  useDevices,
   useIsEditMode,
   useSelectedDeviceId,
-  useWalls,
 } from "@/store/selectors";
+import { useMapCommands } from "@/store/useMapCommands";
 import { GRID_SIZE } from "@/lib/grid";
 import { cn } from "@/lib/utils";
 import { CanvasZoomControls } from "@/canvas/components/CanvasZoomControls";
@@ -40,8 +39,6 @@ const SNAP_GRID: [number, number] = [GRID_SIZE, GRID_SIZE];
 const EMPTY_EDGES: Array<never> = [];
 
 export default function FlowCanvas() {
-  const devices = useDevices();
-  const walls = useWalls();
   const currentFloorId = useCurrentFloorId();
   const selectedDeviceId = useSelectedDeviceId();
   const isEditMode = useIsEditMode();
@@ -49,9 +46,10 @@ export default function FlowCanvas() {
 
   const selectDevice = useMapStore((s) => s.selectDevice);
   const setHoveredDevice = useMapStore((s) => s.setHoveredDevice);
-  const updateDevicePosition = useMapStore((s) => s.updateDevicePosition);
-  const checkCollision = useMapStore((s) => s.checkCollision);
   const reactFlow = useReactFlow();
+
+  const commands = useMapCommands(currentFloorId);
+  const { devices, walls, updateDevicePosition, checkCollision } = commands;
 
   const canEditDevices = isEditMode && activeDrawTool === "device";
   const floorWalls = useMemo(
@@ -179,7 +177,6 @@ export default function FlowCanvas() {
         onMoveEnd={handleMoveEnd}
         nodeTypes={nodeTypes}
         snapToGrid={true}
-        // panOnScroll={true} // Allow moving on the canvas horizontally and vertically by using the trackpad naturally
         snapGrid={SNAP_GRID}
         fitView
         fitViewOptions={{ padding: FLOW_CANVAS_FIT_VIEW_PADDING }}

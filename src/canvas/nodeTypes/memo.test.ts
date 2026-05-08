@@ -1,8 +1,10 @@
 import { describe, expect, it } from "bun:test";
 import type { Node, NodeProps } from "@xyflow/react";
-import type { Device } from "@/types/map";
+import type { Device, DeviceId } from "@/types/map";
 import { buildDevice } from "../../../test/storeHarness";
 import { areDeviceNodePropsEqual } from "./memo";
+
+const did = (s: string) => s as DeviceId;
 
 type DeviceNode = Node<Device>;
 
@@ -11,7 +13,7 @@ const nodeProps = (
 ): NodeProps<DeviceNode> => ({
   id: "device-1",
   type: "pc",
-  data: buildDevice({ id: "device-1" }),
+  data: buildDevice({ _id: did("device-1") }),
   positionAbsoluteX: 0,
   positionAbsoluteY: 0,
   selected: false,
@@ -26,7 +28,7 @@ const nodeProps = (
 
 describe("device node memo comparator", () => {
   it("only compares node id and data identity", () => {
-    const data = buildDevice({ id: "device-1" });
+    const data = buildDevice({ _id: did("device-1") });
 
     expect(
       areDeviceNodePropsEqual(
