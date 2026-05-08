@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { useMutation } from "convex/react";
 import { useMapStore } from "@/store/useMapStore";
 import {
@@ -32,6 +33,8 @@ export function useUndoRedo() {
   const addStroke = useMutation(api.walls.addStroke);
   const eraseStroke = useMutation(api.walls.eraseStroke);
 
+  const pendingRef = useRef<Promise<void>>(Promise.resolve());
+
   const runners: InverseCommandRunners = {
     createDevice: (draft) =>
       createDevice({
@@ -52,9 +55,9 @@ export function useUndoRedo() {
   };
 
   const handleUndo = () => {
-    const command = useMapStore.getState().takeUndo();
-    if (!command) return;
-    void (async () => {
+    pendingRef.current = pendingRef.current.then(async () => {
+      const command = useMapStore.getState().takeUndo();
+      if (!command) return;
       try {
         const inverse = await executeInverseCommand(command, runners);
         useMapStore.getState().queueRedo(inverse);
@@ -63,13 +66,13 @@ export function useUndoRedo() {
         console.error("undo failed", error);
         useMapStore.getState().queueUndo(command);
       }
-    })();
+    });
   };
 
   const handleRedo = () => {
-    const command = useMapStore.getState().takeRedo();
-    if (!command) return;
-    void (async () => {
+    pendingRef.current = pendingRef.current.then(async () => {
+      const command = useMapStore.getState().takeRedo();
+      if (!command) return;
       try {
         const inverse = await executeInverseCommand(command, runners);
         useMapStore.getState().queueUndo(inverse);
@@ -78,7 +81,7 @@ export function useUndoRedo() {
         console.error("redo failed", error);
         useMapStore.getState().queueRedo(command);
       }
-    })();
+    });
   };
 
   return { handleUndo, handleRedo } as const;

@@ -24,7 +24,8 @@ export const create = mutation({
   returns: v.id("buildings"),
   handler: async (ctx, { name }): Promise<Id<"buildings">> => {
     const buildings = await ctx.db.query("buildings").collect();
-    const order = buildings.length;
+    const maxOrder = Math.max(...buildings.map(b => (typeof b.order === "number" ? b.order : -1)), -1);
+    const order = maxOrder + 1;
     const buildingId = await ctx.db.insert("buildings", { name, order });
     await ctx.db.insert("floors", {
       buildingId,

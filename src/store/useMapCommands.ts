@@ -52,7 +52,7 @@ export interface MapCommands {
   deleteDevice: (deviceId: DeviceId) => void;
   checkCollision: (
     floorId: FloorId,
-    deviceId: DeviceId | string,
+    deviceId: DeviceId,
     position: Position,
     size: Size,
   ) => boolean;
@@ -243,7 +243,7 @@ export function useMapCommands(floorId: FloorId | null): MapCommands {
 
   const checkCollision = (
     targetFloorId: FloorId,
-    deviceId: DeviceId | string,
+    deviceId: DeviceId,
     position: Position,
     size: Size,
   ): boolean => {
@@ -302,13 +302,16 @@ export function useMapCommands(floorId: FloorId | null): MapCommands {
       (wall) => !remainingIds.has(wall._id),
     );
     if (removed.length === 0) return;
-    const removedIds = removed.map((wall) => wall._id) as Array<Id<"walls">>;
+    const realRemoved = removed.filter((wall) => !wall._id.startsWith("temp-wall-"));
+    const removedIds = realRemoved.map((wall) => wall._id) as Array<Id<"walls">>;
     const inverse = buildEraseWallsInverse(targetFloorId, removed);
     void (async () => {
-      await eraseStrokeMutation({
-        floorId: targetFloorId,
-        removeIds: removedIds,
-      });
+      if (removedIds.length > 0) {
+        await eraseStrokeMutation({
+          floorId: targetFloorId,
+          removeIds: removedIds,
+        });
+      }
       pushHistory(inverse);
     })();
   };

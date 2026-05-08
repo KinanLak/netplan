@@ -19,8 +19,8 @@ import type {
   EraseStrokeCommandInput,
 } from "./types";
 
-const defaultGenerateWallId = () =>
-  `wall-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+const defaultGenerateWallId = (): Id<"walls"> =>
+  `wall-${Date.now()}-${Math.random().toString(36).slice(2, 9)}` as unknown as Id<"walls">;
 
 const asMutableWalls = (
   walls: ReadonlyArray<WallSegment>,
@@ -51,7 +51,7 @@ const addBlocks = (
   walls: ReadonlyArray<WallSegment>,
   blocks: Array<WallDraft>,
   collidesWithBlock: AddLineCommandInput["collidesWithBlock"],
-  generateWallId: () => string,
+  generateWallId: () => Id<"walls">,
   invalidReason: WallCommandReason,
 ): EngineResult => {
   if (blocks.length === 0) {
@@ -88,7 +88,7 @@ const addBlocks = (
     ...Array.from(stagedByKey.values()).map(
       (block): WallSegment => ({
         ...block,
-        _id: generateWallId() as unknown as Id<"walls">,
+        _id: generateWallId(),
         _creationTime: Date.now(),
       }),
     ),

@@ -66,9 +66,11 @@ describe("walls", () => {
       ],
     });
 
+    const idA = idsA[0]; // guaranteed non-null by test setup
+    const idB = idsB[0];
     await t.mutation(api.walls.eraseStroke, {
       floorId: a,
-      removeIds: [idsA[0], idsB[0]],
+      removeIds: [idA, idB],
     });
 
     const remainingA = await t.query(api.walls.listForFloor, { floorId: a });

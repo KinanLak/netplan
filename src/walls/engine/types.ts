@@ -1,3 +1,4 @@
+import type { Id } from "../../../convex/_generated/dataModel";
 import type {
   FloorId,
   Position,
@@ -16,7 +17,7 @@ export interface AddLineCommandInput {
   start: Position;
   end: Position;
   collidesWithBlock?: (block: WallDraft) => boolean;
-  generateWallId?: () => string;
+  generateWallId?: () => Id<"walls">;
 }
 
 export interface AddRoomCommandInput {
@@ -26,7 +27,7 @@ export interface AddRoomCommandInput {
   start: Position;
   end: Position;
   collidesWithBlock?: (block: WallDraft) => boolean;
-  generateWallId?: () => string;
+  generateWallId?: () => Id<"walls">;
 }
 
 export interface EraseAtPointerCommandInput {

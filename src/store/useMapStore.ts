@@ -45,7 +45,9 @@ export const useMapStore = create<MapStore>()((set, get) => ({
   setCurrentBuilding: (buildingId: BuildingId | null) => {
     set({
       currentBuildingId: buildingId,
+      currentFloorId: null,
       selectedDeviceId: null,
+      hoveredDeviceId: null,
       highlightedDeviceIds: [],
       highlightedDeviceIdSet: toHighlightedDeviceIdSet([]),
       undoStack: EMPTY_HISTORY,
@@ -56,6 +58,7 @@ export const useMapStore = create<MapStore>()((set, get) => ({
     set({
       currentFloorId: floorId,
       selectedDeviceId: null,
+      hoveredDeviceId: null,
       highlightedDeviceIds: [],
       highlightedDeviceIdSet: toHighlightedDeviceIdSet([]),
       undoStack: EMPTY_HISTORY,

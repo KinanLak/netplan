@@ -84,15 +84,16 @@ function HomePageContent() {
     setCurrentBuilding(buildings[0]._id);
   }, [buildings, currentBuildingId, setCurrentBuilding]);
 
-  useEffect(() => {
-    if (!floors) return;
-    if (currentFloorId && floors.some((f) => f._id === currentFloorId)) return;
-    setCurrentFloor(floors[0]?._id ?? null);
-  }, [floors, currentFloorId, setCurrentFloor]);
-
   const sortedFloors = floors
     ? [...floors].sort((a, b) => a.order - b.order)
     : [];
+
+  useEffect(() => {
+    if (!floors) return;
+    if (currentFloorId && floors.some((f) => f._id === currentFloorId)) return;
+    const sorted = [...floors].sort((a, b) => a.order - b.order);
+    setCurrentFloor(sorted[0]?._id ?? null);
+  }, [floors, currentFloorId, setCurrentFloor]);
   const currentFloorIndex = sortedFloors.findIndex(
     (f) => f._id === currentFloorId,
   );

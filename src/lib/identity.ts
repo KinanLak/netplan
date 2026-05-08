@@ -25,8 +25,10 @@ const generateSessionId = (): string => {
   return `session-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 };
 
-const pickFrom = <T>(items: ReadonlyArray<T>, seed: number): T =>
-  items[seed % items.length];
+const pickFrom = <T>(items: ReadonlyArray<T>, seed: number): T => {
+  if (items.length === 0) throw new Error("pickFrom: empty items");
+  return items[seed % items.length];
+};
 
 const buildDisplayName = (sessionId: string): string => {
   const seed = hashString(sessionId);
@@ -41,9 +43,9 @@ const buildIdentity = (sessionId: string): Identity => ({
   colorHue: hashString(sessionId) % 360,
 });
 
-const isIdentity = (value: unknown): value is Identity => {
+const isIdentity = (value: object | null): value is Identity => {
   if (!value || typeof value !== "object") return false;
-  const candidate = value as Record<string, unknown>;
+  const candidate = value as Record<string, any>;
   return (
     typeof candidate.sessionId === "string" &&
     typeof candidate.displayName === "string" &&
@@ -60,7 +62,8 @@ export const loadOrCreateIdentity = (): Identity => {
   if (raw) {
     try {
       const parsed: unknown = JSON.parse(raw);
-      if (isIdentity(parsed)) return parsed;
+      if (parsed !== null && typeof parsed === "object" && isIdentity(parsed))
+        return parsed;
     } catch {
       // fall through to fresh identity
     }

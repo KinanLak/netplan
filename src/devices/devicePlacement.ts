@@ -49,7 +49,7 @@ export interface DevicePlacement {
 interface CreateDevicePlacementOptions {
   checkCollision: (
     floorId: FloorId,
-    deviceId: DeviceId | string,
+    deviceId: DeviceId,
     position: Position,
     size: Size,
   ) => boolean;
@@ -77,7 +77,7 @@ const dedupePositions = (positions: Array<Position>): Array<Position> => {
 const resolvePosition = (
   options: CreateDevicePlacementOptions,
   floorId: FloorId,
-  deviceId: DeviceId | string,
+  deviceId: DeviceId,
   requestedPosition: Position,
   size: Size,
 ): PlacementResolution | null => {
@@ -152,7 +152,7 @@ export const createDevicePlacement = (
         const resolvedPosition = resolvePosition(
           options,
           request.floorId,
-          "",
+          "" as DeviceId,
           request.requestedPosition,
           request.size,
         );

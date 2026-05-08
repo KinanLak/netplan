@@ -21,7 +21,7 @@ interface UseCanvasDeviceNodesParams {
   canEditDevices: boolean;
   checkCollision: (
     floorId: FloorId,
-    deviceId: DeviceId | string,
+    deviceId: DeviceId,
     position: Position,
     size: Size,
   ) => boolean;
