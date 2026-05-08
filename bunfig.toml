@@ -1,0 +1,4 @@
+[test]
+preload = ["./test/setup-happy-dom.ts"]
+coveragePathIgnorePatterns = ["test/**"]
+onlyFailures = true

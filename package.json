@@ -8,7 +8,7 @@
     "lint": "oxlint --fix",
     "format": "oxfmt --write",
     "tsc": "tsgo --noEmit --pretty",
-    "check": "bun run tsc && bun run lint && bun run format"
+    "check": "bun run tsc && bun run lint && bun run format && bun test"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
@@ -37,19 +37,21 @@
   },
   "devDependencies": {
     "@babel/core": "^7.29.0",
+    "@happy-dom/global-registrator": "^20.9.0",
     "@rolldown/plugin-babel": "^0.2.3",
     "@tanstack/devtools-vite": "^0.6.0",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/babel__core": "^7.20.5",
-    "@types/node": "^25.6.1",
+    "@types/node": "^25.6.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@typescript/native-preview": "^7.0.0-dev.20260507.1",
     "@vitejs/plugin-react": "^6.0.1",
     "babel-plugin-react-compiler": "^1.0.0",
     "eslint-plugin-react-hooks": "^7.1.1",
-    "jsdom": "^29.1.1",
+    "happy-dom": "^20.9.0",
     "oxfmt": "^0.48.0",
     "oxlint": "^1.63.0",
     "oxlint-tsgolint": "^0.22.1",

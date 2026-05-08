@@ -3,7 +3,7 @@
 ## Tooling rules
 
 - You can use Context7 MCP for library/API docs, code generation, or configuration, without being asked.
-- Run `bun run check` (tsgo + oxlint + oxfmt) **after the end of every code change**.
+- Run `bun run check` (tsgo + oxlint + oxfmt + test suite) **after the end of every code change**.
 - **Bun only** (not npm/yarn): `bun run dev`, `bun run build`, `bun run preview`.
 - Path alias: `@/` → `src/`.
 - Don't manually edit package.json. Use `bun add` or `bun remove` to update dependencies.
@@ -18,15 +18,11 @@ React 19, TypeScript, Vite, TailwindCSS V4, Zustand (persisted to `localStorage`
 
 `selected` is a React Flow node field (not nested inside `data`).
 
-`deviceKindRegistry` keys in `src/devices/deviceKindRegistry.tsx` must match `DeviceType` strings exactly.
+To add a new `DeviceType`: extend the union in `src/types/map.ts` — TypeScript + `deviceKindRegistry.test.ts` will then guide you through registry, adapter, and catalog updates.
 
-## Adding a new device type
+## Testing
 
-1. Extend `DeviceType` in `src/types/map.ts`
-2. Create component in `src/canvas/nodeTypes/<Name>.tsx`
-3. Register labels, default size, toolbar metadata, shortcut metadata, and the node adapter in `src/devices/deviceKindRegistry.tsx`
-4. Add device presets in `src/mock/availableDevices.ts`
-5. Keep `src/devices/deviceKindRegistry.test.ts` passing so every device-kind seam stays exhaustive
+Tests ship with the code, not after. Every change touching logic adds or updates a `*.test.ts(x)` colocated with the source. A change is not done until it's green.
 
 ## Boundaries
 
