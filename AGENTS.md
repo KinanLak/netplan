@@ -30,3 +30,4 @@ Tests ship with the code, not after. Every change touching logic adds or updates
 - React Compiler is enabled, so useMemo aren't needed since all components are automatically memoized.
 - If you encounter an unusual or hard-to-fix pattern, consider proposing an addition to AGENTS.md only when it would genuinely help share knowledge and prevent future issues.
 - Avoid using `any` or `unknown` in TypeScript. If you find a case where it's necessary, consider if it indicates a missing type definition or if the code can be refactored for better type safety. `unknown` is allowed in catch blocks.
+- Always use Context7 or web search when I need library/API documentation, code generation, setup or configuration steps without me having to explicitly ask.
