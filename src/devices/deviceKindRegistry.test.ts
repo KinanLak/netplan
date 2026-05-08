@@ -3,9 +3,12 @@ import { deviceToolbarActions } from "@/panels/toolbar-actions";
 import { availableDevicesCatalog } from "@/mock/availableDevices";
 import { shortcuts } from "@/lib/shortcuts";
 import {
+  createDeviceKindRecord,
   deviceKindRegistry,
   deviceToolShortcutActions,
   deviceTypes,
+  getDeviceKind,
+  getDeviceKindLabel,
 } from "./deviceKindRegistry";
 import { deviceNodeTypes, toDeviceNode } from "./reactFlowDeviceAdapter";
 import type { Device, DeviceType } from "@/types/map";
@@ -80,6 +83,21 @@ describe("device kind registry", () => {
     expect(node.selected).toBe(true);
     expect(node.draggable).toBe(true);
     expect(node.data).toBe(device);
+  });
+
+  it("exposes lookup helpers derived from the registry", () => {
+    expect(getDeviceKind("pc")).toBe(deviceKindRegistry.pc);
+    expect(getDeviceKindLabel("switch")).toBe(
+      deviceKindRegistry.switch.drawerLabel,
+    );
+    expect(
+      createDeviceKindRecord((type) => deviceKindRegistry[type].label),
+    ).toEqual({
+      pc: deviceKindRegistry.pc.label,
+      rack: deviceKindRegistry.rack.label,
+      switch: deviceKindRegistry.switch.label,
+      "wall-port": deviceKindRegistry["wall-port"].label,
+    });
   });
 });
 

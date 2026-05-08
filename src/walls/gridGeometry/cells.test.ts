@@ -1,10 +1,15 @@
 import { describe, expect, it } from "bun:test";
 import type { Device, WallSegment } from "@/types/map";
 import {
+  arePositionsEqual,
   computeWallMaskBounds,
   getWallBlockKey,
   getWallCellRect,
   getWallCollisionRect,
+  getWallGeometryKey,
+  isPointOnWall,
+  normalizeWallBlockPoints,
+  snapPositionToGrid,
   snapPositionToWallGrid,
   WALL_GRID_OFFSET,
   wallCollidesWithDevices,
@@ -37,6 +42,7 @@ const device = (
 
 describe("wall grid cell math", () => {
   it("snaps positions onto the wall-offset grid", () => {
+    expect(snapPositionToGrid({ x: 12, y: 29 })).toEqual({ x: 20, y: 20 });
     expect(snapPositionToWallGrid({ x: 12, y: 4 })).toEqual({
       x: WALL_GRID_OFFSET,
       y: WALL_GRID_OFFSET,
@@ -45,6 +51,26 @@ describe("wall grid cell math", () => {
       x: 30,
       y: 30,
     });
+  });
+
+  it("compares and normalizes wall block endpoints", () => {
+    expect(arePositionsEqual({ x: 10, y: 10 }, { x: 10, y: 10 })).toBe(true);
+    expect(arePositionsEqual({ x: 10, y: 10 }, { x: 30, y: 10 })).toBe(false);
+    expect(
+      normalizeWallBlockPoints({ x: 50, y: 10 }, { x: 10, y: 10 }),
+    ).toEqual({
+      start: { x: 10, y: 10 },
+      end: { x: 50, y: 10 },
+    });
+    expect(
+      normalizeWallBlockPoints({ x: 10, y: 50 }, { x: 10, y: 10 }),
+    ).toEqual({
+      start: { x: 10, y: 10 },
+      end: { x: 10, y: 50 },
+    });
+    expect(normalizeWallBlockPoints({ x: 10, y: 10 }, { x: 30, y: 50 })).toBe(
+      null,
+    );
   });
 
   it("returns a collision rect that matches the cell rect for single-cell walls", () => {
@@ -85,6 +111,7 @@ describe("wall grid cell math", () => {
   it("returns null block keys for diagonal walls", () => {
     const diagonal = wall({ x: 10, y: 10 }, { x: 30, y: 50 });
     expect(getWallBlockKey(diagonal)).toBe(null);
+    expect(getWallGeometryKey(diagonal)).toBe(null);
   });
 
   it("normalizes endpoint order so reversed walls share a block key", () => {
@@ -100,6 +127,13 @@ describe("wall grid cell math", () => {
 
     expect(wallCollidesWithDevices(segment, [overlapping])).toBe(true);
     expect(wallCollidesWithDevices(segment, [next])).toBe(false);
+  });
+
+  it("detects whether a point is inside a wall collision rect", () => {
+    const segment = wall({ x: 10, y: 30 }, { x: 70, y: 30 });
+
+    expect(isPointOnWall({ x: 40, y: 30 }, segment)).toBe(true);
+    expect(isPointOnWall({ x: 40, y: 60 }, segment)).toBe(false);
   });
 
   it("computes mask bounds with padding from a non-empty wall list", () => {

@@ -117,4 +117,38 @@ describe("device placement", () => {
     expect(placement.commitDrag("device-1")).toEqual({ x: 20, y: 20 });
     expect(placement.commitDrag("device-1")).toBe(null);
   });
+
+  it("reuses the last valid drag position while the pointer stays in the same grid cell", () => {
+    const placement = createDevicePlacement({
+      checkCollision: () => false,
+    });
+
+    const firstDrag = placement.resolve({
+      kind: "drag",
+      deviceId: "device-1",
+      floorId,
+      requestedPosition: { x: 21, y: 20 },
+      size,
+      startPosition: { x: 0, y: 20 },
+    });
+    const secondDrag = placement.resolve({
+      kind: "drag",
+      deviceId: "device-1",
+      floorId,
+      requestedPosition: { x: 24, y: 20 },
+      size,
+      startPosition: { x: 0, y: 20 },
+    });
+
+    expect(firstDrag).toEqual({
+      ok: true,
+      position: { x: 20, y: 20 },
+      status: "exact",
+    });
+    expect(secondDrag).toEqual({
+      ok: true,
+      position: { x: 20, y: 20 },
+      status: "reused-last-valid",
+    });
+  });
 });

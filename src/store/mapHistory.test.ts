@@ -182,8 +182,16 @@ describe("map history", () => {
   it("finds the affected floor across device and wall changes", () => {
     const deviceA = createDevice("device-a", floorA);
     const deviceB = createDevice("device-b", floorB);
+    const movedDeviceB = {
+      ...deviceB,
+      position: { x: 20, y: 20 },
+    };
     const wallA = createWall("wall-a", floorA);
     const wallB = createWall("wall-b", floorB);
+    const movedWallB = {
+      ...wallB,
+      end: { x: 30, y: 10 },
+    };
 
     expect(
       findAffectedFloorId(
@@ -193,10 +201,74 @@ describe("map history", () => {
     ).toBe(floorB);
     expect(
       findAffectedFloorId(
+        { devices: [deviceA, deviceB], walls: [] },
+        { devices: [deviceA, movedDeviceB], walls: [] },
+      ),
+    ).toBe(floorB);
+    expect(
+      findAffectedFloorId(
+        { devices: [deviceA, deviceB], walls: [] },
+        { devices: [deviceA], walls: [] },
+      ),
+    ).toBe(floorB);
+    expect(
+      findAffectedFloorId(
+        { devices: [deviceA], walls: [wallA] },
+        { devices: [deviceA], walls: [wallA, wallB] },
+      ),
+    ).toBe(floorB);
+    expect(
+      findAffectedFloorId(
         { devices: [deviceA], walls: [wallA, wallB] },
         { devices: [deviceA], walls: [wallA] },
       ),
     ).toBe(floorB);
+    expect(
+      findAffectedFloorId(
+        { devices: [deviceA], walls: [wallA, wallB] },
+        { devices: [deviceA], walls: [wallA, movedWallB] },
+      ),
+    ).toBe(floorB);
+    expect(
+      findAffectedFloorId(
+        { devices: [deviceA], walls: [wallA] },
+        { devices: [deviceA], walls: [wallA] },
+      ),
+    ).toBe(null);
+  });
+
+  it("ignores history commands outside edit mode", () => {
+    let undoCount = 0;
+    const harness = createStoreHarness({ isEditMode: false });
+
+    harness.store.temporal.getState = () =>
+      createTemporalState({
+        pastStates: [{ devices: [], walls: [] }],
+        undo: () => {
+          undoCount += 1;
+        },
+      });
+
+    undoMapChange(harness.store);
+
+    expect(undoCount).toBe(0);
+  });
+
+  it("ignores history commands when there is no matching history entry", () => {
+    let redoCount = 0;
+    const harness = createStoreHarness();
+
+    harness.store.temporal.getState = () =>
+      createTemporalState({
+        futureStates: [],
+        redo: () => {
+          redoCount += 1;
+        },
+      });
+
+    redoMapChange(harness.store);
+
+    expect(redoCount).toBe(0);
   });
 
   it("undo navigates to the affected floor and dispatches feedback", () => {
