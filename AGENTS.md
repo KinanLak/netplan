@@ -10,7 +10,21 @@
 
 ## Tech stack
 
-React 19, TypeScript, Vite, TailwindCSS V4, Zustand (persisted to `localStorage`), @xyflow/react.
+React 19, TypeScript, Vite, TailwindCSS V4, @xyflow/react. Domain state lives in **Convex cloud** (`convex/`); Zustand only holds ephemeral UI slices (selection, hover, draw tool, edit mode, undo/redo stacks). The only `localStorage` key the app writes is `netplan-identity` (random session id + display name + colour hue).
+
+## Convex layer
+
+- `convex/schema.ts` defines `buildings`, `floors`, `devices`, `walls`, `links`, `presences`. All ids are branded `Id<"...">` from `convex/_generated/dataModel`; the canonical aliases (`DeviceId`, `FloorId`, …) live in `src/types/map.ts`.
+- `src/store/useMapCommands.ts` is the only place that calls Convex mutations for the map domain. Latency-sensitive mutations (`devices.create`, `devices.updatePosition`, `devices.remove`, `walls.addStroke`, `walls.eraseStroke`) ship with `withOptimisticUpdate` callbacks — keep new write paths consistent.
+- After every successful mutation, `useMapCommands` pushes an `InverseCommand` onto `useMapStore.undoStack`. `useUndoRedo` (`src/hooks/use-undo-redo.ts`) pops and runs the inverse via `executeInverseCommand` (`src/store/mapHistory.ts`); the result lands on `redoStack`. New domain mutation? Extend `InverseCommand` and the runner map together.
+- Live cursors run through the custom `presences` table at 30 Hz with a 30 s TTL — see `convex/presences.ts` and `src/canvas/PresenceCursors.tsx`.
+
+## Tradeoffs (MVP, no auth)
+
+- **Last-write-wins on concurrent device drag.** Two clients dragging the same device race on `updatePosition`; accepted for the MVP.
+- **Undo is per-session and not CRDT-safe.** If peer B deletes a device that peer A's undo stack references, A's undo will throw — fire-and-forget, the UI keeps going.
+- **No server-side collision validation.** A scripted client can persist overlapping walls/devices. The UI enforces it; the server trusts the client.
+- **No auth.** Anyone with the deploy URL can write. Identity is a `localStorage` UUID + a random "Adjectif Animal" pair purely for display.
 
 ## Adding a new device type
 
