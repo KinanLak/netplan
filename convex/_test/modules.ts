@@ -8,6 +8,7 @@ export const modules: Record<string, () => Promise<unknown>> = {
   "./devices.ts": () => import("../devices"),
   "./floors.ts": () => import("../floors"),
   "./links.ts": () => import("../links"),
+  "./presences.ts": () => import("../presences"),
   "./schema.ts": () => import("../schema"),
   "./seed.ts": () => import("../seed"),
   "./walls.ts": () => import("../walls"),

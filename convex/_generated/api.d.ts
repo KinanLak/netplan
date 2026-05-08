@@ -13,6 +13,7 @@ import type * as buildings from "../buildings.js";
 import type * as devices from "../devices.js";
 import type * as floors from "../floors.js";
 import type * as links from "../links.js";
+import type * as presences from "../presences.js";
 import type * as seed from "../seed.js";
 import type * as walls from "../walls.js";
 
@@ -28,6 +29,7 @@ declare const fullApi: ApiFromModules<{
   devices: typeof devices;
   floors: typeof floors;
   links: typeof links;
+  presences: typeof presences;
   seed: typeof seed;
   walls: typeof walls;
 }>;

@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Background,
   BackgroundVariant,
   ReactFlow,
   useReactFlow,
 } from "@xyflow/react";
+import { useMutation } from "convex/react";
 import { nodeTypes } from "./nodeTypes";
 import type { DeviceNode } from "@/devices/reactFlowDeviceAdapter";
 import { useMapStore } from "@/store/useMapStore";
@@ -15,6 +16,7 @@ import {
   useSelectedDeviceId,
 } from "@/store/selectors";
 import { useMapCommands } from "@/store/useMapCommands";
+import { useIdentity } from "@/lib/identity";
 import { GRID_SIZE } from "@/lib/grid";
 import { cn } from "@/lib/utils";
 import { CanvasZoomControls } from "@/canvas/components/CanvasZoomControls";
@@ -23,6 +25,8 @@ import { useCanvasDeviceNodes } from "@/canvas/hooks/useCanvasDeviceNodes";
 import { useCanvasDragState } from "@/canvas/hooks/useCanvasDragState";
 import { useCanvasKeyboardShortcuts } from "@/canvas/hooks/useCanvasKeyboardShortcuts";
 import { useWallToolSession } from "@/walls/useWallToolSession";
+import { PresenceCursors } from "./PresenceCursors";
+import { api } from "../../convex/_generated/api";
 import {
   FLOW_CANVAS_BACKGROUND_COLOR,
   FLOW_CANVAS_BACKGROUND_DOT_SIZE,
@@ -37,12 +41,16 @@ import {
 
 const SNAP_GRID: [number, number] = [GRID_SIZE, GRID_SIZE];
 const EMPTY_EDGES: Array<never> = [];
+const PRESENCE_THROTTLE_MS = 1000 / 30;
 
 export default function FlowCanvas() {
   const currentFloorId = useCurrentFloorId();
   const selectedDeviceId = useSelectedDeviceId();
   const isEditMode = useIsEditMode();
   const activeDrawTool = useActiveDrawTool();
+  const identity = useIdentity();
+  const updateCursor = useMutation(api.presences.updateCursor);
+  const removePresence = useMutation(api.presences.remove);
 
   const selectDevice = useMapStore((s) => s.selectDevice);
   const setHoveredDevice = useMapStore((s) => s.setHoveredDevice);
@@ -89,6 +97,35 @@ export default function FlowCanvas() {
     cancelWallTool: wallToolSession.cancelTool,
     toggleWallDebugPanel: wallToolSession.toggleDebugPanel,
   });
+
+  const lastCursorAtRef = useRef(0);
+
+  const publishCursor = (event: React.MouseEvent) => {
+    if (!identity || !currentFloorId) return;
+    const now = performance.now();
+    if (now - lastCursorAtRef.current < PRESENCE_THROTTLE_MS) return;
+    lastCursorAtRef.current = now;
+    const flowPosition = reactFlow.screenToFlowPosition({
+      x: event.clientX,
+      y: event.clientY,
+    });
+    void updateCursor({
+      sessionId: identity.sessionId,
+      displayName: identity.displayName,
+      colorHue: identity.colorHue,
+      floorId: currentFloorId,
+      cursor: flowPosition,
+      selectedDeviceId: selectedDeviceId ?? undefined,
+    });
+  };
+
+  useEffect(() => {
+    if (!identity) return;
+    const sessionId = identity.sessionId;
+    return () => {
+      void removePresence({ sessionId });
+    };
+  }, [identity, removePresence]);
 
   const handlePaneClick = (event: React.MouseEvent) => {
     if (!currentFloorId) {
@@ -171,7 +208,10 @@ export default function FlowCanvas() {
         onNodeDragStop={handleNodeDragStop}
         onNodeContextMenu={handleContextMenu}
         onPaneClick={handlePaneClick}
-        onPaneMouseMove={wallToolSession.handlePaneMouseMove}
+        onPaneMouseMove={(event) => {
+          publishCursor(event);
+          wallToolSession.handlePaneMouseMove(event);
+        }}
         onPaneContextMenu={handleContextMenu}
         onMoveStart={handleMoveStart}
         onMoveEnd={handleMoveEnd}
@@ -206,6 +246,8 @@ export default function FlowCanvas() {
           paneHoverFillColor={paneHoverFillColor}
           paneHoverStrokeColor={paneHoverStrokeColor}
         />
+
+        <PresenceCursors identity={identity} floorId={currentFloorId} />
       </ReactFlow>
 
       <CanvasZoomControls
