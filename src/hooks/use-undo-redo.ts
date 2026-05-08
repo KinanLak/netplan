@@ -1,39 +1,85 @@
-import { useStore } from "zustand";
+import { useMutation } from "convex/react";
 import { useMapStore } from "@/store/useMapStore";
-import type { TemporalState } from "zundo";
-import type { MapHistorySnapshot } from "@/store/mapHistory";
-import { redoMapChange, undoMapChange } from "@/store/mapHistory";
+import {
+  dispatchUndoRedoEvent,
+  executeInverseCommand,
+} from "@/store/mapHistory";
+import type { InverseCommandRunners } from "@/store/mapHistory";
+import type { InverseCommand } from "@/types/map";
+import { api } from "../../convex/_generated/api";
 
-/**
- * Reactive hook to subscribe to the temporal (undo/redo) store.
- * Use this to read `pastStates.length`, `futureStates.length`, etc. reactively.
- */
-export function useTemporalStore<T>(
-  selector: (state: TemporalState<MapHistorySnapshot>) => T,
-): T {
-  return useStore(useMapStore.temporal, selector);
+interface TemporalView {
+  pastStates: ReadonlyArray<InverseCommand>;
+  futureStates: ReadonlyArray<InverseCommand>;
 }
 
 /**
- * Module-level stable undo handler.
- * Only accesses store via getState() — no hooks, no re-renders.
+ * Reactive view over the inverse-command undo/redo stacks. Kept under the
+ * old `useTemporalStore` name for callsite compatibility; the shape mimics
+ * zundo's `TemporalState` so consumers can read `pastStates.length` /
+ * `futureStates.length` without churn.
  */
-function handleUndo() {
-  undoMapChange(useMapStore);
+export function useTemporalStore<T>(selector: (state: TemporalView) => T): T {
+  return useMapStore((s) =>
+    selector({ pastStates: s.undoStack, futureStates: s.redoStack }),
+  );
 }
 
-/**
- * Module-level stable redo handler.
- * Only accesses store via getState() — no hooks, no re-renders.
- */
-function handleRedo() {
-  redoMapChange(useMapStore);
-}
-
-/**
- * Hook providing stable undo/redo handlers.
- * Returns the same function references every render — no unnecessary re-renders in consumers.
- */
 export function useUndoRedo() {
+  const createDevice = useMutation(api.devices.create);
+  const removeDevice = useMutation(api.devices.remove);
+  const updatePosition = useMutation(api.devices.updatePosition);
+  const addStroke = useMutation(api.walls.addStroke);
+  const eraseStroke = useMutation(api.walls.eraseStroke);
+
+  const runners: InverseCommandRunners = {
+    createDevice: (draft) =>
+      createDevice({
+        floorId: draft.floorId,
+        type: draft.type,
+        name: draft.name,
+        hostname: draft.hostname,
+        position: draft.position,
+        size: draft.size,
+        metadata: draft.metadata,
+      }),
+    removeDevice: (args) => removeDevice(args),
+    updatePosition: (args) => updatePosition(args),
+    addStroke: (args) =>
+      addStroke({ floorId: args.floorId, segments: args.segments }),
+    eraseStroke: (args) =>
+      eraseStroke({ floorId: args.floorId, removeIds: args.removeIds }),
+  };
+
+  const handleUndo = () => {
+    const command = useMapStore.getState().takeUndo();
+    if (!command) return;
+    void (async () => {
+      try {
+        const inverse = await executeInverseCommand(command, runners);
+        useMapStore.getState().queueRedo(inverse);
+        dispatchUndoRedoEvent("undo");
+      } catch (error) {
+        console.error("undo failed", error);
+        useMapStore.getState().queueUndo(command);
+      }
+    })();
+  };
+
+  const handleRedo = () => {
+    const command = useMapStore.getState().takeRedo();
+    if (!command) return;
+    void (async () => {
+      try {
+        const inverse = await executeInverseCommand(command, runners);
+        useMapStore.getState().queueUndo(inverse);
+        dispatchUndoRedoEvent("redo");
+      } catch (error) {
+        console.error("redo failed", error);
+        useMapStore.getState().queueRedo(command);
+      }
+    })();
+  };
+
   return { handleUndo, handleRedo } as const;
 }

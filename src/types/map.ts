@@ -95,6 +95,29 @@ export interface WallStrokeInput {
   toSnappedPoint: Position;
 }
 
+// ── History (inverse-command undo/redo) ─────────────────────────────────────
+export interface WallSegmentSnapshot {
+  start: Position;
+  end: Position;
+  color: WallColor;
+}
+
+export type InverseCommand =
+  | { kind: "createDevice"; draft: DeviceDraft }
+  | { kind: "removeDevice"; deviceId: DeviceId; snapshot: DeviceDraft }
+  | { kind: "moveDevice"; deviceId: DeviceId; from: Position; to: Position }
+  | {
+      kind: "addWalls";
+      floorId: FloorId;
+      segments: ReadonlyArray<WallSegmentSnapshot>;
+    }
+  | {
+      kind: "removeWalls";
+      floorId: FloorId;
+      ids: ReadonlyArray<WallId>;
+      snapshots: ReadonlyArray<WallSegmentSnapshot>;
+    };
+
 // ── UI store (Zustand): only ephemeral interaction state ─────────────────────
 export interface MapInteractionState {
   currentBuildingId: BuildingId | null;
@@ -106,6 +129,8 @@ export interface MapInteractionState {
   highlightedDeviceIdSet: ReadonlySet<DeviceId>;
   activeDrawTool: DrawTool;
   selectedWallColor: WallColor;
+  undoStack: ReadonlyArray<InverseCommand>;
+  redoStack: ReadonlyArray<InverseCommand>;
 }
 
 export interface MapInteractionActions {
@@ -117,6 +142,12 @@ export interface MapInteractionActions {
   setActiveDrawTool: (tool: DrawTool) => void;
   setSelectedWallColor: (color: WallColor) => void;
   setHighlightedDevices: (deviceIds: Array<DeviceId>) => void;
+  pushHistory: (command: InverseCommand) => void;
+  takeUndo: () => InverseCommand | null;
+  takeRedo: () => InverseCommand | null;
+  queueRedo: (command: InverseCommand) => void;
+  queueUndo: (command: InverseCommand) => void;
+  clearHistory: () => void;
 }
 
 export type MapStore = MapInteractionState & MapInteractionActions;

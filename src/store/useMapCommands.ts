@@ -1,5 +1,13 @@
 import type { OptimisticLocalStore } from "convex/browser";
 import { useMutation, useQuery } from "convex/react";
+import { useMapStore } from "@/store/useMapStore";
+import {
+  buildAddDeviceInverse,
+  buildAddWallsInverse,
+  buildDeleteDeviceInverse,
+  buildEraseWallsInverse,
+  buildMoveDeviceInverse,
+} from "@/store/mapHistory";
 import type {
   Device,
   DeviceDraft,
@@ -166,6 +174,8 @@ export function useMapCommands(floorId: FloorId | null): MapCommands {
     useQuery(api.walls.listForFloor, floorId ? { floorId } : "skip") ??
     EMPTY_WALLS;
 
+  const pushHistory = useMapStore((s) => s.pushHistory);
+
   const createDeviceMutation = useMutation(
     api.devices.create,
   ).withOptimisticUpdate(applyCreateDeviceOptimistic);
@@ -191,23 +201,44 @@ export function useMapCommands(floorId: FloorId | null): MapCommands {
   ).withOptimisticUpdate(applyEraseStrokeOptimistic);
 
   const addDevice = (draft: DeviceDraft) => {
-    void createDeviceMutation({
-      floorId: draft.floorId,
-      type: draft.type,
-      name: draft.name,
-      hostname: draft.hostname,
-      position: draft.position,
-      size: draft.size,
-      metadata: draft.metadata,
-    });
+    void (async () => {
+      const newId = await createDeviceMutation({
+        floorId: draft.floorId,
+        type: draft.type,
+        name: draft.name,
+        hostname: draft.hostname,
+        position: draft.position,
+        size: draft.size,
+        metadata: draft.metadata,
+      });
+      pushHistory(buildAddDeviceInverse(draft, newId));
+    })();
   };
 
   const updateDevicePosition = (deviceId: DeviceId, position: Position) => {
-    void updatePositionMutation({ id: deviceId, position });
+    const previous = devices.find((d) => d._id === deviceId);
+    if (!previous) return;
+    const previousPosition = previous.position;
+    if (
+      previousPosition.x === position.x &&
+      previousPosition.y === position.y
+    ) {
+      return;
+    }
+    void (async () => {
+      await updatePositionMutation({ id: deviceId, position });
+      pushHistory(buildMoveDeviceInverse(deviceId, previousPosition, position));
+    })();
   };
 
   const deleteDevice = (deviceId: DeviceId) => {
-    void removeDeviceMutation({ id: deviceId });
+    const device = devices.find((d) => d._id === deviceId);
+    if (!device) return;
+    const inverse = buildDeleteDeviceInverse(device);
+    void (async () => {
+      await removeDeviceMutation({ id: deviceId });
+      pushHistory(inverse);
+    })();
   };
 
   const checkCollision = (
@@ -247,30 +278,39 @@ export function useMapCommands(floorId: FloorId | null): MapCommands {
   ) => {
     const added = nextWalls.filter((wall) => !existingIds.has(wall._id));
     if (added.length === 0) return;
-    void addStrokeMutation({
-      floorId: targetFloorId,
-      segments: added.map((segment) => ({
-        start: segment.start,
-        end: segment.end,
-        color: segment.color,
-      })),
-    });
+    const segments = added.map((segment) => ({
+      start: segment.start,
+      end: segment.end,
+      color: segment.color,
+    }));
+    void (async () => {
+      const newIds = await addStrokeMutation({
+        floorId: targetFloorId,
+        segments,
+      });
+      pushHistory(buildAddWallsInverse(targetFloorId, newIds, segments));
+    })();
   };
 
   const flushErasedIds = (
     targetFloorId: FloorId,
-    existingIds: Set<string>,
+    floorWallsBefore: Array<WallSegment>,
     nextWalls: Array<WallSegment>,
   ) => {
     const remainingIds = new Set<string>(nextWalls.map((wall) => wall._id));
-    const removed: Array<Id<"walls">> = [];
-    for (const id of existingIds) {
-      if (!remainingIds.has(id)) {
-        removed.push(id as Id<"walls">);
-      }
-    }
+    const removed = floorWallsBefore.filter(
+      (wall) => !remainingIds.has(wall._id),
+    );
     if (removed.length === 0) return;
-    void eraseStrokeMutation({ floorId: targetFloorId, removeIds: removed });
+    const removedIds = removed.map((wall) => wall._id) as Array<Id<"walls">>;
+    const inverse = buildEraseWallsInverse(targetFloorId, removed);
+    void (async () => {
+      await eraseStrokeMutation({
+        floorId: targetFloorId,
+        removeIds: removedIds,
+      });
+      pushHistory(inverse);
+    })();
   };
 
   const addWallLine = (line: WallDraft): WallCommandResult => {
@@ -319,7 +359,6 @@ export function useMapCommands(floorId: FloorId | null): MapCommands {
     input: WallPointerInput,
   ): WallCommandResult => {
     const floorWalls = walls.filter((w) => w.floorId === input.floorId);
-    const existingIds = new Set(floorWalls.map((w) => w._id));
 
     const result = eraseAtPointer({
       walls: floorWalls,
@@ -329,14 +368,13 @@ export function useMapCommands(floorId: FloorId | null): MapCommands {
     });
 
     if (result.changed) {
-      flushErasedIds(input.floorId, existingIds, result.nextWalls);
+      flushErasedIds(input.floorId, floorWalls, result.nextWalls);
     }
     return result;
   };
 
   const eraseWallStrokeCmd = (input: WallStrokeInput): WallCommandResult => {
     const floorWalls = walls.filter((w) => w.floorId === input.floorId);
-    const existingIds = new Set(floorWalls.map((w) => w._id));
 
     const result = eraseStroke({
       walls: floorWalls,
@@ -348,7 +386,7 @@ export function useMapCommands(floorId: FloorId | null): MapCommands {
     });
 
     if (result.changed) {
-      flushErasedIds(input.floorId, existingIds, result.nextWalls);
+      flushErasedIds(input.floorId, floorWalls, result.nextWalls);
     }
     return result;
   };
