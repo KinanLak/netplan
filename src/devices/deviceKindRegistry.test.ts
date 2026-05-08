@@ -79,9 +79,7 @@ describe("device kind registry", () => {
     expect(node.position).toBe(device.position);
     expect(node.selected).toBe(true);
     expect(node.draggable).toBe(true);
-    expect(node.data).toEqual({ data: device });
-    expect(node.data.data).toBe(device);
-    expect("selected" in node.data).toBe(false);
+    expect(node.data).toBe(device);
   });
 });
 

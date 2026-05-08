@@ -3,14 +3,13 @@ import { Handle, Position } from "@xyflow/react";
 import NetworkNode from "./NetworkNode";
 import { areDeviceNodePropsEqual } from "./memo";
 import type { Node, NodeProps } from "@xyflow/react";
-import type { DeviceNodeData, DeviceStatus } from "@/types/map";
+import type { Device, DeviceStatus } from "@/types/map";
 import { StatusDot } from "@/components/StatusDot";
 import { cn } from "@/lib/utils";
 
-type SwitchNodeType = Node<DeviceNodeData>;
+type SwitchNodeType = Node<Device>;
 
-function SwitchNode({ data, id }: NodeProps<SwitchNodeType>) {
-  const device = data.data;
+function SwitchNode({ data: device, id }: NodeProps<SwitchNodeType>) {
   const ports = device.metadata.ports ?? [];
   const status: DeviceStatus = device.metadata.status ?? "unknown";
 

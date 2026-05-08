@@ -2,14 +2,13 @@ import { Handle, Position } from "@xyflow/react";
 import { memo } from "react";
 import NetworkNode from "./NetworkNode";
 import { areDeviceNodePropsEqual } from "./memo";
-import type { DeviceNodeData, DeviceStatus } from "@/types/map";
+import type { Device, DeviceStatus } from "@/types/map";
 import type { Node, NodeProps } from "@xyflow/react";
 import { StatusDot } from "@/components/StatusDot";
 
-type RackNodeType = Node<DeviceNodeData>;
+type RackNodeType = Node<Device>;
 
-function RackNode({ data, id }: NodeProps<RackNodeType>) {
-  const device = data.data;
+function RackNode({ data: device, id }: NodeProps<RackNodeType>) {
   const status: DeviceStatus = device.metadata.status ?? "unknown";
 
   return (

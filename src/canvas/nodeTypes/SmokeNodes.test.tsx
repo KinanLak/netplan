@@ -20,7 +20,7 @@ const renderWithFlow = (node: React.ReactElement) => {
 const nodeProps = (device: Device) => ({
   id: device.id,
   type: device.type,
-  data: { data: device },
+  data: device,
   positionAbsoluteX: 0,
   positionAbsoluteY: 0,
   selected: false,

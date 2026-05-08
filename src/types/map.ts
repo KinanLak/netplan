@@ -31,7 +31,7 @@ export interface Size {
   height: number;
 }
 
-export interface Device {
+export type Device = {
   id: string;
   type: DeviceType;
   name: string;
@@ -40,7 +40,7 @@ export interface Device {
   position: Position;
   size: Size;
   metadata: DeviceMetadata;
-}
+};
 
 export interface WallSegment {
   id: string;
@@ -103,12 +103,6 @@ export interface Building {
   name: string;
   floors: Array<Floor>;
 }
-
-// React Flow node data keeps the Device nested so the React Flow shape cannot
-// be confused with the domain Device shape.
-export type DeviceNodeData = {
-  data: Device;
-};
 
 // Store types
 export interface DurableMapState {

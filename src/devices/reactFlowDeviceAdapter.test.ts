@@ -19,7 +19,7 @@ const createDevice = (overrides: Partial<Device> = {}): Device => ({
 });
 
 describe("react flow device adapter", () => {
-  it("nests the Device under data.data so the React Flow shape stays distinct", () => {
+  it("exposes the Device directly as the React Flow node data", () => {
     const device = createDevice();
     const node = toDeviceNode({
       device,
@@ -27,9 +27,7 @@ describe("react flow device adapter", () => {
       canEditDevices: true,
     });
 
-    expect(node.data).toEqual({ data: device });
-    expect(node.data.data).toBe(device);
-    expect("selected" in node.data).toBe(false);
+    expect(node.data).toBe(device);
   });
 
   it("forwards canEditDevices to draggable so view mode locks nodes", () => {

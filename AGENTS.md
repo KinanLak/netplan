@@ -12,13 +12,9 @@
 
 React 19, TypeScript, Vite, TailwindCSS V4, Zustand (persisted to `localStorage`), @xyflow/react.
 
-## React Flow node data shape (critical)
+## Adding a new device type
 
-`src/devices/reactFlowDeviceAdapter.ts` builds nodes with `data: { data: device }`. Node components read `const device = data.data`. Keep this nesting consistent or update all node components + typings together.
-
-`selected` is a React Flow node field (not nested inside `data`).
-
-To add a new `DeviceType`: extend the union in `src/types/map.ts` — TypeScript + `deviceKindRegistry.test.ts` will then guide you through registry, adapter, and catalog updates.
+Extend the `DeviceType` union in `src/types/map.ts` — TypeScript + `deviceKindRegistry.test.ts` will then guide you through registry, adapter, and catalog updates.
 
 ## Testing
 

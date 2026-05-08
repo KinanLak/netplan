@@ -3,9 +3,9 @@ import {
   createDeviceKindRecord,
   deviceKindRegistry,
 } from "@/devices/deviceKindRegistry";
-import type { Device, DeviceNodeData } from "@/types/map";
+import type { Device } from "@/types/map";
 
-export type DeviceNode = Node<DeviceNodeData>;
+export type DeviceNode = Node<Device>;
 
 interface DeviceNodeInput {
   device: Device;
@@ -26,7 +26,7 @@ export const toDeviceNode = ({
     id: device.id,
     type: device.type,
     position: device.position,
-    data: { data: device },
+    data: device,
     selected: device.id === selectedDeviceId,
     draggable: canEditDevices,
   };

@@ -26,7 +26,7 @@ const renderPcNode = (overrides: Partial<Device> = {}) => {
       <PcNode
         id={device.id}
         type={device.type}
-        data={{ data: device }}
+        data={device}
         positionAbsoluteX={0}
         positionAbsoluteY={0}
         selected={false}
