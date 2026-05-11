@@ -302,8 +302,12 @@ export function useMapCommands(floorId: FloorId | null): MapCommands {
       (wall) => !remainingIds.has(wall._id),
     );
     if (removed.length === 0) return;
-    const realRemoved = removed.filter((wall) => !wall._id.startsWith("temp-wall-"));
-    const removedIds = realRemoved.map((wall) => wall._id) as Array<Id<"walls">>;
+    const realRemoved = removed.filter(
+      (wall) => !wall._id.startsWith("temp-wall-"),
+    );
+    const removedIds = realRemoved.map((wall) => wall._id) as Array<
+      Id<"walls">
+    >;
     const inverse = buildEraseWallsInverse(targetFloorId, removed);
     void (async () => {
       if (removedIds.length > 0) {

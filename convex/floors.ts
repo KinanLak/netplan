@@ -33,7 +33,10 @@ export const create = mutation({
       .query("floors")
       .withIndex("by_building", (q) => q.eq("buildingId", buildingId))
       .collect();
-    const maxOrder = Math.max(...siblings.map(f => (typeof f.order === "number" ? f.order : -1)), -1);
+    const maxOrder = Math.max(
+      ...siblings.map((f) => (typeof f.order === "number" ? f.order : -1)),
+      -1,
+    );
     const order = maxOrder + 1;
     return await ctx.db.insert("floors", { buildingId, name, order });
   },

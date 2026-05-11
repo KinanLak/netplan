@@ -32,7 +32,7 @@ import { getNextConnectionHighlightIds } from "@/lib/shortcut-intents";
 import { api } from "../../convex/_generated/api";
 
 export const Route = createFileRoute("/")({
-  ssr: true,
+  ssr: false,
   component: HomePage,
 });
 

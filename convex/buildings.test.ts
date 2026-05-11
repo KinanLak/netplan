@@ -70,6 +70,11 @@ describe("buildings", () => {
         fromDeviceId: a,
         toDeviceId: b,
       });
+      await ctx.db.insert("links", {
+        floorId,
+        fromDeviceId: a,
+        toDeviceId: a,
+      });
     });
 
     await t.mutation(api.buildings.remove, { id: buildingId });

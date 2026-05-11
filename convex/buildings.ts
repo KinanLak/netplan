@@ -24,7 +24,10 @@ export const create = mutation({
   returns: v.id("buildings"),
   handler: async (ctx, { name }): Promise<Id<"buildings">> => {
     const buildings = await ctx.db.query("buildings").collect();
-    const maxOrder = Math.max(...buildings.map(b => (typeof b.order === "number" ? b.order : -1)), -1);
+    const maxOrder = Math.max(
+      ...buildings.map((b) => (typeof b.order === "number" ? b.order : -1)),
+      -1,
+    );
     const order = maxOrder + 1;
     const buildingId = await ctx.db.insert("buildings", { name, order });
     await ctx.db.insert("floors", {
@@ -69,17 +72,21 @@ export async function cascadeRemoveFloor(
     .query("devices")
     .withIndex("by_floor", (q) => q.eq("floorId", floorId))
     .collect();
+  const linkIds = new Set<Id<"links">>();
   for (const device of devices) {
     const incoming = await ctx.db
       .query("links")
       .withIndex("by_to_device", (q) => q.eq("toDeviceId", device._id))
       .collect();
-    for (const link of incoming) await ctx.db.delete(link._id);
+    for (const link of incoming) linkIds.add(link._id);
     const outgoing = await ctx.db
       .query("links")
       .withIndex("by_from_device", (q) => q.eq("fromDeviceId", device._id))
       .collect();
-    for (const link of outgoing) await ctx.db.delete(link._id);
+    for (const link of outgoing) linkIds.add(link._id);
+  }
+  for (const linkId of linkIds) await ctx.db.delete(linkId);
+  for (const device of devices) {
     await ctx.db.delete(device._id);
   }
   const walls = await ctx.db
