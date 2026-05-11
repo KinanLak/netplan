@@ -77,6 +77,15 @@ describe("floors", () => {
         fromDeviceId: a,
         toDeviceId: b,
       });
+      await ctx.db.insert("presences", {
+        sessionId: "alice",
+        displayName: "A",
+        colorHue: 100,
+        floorId,
+        cursor: { x: 0, y: 0 },
+        selectedDeviceId: a,
+        updatedAt: Date.now(),
+      });
     });
 
     await t.mutation(api.floors.remove, { id: floorId });
@@ -86,7 +95,22 @@ describe("floors", () => {
       expect(await ctx.db.query("devices").collect()).toHaveLength(0);
       expect(await ctx.db.query("walls").collect()).toHaveLength(0);
       expect(await ctx.db.query("links").collect()).toHaveLength(0);
+      expect(await ctx.db.query("presences").collect()).toHaveLength(0);
       expect(await ctx.db.query("buildings").collect()).toHaveLength(1);
     });
+  });
+
+  it("rejects creates for deleted buildings", async () => {
+    const t = convexTest(schema, modules);
+    const buildingId = await t.mutation(api.buildings.create, { name: "X" });
+    await t.mutation(api.buildings.remove, { id: buildingId });
+
+    let message = "";
+    try {
+      await t.mutation(api.floors.create, { buildingId, name: "Ghost" });
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+    expect(message).toContain("Building not found");
   });
 });

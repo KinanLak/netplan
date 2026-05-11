@@ -1,9 +1,12 @@
+import { useEffect, useState } from "react";
 import { useQuery } from "convex/react";
 import { useViewport } from "@xyflow/react";
 import type { FloorId } from "@/types/map";
 import { colorForHue } from "@/lib/identity";
 import type { Identity } from "@/lib/identity";
 import { api } from "../../convex/_generated/api";
+
+const STALE_AFTER_MS = 30_000;
 
 interface PresenceCursorsProps {
   identity: Identity | null;
@@ -15,14 +18,24 @@ export const PresenceCursors = ({
   floorId,
 }: PresenceCursorsProps) => {
   const { x: panX, y: panY, zoom } = useViewport();
+  const [now, setNow] = useState(() => Date.now());
   const presences =
     useQuery(api.presences.listForFloor, floorId ? { floorId } : "skip") ?? [];
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(Date.now()), 1_000);
+    return () => window.clearInterval(interval);
+  }, []);
 
   if (!floorId) return null;
 
   const ownSessionId = identity?.sessionId ?? null;
+  const cutoff = now - STALE_AFTER_MS;
   const others = presences.filter(
-    (presence) => presence.sessionId !== ownSessionId && presence.cursor,
+    (presence) =>
+      presence.sessionId !== ownSessionId &&
+      presence.cursor &&
+      presence.updatedAt >= cutoff,
   );
 
   if (others.length === 0) return null;

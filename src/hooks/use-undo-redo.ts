@@ -30,6 +30,7 @@ export function useUndoRedo() {
   const createDevice = useMutation(api.devices.create);
   const removeDevice = useMutation(api.devices.remove);
   const updatePosition = useMutation(api.devices.updatePosition);
+  const createLink = useMutation(api.links.create);
   const addStroke = useMutation(api.walls.addStroke);
   const eraseStroke = useMutation(api.walls.eraseStroke);
 
@@ -48,6 +49,7 @@ export function useUndoRedo() {
       }),
     removeDevice: (args) => removeDevice(args),
     updatePosition: (args) => updatePosition(args),
+    createLink: (snapshot) => createLink(snapshot),
     addStroke: (args) =>
       addStroke({ floorId: args.floorId, segments: args.segments }),
     eraseStroke: (args) =>

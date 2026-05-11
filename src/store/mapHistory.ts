@@ -2,8 +2,11 @@ import type {
   Device,
   DeviceDraft,
   DeviceId,
+  DeviceRemovalSnapshot,
   FloorId,
   InverseCommand,
+  LinkId,
+  LinkSnapshot,
   Position,
   WallColor,
   WallId,
@@ -14,11 +17,12 @@ import { UNDO_REDO_EVENT_NAME } from "@/lib/constants";
 
 export interface InverseCommandRunners {
   createDevice: (draft: DeviceDraft) => Promise<DeviceId>;
-  removeDevice: (args: { id: DeviceId }) => Promise<unknown>;
+  removeDevice: (args: { id: DeviceId }) => Promise<DeviceRemovalSnapshot>;
   updatePosition: (args: {
     id: DeviceId;
     position: Position;
   }) => Promise<unknown>;
+  createLink: (snapshot: LinkSnapshot) => Promise<LinkId>;
   addStroke: (args: {
     floorId: FloorId;
     segments: Array<WallSegmentSnapshot>;
@@ -34,13 +38,49 @@ export const executeInverseCommand = async (
   runners: InverseCommandRunners,
 ): Promise<InverseCommand> => {
   switch (command.kind) {
+    case "batch": {
+      const nextCommands: Array<InverseCommand> = [];
+      for (let index = command.commands.length - 1; index >= 0; index -= 1) {
+        const nextCommand = await executeInverseCommand(
+          command.commands[index],
+          runners,
+        );
+        nextCommands.unshift(nextCommand);
+      }
+      return { kind: "batch", commands: nextCommands };
+    }
     case "createDevice": {
       const id = await runners.createDevice(command.draft);
-      return { kind: "removeDevice", deviceId: id, snapshot: command.draft };
+      const links = remapLinkSnapshots(
+        command.links ?? [],
+        command.originalDeviceId,
+        id,
+      );
+      const restoredLinks: Array<LinkSnapshot> = [];
+      for (const link of links) {
+        try {
+          await runners.createLink(link);
+          restoredLinks.push(link);
+        } catch (error) {
+          console.error("link restore failed", error);
+        }
+      }
+      return {
+        kind: "removeDevice",
+        deviceId: id,
+        snapshot: command.draft,
+        originalDeviceId: id,
+        links: restoredLinks,
+      };
     }
     case "removeDevice": {
-      await runners.removeDevice({ id: command.deviceId });
-      return { kind: "createDevice", draft: command.snapshot };
+      const removed = await runners.removeDevice({ id: command.deviceId });
+      return {
+        kind: "createDevice",
+        draft: removed.draft,
+        originalDeviceId: removed.deviceId,
+        links: removed.links,
+      };
     }
     case "moveDevice": {
       await runners.updatePosition({
@@ -81,6 +121,21 @@ export const executeInverseCommand = async (
   }
 };
 
+const remapLinkSnapshots = (
+  links: ReadonlyArray<LinkSnapshot>,
+  fromDeviceId: DeviceId | undefined,
+  toDeviceId: DeviceId,
+): Array<LinkSnapshot> => {
+  if (!fromDeviceId) return [...links];
+
+  return links.map((link) => ({
+    ...link,
+    fromDeviceId:
+      link.fromDeviceId === fromDeviceId ? toDeviceId : link.fromDeviceId,
+    toDeviceId: link.toDeviceId === fromDeviceId ? toDeviceId : link.toDeviceId,
+  }));
+};
+
 export const buildAddDeviceInverse = (
   draft: DeviceDraft,
   newId: DeviceId,
@@ -88,10 +143,12 @@ export const buildAddDeviceInverse = (
   kind: "removeDevice",
   deviceId: newId,
   snapshot: draft,
+  originalDeviceId: newId,
+  links: [],
 });
 
-export const buildDeleteDeviceInverse = (device: Device): InverseCommand => ({
-  kind: "createDevice",
+const deviceToRemovalSnapshot = (device: Device): DeviceRemovalSnapshot => ({
+  deviceId: device._id,
   draft: {
     floorId: device.floorId,
     type: device.type,
@@ -101,7 +158,22 @@ export const buildDeleteDeviceInverse = (device: Device): InverseCommand => ({
     size: device.size,
     metadata: device.metadata,
   },
+  links: [],
 });
+
+export const buildDeleteDeviceInverse = (
+  snapshot: Device | DeviceRemovalSnapshot,
+): InverseCommand => {
+  const removalSnapshot =
+    "_id" in snapshot ? deviceToRemovalSnapshot(snapshot) : snapshot;
+
+  return {
+    kind: "createDevice",
+    draft: removalSnapshot.draft,
+    originalDeviceId: removalSnapshot.deviceId,
+    links: removalSnapshot.links,
+  };
+};
 
 export const buildMoveDeviceInverse = (
   deviceId: DeviceId,

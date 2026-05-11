@@ -92,4 +92,41 @@ describe("presences", () => {
     const presences = await t.query(api.presences.listForFloor, { floorId });
     expect(presences).toHaveLength(0);
   });
+
+  it("rejects selections outside the presence floor", async () => {
+    const t = convexTest(schema, modules);
+    const buildingA = await t.mutation(api.buildings.create, { name: "A" });
+    const floorsA = await t.query(api.floors.listForBuilding, {
+      buildingId: buildingA,
+    });
+    const floorA = floorsA[0]._id;
+    const buildingB = await t.mutation(api.buildings.create, { name: "B" });
+    const floorsB = await t.query(api.floors.listForBuilding, {
+      buildingId: buildingB,
+    });
+    const floorB = floorsB[0]._id;
+    const deviceId = await t.mutation(api.devices.create, {
+      floorId: floorB,
+      type: "pc",
+      name: "PC",
+      position: { x: 0, y: 0 },
+      size: { width: 80, height: 80 },
+      metadata: {},
+    });
+
+    let message = "";
+    try {
+      await t.mutation(api.presences.updateCursor, {
+        sessionId: "alice",
+        displayName: "A",
+        colorHue: 100,
+        floorId: floorA,
+        cursor: { x: 0, y: 0 },
+        selectedDeviceId: deviceId,
+      });
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+    expect(message).toContain("presence floor");
+  });
 });

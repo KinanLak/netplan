@@ -136,12 +136,66 @@ describe("devices", () => {
       await ctx.db.insert("links", { floorId, fromDeviceId: b, toDeviceId: c });
     });
 
-    await t.mutation(api.devices.remove, { id: b });
+    const removed = await t.mutation(api.devices.remove, { id: b });
 
     await t.run(async (ctx) => {
       expect(await ctx.db.query("links").collect()).toHaveLength(0);
     });
+    expect(removed.deviceId).toBe(b);
+    expect(removed.links).toHaveLength(2);
     const remaining = await t.query(api.devices.listForFloor, { floorId });
     expect(remaining.map((d) => d.name).sort()).toEqual(["A", "C"]);
+  });
+
+  it("rejects creates for deleted floors", async () => {
+    const t = convexTest(schema, modules);
+    const floorId = await freshFloor(t);
+    await t.mutation(api.floors.remove, { id: floorId });
+
+    let message = "";
+    try {
+      await t.mutation(api.devices.create, {
+        floorId,
+        type: "pc",
+        name: "Orphan",
+        position: { x: 0, y: 0 },
+        size: { width: 80, height: 80 },
+        metadata: {},
+      });
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+    expect(message).toContain("Floor not found");
+  });
+
+  it("clears presence selections when removing a device", async () => {
+    const t = convexTest(schema, modules);
+    const floorId = await freshFloor(t);
+    const id = await t.mutation(api.devices.create, {
+      floorId,
+      type: "pc",
+      name: "PC",
+      position: { x: 0, y: 0 },
+      size: { width: 80, height: 80 },
+      metadata: {},
+    });
+    await t.mutation(api.presences.updateCursor, {
+      sessionId: "alice",
+      displayName: "A",
+      colorHue: 100,
+      floorId,
+      cursor: { x: 0, y: 0 },
+      selectedDeviceId: id,
+    });
+
+    await t.mutation(api.devices.remove, { id });
+
+    await t.run(async (ctx) => {
+      const presence = await ctx.db
+        .query("presences")
+        .withIndex("by_session", (q) => q.eq("sessionId", "alice"))
+        .unique();
+      expect(presence?.selectedDeviceId).toBe(undefined);
+    });
   });
 });

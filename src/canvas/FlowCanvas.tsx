@@ -8,6 +8,7 @@ import {
 import { useMutation } from "convex/react";
 import { nodeTypes } from "./nodeTypes";
 import type { DeviceNode } from "@/devices/reactFlowDeviceAdapter";
+import type { Position } from "@/types/map";
 import { useMapStore } from "@/store/useMapStore";
 import {
   useActiveDrawTool,
@@ -59,7 +60,8 @@ export default function FlowCanvas() {
   const commands = useMapCommands(currentFloorId);
   const { devices, walls, updateDevicePosition, checkCollision } = commands;
 
-  const canEditDevices = isEditMode && activeDrawTool === "device";
+  const canEditDevices =
+    isEditMode && activeDrawTool === "device" && commands.isReady;
   const floorWalls = useMemo(
     () => walls.filter((wall) => wall.floorId === currentFloorId),
     [walls, currentFloorId],
@@ -99,6 +101,7 @@ export default function FlowCanvas() {
   });
 
   const lastCursorAtRef = useRef(0);
+  const lastCursorPositionRef = useRef<Position | null>(null);
 
   const publishCursor = (event: React.MouseEvent) => {
     if (!identity || !currentFloorId) return;
@@ -109,6 +112,7 @@ export default function FlowCanvas() {
       x: event.clientX,
       y: event.clientY,
     });
+    lastCursorPositionRef.current = flowPosition;
     void updateCursor({
       sessionId: identity.sessionId,
       displayName: identity.displayName,
@@ -118,6 +122,29 @@ export default function FlowCanvas() {
       selectedDeviceId: selectedDeviceId ?? undefined,
     });
   };
+
+  useEffect(() => {
+    if (!identity) return;
+    if (!currentFloorId) {
+      void removePresence({ sessionId: identity.sessionId });
+      return;
+    }
+
+    void updateCursor({
+      sessionId: identity.sessionId,
+      displayName: identity.displayName,
+      colorHue: identity.colorHue,
+      floorId: currentFloorId,
+      cursor: lastCursorPositionRef.current ?? undefined,
+      selectedDeviceId: selectedDeviceId ?? undefined,
+    });
+  }, [
+    currentFloorId,
+    identity,
+    removePresence,
+    selectedDeviceId,
+    updateCursor,
+  ]);
 
   useEffect(() => {
     if (!identity) return;

@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
@@ -39,10 +39,37 @@ export const create = mutation({
   },
 });
 
+export const ensureDefault = mutation({
+  args: {},
+  returns: v.id("buildings"),
+  handler: async (ctx): Promise<Id<"buildings">> => {
+    const existing = await ctx.db.query("buildings").first();
+    if (existing) return existing._id;
+
+    const buildingId = await ctx.db.insert("buildings", {
+      name: "Bâtiment Principal",
+      order: 0,
+    });
+    await ctx.db.insert("floors", {
+      buildingId,
+      name: "RDC",
+      order: 0,
+    });
+    await ctx.db.insert("floors", {
+      buildingId,
+      name: "Étage 1",
+      order: 1,
+    });
+    return buildingId;
+  },
+});
+
 export const rename = mutation({
   args: { id: v.id("buildings"), name: v.string() },
   returns: v.null(),
   handler: async (ctx, { id, name }) => {
+    const building = await ctx.db.get(id);
+    if (!building) throw new ConvexError("Building not found");
     await ctx.db.patch(id, { name });
     return null;
   },
@@ -52,6 +79,8 @@ export const remove = mutation({
   args: { id: v.id("buildings") },
   returns: v.null(),
   handler: async (ctx, { id }) => {
+    const building = await ctx.db.get(id);
+    if (!building) throw new ConvexError("Building not found");
     const floors = await ctx.db
       .query("floors")
       .withIndex("by_building", (q) => q.eq("buildingId", id))
@@ -84,6 +113,17 @@ export async function cascadeRemoveFloor(
       .withIndex("by_from_device", (q) => q.eq("fromDeviceId", device._id))
       .collect();
     for (const link of outgoing) linkIds.add(link._id);
+  }
+  const deviceIds = new Set<string>(devices.map((device) => device._id));
+  const presences = await ctx.db.query("presences").collect();
+  for (const presence of presences) {
+    if (presence.floorId === floorId) {
+      await ctx.db.delete(presence._id);
+      continue;
+    }
+    if (presence.selectedDeviceId && deviceIds.has(presence.selectedDeviceId)) {
+      await ctx.db.patch(presence._id, { selectedDeviceId: undefined });
+    }
   }
   for (const linkId of linkIds) await ctx.db.delete(linkId);
   for (const device of devices) {

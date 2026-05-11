@@ -3,7 +3,7 @@ import { ReactFlowProvider } from "@xyflow/react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Edit01Icon, Tick01Icon } from "@hugeicons/core-free-icons";
 import { useEffect } from "react";
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import FlowCanvas from "@/canvas/FlowCanvas";
 import AppSidebar from "@/panels/Sidebar";
 import Toolbar from "@/panels/Toolbar";
@@ -48,6 +48,7 @@ function HomePage() {
 
 function HomePageContent() {
   const buildings = useQuery(api.buildings.list);
+  const ensureDefaultBuilding = useMutation(api.buildings.ensureDefault);
   const currentBuildingId = useCurrentBuildingId();
   const currentFloorId = useCurrentFloorId();
   const selectedDeviceId = useSelectedDeviceId();
@@ -79,10 +80,20 @@ function HomePageContent() {
   const { handleUndo, handleRedo } = useUndoRedo();
 
   useEffect(() => {
-    if (currentBuildingId !== null) return;
     if (!buildings || buildings.length === 0) return;
+    if (
+      currentBuildingId &&
+      buildings.some((b) => b._id === currentBuildingId)
+    ) {
+      return;
+    }
     setCurrentBuilding(buildings[0]._id);
   }, [buildings, currentBuildingId, setCurrentBuilding]);
+
+  useEffect(() => {
+    if (!buildings || buildings.length > 0) return;
+    void ensureDefaultBuilding();
+  }, [buildings, ensureDefaultBuilding]);
 
   const sortedFloors = floors
     ? [...floors].sort((a, b) => a.order - b.order)
@@ -156,6 +167,16 @@ function HomePageContent() {
   useShortcutIntentEffect("redo", handleRedo);
   useShortcutIntentEffect("floor-up", navigateFloorUp);
   useShortcutIntentEffect("floor-down", navigateFloorDown);
+
+  const isBootstrappingMap =
+    buildings === undefined ||
+    buildings.length === 0 ||
+    currentBuildingId === null ||
+    floors === undefined;
+
+  if (isBootstrappingMap) {
+    return <div className="h-screen w-screen bg-background" />;
+  }
 
   return (
     <SidebarProvider>

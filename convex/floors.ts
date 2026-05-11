@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { cascadeRemoveFloor } from "./buildings";
@@ -29,6 +29,9 @@ export const create = mutation({
   },
   returns: v.id("floors"),
   handler: async (ctx, { buildingId, name }): Promise<Id<"floors">> => {
+    const building = await ctx.db.get(buildingId);
+    if (!building) throw new ConvexError("Building not found");
+
     const siblings = await ctx.db
       .query("floors")
       .withIndex("by_building", (q) => q.eq("buildingId", buildingId))
@@ -46,6 +49,8 @@ export const rename = mutation({
   args: { id: v.id("floors"), name: v.string() },
   returns: v.null(),
   handler: async (ctx, { id, name }) => {
+    const floor = await ctx.db.get(id);
+    if (!floor) throw new ConvexError("Floor not found");
     await ctx.db.patch(id, { name });
     return null;
   },
@@ -55,6 +60,8 @@ export const remove = mutation({
   args: { id: v.id("floors") },
   returns: v.null(),
   handler: async (ctx, { id }) => {
+    const floor = await ctx.db.get(id);
+    if (!floor) throw new ConvexError("Floor not found");
     await cascadeRemoveFloor(ctx, id);
     return null;
   },

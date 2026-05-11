@@ -13,6 +13,8 @@ import type {
   DeviceDraft,
   DeviceId,
   FloorId,
+  LinkId,
+  LinkSnapshot,
   WallId,
   WallSegment,
 } from "@/types/map";
@@ -20,21 +22,26 @@ import type { Id } from "../../convex/_generated/dataModel";
 
 const did = (s: string) => s as Id<"devices">;
 const fid = (s: string) => s as Id<"floors">;
+const lid = (s: string) => s as Id<"links">;
 const wid = (s: string) => s as Id<"walls">;
 
 interface FakeBackendOptions {
   initialDevices?: Array<Device>;
+  initialLinks?: Array<LinkSnapshot>;
   initialWalls?: Array<WallSegment>;
 }
 
 class FakeBackend {
   devices: Array<Device>;
+  links: Array<LinkSnapshot>;
   walls: Array<WallSegment>;
   private nextDeviceCounter = 0;
+  private nextLinkCounter = 0;
   private nextWallCounter = 0;
 
   constructor(opts: FakeBackendOptions = {}) {
     this.devices = [...(opts.initialDevices ?? [])];
+    this.links = [...(opts.initialLinks ?? [])];
     this.walls = [...(opts.initialWalls ?? [])];
   }
 
@@ -56,14 +63,40 @@ class FakeBackend {
         return Promise.resolve(id);
       },
       removeDevice: ({ id }) => {
+        const device = this.devices.find((d) => d._id === id);
+        if (!device) throw new Error("Device not found");
+        const links = this.links.filter(
+          (link) => link.fromDeviceId === id || link.toDeviceId === id,
+        );
         this.devices = this.devices.filter((d) => d._id !== id);
-        return Promise.resolve(null);
+        this.links = this.links.filter(
+          (link) => link.fromDeviceId !== id && link.toDeviceId !== id,
+        );
+        return Promise.resolve({
+          deviceId: id,
+          draft: {
+            floorId: device.floorId,
+            type: device.type,
+            name: device.name,
+            hostname: device.hostname,
+            position: device.position,
+            size: device.size,
+            metadata: device.metadata,
+          },
+          links,
+        });
       },
       updatePosition: ({ id, position }) => {
         this.devices = this.devices.map((d) =>
           d._id === id ? { ...d, position } : d,
         );
         return Promise.resolve(null);
+      },
+      createLink: (snapshot) => {
+        this.links.push(snapshot);
+        return Promise.resolve(
+          lid(`link-fresh-${this.nextLinkCounter++}`) as LinkId,
+        );
       },
       addStroke: ({ floorId, segments }) => {
         const ids: Array<WallId> = [];
@@ -171,6 +204,95 @@ describe("mapHistory inverse commands", () => {
     );
     expect(backend.devices).toHaveLength(0);
     expect(undoStepAgain.kind).toBe("createDevice");
+  });
+
+  it("restores links when undoing a device delete with a fresh device id", async () => {
+    const original: Device = {
+      _id: did("device-linked"),
+      _creationTime: 0,
+      floorId: FLOOR,
+      type: "pc",
+      name: "PC",
+      position: { x: 0, y: 0 },
+      size: { width: 40, height: 40 },
+      metadata: {},
+    };
+    const peer: Device = {
+      _id: did("device-peer"),
+      _creationTime: 0,
+      floorId: FLOOR,
+      type: "switch",
+      name: "Switch",
+      position: { x: 100, y: 0 },
+      size: { width: 40, height: 40 },
+      metadata: {},
+    };
+    const backend = new FakeBackend({
+      initialDevices: [original, peer],
+      initialLinks: [
+        {
+          floorId: FLOOR,
+          fromDeviceId: original._id,
+          toDeviceId: peer._id,
+          label: "uplink",
+        },
+      ],
+    });
+
+    const removed = await backend.runners().removeDevice({ id: original._id });
+    const inverse = buildDeleteDeviceInverse(removed);
+
+    const redoStep = await executeInverseCommand(inverse, backend.runners());
+    const recreated = backend.devices.find((d) => d.name === "PC");
+    expect(recreated?._id).not.toBe(original._id);
+    expect(backend.links).toEqual([
+      {
+        floorId: FLOOR,
+        fromDeviceId: recreated?._id as DeviceId,
+        toDeviceId: peer._id,
+        label: "uplink",
+      },
+    ]);
+    expect(redoStep.kind).toBe("removeDevice");
+  });
+
+  it("executes batch history in reverse and returns a redo batch", async () => {
+    const backend = new FakeBackend({
+      initialDevices: [
+        {
+          _id: did("device-a"),
+          _creationTime: 0,
+          floorId: FLOOR,
+          type: "pc",
+          name: "PC",
+          position: { x: 50, y: 50 },
+          size: { width: 40, height: 40 },
+          metadata: {},
+        },
+      ],
+    });
+
+    const redoStep = await executeInverseCommand(
+      {
+        kind: "batch",
+        commands: [
+          buildMoveDeviceInverse(
+            did("device-a"),
+            { x: 0, y: 0 },
+            { x: 50, y: 50 },
+          ),
+          buildMoveDeviceInverse(
+            did("device-a"),
+            { x: 100, y: 100 },
+            { x: 0, y: 0 },
+          ),
+        ],
+      },
+      backend.runners(),
+    );
+
+    expect(backend.devices[0]?.position).toEqual({ x: 0, y: 0 });
+    expect(redoStep.kind).toBe("batch");
   });
 
   it("round-trips move (A → B → A → B)", async () => {

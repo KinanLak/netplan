@@ -102,9 +102,39 @@ export interface WallSegmentSnapshot {
   color: WallColor;
 }
 
+export interface LinkSnapshot {
+  floorId: FloorId;
+  fromDeviceId: DeviceId;
+  fromPort?: string;
+  toDeviceId: DeviceId;
+  toPort?: string;
+  label?: string;
+}
+
+export interface DeviceRemovalSnapshot {
+  deviceId: DeviceId;
+  draft: DeviceDraft;
+  links: Array<LinkSnapshot>;
+}
+
 export type InverseCommand =
-  | { kind: "createDevice"; draft: DeviceDraft }
-  | { kind: "removeDevice"; deviceId: DeviceId; snapshot: DeviceDraft }
+  | {
+      kind: "batch";
+      commands: ReadonlyArray<InverseCommand>;
+    }
+  | {
+      kind: "createDevice";
+      draft: DeviceDraft;
+      originalDeviceId?: DeviceId;
+      links?: ReadonlyArray<LinkSnapshot>;
+    }
+  | {
+      kind: "removeDevice";
+      deviceId: DeviceId;
+      snapshot: DeviceDraft;
+      originalDeviceId?: DeviceId;
+      links?: ReadonlyArray<LinkSnapshot>;
+    }
   | { kind: "moveDevice"; deviceId: DeviceId; from: Position; to: Position }
   | {
       kind: "addWalls";

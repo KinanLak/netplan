@@ -81,4 +81,22 @@ describe("links", () => {
     const list = await t.query(api.links.listForFloor, { floorId });
     expect(list).toHaveLength(0);
   });
+
+  it("rejects links whose devices are not on the requested floor", async () => {
+    const t = convexTest(schema, modules);
+    const first = await setupFloorWithDevices(t);
+    const second = await setupFloorWithDevices(t);
+
+    let message = "";
+    try {
+      await t.mutation(api.links.create, {
+        floorId: first.floorId,
+        fromDeviceId: first.a,
+        toDeviceId: second.b,
+      });
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+    expect(message).toContain("same floor");
+  });
 });

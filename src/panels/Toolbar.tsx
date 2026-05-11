@@ -162,7 +162,7 @@ export default function Toolbar() {
   });
 
   const handleAddDevice = (catalogDevice: AvailableDevice) => {
-    if (!currentFloorId) return;
+    if (!currentFloorId || !commands.isReady) return;
 
     // Get center of viewport
     const { x, y, zoom } = reactFlow.getViewport();

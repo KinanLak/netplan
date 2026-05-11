@@ -26,6 +26,20 @@ describe("buildings", () => {
     expect(floors.map((f) => f.name)).toEqual(["Étage 1"]);
   });
 
+  it("ensureDefault seeds the canonical starter building once", async () => {
+    const t = convexTest(schema, modules);
+    const first = await t.mutation(api.buildings.ensureDefault, {});
+    const second = await t.mutation(api.buildings.ensureDefault, {});
+
+    expect(second).toBe(first);
+    const buildings = await t.query(api.buildings.list);
+    expect(buildings.map((b) => b.name)).toEqual(["Bâtiment Principal"]);
+    const floors = await t.query(api.floors.listForBuilding, {
+      buildingId: first,
+    });
+    expect(floors.map((f) => f.name)).toEqual(["RDC", "Étage 1"]);
+  });
+
   it("rename updates the building name", async () => {
     const t = convexTest(schema, modules);
     const id = await t.mutation(api.buildings.create, { name: "Old" });

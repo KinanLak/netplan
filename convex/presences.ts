@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
 
@@ -29,6 +29,19 @@ export const updateCursor = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    if (args.floorId) {
+      const floor = await ctx.db.get(args.floorId);
+      if (!floor) throw new ConvexError("Floor not found");
+    }
+
+    if (args.selectedDeviceId) {
+      const device = await ctx.db.get(args.selectedDeviceId);
+      if (!device) throw new ConvexError("Selected device not found");
+      if (args.floorId && device.floorId !== args.floorId) {
+        throw new ConvexError("Selected device must be on the presence floor");
+      }
+    }
+
     const existing = await ctx.db
       .query("presences")
       .withIndex("by_session", (q) => q.eq("sessionId", args.sessionId))
