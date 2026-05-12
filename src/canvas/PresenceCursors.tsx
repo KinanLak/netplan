@@ -43,6 +43,26 @@ export const PresenceCursors = ({
   return (
     <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden">
       {others.map((presence) => {
+        if (presence.editing?.kind !== "device.drag") return null;
+        const preview = presence.editing.previewPosition;
+        const screenX = preview.x * zoom + panX;
+        const screenY = preview.y * zoom + panY;
+        const stroke = colorForHue(presence.colorHue, "stroke");
+        const fill = colorForHue(presence.colorHue, "fill");
+        return (
+          <div
+            key={`${presence.sessionId}:drag-preview`}
+            className="absolute h-20 w-20 rounded-lg border-2 opacity-60 shadow-lg"
+            style={{
+              transform: `translate(${screenX}px, ${screenY}px)`,
+              borderColor: stroke,
+              backgroundColor: fill,
+              transition: "transform 60ms linear",
+            }}
+          />
+        );
+      })}
+      {others.map((presence) => {
         const cursor = presence.cursor;
         if (!cursor) return null;
         const screenX = cursor.x * zoom + panX;
@@ -52,7 +72,7 @@ export const PresenceCursors = ({
         const labelBg = colorForHue(presence.colorHue, "label");
         return (
           <div
-            key={presence._id}
+            key={presence.sessionId}
             className="absolute"
             style={{
               transform: `translate(${screenX}px, ${screenY}px)`,
@@ -73,6 +93,11 @@ export const PresenceCursors = ({
             >
               {presence.displayName}
             </span>
+            {presence.editing?.kind === "device.drag" ? (
+              <span className="absolute top-8 left-4 rounded bg-card px-1.5 py-0.5 text-xs font-medium whitespace-nowrap text-foreground shadow">
+                déplace un équipement
+              </span>
+            ) : null}
           </div>
         );
       })}

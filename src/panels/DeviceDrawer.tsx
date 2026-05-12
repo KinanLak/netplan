@@ -1,12 +1,10 @@
 import { useReactFlow } from "@xyflow/react";
-import { useQuery } from "convex/react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Cancel01Icon, UserIcon, WasteIcon } from "@hugeicons/core-free-icons";
 import type { DeviceId, DeviceStatus } from "@/types/map";
 import { useMapStore } from "@/store/useMapStore";
-import { useMapCommands } from "@/store/useMapCommands";
+import { useMapDocument } from "@/map-session/useMapDocument";
 import {
-  useCurrentFloorId,
   useHighlightedDeviceIds,
   useIsEditMode,
   useSelectedDeviceId,
@@ -22,7 +20,6 @@ import { cn } from "@/lib/utils";
 import { DrawerConnectionsSection } from "@/panels/drawer/DrawerConnectionsSection";
 import type { ConnectedDeviceSummary } from "@/panels/drawer/DrawerConnectionsSection";
 import { DrawerPortsSection } from "@/panels/drawer/DrawerPortsSection";
-import { api } from "../../convex/_generated/api";
 
 const statusLabels: Record<DeviceStatus, string> = {
   up: "En ligne",
@@ -31,7 +28,6 @@ const statusLabels: Record<DeviceStatus, string> = {
 };
 
 export default function DeviceDrawer() {
-  const currentFloorId = useCurrentFloorId();
   const selectedDeviceId = useSelectedDeviceId();
   const isEditMode = useIsEditMode();
   const highlightedDeviceIds = useHighlightedDeviceIds();
@@ -39,18 +35,13 @@ export default function DeviceDrawer() {
   const selectDevice = useMapStore((s) => s.selectDevice);
   const setHighlightedDevices = useMapStore((s) => s.setHighlightedDevices);
 
-  const commands = useMapCommands(currentFloorId);
-  const { devices, deleteDevice } = commands;
-
-  const links =
-    useQuery(
-      api.links.listForDevice,
-      selectedDeviceId ? { deviceId: selectedDeviceId } : "skip",
-    ) ?? [];
+  const { document, commands } = useMapDocument();
+  const { devices, links } = document;
+  const { deleteDevice } = commands;
 
   const reactFlow = useReactFlow();
 
-  const device = devices.find((d) => d._id === selectedDeviceId);
+  const device = devices.find((d) => d.id === selectedDeviceId);
 
   const connectedDevices: Array<ConnectedDeviceSummary> = (() => {
     if (!device) return [];
@@ -58,17 +49,17 @@ export default function DeviceDrawer() {
     const out: Array<ConnectedDeviceSummary> = [];
     for (const link of links) {
       const otherId =
-        link.fromDeviceId === device._id
+        link.fromDeviceId === device.id
           ? link.toDeviceId
-          : link.toDeviceId === device._id
+          : link.toDeviceId === device.id
             ? link.fromDeviceId
             : null;
       if (!otherId || seen.has(otherId)) continue;
       seen.add(otherId);
-      const other = devices.find((d) => d._id === otherId);
+      const other = devices.find((d) => d.id === otherId);
       if (!other) continue;
       out.push({
-        _id: other._id,
+        id: other.id,
         name: other.name,
         type: other.type,
         status: other.metadata.status ?? "unknown",
@@ -80,7 +71,7 @@ export default function DeviceDrawer() {
   const isCurrentDeviceHighlighted = (() => {
     if (!device || connectedDevices.length === 0) return false;
     if (highlightedDeviceIds.length === 0) return false;
-    const allIds = [device._id, ...connectedDevices.map((c) => c._id)];
+    const allIds = [device.id, ...connectedDevices.map((c) => c.id)];
     return allIds.every((id) => highlightedDeviceIds.includes(id));
   })();
 
@@ -98,7 +89,7 @@ export default function DeviceDrawer() {
   };
 
   const handleSelectConnected = (deviceId: DeviceId) => {
-    const targetDevice = devices.find((d) => d._id === deviceId);
+    const targetDevice = devices.find((d) => d.id === deviceId);
     if (targetDevice) {
       const centerX = targetDevice.position.x + targetDevice.size.width / 2;
       const centerY = targetDevice.position.y + targetDevice.size.height / 2;
@@ -119,7 +110,7 @@ export default function DeviceDrawer() {
 
   const handleDeleteDevice = () => {
     if (!device) return;
-    deleteDevice(device._id);
+    deleteDevice(device.id);
     selectDevice(null);
   };
 

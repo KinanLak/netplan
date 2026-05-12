@@ -1,6 +1,5 @@
 import type { DeviceMetadata, DeviceType, Size } from "@/types/map";
 
-// Représente un device disponible dans le catalogue NetBox/LibreNMS
 export interface AvailableDevice {
   id: string;
   type: DeviceType;
@@ -12,7 +11,6 @@ export interface AvailableDevice {
   metadata: DeviceMetadata;
 }
 
-// Devices disponibles par type (simulant les données NetBox/LibreNMS)
 export const availableDevicesCatalog: Record<
   DeviceType,
   Array<AvailableDevice>
@@ -184,7 +182,6 @@ export const availableDevicesCatalog: Record<
   ],
 };
 
-// Helper pour obtenir la liste plate de tous les devices disponibles
 export const getAllAvailableDevices = (): Array<AvailableDevice> => {
   return Object.values(availableDevicesCatalog).flat();
 };

@@ -1,7 +1,7 @@
 import type { Node, NodeProps } from "@xyflow/react";
-import type { Device } from "@/types/map";
+import type { DeviceNodeData } from "@/devices/reactFlowDeviceAdapter";
 
-type DeviceNodeType = Node<Device>;
+type DeviceNodeType = Node<DeviceNodeData>;
 
 export const areDeviceNodePropsEqual = (
   previous: NodeProps<DeviceNodeType>,

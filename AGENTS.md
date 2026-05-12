@@ -10,20 +10,21 @@
 
 ## Tech stack
 
-React 19, TypeScript, Vite, TailwindCSS V4, @xyflow/react. Domain state lives in **Convex cloud** (`convex/`); Zustand only holds ephemeral UI slices (selection, hover, draw tool, edit mode, undo/redo stacks). The only `localStorage` key the app writes is `netplan-identity` (random session id + display name + colour hue).
+React 19, TypeScript, Vite, TailwindCSS V4, @xyflow/react. Durable domain state lives in **Convex cloud** (`convex/`); Zustand only holds ephemeral UI slices (current building/floor, selection, hover, draw tool, edit mode, highlights). The document session owns pending operations, outbox, and undo/redo. The only map identity `localStorage` key is `netplan-identity` (client id, session id, counters, display name, colour hue).
 
 ## Convex layer
 
-- `convex/schema.ts` defines `buildings`, `floors`, `devices`, `walls`, `links`, `presences`. All ids are branded `Id<"...">` from `convex/_generated/dataModel`; the canonical aliases (`DeviceId`, `FloorId`, …) live in `src/types/map.ts`.
-- `src/store/useMapCommands.ts` is the only place that calls Convex mutations for the map domain. Latency-sensitive mutations (`devices.create`, `devices.updatePosition`, `devices.remove`, `walls.addStroke`, `walls.eraseStroke`) ship with `withOptimisticUpdate` callbacks — keep new write paths consistent.
-- After every successful mutation, `useMapCommands` pushes an `InverseCommand` onto `useMapStore.undoStack`. `useUndoRedo` (`src/hooks/use-undo-redo.ts`) pops and runs the inverse via `executeInverseCommand` (`src/store/mapHistory.ts`); the result lands on `redoStack`. New domain mutation? Extend `InverseCommand` and the runner map together.
-- Live cursors run through the custom `presences` table at 30 Hz with a 30 s TTL — see `convex/presences.ts` and `src/canvas/PresenceCursors.tsx`.
+- `convex/schema.ts` defines durable rows with `objectId` string fields. Convex `_id` stays inside Convex functions and repository/query boundaries only; UI/domain code uses the canonical branded aliases (`DeviceId`, `FloorId`, …) in `src/types/map.ts`.
+- `src/map-session/MapDocumentProvider.tsx` is the single active owner for map command dispatch, pending operations, sequential outbox, and undo/redo. UI components consume `useMapDocument()` and must not call Convex map mutations directly.
+- Local optimistic state is the materialized projection `applyOperations(serverDocument, pendingOperations)` from `src/map-engine/`. Do not generate durable ids in Convex optimistic callbacks; the session generates object ids and op ids before dispatch.
+- All durable map writes go through `api.mapOperations.apply`, which is idempotent by `opId` and validates server invariants. New domain mutation? Add a typed operation, pure engine behavior, inverse generation, server application, and tests together.
+- Live cursors and edit leases run through the custom `presences` table at 30 Hz with a 30 s TTL — see `convex/presences.ts` and `src/canvas/PresenceCursors.tsx`. Presence references application object ids, never Convex `_id`.
 
 ## Tradeoffs (MVP, no auth)
 
-- **Last-write-wins on concurrent device drag.** Two clients dragging the same device race on `updatePosition`; accepted for the MVP.
-- **Undo is per-session and not CRDT-safe.** If peer B deletes a device that peer A's undo stack references, A's undo will throw — fire-and-forget, the UI keeps going.
-- **No server-side collision validation.** A scripted client can persist overlapping walls/devices. The UI enforces it; the server trusts the client.
+- **Property-level last-write-wins.** Concurrent patches converge through the server-authoritative operation order; local pending operations remain overlaid until ACK to avoid flicker.
+- **Undo/redo is per-session and operation-based.** Undo and redo dispatch fresh normal operations. If a target disappeared because of a remote edit, the session reports a safe rejection instead of throwing.
+- **Server-side validation is required.** Device/wall collisions, link endpoints, floor existence, object id uniqueness, and device-delete link cleanup are enforced in Convex mutations, not only in the UI.
 - **No auth.** Anyone with the deploy URL can write. Identity is a `localStorage` UUID + a random "Adjectif Animal" pair purely for display.
 
 ## Adding a new device type

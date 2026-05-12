@@ -9,8 +9,12 @@ import {
   buildWallSnapPath,
   resolveWallEraseCandidate,
 } from "@/walls/gridGeometry/erase";
-import type { WallCommandReason, WallDraft, WallSegment } from "@/types/map";
-import type { Id } from "../../../convex/_generated/dataModel";
+import type {
+  WallCommandReason,
+  WallDraft,
+  WallId,
+  WallSegment,
+} from "@/types/map";
 import type {
   AddLineCommandInput,
   AddRoomCommandInput,
@@ -18,9 +22,6 @@ import type {
   EraseAtPointerCommandInput,
   EraseStrokeCommandInput,
 } from "./types";
-
-const defaultGenerateWallId = (): Id<"walls"> =>
-  `wall-${Date.now()}-${Math.random().toString(36).slice(2, 9)}` as unknown as Id<"walls">;
 
 const asMutableWalls = (
   walls: ReadonlyArray<WallSegment>,
@@ -51,7 +52,7 @@ const addBlocks = (
   walls: ReadonlyArray<WallSegment>,
   blocks: Array<WallDraft>,
   collidesWithBlock: AddLineCommandInput["collidesWithBlock"],
-  generateWallId: () => Id<"walls">,
+  generateWallId: () => WallId,
   invalidReason: WallCommandReason,
 ): EngineResult => {
   if (blocks.length === 0) {
@@ -88,8 +89,8 @@ const addBlocks = (
     ...Array.from(stagedByKey.values()).map(
       (block): WallSegment => ({
         ...block,
-        _id: generateWallId(),
-        _creationTime: Date.now(),
+        id: generateWallId(),
+        geometryKey: getWallBlockKey(block) ?? "",
       }),
     ),
   ];
@@ -115,7 +116,7 @@ export const addLine = (input: AddLineCommandInput): EngineResult => {
     input.walls,
     blocks,
     input.collidesWithBlock,
-    input.generateWallId ?? defaultGenerateWallId,
+    input.generateWallId,
     "invalid-line",
   );
 };
@@ -138,7 +139,7 @@ export const addRoom = (input: AddRoomCommandInput): EngineResult => {
     input.walls,
     blocks,
     input.collidesWithBlock,
-    input.generateWallId ?? defaultGenerateWallId,
+    input.generateWallId,
     "invalid-room",
   );
 };

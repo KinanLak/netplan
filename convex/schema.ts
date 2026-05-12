@@ -20,6 +20,14 @@ const wallColor = v.union(
   v.literal("slate"),
 );
 
+const drawTool = v.union(
+  v.literal("device"),
+  v.literal("wall"),
+  v.literal("wall-brush"),
+  v.literal("wall-erase"),
+  v.literal("room"),
+);
+
 const position = v.object({ x: v.number(), y: v.number() });
 const size = v.object({ width: v.number(), height: v.number() });
 
@@ -37,54 +45,105 @@ const deviceMetadata = v.object({
   lastUser: v.optional(v.string()),
 });
 
+const editingPresence = v.union(
+  v.object({
+    kind: v.literal("device.drag"),
+    deviceId: v.string(),
+    previewPosition: position,
+    expiresAt: v.number(),
+  }),
+  v.object({
+    kind: v.literal("wall.draw"),
+    expiresAt: v.number(),
+  }),
+);
+
 export default defineSchema({
   buildings: defineTable({
+    objectId: v.string(),
     name: v.string(),
     order: v.number(),
-  }),
+  }).index("by_object_id", ["objectId"]),
 
   floors: defineTable({
-    buildingId: v.id("buildings"),
+    objectId: v.string(),
+    buildingId: v.string(),
     name: v.string(),
     order: v.number(),
-  }).index("by_building", ["buildingId", "order"]),
+  })
+    .index("by_object_id", ["objectId"])
+    .index("by_building", ["buildingId", "order"]),
 
   devices: defineTable({
-    floorId: v.id("floors"),
+    objectId: v.string(),
+    floorId: v.string(),
     type: deviceType,
     name: v.string(),
     hostname: v.optional(v.string()),
     position,
     size,
     metadata: deviceMetadata,
-  }).index("by_floor", ["floorId"]),
+    updatedAt: v.number(),
+    updatedBy: v.string(),
+  })
+    .index("by_object_id", ["objectId"])
+    .index("by_floor", ["floorId"]),
 
   walls: defineTable({
-    floorId: v.id("floors"),
+    objectId: v.string(),
+    floorId: v.string(),
     start: position,
     end: position,
     color: wallColor,
-  }).index("by_floor", ["floorId"]),
+    geometryKey: v.string(),
+    updatedAt: v.number(),
+    updatedBy: v.string(),
+  })
+    .index("by_object_id", ["objectId"])
+    .index("by_floor", ["floorId"])
+    .index("by_floor_geometry", ["floorId", "geometryKey"]),
 
   links: defineTable({
-    floorId: v.id("floors"),
-    fromDeviceId: v.id("devices"),
+    objectId: v.string(),
+    floorId: v.string(),
+    fromDeviceId: v.string(),
     fromPort: v.optional(v.string()),
-    toDeviceId: v.id("devices"),
+    toDeviceId: v.string(),
     toPort: v.optional(v.string()),
     label: v.optional(v.string()),
+    updatedAt: v.number(),
+    updatedBy: v.string(),
   })
+    .index("by_object_id", ["objectId"])
     .index("by_floor", ["floorId"])
     .index("by_from_device", ["fromDeviceId"])
     .index("by_to_device", ["toDeviceId"]),
 
+  clientOperations: defineTable({
+    opId: v.string(),
+    clientId: v.string(),
+    clientSeq: v.number(),
+    floorId: v.optional(v.string()),
+    kind: v.string(),
+    status: v.union(v.literal("applied"), v.literal("rejected")),
+    error: v.optional(v.string()),
+    createdAt: v.number(),
+    appliedAt: v.number(),
+  })
+    .index("by_op_id", ["opId"])
+    .index("by_client_seq", ["clientId", "clientSeq"]),
+
   presences: defineTable({
     sessionId: v.string(),
+    clientId: v.string(),
     displayName: v.string(),
     colorHue: v.number(),
-    floorId: v.optional(v.id("floors")),
+    floorId: v.optional(v.string()),
     cursor: v.optional(position),
-    selectedDeviceId: v.optional(v.id("devices")),
+    selectedDeviceId: v.optional(v.string()),
+    selectedObjectIds: v.optional(v.array(v.string())),
+    activeTool: v.optional(drawTool),
+    editing: v.optional(editingPresence),
     updatedAt: v.number(),
   })
     .index("by_session", ["sessionId"])

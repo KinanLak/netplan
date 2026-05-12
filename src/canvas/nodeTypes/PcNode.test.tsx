@@ -3,6 +3,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { ReactFlowProvider } from "@xyflow/react";
 import PcNode from "./PcNode";
 import type { Device } from "@/types/map";
+import type { DeviceNodeData } from "@/devices/reactFlowDeviceAdapter";
 import { buildDevice, seedMapStore } from "../../../test/storeHarness";
 
 const renderPcNode = (overrides: Partial<Device> = {}) => {
@@ -24,9 +25,9 @@ const renderPcNode = (overrides: Partial<Device> = {}) => {
   return render(
     <ReactFlowProvider>
       <PcNode
-        id={device._id}
+        id={device.id}
         type={device.type}
-        data={device}
+        data={device as DeviceNodeData}
         positionAbsoluteX={0}
         positionAbsoluteY={0}
         selected={false}

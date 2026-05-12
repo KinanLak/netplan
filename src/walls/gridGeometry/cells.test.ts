@@ -1,6 +1,11 @@
 import { describe, expect, it } from "bun:test";
-import type { Device, DeviceId, FloorId, WallSegment } from "@/types/map";
-import type { Id } from "../../../convex/_generated/dataModel";
+import type {
+  Device,
+  DeviceId,
+  FloorId,
+  WallId,
+  WallSegment,
+} from "@/types/map";
 import {
   arePositionsEqual,
   computeWallMaskBounds,
@@ -21,20 +26,19 @@ const wall = (
   end: { x: number; y: number },
   floorId: FloorId = "floor-a" as FloorId,
 ): WallSegment => ({
-  _id: "wall" as Id<"walls">,
-  _creationTime: 0,
+  id: "wall" as WallId,
   floorId,
   start,
   end,
   color: "concrete",
+  geometryKey: `${floorId}:${start.x}:${start.y}:${end.x}:${end.y}`,
 });
 
 const device = (
   position: { x: number; y: number },
   size = { width: 20, height: 20 },
 ): Device => ({
-  _id: "device" as DeviceId,
-  _creationTime: 0,
+  id: "device" as DeviceId,
   type: "pc",
   name: "PC",
   floorId: "floor-a" as FloorId,

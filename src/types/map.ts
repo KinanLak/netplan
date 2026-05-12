@@ -1,19 +1,21 @@
-import type { Doc, Id } from "../../convex/_generated/dataModel";
+// ── Stable application ids ───────────────────────────────────────────────────
 
-// ── Re-exports of Convex types for app-wide use ──────────────────────────────
-export type Device = Doc<"devices">;
-export type WallSegment = Doc<"walls">;
-export type Floor = Doc<"floors">;
-export type Building = Doc<"buildings">;
-export type LinkDoc = Doc<"links">;
+type Brand<T, TBrand extends string> = T & { readonly __brand: TBrand };
 
-export type DeviceId = Id<"devices">;
-export type WallId = Id<"walls">;
-export type FloorId = Id<"floors">;
-export type BuildingId = Id<"buildings">;
-export type LinkId = Id<"links">;
+export type ClientId = Brand<string, "ClientId">;
+export type SessionId = Brand<string, "SessionId">;
+export type OperationId = Brand<string, "OperationId">;
+export type DeviceId = Brand<string, "DeviceId">;
+export type WallId = Brand<string, "WallId">;
+export type FloorId = Brand<string, "FloorId">;
+export type BuildingId = Brand<string, "BuildingId">;
+export type LinkId = Brand<string, "LinkId">;
+
+export type ObjectId = DeviceId | WallId | FloorId | BuildingId | LinkId;
+export type ObjectKind = "building" | "floor" | "device" | "wall" | "link";
 
 // ── Domain enums ─────────────────────────────────────────────────────────────
+
 export type DeviceType = "rack" | "switch" | "pc" | "wall-port";
 export type DrawTool = "device" | "wall" | "wall-brush" | "wall-erase" | "room";
 export type WallColor = "sand" | "concrete" | "slate";
@@ -35,9 +37,79 @@ export interface PortInfo {
   status: DeviceStatus;
 }
 
-export type DeviceMetadata = Device["metadata"];
+export interface DeviceMetadata {
+  ip?: string;
+  status?: DeviceStatus;
+  model?: string;
+  ports?: Array<PortInfo>;
+  lastUser?: string;
+}
 
-// ── Drafts (input shapes for mutations / engine) ─────────────────────────────
+// ── Domain documents ─────────────────────────────────────────────────────────
+
+export interface Building {
+  id: BuildingId;
+  name: string;
+  order: number;
+}
+
+export interface Floor {
+  id: FloorId;
+  buildingId: BuildingId;
+  name: string;
+  order: number;
+}
+
+export interface Device {
+  id: DeviceId;
+  floorId: FloorId;
+  type: DeviceType;
+  name: string;
+  hostname?: string;
+  position: Position;
+  size: Size;
+  metadata: DeviceMetadata;
+}
+
+export interface WallSegment {
+  id: WallId;
+  floorId: FloorId;
+  start: Position;
+  end: Position;
+  color: WallColor;
+  geometryKey: string;
+}
+
+export interface LinkDoc {
+  id: LinkId;
+  floorId: FloorId;
+  fromDeviceId: DeviceId;
+  fromPort?: string;
+  toDeviceId: DeviceId;
+  toPort?: string;
+  label?: string;
+}
+
+export type Link = LinkDoc;
+
+export interface MapDocumentSnapshot {
+  floorId: FloorId;
+  devices: Array<Device>;
+  walls: Array<WallSegment>;
+  links: Array<LinkDoc>;
+}
+
+// ── Operation metadata ───────────────────────────────────────────────────────
+
+export interface OperationMeta {
+  opId: OperationId;
+  clientId: ClientId;
+  clientSeq: number;
+  createdAt: number;
+}
+
+// ── Drafts (input shapes for commands / engine) ──────────────────────────────
+
 export interface DeviceDraft {
   floorId: FloorId;
   type: DeviceType;
@@ -62,7 +134,8 @@ export interface RoomDraft {
   color: WallColor;
 }
 
-// ── Wall command results (consumed by the wall interaction state machine) ───
+// ── Wall command results (consumed by the wall interaction state machine) ────
+
 export type WallCommandReason =
   | "applied"
   | "invalid-line"
@@ -95,60 +168,8 @@ export interface WallStrokeInput {
   toSnappedPoint: Position;
 }
 
-// ── History (inverse-command undo/redo) ─────────────────────────────────────
-export interface WallSegmentSnapshot {
-  start: Position;
-  end: Position;
-  color: WallColor;
-}
-
-export interface LinkSnapshot {
-  floorId: FloorId;
-  fromDeviceId: DeviceId;
-  fromPort?: string;
-  toDeviceId: DeviceId;
-  toPort?: string;
-  label?: string;
-}
-
-export interface DeviceRemovalSnapshot {
-  deviceId: DeviceId;
-  draft: DeviceDraft;
-  links: Array<LinkSnapshot>;
-}
-
-export type InverseCommand =
-  | {
-      kind: "batch";
-      commands: ReadonlyArray<InverseCommand>;
-    }
-  | {
-      kind: "createDevice";
-      draft: DeviceDraft;
-      originalDeviceId?: DeviceId;
-      links?: ReadonlyArray<LinkSnapshot>;
-    }
-  | {
-      kind: "removeDevice";
-      deviceId: DeviceId;
-      snapshot: DeviceDraft;
-      originalDeviceId?: DeviceId;
-      links?: ReadonlyArray<LinkSnapshot>;
-    }
-  | { kind: "moveDevice"; deviceId: DeviceId; from: Position; to: Position }
-  | {
-      kind: "addWalls";
-      floorId: FloorId;
-      segments: ReadonlyArray<WallSegmentSnapshot>;
-    }
-  | {
-      kind: "removeWalls";
-      floorId: FloorId;
-      ids: ReadonlyArray<WallId>;
-      snapshots: ReadonlyArray<WallSegmentSnapshot>;
-    };
-
 // ── UI store (Zustand): only ephemeral interaction state ─────────────────────
+
 export interface MapInteractionState {
   currentBuildingId: BuildingId | null;
   currentFloorId: FloorId | null;
@@ -159,8 +180,6 @@ export interface MapInteractionState {
   highlightedDeviceIdSet: ReadonlySet<DeviceId>;
   activeDrawTool: DrawTool;
   selectedWallColor: WallColor;
-  undoStack: ReadonlyArray<InverseCommand>;
-  redoStack: ReadonlyArray<InverseCommand>;
 }
 
 export interface MapInteractionActions {
@@ -172,12 +191,6 @@ export interface MapInteractionActions {
   setActiveDrawTool: (tool: DrawTool) => void;
   setSelectedWallColor: (color: WallColor) => void;
   setHighlightedDevices: (deviceIds: Array<DeviceId>) => void;
-  pushHistory: (command: InverseCommand) => void;
-  takeUndo: () => InverseCommand | null;
-  takeRedo: () => InverseCommand | null;
-  queueRedo: (command: InverseCommand) => void;
-  queueUndo: (command: InverseCommand) => void;
-  clearHistory: () => void;
 }
 
 export type MapStore = MapInteractionState & MapInteractionActions;

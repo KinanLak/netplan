@@ -11,8 +11,7 @@ const did = (s: string) => s as DeviceId;
 const fid = (s: string) => s as FloorId;
 
 const createDevice = (overrides: Partial<Device> = {}): Device => ({
-  _id: did("device-1"),
-  _creationTime: 0,
+  id: did("device-1"),
   type: "pc",
   name: "PC 1",
   floorId: fid("floor-a"),
@@ -53,7 +52,7 @@ describe("react flow device adapter", () => {
     expect(
       toDeviceNode({
         device,
-        selectedDeviceId: device._id,
+        selectedDeviceId: device.id,
         canEditDevices: true,
       }).selected,
     ).toBe(true);
@@ -68,11 +67,11 @@ describe("react flow device adapter", () => {
 
   it("filters devices by current floor when adapting the collection", () => {
     const onFloor = createDevice({
-      _id: did("device-1"),
+      id: did("device-1"),
       floorId: fid("floor-a"),
     });
     const onAnotherFloor = createDevice({
-      _id: did("device-2"),
+      id: did("device-2"),
       floorId: fid("floor-b"),
     });
 

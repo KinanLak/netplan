@@ -5,12 +5,14 @@ import {
 } from "@/devices/deviceKindRegistry";
 import type { Device, DeviceId, FloorId } from "@/types/map";
 
-export type DeviceNode = Node<Device>;
+export type DeviceNodeData = Device & Record<string, unknown>;
+export type DeviceNode = Node<DeviceNodeData>;
 
 interface DeviceNodeInput {
   device: Device;
   selectedDeviceId: DeviceId | null;
   canEditDevices: boolean;
+  lockedDeviceIds?: ReadonlySet<DeviceId>;
 }
 
 export const deviceNodeTypes: NodeTypes = createDeviceKindRecord(
@@ -21,14 +23,16 @@ export const toDeviceNode = ({
   device,
   selectedDeviceId,
   canEditDevices,
+  lockedDeviceIds,
 }: DeviceNodeInput): DeviceNode => {
+  const isLocked = lockedDeviceIds?.has(device.id) ?? false;
   return {
-    id: device._id,
+    id: device.id,
     type: device.type,
     position: device.position,
-    data: device,
-    selected: device._id === selectedDeviceId,
-    draggable: canEditDevices,
+    data: device as DeviceNodeData,
+    selected: device.id === selectedDeviceId,
+    draggable: canEditDevices && !isLocked,
   };
 };
 
@@ -37,13 +41,21 @@ export const toDeviceNodes = (
   currentFloorId: FloorId | null,
   selectedDeviceId: DeviceId | null,
   canEditDevices: boolean,
+  lockedDeviceIds?: ReadonlySet<DeviceId>,
 ): Array<DeviceNode> => {
   return devices.reduce<Array<DeviceNode>>((acc, device) => {
     if (device.floorId !== currentFloorId) {
       return acc;
     }
 
-    acc.push(toDeviceNode({ device, selectedDeviceId, canEditDevices }));
+    acc.push(
+      toDeviceNode({
+        device,
+        selectedDeviceId,
+        canEditDevices,
+        lockedDeviceIds,
+      }),
+    );
     return acc;
   }, []);
 };

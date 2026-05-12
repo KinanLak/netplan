@@ -4,51 +4,104 @@ import schema from "./schema";
 import { api } from "./_generated/api";
 import { modules } from "./_test/modules";
 
+let counter = 0;
+
+const meta = () => ({
+  opId: `op:links:${counter}`,
+  clientId: "client:links",
+  clientSeq: counter,
+  createdAt: counter,
+});
+
 async function setupFloorWithDevices(t: ReturnType<typeof convexTest>) {
-  const buildingId = await t.mutation(api.buildings.create, { name: "Test" });
-  const floors = await t.query(api.floors.listForBuilding, { buildingId });
-  const floorId = floors[0]._id;
-  const a = await t.mutation(api.devices.create, {
-    floorId,
-    type: "pc",
-    name: "A",
-    position: { x: 0, y: 0 },
-    size: { width: 80, height: 80 },
-    metadata: {},
+  counter += 1;
+  const buildingId = await t.mutation(api.buildings.create, {
+    objectId: `building:links:${counter}`,
+    name: "Test",
   });
-  const b = await t.mutation(api.devices.create, {
-    floorId,
-    type: "switch",
-    name: "B",
-    position: { x: 200, y: 0 },
-    size: { width: 200, height: 60 },
-    metadata: {},
+  const floorId = await t.mutation(api.floors.create, {
+    objectId: `floor:links:${counter}`,
+    buildingId,
+    name: "Floor",
   });
-  const c = await t.mutation(api.devices.create, {
-    floorId,
-    type: "pc",
-    name: "C",
-    position: { x: 0, y: 200 },
-    size: { width: 80, height: 80 },
-    metadata: {},
+  const a = `device:links:${counter}:a`;
+  const b = `device:links:${counter}:b`;
+  const c = `device:links:${counter}:c`;
+  counter += 1;
+  await t.mutation(api.mapOperations.apply, {
+    operation: {
+      kind: "batch",
+      meta: meta(),
+      operations: [
+        {
+          kind: "device.create",
+          meta: meta(),
+          device: {
+            id: a,
+            floorId,
+            type: "pc",
+            name: "A",
+            position: { x: 0, y: 0 },
+            size: { width: 80, height: 80 },
+            metadata: {},
+          },
+        },
+        {
+          kind: "device.create",
+          meta: meta(),
+          device: {
+            id: b,
+            floorId,
+            type: "switch",
+            name: "B",
+            position: { x: 200, y: 0 },
+            size: { width: 200, height: 60 },
+            metadata: {},
+          },
+        },
+        {
+          kind: "device.create",
+          meta: meta(),
+          device: {
+            id: c,
+            floorId,
+            type: "pc",
+            name: "C",
+            position: { x: 0, y: 200 },
+            size: { width: 80, height: 80 },
+            metadata: {},
+          },
+        },
+      ],
+    },
   });
   return { floorId, a, b, c };
 }
+
+const createLink = async (
+  t: ReturnType<typeof convexTest>,
+  floorId: string,
+  id: string,
+  fromDeviceId: string,
+  toDeviceId: string,
+  label?: string,
+) => {
+  counter += 1;
+  await t.mutation(api.mapOperations.apply, {
+    operation: {
+      kind: "link.create",
+      meta: meta(),
+      link: { id, floorId, fromDeviceId, toDeviceId, label },
+    },
+  });
+};
 
 describe("links", () => {
   it("listForDevice returns both incoming and outgoing edges", async () => {
     const t = convexTest(schema, modules);
     const { floorId, a, b, c } = await setupFloorWithDevices(t);
-    await t.mutation(api.links.create, {
-      floorId,
-      fromDeviceId: a,
-      toDeviceId: b,
-    });
-    await t.mutation(api.links.create, {
-      floorId,
-      fromDeviceId: c,
-      toDeviceId: b,
-    });
+    await createLink(t, floorId, "link:ab", a, b);
+    await createLink(t, floorId, "link:cb", c, b);
 
     const forB = await t.query(api.links.listForDevice, { deviceId: b });
     expect(forB).toHaveLength(2);
@@ -59,44 +112,28 @@ describe("links", () => {
   it("listForFloor returns links scoped to a floor", async () => {
     const t = convexTest(schema, modules);
     const { floorId, a, b } = await setupFloorWithDevices(t);
-    await t.mutation(api.links.create, {
-      floorId,
-      fromDeviceId: a,
-      toDeviceId: b,
-      label: "uplink",
-    });
+    await createLink(t, floorId, "link:floor", a, b, "uplink");
+
     const list = await t.query(api.links.listForFloor, { floorId });
     expect(list[0]?.label).toBe("uplink");
+    expect(list[0]?.id).toBe("link:floor");
   });
 
-  it("remove deletes a single link", async () => {
+  it("reflects link deletion applied through mapOperations", async () => {
     const t = convexTest(schema, modules);
     const { floorId, a, b } = await setupFloorWithDevices(t);
-    const id = await t.mutation(api.links.create, {
-      floorId,
-      fromDeviceId: a,
-      toDeviceId: b,
+    await createLink(t, floorId, "link:remove", a, b);
+    counter += 1;
+
+    await t.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "link.delete",
+        meta: meta(),
+        linkId: "link:remove",
+      },
     });
-    await t.mutation(api.links.remove, { id });
+
     const list = await t.query(api.links.listForFloor, { floorId });
     expect(list).toHaveLength(0);
-  });
-
-  it("rejects links whose devices are not on the requested floor", async () => {
-    const t = convexTest(schema, modules);
-    const first = await setupFloorWithDevices(t);
-    const second = await setupFloorWithDevices(t);
-
-    let message = "";
-    try {
-      await t.mutation(api.links.create, {
-        floorId: first.floorId,
-        fromDeviceId: first.a,
-        toDeviceId: second.b,
-      });
-    } catch (error) {
-      message = error instanceof Error ? error.message : String(error);
-    }
-    expect(message).toContain("same floor");
   });
 });

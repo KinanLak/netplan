@@ -1,6 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import type { Id } from "../../../convex/_generated/dataModel";
-import type { FloorId, WallSegment } from "@/types/map";
+import type { FloorId, WallId, WallSegment } from "@/types/map";
 import {
   addLine,
   addRoom,
@@ -14,7 +13,7 @@ const floorId = "floor-a" as FloorId;
 
 const createWallIdFactory = () => {
   let index = 0;
-  return () => `wall-${++index}` as unknown as Id<"walls">;
+  return () => `wall-${++index}` as WallId;
 };
 
 const toKeys = (walls: Array<WallSegment>): Array<string> =>

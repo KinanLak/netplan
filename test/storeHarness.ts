@@ -21,8 +21,7 @@ export const seedMapStore = (seed: MapStoreSeed) => {
 };
 
 export const buildDevice = (overrides: Partial<Device> = {}): Device => ({
-  _id: "device-1" as DeviceId,
-  _creationTime: 0,
+  id: "device-1" as DeviceId,
   type: "pc",
   name: "PC 1",
   hostname: "host-1",

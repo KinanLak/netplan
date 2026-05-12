@@ -7,7 +7,8 @@ import {
   UndoIcon,
 } from "@hugeicons/core-free-icons";
 import { Link } from "@tanstack/react-router";
-import { useQuery } from "convex/react";
+import { useState } from "react";
+import { useMutation, useQuery } from "convex/react";
 import { useMapStore } from "@/store/useMapStore";
 import {
   useCurrentBuildingId,
@@ -17,6 +18,7 @@ import {
 import { useOptionHeld } from "@/hooks/use-shortcuts";
 import { cn } from "@/lib/utils";
 import { getShortcutDisplay } from "@/lib/shortcuts";
+import { asBuildingId, asFloorId } from "@/lib/objectIds";
 import { useTemporalStore, useUndoRedo } from "@/hooks/use-undo-redo";
 import { Kbd, KbdGroup } from "@/components/ui/kbd";
 import { NetplanLogo } from "@/components/netplan-logo";
@@ -46,6 +48,11 @@ export default function AppSidebar() {
 
   const setCurrentBuilding = useMapStore((s) => s.setCurrentBuilding);
   const setCurrentFloor = useMapStore((s) => s.setCurrentFloor);
+  const createDefaultMap = useMutation(api.buildings.createDefaultMap);
+  const clearMap = useMutation(api.buildings.clearMap);
+  const [devMapAction, setDevMapAction] = useState<"clear" | "create" | null>(
+    null,
+  );
 
   const floorsForCurrent = useQuery(
     api.floors.listForBuilding,
@@ -68,10 +75,38 @@ export default function AppSidebar() {
   const floorUpArrow = floorUpKeys.at(-1) ?? "↑";
   const floorDownArrow = floorDownKeys.at(-1) ?? "↓";
 
-  const currentBuilding = buildings.find((b) => b._id === currentBuildingId);
+  const currentBuilding = buildings.find((b) => b.id === currentBuildingId);
   const sortedFloors = floorsForCurrent
     ? [...floorsForCurrent].sort((a, b) => a.order - b.order)
     : [];
+  const showDevMapControls = import.meta.env.DEV || buildings.length === 0;
+
+  const handleCreateDefaultMap = async () => {
+    setDevMapAction("create");
+    try {
+      const result = await createDefaultMap();
+      setCurrentBuilding(asBuildingId(result.buildingId));
+      const firstFloorId = result.floorIds[0];
+      if (firstFloorId) setCurrentFloor(asFloorId(firstFloorId));
+    } finally {
+      setDevMapAction(null);
+    }
+  };
+
+  const handleClearMap = async () => {
+    const confirmed = window.confirm(
+      "Supprimer temporairement toute la carte de développement ?",
+    );
+    if (!confirmed) return;
+
+    setDevMapAction("clear");
+    try {
+      await clearMap();
+      setCurrentBuilding(null);
+    } finally {
+      setDevMapAction(null);
+    }
+  };
 
   return (
     <Sidebar collapsible="none" className="border-r">
@@ -109,12 +144,14 @@ export default function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {buildings.map((building) => (
-                <SidebarMenuItem key={building._id}>
+                <SidebarMenuItem key={building.id}>
                   <SidebarMenuButton
-                    onClick={() => setCurrentBuilding(building._id)}
+                    onClick={() =>
+                      setCurrentBuilding(asBuildingId(building.id))
+                    }
                     className={cn(
                       "cursor-pointer",
-                      building._id === currentBuildingId &&
+                      building.id === currentBuildingId &&
                         "font-medium text-foreground",
                     )}
                   >
@@ -126,15 +163,17 @@ export default function AppSidebar() {
                     <span>{building.name}</span>
                   </SidebarMenuButton>
 
-                  {building._id === currentBuildingId ? (
+                  {building.id === currentBuildingId ? (
                     <SidebarMenuSub>
                       {sortedFloors.map((floor) => {
-                        const isActive = floor._id === currentFloorId;
+                        const isActive = floor.id === currentFloorId;
 
                         return (
-                          <SidebarMenuSubItem key={floor._id}>
+                          <SidebarMenuSubItem key={floor.id}>
                             <SidebarMenuSubButton
-                              onClick={() => setCurrentFloor(floor._id)}
+                              onClick={() =>
+                                setCurrentFloor(asFloorId(floor.id))
+                              }
                               className={cn(
                                 "cursor-pointer justify-between",
                                 isActive &&
@@ -196,6 +235,30 @@ export default function AppSidebar() {
       </div>
 
       <SidebarFooter className="border-t px-4 py-3">
+        {showDevMapControls ? (
+          <div className="mb-3 space-y-2 rounded-md border border-dashed border-border bg-muted p-2">
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={handleCreateDefaultMap}
+                disabled={devMapAction !== null}
+                className="rounded-md border border-border bg-background px-2 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
+              >
+                {devMapAction === "create"
+                  ? "Création..."
+                  : "Create default map"}
+              </button>
+              <button
+                type="button"
+                onClick={handleClearMap}
+                disabled={devMapAction !== null}
+                className="hover:text-destructive-foreground rounded-md border border-destructive bg-background px-2 py-1.5 text-xs font-medium text-destructive transition-colors hover:bg-destructive disabled:pointer-events-none disabled:opacity-50"
+              >
+                {devMapAction === "clear" ? "Suppression..." : "Clear map"}
+              </button>
+            </div>
+          </div>
+        ) : null}
         <div className="flex items-center justify-between gap-2">
           <div className="truncate text-xs text-muted-foreground">
             {currentBuilding?.name ?? "Aucun bâtiment"}

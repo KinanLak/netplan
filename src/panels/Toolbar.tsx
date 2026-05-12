@@ -5,10 +5,10 @@ import { Tick02Icon } from "@hugeicons/core-free-icons";
 import type { ComponentProps } from "react";
 import type { DeviceType, DrawTool } from "@/types/map";
 import { useDevicePlacement } from "@/devices/useDevicePlacement";
-import type { AvailableDevice } from "@/mock/availableDevices";
+import type { AvailableDevice } from "@/devices/deviceCatalog";
 import type { ToolbarAction } from "@/panels/toolbar-actions";
 import { useMapStore } from "@/store/useMapStore";
-import { useMapCommands } from "@/store/useMapCommands";
+import { useMapDocument } from "@/map-session/useMapDocument";
 import {
   useActiveDrawTool,
   useCurrentFloorId,
@@ -29,7 +29,7 @@ import { ShortcutHintAbsolute } from "@/components/ui/shortcut-hint";
 import { createDeviceKindRecord } from "@/devices/deviceKindRegistry";
 import { useDeviceToolShortcuts } from "@/devices/useDeviceToolShortcuts";
 import { cn } from "@/lib/utils";
-import { availableDevicesCatalog } from "@/mock/availableDevices";
+import { availableDevicesCatalog } from "@/devices/deviceCatalog";
 import {
   TOOLBAR_WALL_COLOR_SELECTION_ENABLED,
   UNDO_REDO_EVENT_NAME,
@@ -50,7 +50,7 @@ export default function Toolbar() {
   const setActiveDrawTool = useMapStore((s) => s.setActiveDrawTool);
   const setSelectedWallColor = useMapStore((s) => s.setSelectedWallColor);
   const selectDevice = useMapStore((s) => s.selectDevice);
-  const commands = useMapCommands(currentFloorId);
+  const { commands, isReady } = useMapDocument();
   const { addDevice, checkCollision } = commands;
   const devicePlacement = useDevicePlacement(checkCollision);
   const reactFlow = useReactFlow();
@@ -162,7 +162,7 @@ export default function Toolbar() {
   });
 
   const handleAddDevice = (catalogDevice: AvailableDevice) => {
-    if (!currentFloorId || !commands.isReady) return;
+    if (!currentFloorId || !isReady) return;
 
     // Get center of viewport
     const { x, y, zoom } = reactFlow.getViewport();
@@ -193,7 +193,8 @@ export default function Toolbar() {
       position: placement.position,
     };
 
-    addDevice(newDevice);
+    const newDeviceId = addDevice(newDevice);
+    if (newDeviceId) selectDevice(newDeviceId);
     setActiveDrawTool("device");
     setSelectedType(null);
     setOpen(false);

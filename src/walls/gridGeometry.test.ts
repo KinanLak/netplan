@@ -1,6 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import type { FloorId, WallSegment } from "@/types/map";
-import type { Id } from "../../convex/_generated/dataModel";
+import type { FloorId, WallId, WallSegment } from "@/types/map";
 import {
   computeMergedWallGroups,
   computeSingleWallPath,
@@ -14,12 +13,12 @@ import { getWallRenderRect } from "@/walls/gridGeometry/render";
 const floorId = "floor-a" as FloorId;
 
 const wall: WallSegment = {
-  _id: "wall-1" as Id<"walls">,
-  _creationTime: 0,
+  id: "wall-1" as WallId,
   floorId,
   start: { x: 10, y: 10 },
   end: { x: 10, y: 10 },
   color: "concrete",
+  geometryKey: `${floorId}:10:10`,
 };
 
 describe("wall grid geometry", () => {

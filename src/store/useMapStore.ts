@@ -4,23 +4,9 @@ import type {
   DeviceId,
   DrawTool,
   FloorId,
-  InverseCommand,
   MapStore,
   WallColor,
 } from "@/types/map";
-
-const HISTORY_LIMIT = 200;
-const EMPTY_HISTORY: ReadonlyArray<InverseCommand> = [];
-
-const appendCapped = (
-  stack: ReadonlyArray<InverseCommand>,
-  command: InverseCommand,
-): ReadonlyArray<InverseCommand> => {
-  const next = [...stack, command];
-  return next.length > HISTORY_LIMIT
-    ? next.slice(next.length - HISTORY_LIMIT)
-    : next;
-};
 
 const EMPTY_HIGHLIGHT_SET: ReadonlySet<DeviceId> = new Set<DeviceId>();
 const toHighlightedDeviceIdSet = (
@@ -29,7 +15,7 @@ const toHighlightedDeviceIdSet = (
   return deviceIds.length === 0 ? EMPTY_HIGHLIGHT_SET : new Set(deviceIds);
 };
 
-export const useMapStore = create<MapStore>()((set, get) => ({
+export const useMapStore = create<MapStore>()((set) => ({
   currentBuildingId: null,
   currentFloorId: null,
   selectedDeviceId: null,
@@ -39,8 +25,6 @@ export const useMapStore = create<MapStore>()((set, get) => ({
   highlightedDeviceIdSet: toHighlightedDeviceIdSet([]),
   activeDrawTool: "device" as DrawTool,
   selectedWallColor: "concrete" as WallColor,
-  undoStack: EMPTY_HISTORY,
-  redoStack: EMPTY_HISTORY,
 
   setCurrentBuilding: (buildingId: BuildingId | null) => {
     set({
@@ -50,8 +34,6 @@ export const useMapStore = create<MapStore>()((set, get) => ({
       hoveredDeviceId: null,
       highlightedDeviceIds: [],
       highlightedDeviceIdSet: toHighlightedDeviceIdSet([]),
-      undoStack: EMPTY_HISTORY,
-      redoStack: EMPTY_HISTORY,
     });
   },
   setCurrentFloor: (floorId: FloorId | null) => {
@@ -61,8 +43,6 @@ export const useMapStore = create<MapStore>()((set, get) => ({
       hoveredDeviceId: null,
       highlightedDeviceIds: [],
       highlightedDeviceIdSet: toHighlightedDeviceIdSet([]),
-      undoStack: EMPTY_HISTORY,
-      redoStack: EMPTY_HISTORY,
     });
   },
   selectDevice: (deviceId) => {
@@ -106,39 +86,5 @@ export const useMapStore = create<MapStore>()((set, get) => ({
         highlightedDeviceIdSet: toHighlightedDeviceIdSet(deviceIds),
       };
     });
-  },
-
-  pushHistory: (command) => {
-    set((state) => ({
-      undoStack: appendCapped(state.undoStack, command),
-      redoStack: EMPTY_HISTORY,
-    }));
-  },
-  takeUndo: () => {
-    const stack = get().undoStack;
-    if (stack.length === 0) return null;
-    const top = stack[stack.length - 1] ?? null;
-    set({ undoStack: stack.slice(0, -1) });
-    return top;
-  },
-  takeRedo: () => {
-    const stack = get().redoStack;
-    if (stack.length === 0) return null;
-    const top = stack[stack.length - 1] ?? null;
-    set({ redoStack: stack.slice(0, -1) });
-    return top;
-  },
-  queueRedo: (command) => {
-    set((state) => ({
-      redoStack: appendCapped(state.redoStack, command),
-    }));
-  },
-  queueUndo: (command) => {
-    set((state) => ({
-      undoStack: appendCapped(state.undoStack, command),
-    }));
-  },
-  clearHistory: () => {
-    set({ undoStack: EMPTY_HISTORY, redoStack: EMPTY_HISTORY });
   },
 }));

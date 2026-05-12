@@ -5,7 +5,7 @@ import { StatusDot } from "@/components/StatusDot";
 import { getDeviceKindLabel } from "@/devices/deviceKindRegistry";
 
 export interface ConnectedDeviceSummary {
-  _id: DeviceId;
+  id: DeviceId;
   name: string;
   type: DeviceType;
   status: DeviceStatus;
@@ -49,8 +49,8 @@ export function DrawerConnectionsSection({
         {connectedDevices.map((connDevice) => (
           <button
             type="button"
-            key={connDevice._id}
-            onClick={() => onSelectConnected(connDevice._id)}
+            key={connDevice.id}
+            onClick={() => onSelectConnected(connDevice.id)}
             className="group w-full rounded-lg bg-muted px-3 py-2 text-left transition-colors hover:bg-accent"
           >
             <div className="flex items-center justify-between">

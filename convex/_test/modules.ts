@@ -8,8 +8,10 @@ export const modules: Record<string, () => Promise<Record<string, any>>> = {
   "./devices.ts": () => import("../devices"),
   "./floors.ts": () => import("../floors"),
   "./links.ts": () => import("../links"),
+  "./mapDocument.ts": () => import("../mapDocument"),
+  "./mapOperations.ts": () => import("../mapOperations"),
+  "./mapValidators.ts": () => import("../mapValidators"),
   "./presences.ts": () => import("../presences"),
   "./schema.ts": () => import("../schema"),
-  "./seed.ts": () => import("../seed"),
   "./walls.ts": () => import("../walls"),
 };

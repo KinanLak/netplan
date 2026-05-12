@@ -5,10 +5,10 @@ import {
   ReactFlow,
   useReactFlow,
 } from "@xyflow/react";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { nodeTypes } from "./nodeTypes";
 import type { DeviceNode } from "@/devices/reactFlowDeviceAdapter";
-import type { Position } from "@/types/map";
+import type { DeviceId, Position } from "@/types/map";
 import { useMapStore } from "@/store/useMapStore";
 import {
   useActiveDrawTool,
@@ -16,7 +16,7 @@ import {
   useIsEditMode,
   useSelectedDeviceId,
 } from "@/store/selectors";
-import { useMapCommands } from "@/store/useMapCommands";
+import { useMapDocument } from "@/map-session/useMapDocument";
 import { useIdentity } from "@/lib/identity";
 import { GRID_SIZE } from "@/lib/grid";
 import { cn } from "@/lib/utils";
@@ -42,6 +42,7 @@ import {
 
 const SNAP_GRID: [number, number] = [GRID_SIZE, GRID_SIZE];
 const EMPTY_EDGES: Array<never> = [];
+const EMPTY_PRESENCES: Array<never> = [];
 const PRESENCE_THROTTLE_MS = 1000 / 30;
 
 export default function FlowCanvas() {
@@ -52,20 +53,42 @@ export default function FlowCanvas() {
   const identity = useIdentity();
   const updateCursor = useMutation(api.presences.updateCursor);
   const removePresence = useMutation(api.presences.remove);
+  const presences =
+    useQuery(
+      api.presences.listForFloor,
+      currentFloorId ? { floorId: currentFloorId } : "skip",
+    ) ?? EMPTY_PRESENCES;
+  const [presenceNow, setPresenceNow] = useState(() => Date.now());
 
   const selectDevice = useMapStore((s) => s.selectDevice);
   const setHoveredDevice = useMapStore((s) => s.setHoveredDevice);
   const reactFlow = useReactFlow();
 
-  const commands = useMapCommands(currentFloorId);
-  const { devices, walls, updateDevicePosition, checkCollision } = commands;
+  const { document, commands, isReady } = useMapDocument();
+  const { devices, walls } = document;
+  const { updateDevicePosition, checkCollision } = commands;
 
-  const canEditDevices =
-    isEditMode && activeDrawTool === "device" && commands.isReady;
+  const canEditDevices = isEditMode && activeDrawTool === "device" && isReady;
   const floorWalls = useMemo(
     () => walls.filter((wall) => wall.floorId === currentFloorId),
     [walls, currentFloorId],
   );
+  const lockedDeviceIdsKey = useMemo(() => {
+    const ids = new Set<DeviceId>();
+    for (const presence of presences) {
+      if (presence.sessionId === identity?.sessionId) continue;
+      if (presence.editing?.kind !== "device.drag") continue;
+      if (presence.editing.expiresAt <= presenceNow) continue;
+      ids.add(presence.editing.deviceId as DeviceId);
+    }
+    return Array.from(ids).toSorted().join("\0");
+  }, [identity?.sessionId, presenceNow, presences]);
+  const lockedDeviceIds = useMemo<ReadonlySet<DeviceId> | undefined>(() => {
+    if (!lockedDeviceIdsKey) return undefined;
+    return new Set(
+      lockedDeviceIdsKey.split("\0").map((deviceId) => deviceId as DeviceId),
+    );
+  }, [lockedDeviceIdsKey]);
 
   const {
     nodes,
@@ -83,6 +106,44 @@ export default function FlowCanvas() {
     updateDevicePosition,
     selectDevice,
     setHoveredDevice,
+    lockedDeviceIds,
+    publishDragPreview: (deviceId, position) => {
+      if (!identity || !currentFloorId) return;
+      const now = performance.now();
+      if (now - lastDragPreviewAtRef.current < PRESENCE_THROTTLE_MS) return;
+      lastDragPreviewAtRef.current = now;
+      void updateCursor({
+        sessionId: identity.sessionId,
+        clientId: identity.clientId,
+        displayName: identity.displayName,
+        colorHue: identity.colorHue,
+        floorId: currentFloorId,
+        cursor: lastCursorPositionRef.current ?? undefined,
+        selectedDeviceId: selectedDeviceId ?? undefined,
+        selectedObjectIds: selectedDeviceId ? [selectedDeviceId] : undefined,
+        activeTool: activeDrawTool,
+        editing: {
+          kind: "device.drag",
+          deviceId,
+          previewPosition: position,
+          expiresAt: Date.now() + 2_000,
+        },
+      });
+    },
+    clearDragPreview: () => {
+      if (!identity || !currentFloorId) return;
+      void updateCursor({
+        sessionId: identity.sessionId,
+        clientId: identity.clientId,
+        displayName: identity.displayName,
+        colorHue: identity.colorHue,
+        floorId: currentFloorId,
+        cursor: lastCursorPositionRef.current ?? undefined,
+        selectedDeviceId: selectedDeviceId ?? undefined,
+        selectedObjectIds: selectedDeviceId ? [selectedDeviceId] : undefined,
+        activeTool: activeDrawTool,
+      });
+    },
   });
 
   const {
@@ -101,7 +162,16 @@ export default function FlowCanvas() {
   });
 
   const lastCursorAtRef = useRef(0);
+  const lastDragPreviewAtRef = useRef(0);
   const lastCursorPositionRef = useRef<Position | null>(null);
+
+  useEffect(() => {
+    const interval = window.setInterval(
+      () => setPresenceNow(Date.now()),
+      1_000,
+    );
+    return () => window.clearInterval(interval);
+  }, []);
 
   const publishCursor = (event: React.MouseEvent) => {
     if (!identity || !currentFloorId) return;
@@ -115,11 +185,14 @@ export default function FlowCanvas() {
     lastCursorPositionRef.current = flowPosition;
     void updateCursor({
       sessionId: identity.sessionId,
+      clientId: identity.clientId,
       displayName: identity.displayName,
       colorHue: identity.colorHue,
       floorId: currentFloorId,
       cursor: flowPosition,
       selectedDeviceId: selectedDeviceId ?? undefined,
+      selectedObjectIds: selectedDeviceId ? [selectedDeviceId] : undefined,
+      activeTool: activeDrawTool,
     });
   };
 
@@ -132,13 +205,17 @@ export default function FlowCanvas() {
 
     void updateCursor({
       sessionId: identity.sessionId,
+      clientId: identity.clientId,
       displayName: identity.displayName,
       colorHue: identity.colorHue,
       floorId: currentFloorId,
       cursor: lastCursorPositionRef.current ?? undefined,
       selectedDeviceId: selectedDeviceId ?? undefined,
+      selectedObjectIds: selectedDeviceId ? [selectedDeviceId] : undefined,
+      activeTool: activeDrawTool,
     });
   }, [
+    activeDrawTool,
     currentFloorId,
     identity,
     removePresence,

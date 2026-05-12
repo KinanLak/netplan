@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { deviceToolbarActions } from "@/panels/toolbar-actions";
-import { availableDevicesCatalog } from "@/mock/availableDevices";
+import { availableDevicesCatalog } from "@/devices/deviceCatalog";
 import { shortcuts } from "@/lib/shortcuts";
 import {
   createDeviceKindRecord,
@@ -62,8 +62,7 @@ describe("device kind registry", () => {
 
   it("adapts a Device into the React Flow node shape", () => {
     const device: Device = {
-      _id: "device-1" as DeviceId,
-      _creationTime: 0,
+      id: "device-1" as DeviceId,
       type: "switch",
       name: "Switch 1",
       floorId: "floor-1" as FloorId,
@@ -74,11 +73,11 @@ describe("device kind registry", () => {
 
     const node = toDeviceNode({
       device,
-      selectedDeviceId: device._id,
+      selectedDeviceId: device.id,
       canEditDevices: true,
     });
 
-    expect(node.id).toBe(device._id);
+    expect(node.id).toBe(device.id);
     expect(node.type).toBe(device.type);
     expect(node.position).toBe(device.position);
     expect(node.selected).toBe(true);

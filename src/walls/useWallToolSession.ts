@@ -15,7 +15,7 @@ import {
   useIsEditMode,
   useSelectedWallColor,
 } from "@/store/selectors";
-import { useMapCommands } from "@/store/useMapCommands";
+import { useMapDocument } from "@/map-session/useMapDocument";
 import { snapPositionToWallGrid } from "@/walls/gridGeometry";
 import {
   cancelWallTool,
@@ -64,7 +64,7 @@ export const useWallToolSession = (): WallToolSession => {
     isEditMode && activeDrawTool !== "device" && isDebugVisible;
 
   const setActiveDrawTool = useMapStore((state) => state.setActiveDrawTool);
-  const commands = useMapCommands(currentFloorId);
+  const { commands } = useMapDocument();
 
   const [interactionState, setInteractionState] = useState(
     createWallInteractionState,
