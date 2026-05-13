@@ -22,6 +22,7 @@ import { asBuildingId, asFloorId } from "@/lib/objectIds";
 import { useTemporalStore, useUndoRedo } from "@/hooks/use-undo-redo";
 import { Kbd, KbdGroup } from "@/components/ui/kbd";
 import { NetplanLogo } from "@/components/netplan-logo";
+import { ConnectedUsers } from "@/panels/ConnectedUsers";
 import {
   Sidebar,
   SidebarContent,
@@ -233,6 +234,8 @@ export default function AppSidebar() {
           </button>
         </div>
       </div>
+
+      <ConnectedUsers floorId={currentFloorId} />
 
       <SidebarFooter className="border-t px-4 py-3">
         {showDevMapControls ? (

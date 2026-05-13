@@ -12,7 +12,6 @@ interface DeviceNodeInput {
   device: Device;
   selectedDeviceId: DeviceId | null;
   canEditDevices: boolean;
-  lockedDeviceIds?: ReadonlySet<DeviceId>;
 }
 
 export const deviceNodeTypes: NodeTypes = createDeviceKindRecord(
@@ -23,16 +22,14 @@ export const toDeviceNode = ({
   device,
   selectedDeviceId,
   canEditDevices,
-  lockedDeviceIds,
 }: DeviceNodeInput): DeviceNode => {
-  const isLocked = lockedDeviceIds?.has(device.id) ?? false;
   return {
     id: device.id,
     type: device.type,
     position: device.position,
     data: device as DeviceNodeData,
     selected: device.id === selectedDeviceId,
-    draggable: canEditDevices && !isLocked,
+    draggable: canEditDevices,
   };
 };
 
@@ -41,7 +38,6 @@ export const toDeviceNodes = (
   currentFloorId: FloorId | null,
   selectedDeviceId: DeviceId | null,
   canEditDevices: boolean,
-  lockedDeviceIds?: ReadonlySet<DeviceId>,
 ): Array<DeviceNode> => {
   return devices.reduce<Array<DeviceNode>>((acc, device) => {
     if (device.floorId !== currentFloorId) {
@@ -53,7 +49,6 @@ export const toDeviceNodes = (
         device,
         selectedDeviceId,
         canEditDevices,
-        lockedDeviceIds,
       }),
     );
     return acc;

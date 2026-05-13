@@ -167,17 +167,13 @@ export async function cascadeRemoveFloor(ctx: MutationCtx, floorId: string) {
     .query("devices")
     .withIndex("by_floor", (q) => q.eq("floorId", floorId))
     .collect();
-  const deviceIds = new Set(devices.map((device) => device.objectId));
 
-  const presences = await ctx.db.query("presences").collect();
+  const presences = await ctx.db
+    .query("presences")
+    .withIndex("by_floor", (q) => q.eq("floorId", floorId))
+    .collect();
   for (const presence of presences) {
-    if (presence.floorId === floorId) {
-      await ctx.db.delete(presence._id);
-      continue;
-    }
-    if (presence.selectedDeviceId && deviceIds.has(presence.selectedDeviceId)) {
-      await ctx.db.patch(presence._id, { selectedDeviceId: undefined });
-    }
+    await ctx.db.delete(presence._id);
   }
 
   for (const device of devices) await ctx.db.delete(device._id);

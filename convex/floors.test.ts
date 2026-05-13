@@ -113,8 +113,6 @@ describe("floors", () => {
         displayName: "A",
         colorHue: 100,
         floorId,
-        cursor: { x: 0, y: 0 },
-        selectedDeviceId: "device:a",
         updatedAt: Date.now(),
       });
     });

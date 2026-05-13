@@ -30,9 +30,6 @@ interface UseCanvasDeviceNodesParams {
   updateDevicePosition: (deviceId: DeviceId, position: Position) => void;
   selectDevice: (deviceId: DeviceId | null) => void;
   setHoveredDevice: (deviceId: DeviceId | null) => void;
-  lockedDeviceIds?: ReadonlySet<DeviceId>;
-  publishDragPreview?: (deviceId: DeviceId, position: Position) => void;
-  clearDragPreview?: () => void;
 }
 
 interface UseCanvasDeviceNodesResult {
@@ -122,9 +119,6 @@ export function useCanvasDeviceNodes({
   updateDevicePosition,
   selectDevice,
   setHoveredDevice,
-  lockedDeviceIds,
-  publishDragPreview,
-  clearDragPreview,
 }: UseCanvasDeviceNodesParams): UseCanvasDeviceNodesResult {
   const [nodes, setNodes, onNodesChange] = useNodesState<DeviceNode>([]);
   const devicePlacement = useDevicePlacement(checkCollision);
@@ -136,7 +130,6 @@ export function useCanvasDeviceNodes({
       currentFloorId,
       selectedDeviceId,
       canEditDevices,
-      lockedDeviceIds,
     );
 
     setNodes((currentNodes) => {
@@ -167,14 +160,7 @@ export function useCanvasDeviceNodes({
         ? currentNodes
         : syncedNodes;
     });
-  }, [
-    devices,
-    currentFloorId,
-    selectedDeviceId,
-    canEditDevices,
-    lockedDeviceIds,
-    setNodes,
-  ]);
+  }, [devices, currentFloorId, selectedDeviceId, canEditDevices, setNodes]);
 
   const handleNodesChange: OnNodesChange<DeviceNode> = useCallback(
     (changes) => {
@@ -196,7 +182,6 @@ export function useCanvasDeviceNodes({
             });
 
             if (result.ok) {
-              publishDragPreview?.(change.id as DeviceId, result.position);
               return {
                 ...change,
                 position: result.position,
@@ -212,7 +197,6 @@ export function useCanvasDeviceNodes({
           );
           if (committedPosition) {
             committedPositions.set(change.id as DeviceId, committedPosition);
-            clearDragPreview?.();
             return {
               ...change,
               position: committedPosition,
@@ -235,9 +219,7 @@ export function useCanvasDeviceNodes({
       canEditDevices,
       devicePlacement,
       devices,
-      clearDragPreview,
       onNodesChange,
-      publishDragPreview,
       updateDevicePosition,
     ],
   );

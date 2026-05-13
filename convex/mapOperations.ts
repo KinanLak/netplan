@@ -32,15 +32,9 @@ type DevicePatch = Pick<
   | "updatedAt"
   | "updatedBy"
 >;
-type PresencePatch = {
-  selectedDeviceId?: string;
-  selectedObjectIds?: Array<string>;
-};
-
 type PlannedDevice = DeviceInsert & { rowId?: Id<"devices"> };
 type PlannedWall = WallInsert & { rowId?: Id<"walls"> };
 type PlannedLink = LinkInsert & { rowId?: Id<"links"> };
-type PlannedPresence = Doc<"presences">;
 
 type WritePlan = Array<
   | { kind: "insertDevice"; value: DeviceInsert }
@@ -50,7 +44,6 @@ type WritePlan = Array<
   | { kind: "deleteWall"; rowId: Id<"walls"> }
   | { kind: "insertLink"; value: LinkInsert }
   | { kind: "deleteLink"; rowId: Id<"links"> }
-  | { kind: "patchPresence"; rowId: Id<"presences">; value: PresencePatch }
 >;
 
 interface PlanningState {
@@ -58,7 +51,6 @@ interface PlanningState {
   devices: Map<string, PlannedDevice>;
   walls: Map<string, PlannedWall>;
   links: Map<string, PlannedLink>;
-  presences: Map<Id<"presences">, PlannedPresence>;
   wallGeometry: Map<string, string>;
   affectedFloorIds: Set<string>;
   plan: WritePlan;
@@ -246,12 +238,11 @@ const wallGeometryKey = (floorId: string, geometryKey: string): string =>
   `${floorId}:${geometryKey}`;
 
 const buildPlanningState = async (ctx: MutationCtx): Promise<PlanningState> => {
-  const [floors, devices, walls, links, presences] = await Promise.all([
+  const [floors, devices, walls, links] = await Promise.all([
     ctx.db.query("floors").collect(),
     ctx.db.query("devices").collect(),
     ctx.db.query("walls").collect(),
     ctx.db.query("links").collect(),
-    ctx.db.query("presences").collect(),
   ]);
 
   return {
@@ -307,7 +298,6 @@ const buildPlanningState = async (ctx: MutationCtx): Promise<PlanningState> => {
         },
       ]),
     ),
-    presences: new Map(presences.map((presence) => [presence._id, presence])),
     wallGeometry: new Map(
       walls.map((wall) => [
         wallGeometryKey(wall.floorId, wall.geometryKey),
@@ -513,34 +503,6 @@ const planDevicePatch = (
   return null;
 };
 
-const planPresenceSelectionClear = (state: PlanningState, deviceId: string) => {
-  for (const presence of state.presences.values()) {
-    const selectedObjectIds = presence.selectedObjectIds?.filter(
-      (objectId) => objectId !== deviceId,
-    );
-    if (
-      presence.selectedDeviceId !== deviceId &&
-      selectedObjectIds?.length === presence.selectedObjectIds?.length
-    ) {
-      continue;
-    }
-
-    const patch: PresencePatch = {
-      selectedDeviceId:
-        presence.selectedDeviceId === deviceId
-          ? undefined
-          : presence.selectedDeviceId,
-      selectedObjectIds,
-    };
-    state.presences.set(presence._id, { ...presence, ...patch });
-    state.plan.push({
-      kind: "patchPresence",
-      rowId: presence._id,
-      value: patch,
-    });
-  }
-};
-
 const planLinkDeleteById = (state: PlanningState, linkId: string) => {
   const existing = state.links.get(linkId);
   if (!existing) return;
@@ -570,7 +532,6 @@ const planDeviceDelete = (
     }
   }
 
-  planPresenceSelectionClear(state, operation.deviceId);
   state.devices.delete(operation.deviceId);
   markAffectedFloor(state, existing.floorId);
   if (existing.rowId) {
@@ -798,9 +759,6 @@ const executePlan = async (ctx: MutationCtx, plan: WritePlan) => {
         break;
       case "deleteLink":
         await ctx.db.delete(write.rowId);
-        break;
-      case "patchPresence":
-        await ctx.db.patch(write.rowId, write.value);
         break;
     }
   }

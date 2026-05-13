@@ -22,9 +22,9 @@ describe("useCanvasDeviceNodes", () => {
   it("preserves an in-flight drag position when node metadata resyncs", async () => {
     const updateDevicePosition = mock(() => {});
     const { result, rerender } = renderHook(
-      ({ lockedDeviceIds }: { lockedDeviceIds?: ReadonlySet<DeviceId> }) =>
+      ({ devices }: { devices: Array<Device> }) =>
         useCanvasDeviceNodes({
-          devices: [device],
+          devices,
           currentFloorId: floorId,
           selectedDeviceId: null,
           activeDrawTool: "device",
@@ -33,9 +33,8 @@ describe("useCanvasDeviceNodes", () => {
           updateDevicePosition,
           selectDevice: () => {},
           setHoveredDevice: () => {},
-          lockedDeviceIds,
         }),
-      { initialProps: {} },
+      { initialProps: { devices: [device] } },
     );
 
     await waitFor(() => expect(result.current.nodes).toHaveLength(1));
@@ -53,7 +52,7 @@ describe("useCanvasDeviceNodes", () => {
 
     expect(result.current.nodes[0].position).toEqual({ x: 40, y: 0 });
 
-    rerender({ lockedDeviceIds: new Set<DeviceId>() });
+    rerender({ devices: [{ ...device, name: "PC A updated" }] });
 
     await waitFor(() =>
       expect(result.current.nodes[0].position).toEqual({ x: 40, y: 0 }),

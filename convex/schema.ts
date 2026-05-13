@@ -20,14 +20,6 @@ const wallColor = v.union(
   v.literal("slate"),
 );
 
-const drawTool = v.union(
-  v.literal("device"),
-  v.literal("wall"),
-  v.literal("wall-brush"),
-  v.literal("wall-erase"),
-  v.literal("room"),
-);
-
 const position = v.object({ x: v.number(), y: v.number() });
 const size = v.object({ width: v.number(), height: v.number() });
 
@@ -44,19 +36,6 @@ const deviceMetadata = v.object({
   ports: v.optional(v.array(portInfo)),
   lastUser: v.optional(v.string()),
 });
-
-const editingPresence = v.union(
-  v.object({
-    kind: v.literal("device.drag"),
-    deviceId: v.string(),
-    previewPosition: position,
-    expiresAt: v.number(),
-  }),
-  v.object({
-    kind: v.literal("wall.draw"),
-    expiresAt: v.number(),
-  }),
-);
 
 export default defineSchema({
   buildings: defineTable({
@@ -145,14 +124,10 @@ export default defineSchema({
     clientId: v.string(),
     displayName: v.string(),
     colorHue: v.number(),
-    floorId: v.optional(v.string()),
-    cursor: v.optional(position),
-    selectedDeviceId: v.optional(v.string()),
-    selectedObjectIds: v.optional(v.array(v.string())),
-    activeTool: v.optional(drawTool),
-    editing: v.optional(editingPresence),
+    floorId: v.string(),
     updatedAt: v.number(),
   })
     .index("by_session", ["sessionId"])
+    .index("by_client", ["clientId"])
     .index("by_floor", ["floorId"]),
 });

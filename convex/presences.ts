@@ -1,100 +1,73 @@
 import { ConvexError, v } from "convex/values";
+import type { Doc } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
 
-const STALE_AFTER_MS = 30_000;
-
-const position = v.object({ x: v.number(), y: v.number() });
-const editingPresence = v.union(
-  v.object({
-    kind: v.literal("device.drag"),
-    deviceId: v.string(),
-    previewPosition: position,
-    expiresAt: v.number(),
-  }),
-  v.object({ kind: v.literal("wall.draw"), expiresAt: v.number() }),
-);
-
-const drawTool = v.union(
-  v.literal("device"),
-  v.literal("wall"),
-  v.literal("wall-brush"),
-  v.literal("wall-erase"),
-  v.literal("room"),
-);
-
-const presenceShape = v.object({
+const onlineUserShape = v.object({
   sessionId: v.string(),
   clientId: v.string(),
   displayName: v.string(),
   colorHue: v.number(),
-  floorId: v.optional(v.string()),
-  cursor: v.optional(position),
-  selectedDeviceId: v.optional(v.string()),
-  selectedObjectIds: v.optional(v.array(v.string())),
-  activeTool: v.optional(drawTool),
-  editing: v.optional(editingPresence),
+  floorId: v.string(),
   updatedAt: v.number(),
 });
 
-export const updateCursor = mutation({
+const latestPresencesByClient = (
+  presences: Array<Doc<"presences">>,
+): Array<Doc<"presences">> => {
+  const latestByClient = new Map<string, Doc<"presences">>();
+
+  for (const presence of presences) {
+    const current = latestByClient.get(presence.clientId);
+    if (!current || presence.updatedAt > current.updatedAt) {
+      latestByClient.set(presence.clientId, presence);
+    }
+  }
+
+  return Array.from(latestByClient.values());
+};
+
+export const updateOnlineUser = mutation({
   args: {
     sessionId: v.string(),
     clientId: v.string(),
     displayName: v.string(),
     colorHue: v.number(),
-    floorId: v.optional(v.string()),
-    cursor: v.optional(position),
-    selectedDeviceId: v.optional(v.string()),
-    selectedObjectIds: v.optional(v.array(v.string())),
-    activeTool: v.optional(drawTool),
-    editing: v.optional(editingPresence),
+    floorId: v.string(),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const floorId = args.floorId;
-    if (floorId) {
-      const floor = await ctx.db
-        .query("floors")
-        .withIndex("by_object_id", (q) => q.eq("objectId", floorId))
-        .unique();
-      if (!floor) throw new ConvexError("Floor not found");
-    }
-
-    const selectedDeviceId = args.selectedDeviceId;
-    if (selectedDeviceId) {
-      const device = await ctx.db
-        .query("devices")
-        .withIndex("by_object_id", (q) => q.eq("objectId", selectedDeviceId))
-        .unique();
-      if (!device) throw new ConvexError("Selected device not found");
-      if (floorId && device.floorId !== floorId) {
-        throw new ConvexError("Selected device must be on the presence floor");
-      }
-    }
-
-    const existing = await ctx.db
-      .query("presences")
-      .withIndex("by_session", (q) => q.eq("sessionId", args.sessionId))
+    const floor = await ctx.db
+      .query("floors")
+      .withIndex("by_object_id", (q) => q.eq("objectId", args.floorId))
       .unique();
+    if (!floor) throw new ConvexError("Floor not found");
 
-    const updatedAt = Date.now();
+    const existingByClient = await ctx.db
+      .query("presences")
+      .withIndex("by_client", (q) => q.eq("clientId", args.clientId))
+      .collect();
+
     const next = {
       clientId: args.clientId,
       displayName: args.displayName,
       colorHue: args.colorHue,
       floorId: args.floorId,
-      cursor: args.cursor,
-      selectedDeviceId: args.selectedDeviceId,
-      selectedObjectIds: args.selectedObjectIds,
-      activeTool: args.activeTool,
-      editing: args.editing,
-      updatedAt,
+      updatedAt: Date.now(),
     };
-    if (existing) {
-      await ctx.db.patch(existing._id, next);
+
+    if (existingByClient.length > 0) {
+      const existing =
+        existingByClient.find(
+          (presence) => presence.sessionId === args.sessionId,
+        ) ?? existingByClient[0];
+      await ctx.db.patch(existing._id, { sessionId: args.sessionId, ...next });
+      for (const duplicate of existingByClient) {
+        if (duplicate._id !== existing._id) await ctx.db.delete(duplicate._id);
+      }
     } else {
       await ctx.db.insert("presences", { sessionId: args.sessionId, ...next });
     }
+
     return null;
   },
 });
@@ -106,35 +79,32 @@ export const remove = mutation({
     const existing = await ctx.db
       .query("presences")
       .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
-      .unique();
-    if (existing) await ctx.db.delete(existing._id);
+      .collect();
+
+    for (const presence of existing) {
+      await ctx.db.delete(presence._id);
+    }
+
     return null;
   },
 });
 
 export const listForFloor = query({
   args: { floorId: v.string() },
-  returns: v.array(presenceShape),
+  returns: v.array(onlineUserShape),
   handler: async (ctx, { floorId }) => {
     const presences = await ctx.db
       .query("presences")
       .withIndex("by_floor", (q) => q.eq("floorId", floorId))
       .collect();
-    const cutoff = Date.now() - STALE_AFTER_MS;
-    return presences
-      .filter((presence) => presence.updatedAt >= cutoff)
-      .map((presence) => ({
-        sessionId: presence.sessionId,
-        clientId: presence.clientId,
-        displayName: presence.displayName,
-        colorHue: presence.colorHue,
-        floorId: presence.floorId,
-        cursor: presence.cursor,
-        selectedDeviceId: presence.selectedDeviceId,
-        selectedObjectIds: presence.selectedObjectIds,
-        activeTool: presence.activeTool,
-        editing: presence.editing,
-        updatedAt: presence.updatedAt,
-      }));
+
+    return latestPresencesByClient(presences).map((presence) => ({
+      sessionId: presence.sessionId,
+      clientId: presence.clientId,
+      displayName: presence.displayName,
+      colorHue: presence.colorHue,
+      floorId: presence.floorId,
+      updatedAt: presence.updatedAt,
+    }));
   },
 });

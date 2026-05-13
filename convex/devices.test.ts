@@ -92,38 +92,4 @@ describe("devices", () => {
       position: { x: 200, y: 300 },
     });
   });
-
-  it("device deletion through mapOperations clears presence selections", async () => {
-    const t = convexTest(schema, modules);
-    const floorId = await freshFloor(t);
-    const id = await createDevice(t, floorId, "device:presence", "PC", 0);
-    await t.mutation(api.presences.updateCursor, {
-      sessionId: "alice",
-      clientId: "client:alice",
-      displayName: "A",
-      colorHue: 100,
-      floorId,
-      cursor: { x: 0, y: 0 },
-      selectedDeviceId: id,
-      selectedObjectIds: [id],
-    });
-    counter += 1;
-
-    await t.mutation(api.mapOperations.apply, {
-      operation: {
-        kind: "device.delete",
-        meta: meta(),
-        deviceId: id,
-      },
-    });
-
-    await t.run(async (ctx) => {
-      const presence = await ctx.db
-        .query("presences")
-        .withIndex("by_session", (q) => q.eq("sessionId", "alice"))
-        .unique();
-      expect(presence?.selectedDeviceId).toBe(undefined);
-      expect(presence?.selectedObjectIds).toEqual([]);
-    });
-  });
 });
