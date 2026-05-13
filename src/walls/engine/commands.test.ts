@@ -8,6 +8,7 @@ import {
   previewEraseAtPointer,
 } from "@/walls/engine";
 import { getWallBlockKey } from "@/walls/gridGeometry";
+import { getWallGeometryKey } from "@/walls/gridGeometry/cells";
 
 const floorId = "floor-a" as FloorId;
 
@@ -37,6 +38,10 @@ describe("wall engine commands", () => {
     expect(result.reason).toBe("applied");
     expect(result.nextWalls).toHaveLength(4);
     expect(result.affectedKeys).toHaveLength(4);
+    expect(result.nextWalls.map((wall) => wall.geometryKey)).toEqual(
+      result.nextWalls.map((wall) => getWallGeometryKey(wall)),
+    );
+    expect(result.nextWalls[0]?.geometryKey).toBe("10:10:10:10");
   });
 
   it("splits vertical lines into canonical grid blocks", () => {

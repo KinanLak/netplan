@@ -59,8 +59,15 @@ import {
 import type { SessionHistoryEntry } from "./history";
 import { SequentialOutbox } from "./outbox";
 import type { OutboxState } from "./outbox";
-import { removeObservedPendingOperations } from "./pendingOperations";
-import type { PendingOperationEntry } from "./pendingOperations";
+import {
+  removeObservedOperationLogEntries,
+  removeObservedPendingOperations,
+  reconcileObservedOperationLogEntries,
+} from "./pendingOperations";
+import type {
+  PendingOperationEntry,
+  PendingOperationObservation,
+} from "./pendingOperations";
 import { reconcileEphemeralState } from "./reconcileEphemeralState";
 
 export interface MapDocumentCommands {
@@ -127,6 +134,7 @@ const emptyDocument = (floorId: FloorId): MapDocumentSnapshot => ({
 });
 
 const NONE_FLOOR_ID = "floor:none" as FloorId;
+const MAX_OBSERVED_PENDING_OP_IDS = 100;
 
 const unchangedWallResult = (
   walls: Array<WallSegment>,
@@ -246,6 +254,16 @@ export function MapDocumentProvider({
   const hasBackgroundPendingOperations = pendingEntries.some(
     (entry) => entry.floorId !== activeFloorId,
   );
+  const observedPendingOpIds = pendingEntries
+    .slice(0, MAX_OBSERVED_PENDING_OP_IDS)
+    .map((entry) => entry.operation.meta.opId);
+  const observedPendingRaw = useQuery(
+    api.mapOperations.observePending,
+    observedPendingOpIds.length > 0 ? { opIds: observedPendingOpIds } : "skip",
+  );
+  const observedPending = observedPendingRaw as
+    | Array<PendingOperationObservation>
+    | undefined;
 
   const documentRef = useRef(document);
   const undoStackRef = useRef(undoStack);
@@ -334,6 +352,57 @@ export function MapDocumentProvider({
       cancelled = true;
     };
   }, [activeFloorId, serverDocument.revision]);
+
+  useEffect(() => {
+    if (!observedPending || observedPending.length === 0) return;
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      const reconciliation = reconcileObservedOperationLogEntries(
+        pendingEntries,
+        activeFloorId,
+        observedPending,
+      );
+      const rejectedOpIds = new Set(reconciliation.rejectedOpIds);
+
+      setPendingEntries((current) =>
+        current === pendingEntries
+          ? reconciliation.pendingEntries
+          : removeObservedOperationLogEntries(
+              current,
+              activeFloorId,
+              observedPending,
+            ),
+      );
+
+      if (rejectedOpIds.size === 0) return;
+      setHistoryByFloor((current) => {
+        const next: HistoryByFloor = {};
+        for (const [historyFloorId, history] of Object.entries(current)) {
+          next[historyFloorId] = {
+            undoStack: history.undoStack.filter((entry) =>
+              entry.sourceOpIds.every((opId) => !rejectedOpIds.has(opId)),
+            ),
+            redoStack: history.redoStack.filter((entry) =>
+              entry.sourceOpIds.every((opId) => !rejectedOpIds.has(opId)),
+            ),
+          };
+        }
+        return next;
+      });
+      if (historyGroupRef.current) {
+        historyGroupRef.current = historyGroupRef.current.filter(
+          (entry) => !rejectedOpIds.has(entry.sourceOpId),
+        );
+      }
+      if (reconciliation.rejectedMessage) {
+        setRejectedMessage(reconciliation.rejectedMessage);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeFloorId, observedPending, pendingEntries]);
 
   useEffect(() => {
     if (convexConnectionState.isWebSocketConnected) {

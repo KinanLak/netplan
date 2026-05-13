@@ -1,5 +1,6 @@
 import type { Infer } from "convex/values";
-import { mutation } from "./_generated/server";
+import { v } from "convex/values";
+import { mutation, query } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { mapOperation, mapOperationResult } from "./mapValidators";
@@ -67,6 +68,8 @@ const GRID_SIZE = 20;
 const WALL_THICKNESS = GRID_SIZE;
 const MAX_BATCH_OPERATIONS = 100;
 const MAX_WALLS_PER_OPERATION = 500;
+const MAX_WALL_DELETES_PER_OPERATION = 500;
+const MAX_OBSERVED_PENDING_OP_IDS = 100;
 
 const sameJson = (left: object, right: object): boolean =>
   JSON.stringify(left) === JSON.stringify(right);
@@ -90,15 +93,14 @@ const arePositionsEqual = (
   right: { x: number; y: number },
 ): boolean => left.x === right.x && left.y === right.y;
 
-const isFiniteNonNegative = (value: number): boolean =>
-  Number.isFinite(value) && value >= 0;
+const isFiniteNumber = (value: number): boolean => Number.isFinite(value);
 
 const validatePosition = (position: {
   x: number;
   y: number;
 }): string | null => {
-  if (!isFiniteNonNegative(position.x) || !isFiniteNonNegative(position.y)) {
-    return "Position must contain finite non-negative numbers";
+  if (!isFiniteNumber(position.x) || !isFiniteNumber(position.y)) {
+    return "Position must contain finite numbers";
   }
   return null;
 };
@@ -557,7 +559,7 @@ const planDeviceDelete = (
   operation: DeviceDeleteOperation,
 ): string | null => {
   const existing = state.devices.get(operation.deviceId);
-  if (!existing) return null;
+  if (!existing) return "Device not found";
 
   for (const link of [...state.links.values()]) {
     if (
@@ -625,6 +627,7 @@ const planLinkDelete = (
   state: PlanningState,
   operation: LinkDeleteOperation,
 ): string | null => {
+  if (!state.links.has(operation.linkId)) return "Link not found";
   planLinkDeleteById(state, operation.linkId);
   return null;
 };
@@ -701,6 +704,12 @@ const planWallsDelete = (
   state: PlanningState,
   operation: WallDeleteOperation,
 ): string | null => {
+  if (operation.wallIds.length > MAX_WALL_DELETES_PER_OPERATION) {
+    return "Too many walls in one delete operation";
+  }
+  for (const wallId of operation.wallIds) {
+    if (!state.walls.has(wallId)) return "Wall not found";
+  }
   for (const wallId of operation.wallIds) planWallDeleteById(state, wallId);
   return null;
 };
@@ -820,6 +829,46 @@ const operationFloorId = (operation: OperationInput): string | undefined => {
   }
 };
 
+const singleAffectedFloorId = (state: PlanningState): string | undefined =>
+  state.affectedFloorIds.size === 1
+    ? state.affectedFloorIds.values().next().value
+    : undefined;
+
+const validateSingleAffectedFloor = (state: PlanningState): string | null =>
+  state.affectedFloorIds.size === 1
+    ? null
+    : "Operation must affect exactly one floor";
+
+const clientOperationResult = (operation: Doc<"clientOperations">) => ({
+  status: operation.status,
+  opId: operation.opId,
+  appliedRevision: operation.appliedRevision,
+  floorId: operation.floorId,
+  error: operation.error,
+});
+
+export const observePending = query({
+  args: { opIds: v.array(v.string()) },
+  returns: v.array(mapOperationResult),
+  handler: async (ctx, { opIds }) => {
+    if (opIds.length > MAX_OBSERVED_PENDING_OP_IDS) {
+      throw new Error("Too many pending operation ids");
+    }
+
+    const uniqueOpIds = [...new Set(opIds)];
+    const rows = await Promise.all(
+      uniqueOpIds.map((opId) =>
+        ctx.db
+          .query("clientOperations")
+          .withIndex("by_op_id", (q) => q.eq("opId", opId))
+          .unique(),
+      ),
+    );
+
+    return rows.flatMap((row) => (row ? [clientOperationResult(row)] : []));
+  },
+});
+
 export const apply = mutation({
   args: { operation: mapOperation },
   returns: mapOperationResult,
@@ -844,10 +893,11 @@ export const apply = mutation({
       meta: { ...operation.meta, createdAt: now },
     } as OperationInput;
     const state = await buildPlanningState(ctx);
-    const error = planOperation(state, planningOperation);
+    const planningError = planOperation(state, planningOperation);
+    const error = planningError ?? validateSingleAffectedFloor(state);
     const status: "applied" | "rejected" = error ? "rejected" : "applied";
     let appliedRevision: number | undefined;
-    let floorId = operationFloorId(operation);
+    let floorId = singleAffectedFloorId(state) ?? operationFloorId(operation);
     if (!error) {
       await executePlan(ctx, state.plan);
       const revisions = await bumpDocumentRevisions(
@@ -855,7 +905,7 @@ export const apply = mutation({
         state.affectedFloorIds,
         now,
       );
-      floorId = floorId ?? state.affectedFloorIds.values().next().value;
+      floorId = singleAffectedFloorId(state);
       appliedRevision = floorId ? revisions.get(floorId) : 0;
     }
 

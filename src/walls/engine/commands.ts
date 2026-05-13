@@ -1,4 +1,7 @@
-import { getWallBlockKey } from "@/walls/gridGeometry/cells";
+import {
+  getWallBlockKey,
+  getWallGeometryKey,
+} from "@/walls/gridGeometry/cells";
 import {
   createOrthogonalWallDraft,
   createRoomWallDrafts,
@@ -90,7 +93,7 @@ const addBlocks = (
       (block): WallSegment => ({
         ...block,
         id: generateWallId(),
-        geometryKey: getWallBlockKey(block) ?? "",
+        geometryKey: getWallGeometryKey(block) ?? "",
       }),
     ),
   ];

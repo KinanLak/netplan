@@ -3,6 +3,8 @@ import { convexTest } from "convex-test";
 import schema from "./schema";
 import { api } from "./_generated/api";
 import { modules } from "./_test/modules";
+import { addLine } from "../src/walls/engine";
+import type { FloorId, WallId } from "../src/types/map";
 
 let counter = 0;
 
@@ -35,6 +37,23 @@ const device = (id: string, floorId: string, x: number, y = 0) => ({
   size: { width: 80, height: 80 },
   metadata: {},
 });
+
+const wall = (id: string, floorId: string, x: number, y: number) => ({
+  id,
+  floorId,
+  start: { x, y },
+  end: { x: x + 20, y },
+  color: "sand" as const,
+  geometryKey: `${x}:${y}:${x + 20}:${y}`,
+});
+
+const expectApplicationRejected = async (
+  action: () => Promise<{ status: "applied" | "rejected"; error?: string }>,
+) => {
+  const result = await action();
+  expect(result.status).toBe("rejected");
+  return result;
+};
 
 describe("mapOperations.apply", () => {
   it("is idempotent by opId and writes one operation log row", async () => {
@@ -369,6 +388,7 @@ describe("mapOperations.apply", () => {
     const replay = await t.mutation(api.mapOperations.apply, { operation });
 
     expect(result.status).toBe("applied");
+    expect(result.floorId).toBe(floorId);
     expect(replay).toEqual(result);
     const document = await t.query(api.mapDocument.getFloorDocument, {
       floorId,
@@ -486,6 +506,40 @@ describe("mapOperations.apply", () => {
     expect(result.error).toContain("wall geometry");
   });
 
+  it("accepts wall segments produced by the wall engine", async () => {
+    const t = convexTest(schema, modules);
+    const floorId = await freshFloor(t);
+    const generated = addLine({
+      walls: [],
+      floorId: floorId as FloorId,
+      color: "concrete",
+      start: { x: 10, y: 10 },
+      end: { x: 50, y: 10 },
+      generateWallId: (() => {
+        let index = 0;
+        return () => `wall:ui:${++index}` as WallId;
+      })(),
+    });
+
+    const result = await t.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "walls.add",
+        meta: meta(30),
+        walls: generated.nextWalls,
+      },
+    });
+
+    expect(result.status).toBe("applied");
+    const document = await t.query(api.mapDocument.getFloorDocument, {
+      floorId,
+    });
+    expect(document.walls.map((item) => item.geometryKey)).toEqual([
+      "10:10:10:10",
+      "30:10:30:10",
+      "50:10:50:10",
+    ]);
+  });
+
   it("persists canonical wall endpoints for reversed equivalent input", async () => {
     const t = convexTest(schema, modules);
     const floorId = await freshFloor(t);
@@ -516,32 +570,324 @@ describe("mapOperations.apply", () => {
     expect(document.walls[0]?.geometryKey).toBe("0:0:20:0");
   });
 
-  it("rejects malformed device sizes and positions", async () => {
+  it("accepts finite negative positions for devices and walls", async () => {
     const t = convexTest(schema, modules);
     const floorId = await freshFloor(t);
 
-    const badSize = await t.mutation(api.mapOperations.apply, {
+    const created = await t.mutation(api.mapOperations.apply, {
       operation: {
         kind: "device.create",
         meta: meta(33),
-        device: {
-          ...device("device:bad-size", floorId, 0),
-          size: { width: 0, height: 80 },
-        },
+        device: device("device:negative", floorId, -200, -200),
       },
     });
-    const badPosition = await t.mutation(api.mapOperations.apply, {
+    const patched = await t.mutation(api.mapOperations.apply, {
       operation: {
-        kind: "device.create",
+        kind: "device.patch",
         meta: meta(34),
-        device: {
-          ...device("device:bad-position", floorId, 0),
-          position: { x: -1, y: 0 },
-        },
+        deviceId: "device:negative",
+        patch: { position: { x: -400, y: -400 } },
+      },
+    });
+    const wallResult = await t.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "walls.add",
+        meta: meta(35),
+        walls: [wall("wall:negative", floorId, -100, -100)],
       },
     });
 
-    expect(badSize.status).toBe("rejected");
-    expect(badPosition.status).toBe("rejected");
+    expect(created.status).toBe("applied");
+    expect(patched.status).toBe("applied");
+    expect(wallResult.status).toBe("applied");
+  });
+
+  it("rejects non-finite device and wall positions", async () => {
+    const t = convexTest(schema, modules);
+    const floorId = await freshFloor(t);
+    const values = [NaN, Infinity, -Infinity];
+
+    for (const [index, value] of values.entries()) {
+      const deviceResult = await expectApplicationRejected(() =>
+        t.mutation(api.mapOperations.apply, {
+          operation: {
+            kind: "device.create",
+            meta: meta(40 + index),
+            device: {
+              ...device(`device:bad-position:${index}`, floorId, index * 100),
+              position: { x: value, y: 0 },
+            },
+          },
+        }),
+      );
+      expect(deviceResult.error).toContain("finite numbers");
+
+      const wallResult = await expectApplicationRejected(() =>
+        t.mutation(api.mapOperations.apply, {
+          operation: {
+            kind: "walls.add",
+            meta: meta(50 + index),
+            walls: [
+              {
+                ...wall(`wall:bad-position:${index}`, floorId, index * 40, 0),
+                start: { x: value, y: 0 },
+                geometryKey: `${value}:0:${index * 40 + 20}:0`,
+              },
+            ],
+          },
+        }),
+      );
+      expect(wallResult.error).toContain("wall geometry");
+    }
+  });
+
+  it("rejects invalid device sizes", async () => {
+    const t = convexTest(schema, modules);
+    const floorId = await freshFloor(t);
+    const applicationRejectedSizes = [
+      { width: -1, height: 80 },
+      { width: 0, height: 80 },
+      { width: 80, height: -1 },
+      { width: 80, height: 0 },
+    ];
+    for (const [index, size] of applicationRejectedSizes.entries()) {
+      const result = await expectApplicationRejected(() =>
+        t.mutation(api.mapOperations.apply, {
+          operation: {
+            kind: "device.create",
+            meta: meta(60 + index),
+            device: {
+              ...device(`device:bad-size:${index}`, floorId, index * 100),
+              size,
+            },
+          },
+        }),
+      );
+      expect(result.error).toContain("greater than zero");
+    }
+
+    for (const [index, size] of [
+      { width: NaN, height: 80 },
+      { width: Infinity, height: 80 },
+    ].entries()) {
+      const result = await expectApplicationRejected(() =>
+        t.mutation(api.mapOperations.apply, {
+          operation: {
+            kind: "device.create",
+            meta: meta(70 + index),
+            device: {
+              ...device(
+                `device:bad-finite-size:${index}`,
+                floorId,
+                index * 100,
+              ),
+              size,
+            },
+          },
+        }),
+      );
+      expect(result.error).toContain("finite numbers");
+    }
+  });
+
+  it("rejects cross-floor operations", async () => {
+    const t = convexTest(schema, modules);
+    const floorA = await freshFloor(t);
+    const floorB = await freshFloor(t);
+
+    const batch = await t.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "batch",
+        meta: meta(70),
+        operations: [
+          {
+            kind: "device.create",
+            device: device("device:floor-a", floorA, 0),
+          },
+          {
+            kind: "device.create",
+            device: device("device:floor-b", floorB, 0),
+          },
+        ],
+      },
+    });
+    const wallsAdd = await t.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "walls.add",
+        meta: meta(71),
+        walls: [
+          wall("wall:floor-a", floorA, 0, 0),
+          wall("wall:floor-b", floorB, 0, 0),
+        ],
+      },
+    });
+    await t.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "walls.add",
+        meta: meta(72),
+        walls: [wall("wall:delete-a", floorA, 40, 0)],
+      },
+    });
+    await t.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "walls.add",
+        meta: meta(73),
+        walls: [wall("wall:delete-b", floorB, 40, 0)],
+      },
+    });
+    const wallsDelete = await t.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "walls.delete",
+        meta: meta(74),
+        wallIds: ["wall:delete-a", "wall:delete-b"],
+      },
+    });
+
+    expect(batch.status).toBe("rejected");
+    expect(batch.error).toContain("exactly one floor");
+    expect(wallsAdd.status).toBe("rejected");
+    expect(wallsAdd.error).toContain("exactly one floor");
+    expect(wallsDelete.status).toBe("rejected");
+    expect(wallsDelete.error).toContain("exactly one floor");
+  });
+
+  it("rejects new deletes for missing objects but replays applied delete opIds", async () => {
+    const t = convexTest(schema, modules);
+    const floorId = await freshFloor(t);
+    await t.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "batch",
+        meta: meta(80),
+        operations: [
+          {
+            kind: "device.create",
+            device: device("device:delete", floorId, 0),
+          },
+          {
+            kind: "device.create",
+            device: device("device:link-target", floorId, 200),
+          },
+          {
+            kind: "link.create",
+            link: {
+              id: "link:delete",
+              floorId,
+              fromDeviceId: "device:delete",
+              toDeviceId: "device:link-target",
+            },
+          },
+          { kind: "walls.add", walls: [wall("wall:delete", floorId, 0, 200)] },
+        ],
+      },
+    });
+
+    const deleteOperation = {
+      kind: "device.delete" as const,
+      meta: meta(81),
+      deviceId: "device:delete",
+    };
+    const firstDelete = await t.mutation(api.mapOperations.apply, {
+      operation: deleteOperation,
+    });
+    const replayDelete = await t.mutation(api.mapOperations.apply, {
+      operation: deleteOperation,
+    });
+    const missingDevice = await t.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "device.delete",
+        meta: meta(82),
+        deviceId: "device:delete",
+      },
+    });
+    const missingLink = await t.mutation(api.mapOperations.apply, {
+      operation: { kind: "link.delete", meta: meta(83), linkId: "link:delete" },
+    });
+    const missingWall = await t.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "walls.delete",
+        meta: meta(84),
+        wallIds: ["wall:missing"],
+      },
+    });
+
+    expect(firstDelete.status).toBe("applied");
+    expect(replayDelete).toEqual(firstDelete);
+    expect(missingDevice.status).toBe("rejected");
+    expect(missingDevice.error).toContain("Device not found");
+    expect(missingLink.status).toBe("rejected");
+    expect(missingLink.error).toContain("Link not found");
+    expect(missingWall.status).toBe("rejected");
+    expect(missingWall.error).toContain("Wall not found");
+  });
+
+  it("observes applied and rejected pending operation log rows by op id", async () => {
+    const t = convexTest(schema, modules);
+    const floorId = await freshFloor(t);
+    const appliedOperation = {
+      kind: "device.create" as const,
+      meta: meta(90),
+      device: device("device:observed", floorId, 0),
+    };
+    const rejectedOperation = {
+      kind: "device.delete" as const,
+      meta: meta(91),
+      deviceId: "device:missing-observed",
+    };
+    await t.mutation(api.mapOperations.apply, { operation: appliedOperation });
+    await t.mutation(api.mapOperations.apply, { operation: rejectedOperation });
+
+    const observed = await t.query(api.mapOperations.observePending, {
+      opIds: [appliedOperation.meta.opId, rejectedOperation.meta.opId],
+    });
+
+    expect(observed.map((item) => item.opId).sort()).toEqual(
+      [appliedOperation.meta.opId, rejectedOperation.meta.opId].sort(),
+    );
+    expect(
+      observed.find((item) => item.opId === appliedOperation.meta.opId),
+    ).toMatchObject({
+      status: "applied",
+      floorId,
+      appliedRevision: 1,
+    });
+    expect(
+      observed.find((item) => item.opId === rejectedOperation.meta.opId),
+    ).toMatchObject({
+      status: "rejected",
+      error: "Device not found",
+    });
+  });
+
+  it("bounds walls.delete payload size", async () => {
+    const t = convexTest(schema, modules);
+    const floorId = await freshFloor(t);
+    const walls = Array.from({ length: 500 }, (_, index) =>
+      wall(`wall:cap:${index}`, floorId, 0, index * 20),
+    );
+    await t.mutation(api.mapOperations.apply, {
+      operation: { kind: "walls.add", meta: meta(100), walls },
+    });
+
+    const atCap = await t.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "walls.delete",
+        meta: meta(101),
+        wallIds: walls.map((item) => item.id),
+      },
+    });
+    const overCap = await t.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "walls.delete",
+        meta: meta(102),
+        wallIds: Array.from(
+          { length: 501 },
+          (_, index) => `wall:over:${index}`,
+        ),
+      },
+    });
+
+    expect(atCap.status).toBe("applied");
+    expect(overCap.status).toBe("rejected");
+    expect(overCap.error).toContain("Too many walls");
   });
 });
