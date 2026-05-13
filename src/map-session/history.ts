@@ -1,4 +1,4 @@
-import type { MapOperation } from "@/map-engine/types";
+import type { BatchSubOperation, MapOperation } from "@/map-engine/types";
 import type { OperationMeta } from "@/types/map";
 import { UNDO_REDO_EVENT_NAME } from "@/lib/constants";
 
@@ -6,6 +6,11 @@ export interface SessionHistoryEntry {
   label: string;
   operation: MapOperation;
   sourceOpIds: ReadonlyArray<string>;
+}
+
+export interface PendingHistoryOperationLike<TOperation> {
+  operation: TOperation;
+  sourceOpId: string;
 }
 
 export interface TemporalView {
@@ -31,6 +36,12 @@ export const removeHistoryEntriesForOperation = (
 ): ReadonlyArray<SessionHistoryEntry> =>
   stack.filter((entry) => !entry.sourceOpIds.includes(opId));
 
+export const removePendingHistoryGroupOperation = <TOperation>(
+  group: ReadonlyArray<PendingHistoryOperationLike<TOperation>>,
+  opId: string,
+): Array<PendingHistoryOperationLike<TOperation>> =>
+  group.filter((entry) => entry.sourceOpId !== opId);
+
 export const withOperationMeta = (
   operation: MapOperation,
   meta: OperationMeta,
@@ -54,11 +65,16 @@ export const withOperationMeta = (
       return {
         ...operation,
         meta,
-        operations: operation.operations.map((item) =>
-          withOperationMeta(item, meta),
-        ),
       };
   }
+};
+
+export const withoutOperationMeta = (
+  operation: MapOperation,
+): BatchSubOperation | null => {
+  if (operation.kind === "batch") return null;
+  const { meta: _meta, ...withoutMeta } = operation;
+  return withoutMeta;
 };
 
 export const dispatchUndoRedoEvent = (type: "undo" | "redo") => {

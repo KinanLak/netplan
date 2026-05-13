@@ -12,7 +12,6 @@ type WallAddOperation = Extract<OperationInput, { kind: "walls.add" }>;
 type WallDeleteOperation = Extract<OperationInput, { kind: "walls.delete" }>;
 type LinkCreateOperation = Extract<OperationInput, { kind: "link.create" }>;
 type LinkDeleteOperation = Extract<OperationInput, { kind: "link.delete" }>;
-type BatchOperation = Extract<OperationInput, { kind: "batch" }>;
 
 type DeviceInput = DeviceCreateOperation["device"];
 type WallInput = WallAddOperation["walls"][number];
@@ -60,11 +59,14 @@ interface PlanningState {
   links: Map<string, PlannedLink>;
   presences: Map<Id<"presences">, PlannedPresence>;
   wallGeometry: Map<string, string>;
+  affectedFloorIds: Set<string>;
   plan: WritePlan;
 }
 
 const GRID_SIZE = 20;
 const WALL_THICKNESS = GRID_SIZE;
+const MAX_BATCH_OPERATIONS = 100;
+const MAX_WALLS_PER_OPERATION = 500;
 
 const sameJson = (left: object, right: object): boolean =>
   JSON.stringify(left) === JSON.stringify(right);
@@ -88,6 +90,37 @@ const arePositionsEqual = (
   right: { x: number; y: number },
 ): boolean => left.x === right.x && left.y === right.y;
 
+const isFiniteNonNegative = (value: number): boolean =>
+  Number.isFinite(value) && value >= 0;
+
+const validatePosition = (position: {
+  x: number;
+  y: number;
+}): string | null => {
+  if (!isFiniteNonNegative(position.x) || !isFiniteNonNegative(position.y)) {
+    return "Position must contain finite non-negative numbers";
+  }
+  return null;
+};
+
+const validateSize = (size: {
+  width: number;
+  height: number;
+}): string | null => {
+  if (!Number.isFinite(size.width) || !Number.isFinite(size.height)) {
+    return "Size must contain finite numbers";
+  }
+  if (size.width <= 0 || size.height <= 0) {
+    return "Size must be greater than zero";
+  }
+  return null;
+};
+
+const validateDeviceShape = (
+  device: Pick<PlannedDevice, "position" | "size">,
+): string | null =>
+  validatePosition(device.position) ?? validateSize(device.size);
+
 const normalizeWallBlockPoints = (
   start: { x: number; y: number },
   end: { x: number; y: number },
@@ -105,18 +138,15 @@ const normalizeWallBlockPoints = (
   return start.y <= end.y ? { start, end } : { start: end, end: start };
 };
 
-const getCanonicalWallGeometryKey = (
-  wall: Pick<WallInput, "start" | "end">,
-): string | null => {
+const canonicalWall = (wall: WallInput): WallInput | null => {
   const normalized = normalizeWallBlockPoints(wall.start, wall.end);
   if (!normalized) return null;
-
-  return `${normalized.start.x}:${normalized.start.y}:${normalized.end.x}:${normalized.end.y}`;
-};
-
-const canonicalWall = (wall: WallInput): WallInput | null => {
-  const geometryKey = getCanonicalWallGeometryKey(wall);
-  return geometryKey ? { ...wall, geometryKey } : null;
+  const geometryKey = `${normalized.start.x}:${normalized.start.y}:${normalized.end.x}:${normalized.end.y}`;
+  if (wall.geometryKey !== geometryKey) return null;
+  if (validatePosition(normalized.start) || validatePosition(normalized.end)) {
+    return null;
+  }
+  return { ...wall, ...normalized, geometryKey };
 };
 
 const getWallCollisionRect = (wall: Pick<WallInput, "start" | "end">) => {
@@ -282,8 +312,13 @@ const buildPlanningState = async (ctx: MutationCtx): Promise<PlanningState> => {
         wall.objectId,
       ]),
     ),
+    affectedFloorIds: new Set(),
     plan: [],
   };
+};
+
+const markAffectedFloor = (state: PlanningState, floorId: string) => {
+  state.affectedFloorIds.add(floorId);
 };
 
 const floorError = (state: PlanningState, floorId: string): string | null =>
@@ -325,6 +360,9 @@ const validateDevicePlacement = (
   state: PlanningState,
   device: Pick<PlannedDevice, "objectId" | "floorId" | "position" | "size">,
 ): string | null => {
+  const shapeError = validateDeviceShape(device);
+  if (shapeError) return shapeError;
+
   for (const other of state.devices.values()) {
     if (other.objectId === device.objectId) continue;
     if (other.floorId !== device.floorId) continue;
@@ -386,9 +424,12 @@ const planDeviceCreate = (
 ): string | null => {
   const existingFloorError = floorError(state, operation.device.floorId);
   if (existingFloorError) return existingFloorError;
+  const shapeError = validateDeviceShape(operation.device);
+  if (shapeError) return shapeError;
 
   const existing = state.devices.get(operation.device.id);
   if (existing) {
+    markAffectedFloor(state, existing.floorId);
     return sameJson(
       plannedDevicePayload(existing),
       devicePayload(operation.device),
@@ -418,6 +459,7 @@ const planDeviceCreate = (
     updatedBy: operation.meta.clientId,
   };
   state.devices.set(operation.device.id, value);
+  markAffectedFloor(state, operation.device.floorId);
   state.plan.push({ kind: "insertDevice", value });
   return null;
 };
@@ -447,6 +489,7 @@ const planDevicePatch = (
   if (placementError) return placementError;
 
   state.devices.set(operation.deviceId, patched);
+  markAffectedFloor(state, patched.floorId);
   if (existing.rowId) {
     state.plan.push({
       kind: "patchDevice",
@@ -501,6 +544,7 @@ const planLinkDeleteById = (state: PlanningState, linkId: string) => {
   if (!existing) return;
 
   state.links.delete(linkId);
+  markAffectedFloor(state, existing.floorId);
   if (existing.rowId) {
     state.plan.push({ kind: "deleteLink", rowId: existing.rowId });
   } else {
@@ -526,6 +570,7 @@ const planDeviceDelete = (
 
   planPresenceSelectionClear(state, operation.deviceId);
   state.devices.delete(operation.deviceId);
+  markAffectedFloor(state, existing.floorId);
   if (existing.rowId) {
     state.plan.push({ kind: "deleteDevice", rowId: existing.rowId });
   } else {
@@ -543,6 +588,7 @@ const planLinkCreate = (
 
   const existing = state.links.get(operation.link.id);
   if (existing) {
+    markAffectedFloor(state, existing.floorId);
     return sameJson(plannedLinkPayload(existing), linkPayload(operation.link))
       ? null
       : "Link object id already exists with different payload";
@@ -570,6 +616,7 @@ const planLinkCreate = (
     updatedBy: operation.meta.clientId,
   };
   state.links.set(operation.link.id, value);
+  markAffectedFloor(state, operation.link.floorId);
   state.plan.push({ kind: "insertLink", value });
   return null;
 };
@@ -586,6 +633,9 @@ const planWallsAdd = (
   state: PlanningState,
   operation: WallAddOperation,
 ): string | null => {
+  if (operation.walls.length > MAX_WALLS_PER_OPERATION) {
+    return "Too many walls in one operation";
+  }
   for (const input of operation.walls) {
     const wall = canonicalWall(input);
     if (!wall) return "Invalid wall geometry";
@@ -595,6 +645,7 @@ const planWallsAdd = (
 
     const existing = state.walls.get(wall.id);
     if (existing) {
+      markAffectedFloor(state, existing.floorId);
       if (!sameJson(plannedWallPayload(existing), wallPayload(wall))) {
         return "Wall object id already exists with different payload";
       }
@@ -602,7 +653,10 @@ const planWallsAdd = (
     }
 
     const geometryKey = wallGeometryKey(wall.floorId, wall.geometryKey);
-    if (state.wallGeometry.has(geometryKey)) continue;
+    if (state.wallGeometry.has(geometryKey)) {
+      markAffectedFloor(state, wall.floorId);
+      continue;
+    }
 
     if (wallCollidesWithDevice(state, wall)) {
       return "Wall collides with a device";
@@ -620,6 +674,7 @@ const planWallsAdd = (
     };
     state.walls.set(wall.id, value);
     state.wallGeometry.set(geometryKey, wall.id);
+    markAffectedFloor(state, wall.floorId);
     state.plan.push({ kind: "insertWall", value });
   }
 
@@ -631,6 +686,7 @@ const planWallDeleteById = (state: PlanningState, wallId: string) => {
   if (!existing) return;
 
   state.walls.delete(wallId);
+  markAffectedFloor(state, existing.floorId);
   state.wallGeometry.delete(
     wallGeometryKey(existing.floorId, existing.geometryKey),
   );
@@ -651,7 +707,7 @@ const planWallsDelete = (
 
 const planOperation = (
   state: PlanningState,
-  operation: OperationInput | BatchOperation["operations"][number],
+  operation: OperationInput,
 ): string | null => {
   switch (operation.kind) {
     case "device.create":
@@ -669,13 +725,45 @@ const planOperation = (
     case "walls.delete":
       return planWallsDelete(state, operation);
     case "batch": {
+      if (operation.operations.length > MAX_BATCH_OPERATIONS) {
+        return "Too many operations in one batch";
+      }
       for (const subOperation of operation.operations) {
-        const error = planOperation(state, subOperation);
+        const error = planOperation(state, {
+          ...subOperation,
+          meta: operation.meta,
+        } as OperationInput);
         if (error) return error;
       }
       return null;
     }
   }
+};
+
+const bumpDocumentRevisions = async (
+  ctx: MutationCtx,
+  floorIds: ReadonlySet<string>,
+  now: number,
+): Promise<Map<string, number>> => {
+  const revisions = new Map<string, number>();
+  for (const floorId of floorIds) {
+    const existing = await ctx.db
+      .query("documentRevisions")
+      .withIndex("by_floor", (q) => q.eq("floorId", floorId))
+      .unique();
+    const revision = (existing?.revision ?? 0) + 1;
+    if (existing) {
+      await ctx.db.patch(existing._id, { revision, updatedAt: now });
+    } else {
+      await ctx.db.insert("documentRevisions", {
+        floorId,
+        revision,
+        updatedAt: now,
+      });
+    }
+    revisions.set(floorId, revision);
+  }
+  return revisions;
 };
 
 const executePlan = async (ctx: MutationCtx, plan: WritePlan) => {
@@ -719,7 +807,10 @@ const operationFloorId = (operation: OperationInput): string | undefined => {
       return operation.walls[0]?.floorId;
     case "batch":
       return operation.operations[0]
-        ? operationFloorId(operation.operations[0])
+        ? operationFloorId({
+            ...operation.operations[0],
+            meta: operation.meta,
+          } as OperationInput)
         : undefined;
     case "device.patch":
     case "device.delete":
@@ -741,30 +832,51 @@ export const apply = mutation({
       return {
         status: existing.status,
         opId: existing.opId,
+        appliedRevision: existing.appliedRevision,
+        floorId: existing.floorId,
         error: existing.error,
       };
     }
 
+    const now = Date.now();
+    const planningOperation = {
+      ...operation,
+      meta: { ...operation.meta, createdAt: now },
+    } as OperationInput;
     const state = await buildPlanningState(ctx);
-    const error = planOperation(state, operation);
+    const error = planOperation(state, planningOperation);
     const status: "applied" | "rejected" = error ? "rejected" : "applied";
-    if (!error) await executePlan(ctx, state.plan);
+    let appliedRevision: number | undefined;
+    let floorId = operationFloorId(operation);
+    if (!error) {
+      await executePlan(ctx, state.plan);
+      const revisions = await bumpDocumentRevisions(
+        ctx,
+        state.affectedFloorIds,
+        now,
+      );
+      floorId = floorId ?? state.affectedFloorIds.values().next().value;
+      appliedRevision = floorId ? revisions.get(floorId) : 0;
+    }
 
     await ctx.db.insert("clientOperations", {
       opId: operation.meta.opId,
       clientId: operation.meta.clientId,
       clientSeq: operation.meta.clientSeq,
-      floorId: operationFloorId(operation),
+      floorId,
       kind: operation.kind,
       status,
       error: error ?? undefined,
+      appliedRevision,
       createdAt: operation.meta.createdAt,
-      appliedAt: Date.now(),
+      appliedAt: now,
     });
 
     return {
       status,
       opId: operation.meta.opId,
+      appliedRevision,
+      floorId,
       error: error ?? undefined,
     };
   },

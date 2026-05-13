@@ -247,11 +247,14 @@ export default function FlowCanvas() {
       return;
     }
 
+    if (!isReady) return;
+
     selectDevice(null);
     wallToolSession.handlePaneClick(event);
   };
 
   const handleContextMenu = (event: React.MouseEvent | MouseEvent) => {
+    if (!isReady) return;
     wallToolSession.handleContextMenu(event);
   };
 
@@ -314,7 +317,7 @@ export default function FlowCanvas() {
         onPaneClick={handlePaneClick}
         onPaneMouseMove={(event) => {
           publishCursor(event);
-          wallToolSession.handlePaneMouseMove(event);
+          if (isReady) wallToolSession.handlePaneMouseMove(event);
         }}
         onPaneContextMenu={handleContextMenu}
         onMoveStart={handleMoveStart}
@@ -346,7 +349,7 @@ export default function FlowCanvas() {
           session={wallToolSession}
           floorWalls={floorWalls}
           activeDrawTool={activeDrawTool}
-          isEditMode={isEditMode}
+          isEditMode={isEditMode && isReady}
           paneHoverFillColor={paneHoverFillColor}
           paneHoverStrokeColor={paneHoverStrokeColor}
         />

@@ -5,6 +5,7 @@ import {
   appendCappedHistory,
   HISTORY_LIMIT,
   removeHistoryEntriesForOperation,
+  removePendingHistoryGroupOperation,
   withOperationMeta,
 } from "./history";
 
@@ -18,6 +19,22 @@ const meta = (seq: number): OperationMeta => ({
 });
 
 const operation = (seq: number): MapOperation => ({
+  kind: "device.create",
+  meta: meta(seq),
+  device: {
+    id: `device:${seq}` as DeviceId,
+    floorId,
+    type: "pc",
+    name: "PC",
+    position: { x: 0, y: 0 },
+    size: { width: 80, height: 80 },
+    metadata: {},
+  },
+});
+
+const createOperation = (
+  seq: number,
+): Extract<MapOperation, { kind: "device.create" }> => ({
   kind: "device.create",
   meta: meta(seq),
   device: {
@@ -48,16 +65,17 @@ describe("session history", () => {
     const batch: MapOperation = {
       kind: "batch",
       meta: meta(0),
-      operations: [operation(1), operation(2)],
+      operations: [
+        { kind: "device.create", device: createOperation(1).device },
+        { kind: "device.create", device: createOperation(2).device },
+      ],
     };
 
     const refreshed = withOperationMeta(batch, nextMeta);
 
     expect(refreshed.meta).toBe(nextMeta);
     if (refreshed.kind !== "batch") return;
-    expect(refreshed.operations.every((item) => item.meta === nextMeta)).toBe(
-      true,
-    );
+    expect(refreshed.operations).toEqual(batch.operations);
   });
 
   it("removes entries associated with a rejected operation", () => {
@@ -96,5 +114,24 @@ describe("session history", () => {
     const next = removeHistoryEntriesForOperation(stack, "op:other");
 
     expect(next).toEqual(stack);
+  });
+
+  it("removes rejected operations from an open history group", () => {
+    const group = [
+      { operation: operation(1), sourceOpId: "op:accepted" },
+      { operation: operation(2), sourceOpId: "op:rejected" },
+    ];
+
+    const next = removePendingHistoryGroupOperation(group, "op:rejected");
+
+    expect(next.map((entry) => entry.sourceOpId)).toEqual(["op:accepted"]);
+  });
+
+  it("returns an empty group when every pending source was rejected", () => {
+    const group = [{ operation: operation(1), sourceOpId: "op:rejected" }];
+
+    expect(removePendingHistoryGroupOperation(group, "op:rejected")).toEqual(
+      [],
+    );
   });
 });

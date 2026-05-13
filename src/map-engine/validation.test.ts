@@ -27,7 +27,7 @@ describe("validation", () => {
   it("rejects device placement over another device", () => {
     const existing = device(deviceId("device:a"), 0);
     const result = validateOperation(
-      { floorId, devices: [existing], walls: [], links: [] },
+      { floorId, revision: 0, devices: [existing], walls: [], links: [] },
       {
         kind: "device.create",
         meta,
@@ -42,6 +42,7 @@ describe("validation", () => {
     const result = validateOperation(
       {
         floorId,
+        revision: 0,
         devices: [],
         walls: [
           {

@@ -28,7 +28,13 @@ const device = (id: DeviceId): Device => ({
 describe("buildInverseOperation", () => {
   it("builds a move inverse that patches only position", () => {
     const original = device(deviceId("device:a"));
-    const snapshot = { floorId, devices: [original], walls: [], links: [] };
+    const snapshot = {
+      floorId,
+      revision: 0,
+      devices: [original],
+      walls: [],
+      links: [],
+    };
     const move: MapOperation = {
       kind: "device.patch",
       meta: meta(0),
@@ -55,7 +61,13 @@ describe("buildInverseOperation", () => {
       fromDeviceId: a.id,
       toDeviceId: b.id,
     };
-    const snapshot = { floorId, devices: [a, b], walls: [], links: [link] };
+    const snapshot = {
+      floorId,
+      revision: 0,
+      devices: [a, b],
+      walls: [],
+      links: [link],
+    };
 
     const inverse = buildInverseOperation(snapshot, {
       kind: "device.delete",
@@ -73,20 +85,24 @@ describe("buildInverseOperation", () => {
 
   it("reverses batch operations in reverse order", () => {
     const a = device(deviceId("device:a"));
-    const snapshot = { floorId, devices: [a], walls: [], links: [] };
+    const snapshot = {
+      floorId,
+      revision: 0,
+      devices: [a],
+      walls: [],
+      links: [],
+    };
     const batch: MapOperation = {
       kind: "batch",
       meta: meta(2),
       operations: [
         {
           kind: "device.patch",
-          meta: meta(3),
           deviceId: a.id,
           patch: { position: { x: 40, y: 0 } },
         },
         {
           kind: "device.patch",
-          meta: meta(4),
           deviceId: a.id,
           patch: { name: "Moved" },
         },
@@ -113,7 +129,7 @@ describe("buildInverseOperation", () => {
     };
 
     const inverse = buildInverseOperation(
-      { floorId, devices: [], walls: [wall], links: [] },
+      { floorId, revision: 0, devices: [], walls: [wall], links: [] },
       { kind: "walls.delete", meta: meta(5), wallIds: [wall.id] },
     );
 

@@ -63,6 +63,7 @@ describe("SequentialOutbox", () => {
       onAck: () => {},
       onReject: () => {},
       onNetworkFailure: () => {},
+      retry: { baseDelayMs: 1, jitterRatio: 0, random: () => 0 },
     });
 
     outbox.enqueue(operation(1));
@@ -71,6 +72,45 @@ describe("SequentialOutbox", () => {
 
     shouldFail = false;
     outbox.retry();
+    await tick();
+
+    expect(sent).toEqual(["op:test:1", "op:test:1"]);
+    expect(outbox.length).toBe(0);
+  });
+
+  it("automatically retries transient failures without a new action", async () => {
+    const sent: Array<string> = [];
+    const timers: Array<() => void> = [];
+    let shouldFail = true;
+    const outbox = new SequentialOutbox({
+      send: (item) => {
+        sent.push(item.meta.opId);
+        if (shouldFail) return Promise.reject(new Error("offline"));
+        return Promise.resolve({ status: "applied", opId: item.meta.opId });
+      },
+      onAck: () => {},
+      onReject: () => {},
+      onNetworkFailure: () => {},
+      retry: {
+        baseDelayMs: 10,
+        jitterRatio: 0,
+        random: () => 0,
+        setTimeout: (callback) => {
+          timers.push(callback);
+          return timers.length;
+        },
+        clearTimeout: () => {},
+      },
+    });
+
+    outbox.enqueue(operation(1));
+    await tick();
+    expect(outbox.length).toBe(1);
+    expect(outbox.state.isRetrying).toBe(true);
+
+    shouldFail = false;
+    timers[0]?.();
+    await tick();
     await tick();
 
     expect(sent).toEqual(["op:test:1", "op:test:1"]);
@@ -142,6 +182,85 @@ describe("SequentialOutbox", () => {
     await tick();
     await tick();
     expect(acked).toEqual([second.meta.opId]);
+    expect(outbox.length).toBe(0);
+  });
+
+  it("reconnect retry cancels scheduled backoff and flushes immediately", async () => {
+    const sent: Array<string> = [];
+    const cleared: Array<number> = [];
+    let shouldFail = true;
+    const outbox = new SequentialOutbox({
+      send: (item) => {
+        sent.push(item.meta.opId);
+        if (shouldFail) return Promise.reject(new Error("offline"));
+        return Promise.resolve({ status: "applied", opId: item.meta.opId });
+      },
+      onAck: () => {},
+      onReject: () => {},
+      onNetworkFailure: () => {},
+      retry: {
+        baseDelayMs: 1000,
+        jitterRatio: 0,
+        setTimeout: () => 1,
+        clearTimeout: (timer) => cleared.push(Number(timer)),
+      },
+    });
+
+    outbox.enqueue(operation(1));
+    await tick();
+    shouldFail = false;
+    outbox.retry();
+    await tick();
+
+    expect(cleared).toEqual([1]);
+    expect(sent).toEqual(["op:test:1", "op:test:1"]);
+  });
+
+  it("does not retry validation rejections", async () => {
+    const timers: Array<() => void> = [];
+    const outbox = new SequentialOutbox({
+      send: (item) =>
+        Promise.resolve({
+          status: "rejected",
+          opId: item.meta.opId,
+          error: "invalid",
+        }),
+      onAck: () => {},
+      onReject: () => {},
+      onNetworkFailure: () => {},
+      retry: {
+        setTimeout: (callback) => {
+          timers.push(callback);
+          return timers.length;
+        },
+      },
+    });
+
+    outbox.enqueue(operation(1));
+    await tick();
+
+    expect(outbox.length).toBe(0);
+    expect(timers).toEqual([]);
+  });
+
+  it("dispose cancels scheduled retry timers", async () => {
+    const cleared: Array<number> = [];
+    const outbox = new SequentialOutbox({
+      send: () => Promise.reject(new Error("offline")),
+      onAck: () => {},
+      onReject: () => {},
+      onNetworkFailure: () => {},
+      retry: {
+        setTimeout: () => 9,
+        clearTimeout: (timer) => cleared.push(Number(timer)),
+      },
+    });
+
+    outbox.enqueue(operation(1));
+    await tick();
+    outbox.dispose();
+
+    expect(cleared).toEqual([9]);
     expect(outbox.length).toBe(0);
   });
 });

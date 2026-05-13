@@ -117,34 +117,28 @@ export const mapOperation = v.union(
       v.union(
         v.object({
           kind: v.literal("device.create"),
-          meta: operationMeta,
           device,
         }),
         v.object({
           kind: v.literal("device.patch"),
-          meta: operationMeta,
           deviceId: v.string(),
           patch: devicePatch,
         }),
         v.object({
           kind: v.literal("device.delete"),
-          meta: operationMeta,
           deviceId: v.string(),
         }),
-        v.object({ kind: v.literal("link.create"), meta: operationMeta, link }),
+        v.object({ kind: v.literal("link.create"), link }),
         v.object({
           kind: v.literal("link.delete"),
-          meta: operationMeta,
           linkId: v.string(),
         }),
         v.object({
           kind: v.literal("walls.add"),
-          meta: operationMeta,
           walls: v.array(wallSegment),
         }),
         v.object({
           kind: v.literal("walls.delete"),
-          meta: operationMeta,
           wallIds: v.array(v.string()),
         }),
       ),
@@ -155,5 +149,7 @@ export const mapOperation = v.union(
 export const mapOperationResult = v.object({
   status: v.union(v.literal("applied"), v.literal("rejected")),
   opId: v.string(),
+  appliedRevision: v.optional(v.number()),
+  floorId: v.optional(v.string()),
   error: v.optional(v.string()),
 });

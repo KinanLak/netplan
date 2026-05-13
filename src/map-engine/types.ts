@@ -20,7 +20,7 @@ export interface DevicePatch {
   metadata?: DeviceMetadata;
 }
 
-export type MapOperation =
+export type AtomicMapOperation =
   | { kind: "device.create"; meta: OperationMeta; device: Device }
   | {
       kind: "device.patch";
@@ -32,8 +32,19 @@ export type MapOperation =
   | { kind: "link.create"; meta: OperationMeta; link: LinkDoc }
   | { kind: "link.delete"; meta: OperationMeta; linkId: LinkId }
   | { kind: "walls.add"; meta: OperationMeta; walls: Array<WallSegment> }
-  | { kind: "walls.delete"; meta: OperationMeta; wallIds: Array<WallId> }
-  | { kind: "batch"; meta: OperationMeta; operations: Array<MapOperation> };
+  | { kind: "walls.delete"; meta: OperationMeta; wallIds: Array<WallId> };
+
+type DistributiveOmit<T, K extends keyof T> = T extends T ? Omit<T, K> : never;
+
+export type BatchSubOperation = DistributiveOmit<AtomicMapOperation, "meta">;
+
+export type MapOperation =
+  | AtomicMapOperation
+  | {
+      kind: "batch";
+      meta: OperationMeta;
+      operations: Array<BatchSubOperation>;
+    };
 
 export type ApplyOperationReason =
   | "already-exists"

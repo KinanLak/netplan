@@ -52,10 +52,15 @@ import {
   appendCappedHistory,
   dispatchUndoRedoEvent,
   removeHistoryEntriesForOperation,
+  removePendingHistoryGroupOperation,
   withOperationMeta,
+  withoutOperationMeta,
 } from "./history";
 import type { SessionHistoryEntry } from "./history";
 import { SequentialOutbox } from "./outbox";
+import type { OutboxState } from "./outbox";
+import { removeObservedPendingOperations } from "./pendingOperations";
+import type { PendingOperationEntry } from "./pendingOperations";
 import { reconcileEphemeralState } from "./reconcileEphemeralState";
 
 export interface MapDocumentCommands {
@@ -86,6 +91,8 @@ export interface MapDocumentSession {
   pendingOperations: ReadonlyArray<MapOperation>;
   isReady: boolean;
   isSaving: boolean;
+  isRetrying: boolean;
+  hasBackgroundPendingOperations: boolean;
   hasRejectedOperations: boolean;
   rejectedMessage: string | null;
   connectionState: "connecting" | "connected" | "disconnected";
@@ -113,6 +120,7 @@ export const MapDocumentContext = createContext<MapDocumentSession | null>(
 
 const emptyDocument = (floorId: FloorId): MapDocumentSnapshot => ({
   floorId,
+  revision: 0,
   devices: [],
   walls: [],
   links: [],
@@ -137,6 +145,55 @@ interface PendingHistoryOperation {
   sourceOpId: string;
 }
 
+interface FloorHistoryState {
+  undoStack: Array<SessionHistoryEntry>;
+  redoStack: Array<SessionHistoryEntry>;
+}
+
+type HistoryByFloor = Record<string, FloorHistoryState>;
+
+const emptyHistoryState = (): FloorHistoryState => ({
+  undoStack: [],
+  redoStack: [],
+});
+
+const operationFloorId = (
+  operation: MapOperation,
+  fallbackFloorId: FloorId,
+): FloorId => {
+  switch (operation.kind) {
+    case "device.create":
+      return operation.device.floorId;
+    case "link.create":
+      return operation.link.floorId;
+    case "walls.add":
+      return operation.walls[0]?.floorId ?? fallbackFloorId;
+    case "batch": {
+      if (operation.operations.length === 0) return fallbackFloorId;
+      const first = operation.operations[0];
+      if (first.kind === "device.create") return first.device.floorId;
+      if (first.kind === "link.create") return first.link.floorId;
+      if (first.kind === "walls.add")
+        return first.walls[0]?.floorId ?? fallbackFloorId;
+      return fallbackFloorId;
+    }
+    case "device.patch":
+    case "device.delete":
+    case "link.delete":
+    case "walls.delete":
+      return fallbackFloorId;
+  }
+};
+
+const updateFloorHistory = (
+  current: HistoryByFloor,
+  floorId: FloorId,
+  updater: (history: FloorHistoryState) => FloorHistoryState,
+): HistoryByFloor => ({
+  ...current,
+  [floorId]: updater(current[floorId] ?? emptyHistoryState()),
+});
+
 export function MapDocumentProvider({
   floorId,
   children,
@@ -154,30 +211,47 @@ export function MapDocumentProvider({
     floorId ? { floorId } : "skip",
   );
 
-  const [pendingOperations, setPendingOperations] = useState<
-    Array<MapOperation>
+  const [pendingEntries, setPendingEntries] = useState<
+    Array<PendingOperationEntry>
   >([]);
-  const [undoStack, setUndoStack] = useState<Array<SessionHistoryEntry>>([]);
-  const [redoStack, setRedoStack] = useState<Array<SessionHistoryEntry>>([]);
+  const [historyByFloor, setHistoryByFloor] = useState<HistoryByFloor>({});
   const [rejectedMessage, setRejectedMessage] = useState<string | null>(null);
+  const [outboxState, setOutboxState] = useState<OutboxState>({
+    pendingCount: 0,
+    isFlushing: false,
+    isRetrying: false,
+    lastFailure: null,
+    nextRetryAt: null,
+  });
 
   const activeFloorId = floorId ?? NONE_FLOOR_ID;
   const queriedDocument = queriedDocumentRaw
     ? ({
         floorId: queriedDocumentRaw.floorId as FloorId,
+        revision: queriedDocumentRaw.revision,
         devices: queriedDocumentRaw.devices as Array<Device>,
         walls: queriedDocumentRaw.walls as Array<WallSegment>,
         links: queriedDocumentRaw.links as Array<LinkDoc>,
       } satisfies MapDocumentSnapshot)
     : undefined;
   const serverDocument = queriedDocument ?? emptyDocument(activeFloorId);
+  const pendingOperations = pendingEntries
+    .filter((entry) => entry.floorId === activeFloorId)
+    .map((entry) => entry.operation);
   const document = materializeDocument(serverDocument, pendingOperations);
   const isReady = Boolean(floorId && identity && queriedDocument !== undefined);
+  const activeHistory = historyByFloor[activeFloorId] ?? emptyHistoryState();
+  const undoStack = activeHistory.undoStack;
+  const redoStack = activeHistory.redoStack;
+  const hasBackgroundPendingOperations = pendingEntries.some(
+    (entry) => entry.floorId !== activeFloorId,
+  );
 
   const documentRef = useRef(document);
   const undoStackRef = useRef(undoStack);
   const redoStackRef = useRef(redoStack);
   const historyGroupRef = useRef<Array<PendingHistoryOperation> | null>(null);
+  const outboxRef = useRef<SequentialOutbox | null>(null);
 
   useLayoutEffect(() => {
     documentRef.current = document;
@@ -185,49 +259,87 @@ export function MapDocumentProvider({
     redoStackRef.current = redoStack;
   });
 
-  const [outbox] = useState(
-    () =>
-      new SequentialOutbox({
-        send: (operation) =>
-          applyMutation({ operation: toServerOperation(operation) }),
-        onAck: (operation) => {
-          setPendingOperations((current) =>
-            current.filter((item) => item.meta.opId !== operation.meta.opId),
+  useEffect(() => {
+    const outbox = new SequentialOutbox({
+      send: (operation) =>
+        applyMutation({ operation: toServerOperation(operation) }),
+      onAck: (operation, result) => {
+        setPendingEntries((current) =>
+          current.map((entry) =>
+            entry.operation.meta.opId === operation.meta.opId
+              ? { ...entry, ackedRevision: result.appliedRevision ?? 0 }
+              : entry,
+          ),
+        );
+      },
+      onReject: (operation, error) => {
+        setPendingEntries((current) =>
+          current.filter(
+            (entry) => entry.operation.meta.opId !== operation.meta.opId,
+          ),
+        );
+        setHistoryByFloor((current) => {
+          const next: HistoryByFloor = {};
+          for (const [historyFloorId, history] of Object.entries(current)) {
+            next[historyFloorId] = {
+              undoStack: [
+                ...removeHistoryEntriesForOperation(
+                  history.undoStack,
+                  operation.meta.opId,
+                ),
+              ],
+              redoStack: [
+                ...removeHistoryEntriesForOperation(
+                  history.redoStack,
+                  operation.meta.opId,
+                ),
+              ],
+            };
+          }
+          return next;
+        });
+        if (historyGroupRef.current) {
+          historyGroupRef.current = removePendingHistoryGroupOperation(
+            historyGroupRef.current,
+            operation.meta.opId,
           );
-        },
-        onReject: (operation, error) => {
-          setPendingOperations((current) =>
-            current.filter((item) => item.meta.opId !== operation.meta.opId),
-          );
-          setUndoStack((current) => [
-            ...removeHistoryEntriesForOperation(current, operation.meta.opId),
-          ]);
-          setRedoStack((current) => [
-            ...removeHistoryEntriesForOperation(current, operation.meta.opId),
-          ]);
-          setRejectedMessage(error);
-        },
-        onNetworkFailure: (_operation, error) => {
-          setRejectedMessage(error.message);
-        },
-      }),
-  );
+        }
+        setRejectedMessage(error);
+      },
+      onNetworkFailure: (_operation, error) => {
+        setRejectedMessage(error.message);
+      },
+      onStateChange: setOutboxState,
+    });
+    outboxRef.current = outbox;
+    return () => {
+      outbox.dispose();
+      if (outboxRef.current === outbox) outboxRef.current = null;
+    };
+  }, [applyMutation]);
 
-  const [previousFloorId, setPreviousFloorId] = useState(floorId);
-  if (previousFloorId !== floorId) {
-    setPreviousFloorId(floorId);
-    setPendingOperations([]);
-    setUndoStack([]);
-    setRedoStack([]);
-    setRejectedMessage(null);
-    outbox.clear();
-  }
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setPendingEntries((current) =>
+        removeObservedPendingOperations(
+          current,
+          activeFloorId,
+          serverDocument.revision,
+        ),
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeFloorId, serverDocument.revision]);
 
   useEffect(() => {
     if (convexConnectionState.isWebSocketConnected) {
-      outbox.retry();
+      outboxRef.current?.retry();
     }
-  }, [convexConnectionState.isWebSocketConnected, outbox]);
+  }, [convexConnectionState.isWebSocketConnected]);
 
   useEffect(() => {
     const patch = reconcileEphemeralState(document, useMapStore.getState());
@@ -247,14 +359,18 @@ export function MapDocumentProvider({
       return;
     }
 
-    setUndoStack((current) => [
-      ...appendCappedHistory(current, {
-        label: operationLabel(operation),
-        operation,
-        sourceOpIds: [sourceOpId],
-      }),
-    ]);
-    setRedoStack([]);
+    setHistoryByFloor((current) =>
+      updateFloorHistory(current, activeFloorId, (history) => ({
+        undoStack: [
+          ...appendCappedHistory(history.undoStack, {
+            label: operationLabel(operation),
+            operation,
+            sourceOpIds: [sourceOpId],
+          }),
+        ],
+        redoStack: [],
+      })),
+    );
   };
 
   const recordHistory = (
@@ -271,8 +387,12 @@ export function MapDocumentProvider({
   ) => {
     const snapshotBefore = documentRef.current;
     if (options.recordHistory) recordHistory(snapshotBefore, operation);
-    setPendingOperations((current) => [...current, operation]);
-    outbox.enqueue(operation);
+    const targetFloorId = operationFloorId(operation, activeFloorId);
+    setPendingEntries((current) => [
+      ...current,
+      { operation, floorId: targetFloorId },
+    ]);
+    outboxRef.current?.enqueue(operation);
   };
 
   const freshMeta = () => {
@@ -490,26 +610,34 @@ export function MapDocumentProvider({
     const group = historyGroupRef.current;
     historyGroupRef.current = null;
     if (!group || group.length === 0) return;
-    const operations = group.map((entry) => entry.operation);
+    const operations = group.flatMap((entry) => {
+      const operation = withoutOperationMeta(entry.operation);
+      return operation ? [operation] : [];
+    });
+    if (operations.length === 0) return;
     const operation: MapOperation =
       group.length === 1
-        ? operations[0]
-        : { kind: "batch", meta: operations[0].meta, operations };
-    setUndoStack((current) => [
-      ...appendCappedHistory(current, {
-        label: operationLabel(operation),
-        operation,
-        sourceOpIds: group.map((entry) => entry.sourceOpId),
-      }),
-    ]);
-    setRedoStack([]);
+        ? group[0].operation
+        : { kind: "batch", meta: group[0].operation.meta, operations };
+    setHistoryByFloor((current) =>
+      updateFloorHistory(current, activeFloorId, (history) => ({
+        undoStack: [
+          ...appendCappedHistory(history.undoStack, {
+            label: operationLabel(operation),
+            operation,
+            sourceOpIds: group.map((entry) => entry.sourceOpId),
+          }),
+        ],
+        redoStack: [],
+      })),
+    );
   };
 
   const runHistoryOperation = (
     entry: SessionHistoryEntry,
     type: "undo" | "redo",
   ) => {
-    if (!identity) return;
+    if (!identity || !isReady) return;
     const snapshotBefore = documentRef.current;
     const operation = withOperationMeta(
       entry.operation,
@@ -531,25 +659,47 @@ export function MapDocumentProvider({
         sourceOpIds: [operation.meta.opId],
       };
       if (type === "undo") {
-        setRedoStack((current) => [...appendCappedHistory(current, nextEntry)]);
+        setHistoryByFloor((current) =>
+          updateFloorHistory(current, activeFloorId, (history) => ({
+            ...history,
+            redoStack: [...appendCappedHistory(history.redoStack, nextEntry)],
+          })),
+        );
       } else {
-        setUndoStack((current) => [...appendCappedHistory(current, nextEntry)]);
+        setHistoryByFloor((current) =>
+          updateFloorHistory(current, activeFloorId, (history) => ({
+            ...history,
+            undoStack: [...appendCappedHistory(history.undoStack, nextEntry)],
+          })),
+        );
       }
     }
     dispatchUndoRedoEvent(type);
   };
 
   const undo = () => {
+    if (!isReady) return;
     const entry = undoStackRef.current.at(-1);
     if (!entry) return;
-    setUndoStack((current) => current.slice(0, -1));
+    setHistoryByFloor((current) =>
+      updateFloorHistory(current, activeFloorId, (history) => ({
+        ...history,
+        undoStack: history.undoStack.slice(0, -1),
+      })),
+    );
     runHistoryOperation(entry, "undo");
   };
 
   const redo = () => {
+    if (!isReady) return;
     const entry = redoStackRef.current.at(-1);
     if (!entry) return;
-    setRedoStack((current) => current.slice(0, -1));
+    setHistoryByFloor((current) =>
+      updateFloorHistory(current, activeFloorId, (history) => ({
+        ...history,
+        redoStack: history.redoStack.slice(0, -1),
+      })),
+    );
     runHistoryOperation(entry, "redo");
   };
 
@@ -585,7 +735,9 @@ export function MapDocumentProvider({
     serverDocument,
     pendingOperations,
     isReady,
-    isSaving: pendingOperations.length > 0,
+    isSaving: pendingEntries.length > 0 || outboxState.pendingCount > 0,
+    isRetrying: outboxState.isRetrying,
+    hasBackgroundPendingOperations,
     hasRejectedOperations: rejectedMessage !== null,
     rejectedMessage,
     connectionState,

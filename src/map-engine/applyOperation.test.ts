@@ -27,6 +27,7 @@ const device = (id: DeviceId, x = 0): Device => ({
 
 const emptySnapshot = {
   floorId,
+  revision: 0,
   devices: [],
   walls: [],
   links: [],
@@ -162,10 +163,9 @@ describe("applyOperation", () => {
       kind: "batch",
       meta: meta(6),
       operations: [
-        { kind: "device.create", meta: meta(7), device: created },
+        { kind: "device.create", device: created },
         {
           kind: "device.patch",
-          meta: meta(8),
           deviceId: created.id,
           patch: { name: "Renamed" },
         },
@@ -181,10 +181,9 @@ describe("applyOperation", () => {
       kind: "batch",
       meta: meta(9),
       operations: [
-        { kind: "device.create", meta: meta(10), device: created },
+        { kind: "device.create", device: created },
         {
           kind: "device.patch",
-          meta: meta(11),
           deviceId: deviceId("device:missing"),
           patch: { name: "Missing" },
         },
@@ -204,10 +203,9 @@ describe("applyOperation", () => {
       operations: [
         {
           kind: "device.delete",
-          meta: meta(13),
           deviceId: deviceId("device:missing"),
         },
-        { kind: "device.create", meta: meta(14), device: created },
+        { kind: "device.create", device: created },
       ],
     });
 

@@ -1,6 +1,17 @@
 import type { MapDocumentSnapshot } from "@/types/map";
 import { applyOperation } from "./applyOperation";
-import type { MapOperation } from "./types";
+import type { BatchSubOperation, MapOperation } from "./types";
+
+const stripMeta = (operation: MapOperation): BatchSubOperation | null => {
+  if (operation.kind === "batch") return null;
+  const { meta: _meta, ...withoutMeta } = operation;
+  return withoutMeta;
+};
+
+const withMeta = (
+  operation: BatchSubOperation,
+  meta: MapOperation["meta"],
+): MapOperation => ({ ...operation, meta }) as MapOperation;
 
 const invertDevicePatch = (
   snapshot: MapDocumentSnapshot,
@@ -63,7 +74,14 @@ export function buildInverseOperation(
       ];
       return operations.length === 1
         ? operations[0]
-        : { kind: "batch", meta: operation.meta, operations };
+        : {
+            kind: "batch",
+            meta: operation.meta,
+            operations: operations.flatMap((item) => {
+              const stripped = stripMeta(item);
+              return stripped ? [stripped] : [];
+            }),
+          };
     }
 
     case "link.create":
@@ -101,17 +119,28 @@ export function buildInverseOperation(
       const inverses: Array<MapOperation> = [];
       let currentSnapshot = snapshotBeforeOperation;
       for (const subOperation of operation.operations) {
-        const inverse = buildInverseOperation(currentSnapshot, subOperation);
+        const operationWithMeta = withMeta(subOperation, operation.meta);
+        const inverse = buildInverseOperation(
+          currentSnapshot,
+          operationWithMeta,
+        );
         if (inverse) inverses.unshift(inverse);
         currentSnapshot = applyOperation(
           currentSnapshot,
-          subOperation,
+          operationWithMeta,
         ).snapshot;
       }
       if (inverses.length === 0) return null;
       return inverses.length === 1
         ? inverses[0]
-        : { kind: "batch", meta: operation.meta, operations: inverses };
+        : {
+            kind: "batch",
+            meta: operation.meta,
+            operations: inverses.flatMap((item) => {
+              const stripped = stripMeta(item);
+              return stripped ? [stripped] : [];
+            }),
+          };
     }
   }
 }

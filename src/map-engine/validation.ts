@@ -114,7 +114,10 @@ export function validateOperation(
 
     case "batch": {
       for (const subOperation of operation.operations) {
-        const result = validateOperation(snapshot, subOperation);
+        const result = validateOperation(snapshot, {
+          ...subOperation,
+          meta: operation.meta,
+        } as MapOperation);
         if (!result.valid) return result;
       }
       return valid();

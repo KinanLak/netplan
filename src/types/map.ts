@@ -94,6 +94,7 @@ export type Link = LinkDoc;
 
 export interface MapDocumentSnapshot {
   floorId: FloorId;
+  revision: number;
   devices: Array<Device>;
   walls: Array<WallSegment>;
   links: Array<LinkDoc>;

@@ -2,6 +2,7 @@ import type { MapDocumentSnapshot } from "@/types/map";
 import type {
   ApplyOperationReason,
   ApplyOperationResult,
+  BatchSubOperation,
   MapOperation,
 } from "./types";
 
@@ -28,6 +29,7 @@ const withoutConnectedLinks = (
 
 const applyBatch = (
   snapshot: MapDocumentSnapshot,
+  parent: MapOperation["meta"],
   operations: ReadonlyArray<MapOperation>,
 ): ApplyOperationResult => {
   let next = snapshot;
@@ -37,7 +39,7 @@ const applyBatch = (
     if (operation.kind === "batch") {
       return unchanged(snapshot, "invalid-batch");
     }
-    const result = applyOperation(next, operation);
+    const result = applyOperation(next, { ...operation, meta: parent });
     if (result.reason && !isSafeBatchNoop(operation, result.reason)) {
       return {
         snapshot,
@@ -51,6 +53,11 @@ const applyBatch = (
 
   return { snapshot: next, applied };
 };
+
+const withParentMeta = (
+  operation: BatchSubOperation,
+  meta: MapOperation["meta"],
+): MapOperation => ({ ...operation, meta }) as MapOperation;
 
 const isSafeBatchNoop = (
   operation: MapOperation,
@@ -206,7 +213,13 @@ export function applyOperation(
     }
 
     case "batch":
-      return applyBatch(snapshot, operation.operations);
+      return applyBatch(
+        snapshot,
+        operation.meta,
+        operation.operations.map((item) =>
+          withParentMeta(item, operation.meta),
+        ),
+      );
   }
 }
 

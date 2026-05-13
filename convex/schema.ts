@@ -119,6 +119,12 @@ export default defineSchema({
     .index("by_from_device", ["fromDeviceId"])
     .index("by_to_device", ["toDeviceId"]),
 
+  documentRevisions: defineTable({
+    floorId: v.string(),
+    revision: v.number(),
+    updatedAt: v.number(),
+  }).index("by_floor", ["floorId"]),
+
   clientOperations: defineTable({
     opId: v.string(),
     clientId: v.string(),
@@ -127,6 +133,7 @@ export default defineSchema({
     kind: v.string(),
     status: v.union(v.literal("applied"), v.literal("rejected")),
     error: v.optional(v.string()),
+    appliedRevision: v.optional(v.number()),
     createdAt: v.number(),
     appliedAt: v.number(),
   })

@@ -18,7 +18,7 @@ afterEach(() => {
 });
 
 describe("identity", () => {
-  it("creates and persists a fresh identity with durable counters", () => {
+  it("creates and persists only stable display identity", () => {
     const identity = loadOrCreateIdentity();
 
     expect(identity.clientId.startsWith("client:")).toBe(true);
@@ -31,13 +31,20 @@ describe("identity", () => {
 
     const stored = window.localStorage.getItem(STORAGE_KEY);
     expect(stored).not.toBe(null);
-    expect(JSON.parse(stored as string)).toEqual(identity);
+    expect(JSON.parse(stored as string)).toEqual({
+      clientId: identity.clientId,
+      displayName: identity.displayName,
+      colorHue: identity.colorHue,
+    });
   });
 
-  it("returns the persisted identity on subsequent calls", () => {
+  it("keeps display identity stable while creating a tab session per load", () => {
     const first = loadOrCreateIdentity();
     const second = loadOrCreateIdentity();
-    expect(second).toEqual(first);
+    expect(second.clientId).toBe(first.clientId);
+    expect(second.displayName).toBe(first.displayName);
+    expect(second.colorHue).toBe(first.colorHue);
+    expect(second.sessionId).not.toBe(first.sessionId);
   });
 
   it("recovers from a corrupted storage entry", () => {
@@ -58,36 +65,47 @@ describe("identity", () => {
 
     const identity = loadOrCreateIdentity();
     expect(identity.clientId.startsWith("client:")).toBe(true);
-    expect(identity.nextObjectCounter).toBe(0);
-    expect(identity.nextOperationCounter).toBe(0);
+    expect(identity.sessionId.startsWith("session:")).toBe(true);
   });
 
-  it("generates stable unique object ids and persists the counter", () => {
+  it("generates object ids namespaced by the tab session", () => {
     const identity = loadOrCreateIdentity();
 
     const first = createObjectId("device", identity);
     const second = createObjectId("device", identity);
 
-    expect(first).toBe(`device:${identity.clientId}:0`);
-    expect(second).toBe(`device:${identity.clientId}:1`);
+    expect(first).toBe(`device:${identity.clientId}:${identity.sessionId}:0`);
+    expect(second).toBe(`device:${identity.clientId}:${identity.sessionId}:1`);
     expect(first).not.toBe(second);
-    expect(loadOrCreateIdentity().nextObjectCounter).toBe(2);
   });
 
-  it("generates operation ids that include client identity", () => {
+  it("generates operation ids that include the tab session", () => {
     const identity = loadOrCreateIdentity();
 
     const first = createOperationMeta(identity);
     const second = createOperationMeta(identity);
 
-    expect(first.opId).toBe(`op:${identity.clientId}:0`);
-    expect(second.opId).toBe(`op:${identity.clientId}:1`);
+    expect(first.opId).toBe(`op:${identity.clientId}:${identity.sessionId}:0`);
+    expect(second.opId).toBe(`op:${identity.clientId}:${identity.sessionId}:1`);
     expect(first.clientId).toBe(identity.clientId);
     expect(second.clientSeq).toBe(1);
-    expect(loadOrCreateIdentity().nextOperationCounter).toBe(2);
   });
 
-  it("accepts a fully persisted identity", () => {
+  it("generates different operation and object ids for two tabs", () => {
+    const firstTab = loadOrCreateIdentity();
+    const secondTab = loadOrCreateIdentity();
+
+    expect(firstTab.clientId).toBe(secondTab.clientId);
+    expect(firstTab.sessionId).not.toBe(secondTab.sessionId);
+    expect(createOperationMeta(firstTab).opId).not.toBe(
+      createOperationMeta(secondTab).opId,
+    );
+    expect(createObjectId("device", firstTab)).not.toBe(
+      createObjectId("device", secondTab),
+    );
+  });
+
+  it("migrates a legacy fully persisted identity to display-only storage", () => {
     const persisted: LocalIdentity = {
       clientId: "client:test" as LocalIdentity["clientId"],
       sessionId: "session:test" as LocalIdentity["sessionId"],
@@ -98,7 +116,18 @@ describe("identity", () => {
     };
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
 
-    expect(loadOrCreateIdentity()).toEqual(persisted);
+    const identity = loadOrCreateIdentity();
+    expect(identity.clientId).toBe(persisted.clientId);
+    expect(identity.displayName).toBe(persisted.displayName);
+    expect(identity.colorHue).toBe(persisted.colorHue);
+    expect(identity.sessionId).not.toBe(persisted.sessionId);
+    expect(
+      JSON.parse(window.localStorage.getItem(STORAGE_KEY) as string),
+    ).toEqual({
+      clientId: persisted.clientId,
+      displayName: persisted.displayName,
+      colorHue: persisted.colorHue,
+    });
   });
 
   it("derives stable color roles from a hue", () => {

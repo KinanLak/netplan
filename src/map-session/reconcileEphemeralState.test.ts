@@ -16,7 +16,13 @@ const device = (id: string): Device => ({
 describe("reconcileEphemeralState", () => {
   it("clears selected, hovered, and highlighted ids missing from document", () => {
     const patch = reconcileEphemeralState(
-      { floorId, devices: [device("device:a")], walls: [], links: [] },
+      {
+        floorId,
+        revision: 0,
+        devices: [device("device:a")],
+        walls: [],
+        links: [],
+      },
       {
         selectedDeviceId: "device:missing" as DeviceId,
         hoveredDeviceId: "device:hover" as DeviceId,
@@ -32,7 +38,13 @@ describe("reconcileEphemeralState", () => {
   it("returns null when ephemeral ids are still valid", () => {
     expect(
       reconcileEphemeralState(
-        { floorId, devices: [device("device:a")], walls: [], links: [] },
+        {
+          floorId,
+          revision: 0,
+          devices: [device("device:a")],
+          walls: [],
+          links: [],
+        },
         {
           selectedDeviceId: "device:a" as DeviceId,
           hoveredDeviceId: null,

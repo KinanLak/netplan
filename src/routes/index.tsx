@@ -120,7 +120,7 @@ function MapWorkspace({ sortedFloors }: { sortedFloors: Array<Floor> }) {
   const highlightedDeviceIds = useHighlightedDeviceIds();
   const isEditMode = useIsEditMode();
   const activeDrawTool = useActiveDrawTool();
-  const { document, commands } = useMapDocument();
+  const { document, commands, isReady, history } = useMapDocument();
 
   const setCurrentFloor = useMapStore((s) => s.setCurrentFloor);
   const toggleEditMode = useMapStore((s) => s.toggleEditMode);
@@ -161,7 +161,7 @@ function MapWorkspace({ sortedFloors }: { sortedFloors: Array<Floor> }) {
   };
 
   const deleteSelectedDevice = () => {
-    if (!selectedDeviceId) return;
+    if (!selectedDeviceId || !isReady) return;
     commands.deleteDevice(selectedDeviceId);
     selectDevice(null);
   };
@@ -189,8 +189,12 @@ function MapWorkspace({ sortedFloors }: { sortedFloors: Array<Floor> }) {
       toggleEditMode();
     }
   });
-  useShortcutIntentEffect("undo", handleUndo);
-  useShortcutIntentEffect("redo", handleRedo);
+  useShortcutIntentEffect("undo", () => {
+    if (isEditMode && isReady && history.canUndo) handleUndo();
+  });
+  useShortcutIntentEffect("redo", () => {
+    if (isEditMode && isReady && history.canRedo) handleRedo();
+  });
   useShortcutIntentEffect("floor-up", navigateFloorUp);
   useShortcutIntentEffect("floor-down", navigateFloorDown);
 
@@ -209,6 +213,7 @@ function MapWorkspace({ sortedFloors }: { sortedFloors: Array<Floor> }) {
         <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
           <button
             onClick={toggleEditMode}
+            disabled={!currentFloorId || !isReady}
             className={`relative flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium shadow-lg transition-all ${
               isEditMode
                 ? "border-accent bg-accent text-accent-foreground"

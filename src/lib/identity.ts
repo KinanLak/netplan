@@ -21,6 +21,12 @@ export interface LocalIdentity {
   colorHue: number;
 }
 
+interface PersistedIdentity {
+  clientId: ClientId;
+  displayName: string;
+  colorHue: number;
+}
+
 export type Identity = LocalIdentity;
 
 const hashString = (input: string): number => {
@@ -61,32 +67,36 @@ const buildDisplayName = (clientId: ClientId): string => {
   return `${adjective} ${animal}`;
 };
 
-const buildIdentity = (clientId = generateClientId()): LocalIdentity => ({
+const buildPersistedIdentity = (
+  clientId = generateClientId(),
+): PersistedIdentity => ({
   clientId,
-  sessionId: generateSessionId(),
-  nextObjectCounter: 0,
-  nextOperationCounter: 0,
   displayName: buildDisplayName(clientId),
   colorHue: hashString(clientId) % 360,
 });
 
-const isNonNegativeInteger = (value: number): boolean =>
-  Number.isInteger(value) && value >= 0;
+const buildIdentity = (
+  persisted = buildPersistedIdentity(),
+): LocalIdentity => ({
+  ...persisted,
+  sessionId: generateSessionId(),
+  nextObjectCounter: 0,
+  nextOperationCounter: 0,
+});
 
-const isLocalIdentity = (value: object | null): value is LocalIdentity => {
+const isPersistedIdentity = (
+  value: object | null,
+): value is PersistedIdentity => {
   if (!value || typeof value !== "object") return false;
-  const candidate = value as Partial<LocalIdentity>;
+  const candidate = value as Partial<PersistedIdentity>;
   return (
     typeof candidate.clientId === "string" &&
-    typeof candidate.sessionId === "string" &&
     typeof candidate.displayName === "string" &&
-    typeof candidate.colorHue === "number" &&
-    isNonNegativeInteger(candidate.nextObjectCounter ?? -1) &&
-    isNonNegativeInteger(candidate.nextOperationCounter ?? -1)
+    typeof candidate.colorHue === "number"
   );
 };
 
-const persistIdentity = (identity: LocalIdentity) => {
+const persistIdentity = (identity: PersistedIdentity) => {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(identity));
 };
@@ -103,45 +113,42 @@ export const loadOrCreateIdentity = (): LocalIdentity => {
       if (
         parsed !== null &&
         typeof parsed === "object" &&
-        isLocalIdentity(parsed)
+        isPersistedIdentity(parsed)
       ) {
-        return parsed;
+        const persisted = {
+          clientId: parsed.clientId,
+          displayName: parsed.displayName,
+          colorHue: parsed.colorHue,
+        };
+        persistIdentity(persisted);
+        return buildIdentity(persisted);
       }
     } catch {
       // fall through to fresh identity
     }
   }
 
-  const identity = buildIdentity();
-  persistIdentity(identity);
+  const persisted = buildPersistedIdentity();
+  persistIdentity(persisted);
+  const identity = buildIdentity(persisted);
   return identity;
 };
-
-const objectIdForKind = (
-  kind: ObjectKind,
-  clientId: ClientId,
-  counter: number,
-): ObjectId => `${kind}:${clientId}:${counter}` as ObjectId;
 
 export function createObjectId(
   kind: ObjectKind,
   identity: LocalIdentity,
 ): ObjectId {
-  const id = objectIdForKind(
-    kind,
-    identity.clientId,
-    identity.nextObjectCounter,
-  );
+  const id =
+    `${kind}:${identity.clientId}:${identity.sessionId}:${identity.nextObjectCounter}` as ObjectId;
   identity.nextObjectCounter += 1;
-  persistIdentity(identity);
   return id;
 }
 
 export function createOperationMeta(identity: LocalIdentity): OperationMeta {
   const clientSeq = identity.nextOperationCounter;
-  const opId = `op:${identity.clientId}:${clientSeq}` as OperationId;
+  const opId =
+    `op:${identity.clientId}:${identity.sessionId}:${clientSeq}` as OperationId;
   identity.nextOperationCounter += 1;
-  persistIdentity(identity);
   return {
     opId,
     clientId: identity.clientId,

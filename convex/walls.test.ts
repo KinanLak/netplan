@@ -44,7 +44,7 @@ const addWall = async (
           start: { x: 0, y: 0 },
           end: { x: 20, y: 0 },
           color,
-          geometryKey: "client-provided-key",
+          geometryKey: "0:0:20:0",
         },
       ],
     },

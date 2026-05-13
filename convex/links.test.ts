@@ -35,7 +35,6 @@ async function setupFloorWithDevices(t: ReturnType<typeof convexTest>) {
       operations: [
         {
           kind: "device.create",
-          meta: meta(),
           device: {
             id: a,
             floorId,
@@ -48,7 +47,6 @@ async function setupFloorWithDevices(t: ReturnType<typeof convexTest>) {
         },
         {
           kind: "device.create",
-          meta: meta(),
           device: {
             id: b,
             floorId,
@@ -61,7 +59,6 @@ async function setupFloorWithDevices(t: ReturnType<typeof convexTest>) {
         },
         {
           kind: "device.create",
-          meta: meta(),
           device: {
             id: c,
             floorId,

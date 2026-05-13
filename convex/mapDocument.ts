@@ -5,6 +5,7 @@ import { device, link, wallSegment } from "./mapValidators";
 
 const snapshotValidator = v.object({
   floorId: v.string(),
+  revision: v.number(),
   devices: v.array(device),
   walls: v.array(wallSegment),
   links: v.array(link),
@@ -56,9 +57,14 @@ export const getFloorDocument = query({
       .query("links")
       .withIndex("by_floor", (q) => q.eq("floorId", floorId))
       .collect();
+    const revision = await ctx.db
+      .query("documentRevisions")
+      .withIndex("by_floor", (q) => q.eq("floorId", floorId))
+      .unique();
 
     return {
       floorId,
+      revision: revision?.revision ?? 0,
       devices: devices.map(toDevice),
       walls: walls.map(toWall),
       links: links.map(toLink),

@@ -49,12 +49,18 @@ describe("mapOperations.apply", () => {
     const first = await t.mutation(api.mapOperations.apply, { operation });
     const second = await t.mutation(api.mapOperations.apply, { operation });
 
-    expect(first).toEqual({ status: "applied", opId: operation.meta.opId });
+    expect(first.status).toBe("applied");
+    expect(first.opId).toBe(operation.meta.opId);
+    expect(first.appliedRevision).toBe(1);
     expect(second).toEqual(first);
     await t.run(async (ctx) => {
       expect(await ctx.db.query("clientOperations").collect()).toHaveLength(1);
       expect(await ctx.db.query("devices").collect()).toHaveLength(1);
     });
+    const document = await t.query(api.mapDocument.getFloorDocument, {
+      floorId,
+    });
+    expect(document.revision).toBe(first.appliedRevision);
   });
 
   it("treats duplicate create with same object id and payload as safe", async () => {
@@ -218,17 +224,14 @@ describe("mapOperations.apply", () => {
         operations: [
           {
             kind: "device.create",
-            meta: meta(15),
             device: device("device:a", floorId, 0),
           },
           {
             kind: "device.create",
-            meta: meta(16),
             device: device("device:b", floorId, 200),
           },
           {
             kind: "link.create",
-            meta: meta(17),
             link: {
               id: "link:ab",
               floorId,
@@ -277,7 +280,7 @@ describe("mapOperations.apply", () => {
             start: { x: 200, y: 200 },
             end: { x: 280, y: 200 },
             color: "sand",
-            geometryKey: "safe-client-key",
+            geometryKey: "200:200:280:200",
           },
           {
             id: "wall:collides",
@@ -285,7 +288,7 @@ describe("mapOperations.apply", () => {
             start: { x: 0, y: 40 },
             end: { x: 80, y: 40 },
             color: "concrete",
-            geometryKey: "colliding-client-key",
+            geometryKey: "0:40:80:40",
           },
         ],
       },
@@ -310,12 +313,10 @@ describe("mapOperations.apply", () => {
         operations: [
           {
             kind: "device.create",
-            meta: meta(22),
             device: device("device:batch-created", floorId, 0),
           },
           {
             kind: "link.create",
-            meta: meta(23),
             link: {
               id: "link:invalid-batch",
               floorId,
@@ -340,36 +341,35 @@ describe("mapOperations.apply", () => {
     const t = convexTest(schema, modules);
     const floorId = await freshFloor(t);
 
-    const result = await t.mutation(api.mapOperations.apply, {
-      operation: {
-        kind: "batch",
-        meta: meta(24),
-        operations: [
-          {
-            kind: "device.create",
-            meta: meta(25),
-            device: device("device:batch-a", floorId, 0),
+    const operation = {
+      kind: "batch" as const,
+      meta: meta(24),
+      operations: [
+        {
+          kind: "device.create" as const,
+          device: device("device:batch-a", floorId, 0),
+        },
+        {
+          kind: "device.create" as const,
+          device: device("device:batch-b", floorId, 200),
+        },
+        {
+          kind: "link.create" as const,
+          link: {
+            id: "link:batch-ab",
+            floorId,
+            fromDeviceId: "device:batch-a",
+            toDeviceId: "device:batch-b",
           },
-          {
-            kind: "device.create",
-            meta: meta(26),
-            device: device("device:batch-b", floorId, 200),
-          },
-          {
-            kind: "link.create",
-            meta: meta(27),
-            link: {
-              id: "link:batch-ab",
-              floorId,
-              fromDeviceId: "device:batch-a",
-              toDeviceId: "device:batch-b",
-            },
-          },
-        ],
-      },
-    });
+        },
+      ],
+    };
+
+    const result = await t.mutation(api.mapOperations.apply, { operation });
+    const replay = await t.mutation(api.mapOperations.apply, { operation });
 
     expect(result.status).toBe("applied");
+    expect(replay).toEqual(result);
     const document = await t.query(api.mapDocument.getFloorDocument, {
       floorId,
     });
@@ -378,6 +378,52 @@ describe("mapOperations.apply", () => {
       "device:batch-b",
     ]);
     expect(document.links.map((item) => item.id)).toEqual(["link:batch-ab"]);
+  });
+
+  it("rejects batch sub-operations with hidden metadata", async () => {
+    const t = convexTest(schema, modules);
+    const floorId = await freshFloor(t);
+    const operation = {
+      kind: "batch" as const,
+      meta: meta(35),
+      operations: [
+        {
+          kind: "device.create" as const,
+          meta: meta(36),
+          device: device("device:hidden-meta", floorId, 0),
+        },
+      ],
+    };
+
+    let rejected = false;
+    try {
+      await t.mutation(api.mapOperations.apply, { operation });
+    } catch {
+      rejected = true;
+    }
+    expect(rejected).toBe(true);
+  });
+
+  it("rejects oversized batches before applying writes", async () => {
+    const t = convexTest(schema, modules);
+    const floorId = await freshFloor(t);
+    const operation = {
+      kind: "batch" as const,
+      meta: meta(37),
+      operations: Array.from({ length: 101 }, (_, index) => ({
+        kind: "device.create" as const,
+        device: device(`device:oversized:${index}`, floorId, index * 100),
+      })),
+    };
+
+    const result = await t.mutation(api.mapOperations.apply, { operation });
+
+    expect(result.status).toBe("rejected");
+    expect(result.error).toContain("Too many operations");
+    const document = await t.query(api.mapDocument.getFloorDocument, {
+      floorId,
+    });
+    expect(document.devices).toEqual([]);
   });
 
   it("returns stored rejections for repeated rejected opIds without writing", async () => {
@@ -389,12 +435,10 @@ describe("mapOperations.apply", () => {
       operations: [
         {
           kind: "device.create" as const,
-          meta: meta(29),
           device: device("device:retry-rejected", floorId, 0),
         },
         {
           kind: "link.create" as const,
-          meta: meta(30),
           link: {
             id: "link:retry-rejected",
             floorId,
@@ -417,11 +461,11 @@ describe("mapOperations.apply", () => {
     });
   });
 
-  it("persists server-canonical wall geometry keys and deduplicates bogus keys", async () => {
+  it("rejects non-canonical wall geometry keys", async () => {
     const t = convexTest(schema, modules);
     const floorId = await freshFloor(t);
 
-    await t.mutation(api.mapOperations.apply, {
+    const result = await t.mutation(api.mapOperations.apply, {
       operation: {
         kind: "walls.add",
         meta: meta(31),
@@ -437,44 +481,67 @@ describe("mapOperations.apply", () => {
         ],
       },
     });
-    await t.mutation(api.mapOperations.apply, {
+
+    expect(result.status).toBe("rejected");
+    expect(result.error).toContain("wall geometry");
+  });
+
+  it("persists canonical wall endpoints for reversed equivalent input", async () => {
+    const t = convexTest(schema, modules);
+    const floorId = await freshFloor(t);
+
+    const result = await t.mutation(api.mapOperations.apply, {
       operation: {
         kind: "walls.add",
         meta: meta(32),
         walls: [
           {
-            id: "wall:duplicate-bogus",
-            floorId,
-            start: { x: 0, y: 0 },
-            end: { x: 20, y: 0 },
-            color: "concrete",
-            geometryKey: "bogus-b",
-          },
-        ],
-      },
-    });
-    await t.mutation(api.mapOperations.apply, {
-      operation: {
-        kind: "walls.add",
-        meta: meta(33),
-        walls: [
-          {
-            id: "wall:duplicate-reversed",
+            id: "wall:reversed",
             floorId,
             start: { x: 20, y: 0 },
             end: { x: 0, y: 0 },
-            color: "slate",
-            geometryKey: "bogus-c",
+            color: "concrete",
+            geometryKey: "0:0:20:0",
           },
         ],
       },
     });
 
+    expect(result.status).toBe("applied");
     const document = await t.query(api.mapDocument.getFloorDocument, {
       floorId,
     });
-    expect(document.walls).toHaveLength(1);
-    expect(document.walls[0]?.id).toBe("wall:canonical");
+    expect(document.walls[0]?.start).toEqual({ x: 0, y: 0 });
+    expect(document.walls[0]?.end).toEqual({ x: 20, y: 0 });
     expect(document.walls[0]?.geometryKey).toBe("0:0:20:0");
+  });
+
+  it("rejects malformed device sizes and positions", async () => {
+    const t = convexTest(schema, modules);
+    const floorId = await freshFloor(t);
+
+    const badSize = await t.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "device.create",
+        meta: meta(33),
+        device: {
+          ...device("device:bad-size", floorId, 0),
+          size: { width: 0, height: 80 },
+        },
+      },
+    });
+    const badPosition = await t.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "device.create",
+        meta: meta(34),
+        device: {
+          ...device("device:bad-position", floorId, 0),
+          position: { x: -1, y: 0 },
+        },
+      },
+    });
+
+    expect(badSize.status).toBe("rejected");
+    expect(badPosition.status).toBe("rejected");
   });
 });

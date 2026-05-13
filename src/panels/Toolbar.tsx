@@ -86,6 +86,7 @@ export default function Toolbar() {
   >(createDeviceKindRecord(() => null));
 
   const handleTypeClick = (type: DeviceType) => {
+    if (!currentFloorId || !isReady) return;
     if (suppressNextTypeToggleRef.current) {
       const suppressedType = suppressNextTypeToggleRef.current;
       suppressNextTypeToggleRef.current = null;
@@ -114,7 +115,7 @@ export default function Toolbar() {
   const handleDrawToolClick = (
     tool: Extract<DrawTool, "wall" | "wall-brush" | "wall-erase" | "room">,
   ) => {
-    if (!currentFloorId) return;
+    if (!currentFloorId || !isReady) return;
 
     const nextTool = activeDrawTool === tool ? "device" : tool;
     setActiveDrawTool(nextTool);
@@ -130,6 +131,7 @@ export default function Toolbar() {
   const handleOpenChange: NonNullable<
     ComponentProps<typeof Popover>["onOpenChange"]
   > = (newOpen, eventDetails) => {
+    if (newOpen && !isReady) return;
     const target = eventDetails.event.target;
     const isActiveButtonOutsidePress =
       !newOpen &&
@@ -157,7 +159,7 @@ export default function Toolbar() {
   );
   useShortcutIntentEffect("tool-room", () => handleDrawToolClick("room"));
   useDeviceToolShortcuts({
-    enabled: true,
+    enabled: isReady,
     onSelectDeviceType: handleTypeClick,
   });
 
@@ -262,7 +264,7 @@ export default function Toolbar() {
         variant={isEraseActive ? "ghost" : isActive ? "secondary" : "ghost"}
         size="sm"
         onClick={() => handleToolbarActionClick(action)}
-        disabled={!currentFloorId}
+        disabled={!currentFloorId || !isReady}
         className={cn(
           "-md flex h-auto flex-col items-center px-2 py-1.5",
           isActive && !isEraseActive && "ring-2 ring-ring",
@@ -289,7 +291,12 @@ export default function Toolbar() {
   return (
     <div className="fixed top-4 left-1/2 z-10 -translate-x-1/2">
       <Popover
-        open={open && selectedType !== null && activeDrawTool === "device"}
+        open={
+          open &&
+          isReady &&
+          selectedType !== null &&
+          activeDrawTool === "device"
+        }
         onOpenChange={handleOpenChange}
       >
         <div
@@ -325,7 +332,9 @@ export default function Toolbar() {
                     key={color}
                     type="button"
                     onClick={() => handleSelectWallColor(color)}
-                    disabled={!currentFloorId || !wallColorSelectionEnabled}
+                    disabled={
+                      !currentFloorId || !isReady || !wallColorSelectionEnabled
+                    }
                     className={cn(
                       "h-6 w-6 rounded-full ring-ring transition-all",
                       isActive &&
