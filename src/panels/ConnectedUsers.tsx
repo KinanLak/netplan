@@ -4,9 +4,9 @@ import type { FloorId } from "@/types/map";
 import { colorForHue, useIdentity } from "@/lib/identity";
 import { api } from "../../convex/_generated/api";
 
-const ONLINE_HEARTBEAT_MS = 10_000;
-const ONLINE_STALE_AFTER_MS = 30_000;
-const STALE_TICK_MS = 5_000;
+const ONLINE_HEARTBEAT_MS = 2_000;
+const ONLINE_STALE_AFTER_MS = 5_000;
+const STALE_TICK_MS = 1_000;
 const MAX_VISIBLE_USERS = 5;
 
 interface ConnectedUsersProps {

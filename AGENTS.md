@@ -18,7 +18,7 @@ React 19, TypeScript, Vite, TailwindCSS V4, @xyflow/react. Durable domain state 
 - `src/map-session/MapDocumentProvider.tsx` is the single active owner for map command dispatch, pending operations, sequential outbox, and undo/redo. UI components consume `useMapDocument()` and must not call Convex map mutations directly.
 - Local optimistic state is the materialized projection `applyOperations(serverDocument, pendingOperations)` from `src/map-engine/`. Do not generate durable ids in Convex optimistic callbacks; the session generates object ids and op ids before dispatch.
 - All durable map writes go through `api.mapOperations.apply`, which is idempotent by `opId` and validates server invariants. New domain mutation? Add a typed operation, pure engine behavior, inverse generation, server application, and tests together.
-- Live cursors and edit leases run through the custom `presences` table at 30 Hz with a 30 s TTL — see `convex/presences.ts` and `src/canvas/PresenceCursors.tsx`. Presence references application object ids, never Convex `_id`.
+- Live cursors and edit leases run through the custom `presences` table at 30 Hz with a 5 s TTL — see `convex/presences.ts` and `src/canvas/PresenceCursors.tsx`. Presence references application object ids, never Convex `_id`.
 
 ## Tradeoffs (MVP, no auth)
 
