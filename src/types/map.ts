@@ -171,6 +171,8 @@ export interface WallStrokeInput {
 
 // ── UI store (Zustand): only ephemeral interaction state ─────────────────────
 
+export type CanvasBackgroundMode = "custom" | "xyflow";
+
 export interface MapInteractionState {
   currentBuildingId: BuildingId | null;
   currentFloorId: FloorId | null;
@@ -181,6 +183,7 @@ export interface MapInteractionState {
   highlightedDeviceIdSet: ReadonlySet<DeviceId>;
   activeDrawTool: DrawTool;
   selectedWallColor: WallColor;
+  canvasBackgroundMode: CanvasBackgroundMode;
 }
 
 export interface MapInteractionActions {
@@ -191,6 +194,7 @@ export interface MapInteractionActions {
   toggleEditMode: () => void;
   setActiveDrawTool: (tool: DrawTool) => void;
   setSelectedWallColor: (color: WallColor) => void;
+  setCanvasBackgroundMode: (mode: CanvasBackgroundMode) => void;
   setHighlightedDevices: (deviceIds: Array<DeviceId>) => void;
 }
 

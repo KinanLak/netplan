@@ -49,6 +49,8 @@ export default function AppSidebar() {
 
   const setCurrentBuilding = useMapStore((s) => s.setCurrentBuilding);
   const setCurrentFloor = useMapStore((s) => s.setCurrentFloor);
+  const canvasBackgroundMode = useMapStore((s) => s.canvasBackgroundMode);
+  const setCanvasBackgroundMode = useMapStore((s) => s.setCanvasBackgroundMode);
   const createDefaultMap = useMutation(api.buildings.createDefaultMap);
   const clearMap = useMutation(api.buildings.clearMap);
   const [devMapAction, setDevMapAction] = useState<"clear" | "create" | null>(
@@ -259,6 +261,35 @@ export default function AppSidebar() {
               >
                 {devMapAction === "clear" ? "Suppression..." : "Clear map"}
               </button>
+            </div>
+            <div className="space-y-1.5">
+              <div className="text-xs font-medium text-muted-foreground">
+                Canvas background
+              </div>
+              <div className="grid grid-cols-2 gap-1 rounded-md border border-border bg-background p-1">
+                <button
+                  type="button"
+                  onClick={() => setCanvasBackgroundMode("custom")}
+                  className={cn(
+                    "rounded-sm px-2 py-1 text-xs font-medium transition-colors hover:bg-accent hover:text-accent-foreground",
+                    canvasBackgroundMode === "custom" &&
+                      "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground",
+                  )}
+                >
+                  Custom
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCanvasBackgroundMode("xyflow")}
+                  className={cn(
+                    "rounded-sm px-2 py-1 text-xs font-medium transition-colors hover:bg-accent hover:text-accent-foreground",
+                    canvasBackgroundMode === "xyflow" &&
+                      "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground",
+                  )}
+                >
+                  Xyflow
+                </button>
+              </div>
             </div>
           </div>
         ) : null}
