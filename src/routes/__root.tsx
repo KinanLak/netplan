@@ -6,13 +6,13 @@ import {
 } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import { TanStackDevtools } from "@tanstack/react-devtools";
-import { SpeedInsights } from "@vercel/speed-insights/react";
 import { ConvexProvider } from "convex/react";
 import { useEffect } from "react";
 import type { ReactNode } from "react";
 import appCss from "@/styles.css?url";
 import logoCss from "@/netplan-logo.css?url";
 import { convexClient } from "@/lib/convex";
+import { logGraphicsAccelerationStatusOnce } from "@/lib/graphicsAcceleration";
 
 export const Route = createRootRoute({
   head: () => ({
@@ -42,6 +42,8 @@ function RootComponent() {
 
 function RootDocument({ children }: { children: ReactNode }) {
   useEffect(() => {
+    logGraphicsAccelerationStatusOnce();
+
     if (!import.meta.env.DEV) {
       return;
     }
@@ -61,7 +63,6 @@ function RootDocument({ children }: { children: ReactNode }) {
       </head>
       <body>
         {children}
-        <SpeedInsights debug={false} />
         <TanStackDevtools
           config={{
             position: "middle-left",
