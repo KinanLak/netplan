@@ -1,10 +1,5 @@
 import { useMemo, useState } from "react";
-import {
-  Background,
-  BackgroundVariant,
-  ReactFlow,
-  useReactFlow,
-} from "@xyflow/react";
+import { ReactFlow, useReactFlow } from "@xyflow/react";
 import { nodeTypes } from "./nodeTypes";
 import type { DeviceNode } from "@/devices/reactFlowDeviceAdapter";
 import { useMapStore } from "@/store/useMapStore";
@@ -24,8 +19,6 @@ import { useCanvasDragState } from "@/canvas/hooks/useCanvasDragState";
 import { useCanvasKeyboardShortcuts } from "@/canvas/hooks/useCanvasKeyboardShortcuts";
 import { useWallToolSession } from "@/walls/useWallToolSession";
 import {
-  FLOW_CANVAS_BACKGROUND_COLOR,
-  FLOW_CANVAS_BACKGROUND_DOT_SIZE,
   FLOW_CANVAS_CENTER_DURATION_MS,
   FLOW_CANVAS_FIT_VIEW_PADDING,
   FLOW_CANVAS_HALO_SHADOWS,
@@ -201,12 +194,12 @@ export default function FlowCanvas() {
         )}
         proOptions={PRO_OPTIONS}
       >
-        <Background
+        {/* <Background
           variant={BackgroundVariant.Dots}
           gap={GRID_SIZE}
           size={FLOW_CANVAS_BACKGROUND_DOT_SIZE}
           color={FLOW_CANVAS_BACKGROUND_COLOR}
-        />
+        /> */}
 
         <WallToolsLayer
           session={wallToolSession}
