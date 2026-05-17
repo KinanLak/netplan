@@ -1,8 +1,15 @@
 import { describe, expect, it } from "bun:test";
-import type { DeviceId, FloorId, OperationMeta } from "@/types/map";
+import type {
+  DeviceId,
+  FloorId,
+  OperationMeta,
+  WallId,
+  WallSegment,
+} from "@/types/map";
 import type { MapOperation } from "@/map-engine/types";
 import {
   appendCappedHistory,
+  coalesceHistoryGroupOperations,
   HISTORY_LIMIT,
   removeHistoryEntriesForOperation,
   removePendingHistoryGroupOperation,
@@ -46,6 +53,15 @@ const createOperation = (
     size: { width: 80, height: 80 },
     metadata: {},
   },
+});
+
+const wall = (id: string, x: number): WallSegment => ({
+  id: id as WallId,
+  floorId,
+  start: { x, y: 0 },
+  end: { x, y: 0 },
+  color: "concrete",
+  geometryKey: `${x}:0:${x}:0`,
 });
 
 describe("session history", () => {
@@ -100,6 +116,39 @@ describe("session history", () => {
     const next = removeHistoryEntriesForOperation(stack, "op:rejected");
 
     expect(next.map((entry) => entry.label)).toEqual(["kept"]);
+  });
+
+  it("coalesces grouped wall adds into one operation", () => {
+    const firstWall = wall("wall:a", 0);
+    const secondWall = wall("wall:b", 40);
+
+    const grouped = coalesceHistoryGroupOperations([
+      { kind: "walls.add", meta: meta(1), walls: [firstWall] },
+      { kind: "walls.add", meta: meta(2), walls: [secondWall] },
+    ]);
+
+    expect(grouped).toEqual({
+      kind: "walls.add",
+      meta: meta(1),
+      walls: [firstWall, secondWall],
+    });
+  });
+
+  it("coalesces grouped wall deletes into one operation", () => {
+    const grouped = coalesceHistoryGroupOperations([
+      { kind: "walls.delete", meta: meta(1), wallIds: ["wall:a" as WallId] },
+      {
+        kind: "walls.delete",
+        meta: meta(2),
+        wallIds: ["wall:b" as WallId, "wall:a" as WallId],
+      },
+    ]);
+
+    expect(grouped).toEqual({
+      kind: "walls.delete",
+      meta: meta(1),
+      wallIds: ["wall:a", "wall:b"],
+    });
   });
 
   it("keeps successful operation entries when another op is rejected", () => {

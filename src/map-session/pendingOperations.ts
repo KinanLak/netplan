@@ -5,6 +5,7 @@ export interface PendingOperationEntry {
   operation: MapOperation;
   floorId: FloorId;
   ackedRevision?: number;
+  deferred?: boolean;
 }
 
 export interface PendingOperationObservation {

@@ -7,7 +7,7 @@ import { ApplicationMenu, BrowserWindow, PATHS } from "electrobun/bun";
 ApplicationMenu.setApplicationMenu([
   {
     label: "Netplan",
-    submenu: [{ role: "quit" , accelerator: "CmdOrCtrl+Q" }],
+    submenu: [{ role: "quit", accelerator: "CmdOrCtrl+Q" }],
   },
   {
     label: "Edit",

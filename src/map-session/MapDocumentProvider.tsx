@@ -50,11 +50,11 @@ import {
 import { api } from "../../convex/_generated/api";
 import {
   appendCappedHistory,
+  coalesceHistoryGroupOperations,
   dispatchUndoRedoEvent,
   removeHistoryEntriesForOperation,
   removePendingHistoryGroupOperation,
   withOperationMeta,
-  withoutOperationMeta,
 } from "./history";
 import type { SessionHistoryEntry } from "./history";
 import { SequentialOutbox } from "./outbox";
@@ -153,6 +153,11 @@ interface PendingHistoryOperation {
   sourceOpId: string;
 }
 
+interface PendingHistoryGroup {
+  snapshotBefore: MapDocumentSnapshot;
+  entries: Array<PendingHistoryOperation>;
+}
+
 interface FloorHistoryState {
   undoStack: Array<SessionHistoryEntry>;
   redoStack: Array<SessionHistoryEntry>;
@@ -201,6 +206,31 @@ const updateFloorHistory = (
   ...current,
   [floorId]: updater(current[floorId] ?? emptyHistoryState()),
 });
+
+const replaceGroupedPendingOperations = (
+  current: ReadonlyArray<PendingOperationEntry>,
+  sourceOpIds: ReadonlyArray<string>,
+  operation: MapOperation,
+  floorId: FloorId,
+): Array<PendingOperationEntry> => {
+  const sourceOpIdSet = new Set(sourceOpIds);
+  const next: Array<PendingOperationEntry> = [];
+  let inserted = false;
+
+  for (const entry of current) {
+    if (!sourceOpIdSet.has(entry.operation.meta.opId)) {
+      next.push(entry);
+      continue;
+    }
+
+    if (!inserted) {
+      next.push({ operation, floorId });
+      inserted = true;
+    }
+  }
+
+  return inserted ? next : [...next, { operation, floorId }];
+};
 
 export function MapDocumentProvider({
   floorId,
@@ -255,6 +285,7 @@ export function MapDocumentProvider({
     (entry) => entry.floorId !== activeFloorId,
   );
   const observedPendingOpIds = pendingEntries
+    .filter((entry) => !entry.deferred)
     .slice(0, MAX_OBSERVED_PENDING_OP_IDS)
     .map((entry) => entry.operation.meta.opId);
   const observedPendingRaw = useQuery(
@@ -268,7 +299,7 @@ export function MapDocumentProvider({
   const documentRef = useRef(document);
   const undoStackRef = useRef(undoStack);
   const redoStackRef = useRef(redoStack);
-  const historyGroupRef = useRef<Array<PendingHistoryOperation> | null>(null);
+  const historyGroupRef = useRef<PendingHistoryGroup | null>(null);
   const outboxRef = useRef<SequentialOutbox | null>(null);
 
   useLayoutEffect(() => {
@@ -316,9 +347,10 @@ export function MapDocumentProvider({
           }
           return next;
         });
-        if (historyGroupRef.current) {
-          historyGroupRef.current = removePendingHistoryGroupOperation(
-            historyGroupRef.current,
+        const historyGroup = historyGroupRef.current;
+        if (historyGroup) {
+          historyGroup.entries = removePendingHistoryGroupOperation(
+            historyGroup.entries,
             operation.meta.opId,
           );
         }
@@ -390,8 +422,9 @@ export function MapDocumentProvider({
         }
         return next;
       });
-      if (historyGroupRef.current) {
-        historyGroupRef.current = historyGroupRef.current.filter(
+      const historyGroup = historyGroupRef.current;
+      if (historyGroup) {
+        historyGroup.entries = historyGroup.entries.filter(
           (entry) => !rejectedOpIds.has(entry.sourceOpId),
         );
       }
@@ -422,12 +455,6 @@ export function MapDocumentProvider({
   }, [rejectedMessage]);
 
   const pushUndoOperation = (operation: MapOperation, sourceOpId: string) => {
-    const group = historyGroupRef.current;
-    if (group) {
-      group.push({ operation, sourceOpId });
-      return;
-    }
-
     setHistoryByFloor((current) =>
       updateFloorHistory(current, activeFloorId, (history) => ({
         undoStack: [
@@ -455,13 +482,18 @@ export function MapDocumentProvider({
     options: { recordHistory: boolean } = { recordHistory: true },
   ) => {
     const snapshotBefore = documentRef.current;
-    if (options.recordHistory) recordHistory(snapshotBefore, operation);
+    const historyGroup = options.recordHistory ? historyGroupRef.current : null;
+    if (historyGroup) {
+      historyGroup.entries.push({ operation, sourceOpId: operation.meta.opId });
+    } else if (options.recordHistory) {
+      recordHistory(snapshotBefore, operation);
+    }
     const targetFloorId = operationFloorId(operation, activeFloorId);
     setPendingEntries((current) => [
       ...current,
-      { operation, floorId: targetFloorId },
+      { operation, floorId: targetFloorId, deferred: historyGroup !== null },
     ]);
-    outboxRef.current?.enqueue(operation);
+    if (!historyGroup) outboxRef.current?.enqueue(operation);
   };
 
   const freshMeta = () => {
@@ -672,34 +704,33 @@ export function MapDocumentProvider({
 
   const beginHistoryGroup = () => {
     if (historyGroupRef.current) return;
-    historyGroupRef.current = [];
+    historyGroupRef.current = {
+      snapshotBefore: documentRef.current,
+      entries: [],
+    };
   };
 
   const endHistoryGroup = () => {
     const group = historyGroupRef.current;
     historyGroupRef.current = null;
-    if (!group || group.length === 0) return;
-    const operations = group.flatMap((entry) => {
-      const operation = withoutOperationMeta(entry.operation);
-      return operation ? [operation] : [];
-    });
-    if (operations.length === 0) return;
-    const operation: MapOperation =
-      group.length === 1
-        ? group[0].operation
-        : { kind: "batch", meta: group[0].operation.meta, operations };
-    setHistoryByFloor((current) =>
-      updateFloorHistory(current, activeFloorId, (history) => ({
-        undoStack: [
-          ...appendCappedHistory(history.undoStack, {
-            label: operationLabel(operation),
-            operation,
-            sourceOpIds: group.map((entry) => entry.sourceOpId),
-          }),
-        ],
-        redoStack: [],
-      })),
+    if (!group || group.entries.length === 0) return;
+    const operation = coalesceHistoryGroupOperations(
+      group.entries.map((entry) => entry.operation),
     );
+    if (!operation) return;
+
+    const sourceOpIds = group.entries.map((entry) => entry.sourceOpId);
+    const targetFloorId = operationFloorId(operation, activeFloorId);
+    setPendingEntries((current) =>
+      replaceGroupedPendingOperations(
+        current,
+        sourceOpIds,
+        operation,
+        targetFloorId,
+      ),
+    );
+    recordHistory(group.snapshotBefore, operation);
+    outboxRef.current?.enqueue(operation);
   };
 
   const runHistoryOperation = (
