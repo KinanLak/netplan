@@ -21,7 +21,7 @@ export const FLOW_CANVAS_CENTER_DURATION_MS = 250;
 export const FLOW_CANVAS_FIT_VIEW_PADDING = 0.2;
 export const FLOW_CANVAS_MIN_ZOOM = 0.3;
 export const FLOW_CANVAS_MAX_ZOOM = 2;
-export const FLOW_CANVAS_BACKGROUND_DOT_SIZE = 1.5;
+export const FLOW_CANVAS_BACKGROUND_DOT_SIZE = 2;
 export const FLOW_CANVAS_BACKGROUND_COLOR = "#94a3b8";
 export const FLOW_CANVAS_HALO_SHADOWS = {
   erase: "inset 0 0 50px 20px rgba(239, 68, 68, 0.32)",
