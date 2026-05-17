@@ -12,8 +12,6 @@ export const useIsEditMode = () => useMapStore((s) => s.isEditMode);
 export const useActiveDrawTool = () => useMapStore((s) => s.activeDrawTool);
 export const useSelectedWallColor = () =>
   useMapStore((s) => s.selectedWallColor);
-export const useCanvasBackgroundMode = () =>
-  useMapStore((s) => s.canvasBackgroundMode);
 export const useHighlightedDeviceIds = () =>
   useMapStore((s) => s.highlightedDeviceIds);
 

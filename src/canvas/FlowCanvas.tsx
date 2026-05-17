@@ -1,19 +1,12 @@
 import type { CSSProperties } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  Background,
-  BackgroundVariant,
-  ReactFlow,
-  useOnViewportChange,
-  useReactFlow,
-} from "@xyflow/react";
+import { ReactFlow, useOnViewportChange, useReactFlow } from "@xyflow/react";
 import type { Viewport } from "@xyflow/react";
 import { nodeTypes } from "./nodeTypes";
 import type { DeviceNode } from "@/devices/reactFlowDeviceAdapter";
 import { useMapStore } from "@/store/useMapStore";
 import {
   useActiveDrawTool,
-  useCanvasBackgroundMode,
   useCurrentFloorId,
   useIsEditMode,
   useSelectedDeviceId,
@@ -208,7 +201,6 @@ export default function FlowCanvas() {
   const selectedDeviceId = useSelectedDeviceId();
   const isEditMode = useIsEditMode();
   const activeDrawTool = useActiveDrawTool();
-  const canvasBackgroundMode = useCanvasBackgroundMode();
 
   const selectDevice = useMapStore((s) => s.selectDevice);
   const setHoveredDevice = useMapStore((s) => s.setHoveredDevice);
@@ -365,16 +357,7 @@ export default function FlowCanvas() {
         )}
         proOptions={PRO_OPTIONS}
       >
-        {canvasBackgroundMode === "custom" ? (
-          <FlowCanvasBackground />
-        ) : (
-          <Background
-            variant={BackgroundVariant.Dots}
-            gap={GRID_SIZE}
-            size={FLOW_CANVAS_BACKGROUND_DOT_SIZE}
-            color={FLOW_CANVAS_BACKGROUND_COLOR}
-          />
-        )}
+        <FlowCanvasBackground />
 
         <WallToolsLayer
           session={wallToolSession}

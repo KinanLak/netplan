@@ -21,7 +21,6 @@ export const useMapStore = create<MapStore>()((set) => ({
   selectedDeviceId: null,
   hoveredDeviceId: null,
   isEditMode: true,
-  canvasBackgroundMode: "custom",
   highlightedDeviceIds: [],
   highlightedDeviceIdSet: toHighlightedDeviceIdSet([]),
   activeDrawTool: "device" as DrawTool,
@@ -71,9 +70,6 @@ export const useMapStore = create<MapStore>()((set) => ({
   },
   setSelectedWallColor: (color) => {
     set({ selectedWallColor: color });
-  },
-  setCanvasBackgroundMode: (mode) => {
-    set({ canvasBackgroundMode: mode });
   },
   setHighlightedDevices: (deviceIds) => {
     set((state) => {
