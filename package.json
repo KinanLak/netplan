@@ -10,7 +10,11 @@
     "lint": "oxlint --fix",
     "format": "oxfmt --write",
     "tsc": "tsgo --noEmit --pretty",
-    "check": "bun run tsc && bun run lint && bun run format && bun test"
+    "check": "bun run tsc && bun run lint && bun run format && bun test",
+    "desktop:dev": "concurrently -k 'bun run db' 'bun run web --host 127.0.0.1 --port 3000' 'NETPLAN_DESKTOP_URL=http://127.0.0.1:3000 electrobun dev'",
+    "desktop:build": "bun run build && NETPLAN_ELECTROBUN_INCLUDE_WEB_BUILD=1 electrobun build --env=stable",
+    "desktop:build:dev": "bun run build && NETPLAN_ELECTROBUN_INCLUDE_WEB_BUILD=1 electrobun build",
+    "desktop:dev:build": "bun run desktop:build:dev"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
@@ -27,6 +31,7 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "convex": "^1.37.0",
+    "electrobun": "^1.18.1",
     "nitro": "3.0.260429-beta",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
@@ -48,6 +53,7 @@
     "@types/node": "^25.6.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "@types/three": "^0.184.1",
     "@typescript/native-preview": "^7.0.0-dev.20260507.1",
     "@vitejs/plugin-react": "^6.0.1",
     "babel-plugin-react-compiler": "^1.0.0",
