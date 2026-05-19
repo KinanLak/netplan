@@ -36,6 +36,8 @@ const SNAP_GRID: [number, number] = [GRID_SIZE, GRID_SIZE];
 const EMPTY_EDGES: Array<never> = [];
 const FIT_VIEW_OPTIONS = { padding: FLOW_CANVAS_FIT_VIEW_PADDING };
 const PRO_OPTIONS = { hideAttribution: true };
+const ALL_MOUSE_PAN_BUTTONS = [0, 1, 2];
+const RIGHT_MOUSE_PAN_BUTTON = [2];
 const BACKGROUND_GRID_STEPS = [4, 2, 1] as const;
 const BACKGROUND_COARSE_TO_MEDIUM_ZOOM = 0.4;
 const BACKGROUND_MEDIUM_TO_FINE_ZOOM = 0.75;
@@ -293,6 +295,10 @@ export default function FlowCanvas() {
 
   const isWallDeleteTool = activeDrawTool === "wall-erase";
   const isWallBrushTool = activeDrawTool === "wall-brush";
+  const panOnDrag =
+    isWallDeleteTool || isWallBrushTool
+      ? RIGHT_MOUSE_PAN_BUTTON
+      : ALL_MOUSE_PAN_BUTTONS;
 
   const editModeHaloColor = isWallDeleteTool
     ? FLOW_CANVAS_HALO_SHADOWS.erase
@@ -348,7 +354,8 @@ export default function FlowCanvas() {
         fitViewOptions={FIT_VIEW_OPTIONS}
         minZoom={FLOW_CANVAS_MIN_ZOOM}
         maxZoom={FLOW_CANVAS_MAX_ZOOM}
-        panOnDrag={isWallDeleteTool || isWallBrushTool ? false : true}
+        panOnDrag={panOnDrag}
+        panOnScroll={true}
         deleteKeyCode={null}
         nodesDraggable={canEditDevices}
         className={cn(

@@ -11,10 +11,9 @@ import type {
 } from "@/types/map";
 import {
   clickWallPane,
-  contextCancelWallInteraction,
   createWallInteractionState,
   moveWallPointer,
-  resetWallInteractionState,
+  suppressWallContextMenu,
 } from "@/walls/wallInteraction";
 import type {
   PointerSample,
@@ -117,7 +116,7 @@ const sample = (x: number, y: number): PointerSample => ({
 });
 
 describe("wall interaction", () => {
-  it("anchors a wall draw and clears it on context cancel", () => {
+  it("anchors a wall draw and keeps it on context menu suppression", () => {
     const { adapter, calls } = createAdapter();
     const anchored = clickWallPane(
       createWallInteractionState(),
@@ -126,16 +125,12 @@ describe("wall interaction", () => {
       sample(10, 10),
     ).state;
 
-    const canceled = contextCancelWallInteraction(
-      anchored,
-      context("wall"),
-      adapter,
-    );
+    const suppressed = suppressWallContextMenu(anchored, context("wall"));
 
     expect(anchored.drawAnchor).toEqual({ x: 10, y: 10 });
-    expect(canceled.handled).toBe(true);
-    expect(canceled.state).toEqual(resetWallInteractionState());
-    expect(calls.setActiveDrawTool).toEqual(["device"]);
+    expect(suppressed.handled).toBe(true);
+    expect(suppressed.state).toBe(anchored);
+    expect(calls.setActiveDrawTool).toEqual([]);
   });
 
   it("clears a wall anchor when the next click is on the same snap point", () => {

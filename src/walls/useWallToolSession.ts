@@ -23,12 +23,12 @@ import { snapPositionToWallGrid } from "@/walls/gridGeometry";
 import {
   cancelWallTool,
   clickWallPane,
-  contextCancelWallInteraction,
   createWallInteractionState,
   getWallInteractionViewModel,
   moveWallPointer,
   releaseWallPointer,
   resetWallInteractionState,
+  suppressWallContextMenu,
 } from "@/walls/wallInteraction";
 import type {
   PointerSample,
@@ -262,11 +262,7 @@ export const useWallToolSession = (): WallToolSession => {
   };
 
   const handleContextMenu = (event: ReactMouseEvent | MouseEvent): boolean => {
-    const result = contextCancelWallInteraction(
-      stateRef.current,
-      context,
-      adapter,
-    );
+    const result = suppressWallContextMenu(stateRef.current, context);
 
     if (result.handled) {
       event.preventDefault();

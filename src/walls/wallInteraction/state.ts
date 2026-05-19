@@ -52,14 +52,13 @@ export const cancelWallTool = (
   return resetWallInteractionState();
 };
 
-export const contextCancelWallInteraction = (
+export const suppressWallContextMenu = (
   state: WallInteractionState,
   context: WallInteractionContext,
-  adapter: Pick<WallInteractionAdapter, "setActiveDrawTool">,
 ): WallInteractionResult => {
   if (!context.isEditMode || context.activeDrawTool === "device") {
     return { state, handled: false };
   }
 
-  return { state: cancelWallTool(adapter), handled: true };
+  return { state, handled: true };
 };

@@ -8,10 +8,10 @@ export type {
 
 export {
   cancelWallTool,
-  contextCancelWallInteraction,
   createWallInteractionState,
   releaseWallPointer,
   resetWallInteractionState,
+  suppressWallContextMenu,
 } from "./state";
 
 export { clickWallPane, moveWallPointer } from "./gestures";
