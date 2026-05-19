@@ -20,6 +20,7 @@ const makeContext = (
   activeDrawTool: "wall",
   currentFloorId: "floor-1" as FloorId,
   selectedWallColor: "concrete",
+  wallEraserSize: 1,
   trackPointerPosition: true,
   ...overrides,
 });

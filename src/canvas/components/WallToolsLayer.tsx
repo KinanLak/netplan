@@ -27,6 +27,8 @@ export function WallToolsLayer({
         floorWalls={floorWalls}
         previewSegments={session.previewSegments}
         erasePreviewKeys={session.erasePreviewKeys}
+        erasePreviewPointer={session.erasePreviewPointer}
+        wallEraserSize={session.wallEraserSize}
         activeDrawTool={activeDrawTool}
         drawAnchor={session.drawAnchor}
         hoverSnapPoint={session.hoverSnapPoint}

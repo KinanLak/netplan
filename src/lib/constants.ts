@@ -37,6 +37,14 @@ export const FLOW_CANVAS_PANE_HOVER_COLORS = {
     stroke: "rgba(59, 130, 246, 0.85)",
   },
 } as const;
+export const WALL_ERASER_MIN_SIZE = 1;
+export const WALL_ERASER_MAX_SIZE = 5;
+export const WALL_ERASER_DEFAULT_SIZE = WALL_ERASER_MIN_SIZE;
+export const clampWallEraserSize = (size: number): number =>
+  Math.min(
+    WALL_ERASER_MAX_SIZE,
+    Math.max(WALL_ERASER_MIN_SIZE, Math.round(size)),
+  );
 // Canvas devices
 export const CANVAS_DEVICE_NEAREST_POSITION_MAX_RADIUS = 200;
 

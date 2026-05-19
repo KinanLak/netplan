@@ -35,6 +35,7 @@ export interface EraseAtPointerCommandInput {
   floorId: FloorId;
   pointer: Position;
   snappedPoint: Position;
+  eraserSize: number;
 }
 
 export interface EraseStrokeCommandInput {
@@ -44,4 +45,5 @@ export interface EraseStrokeCommandInput {
   fromSnappedPoint: Position;
   toPointer: Position;
   toSnappedPoint: Position;
+  eraserSize: number;
 }

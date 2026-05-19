@@ -107,6 +107,7 @@ const context = (activeDrawTool: DrawTool): WallInteractionContext => ({
   activeDrawTool,
   currentFloorId: floorId,
   selectedWallColor: "concrete",
+  wallEraserSize: 1,
   trackPointerPosition: false,
 });
 
@@ -483,6 +484,7 @@ describe("wall interaction", () => {
         fromSnappedPoint: { x: 10, y: 10 },
         toPointer: { x: 30, y: 10 },
         toSnappedPoint: { x: 30, y: 10 },
+        eraserSize: 1,
       },
     ]);
     expect(moved.drawMessage).toBe(null);
@@ -564,5 +566,29 @@ describe("wall interaction", () => {
     expect(clicked.state.erasePreviewKeys).toEqual(["wall-a"]);
     expect(calls.eraseWallAtPointer).toHaveLength(1);
     expect(calls.previewEraseWallAtPointer).toHaveLength(2);
+  });
+
+  it("passes the active eraser size to erase preview, stroke, and click", () => {
+    const { adapter, calls } = createAdapter({ erasePreviewKeys: ["wall-a"] });
+    const eraseContext = { ...context("wall-erase"), wallEraserSize: 3 };
+    const firstMove = moveWallPointer(
+      createWallInteractionState(),
+      eraseContext,
+      adapter,
+      sample(10, 10),
+      1,
+    );
+
+    moveWallPointer(firstMove, eraseContext, adapter, sample(30, 10), 1);
+    clickWallPane(
+      createWallInteractionState(),
+      eraseContext,
+      adapter,
+      sample(50, 10),
+    );
+
+    expect(calls.previewEraseWallAtPointer[0]?.eraserSize).toBe(3);
+    expect(calls.eraseWallStroke[0]?.eraserSize).toBe(3);
+    expect(calls.eraseWallAtPointer[0]?.eraserSize).toBe(3);
   });
 });

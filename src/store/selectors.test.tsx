@@ -11,7 +11,9 @@ import {
   useIsEditMode,
   useSelectedDeviceId,
   useSelectedWallColor,
+  useWallEraserSize,
 } from "./selectors";
+import { useMapStore } from "./useMapStore";
 
 const did = (s: string) => s as DeviceId;
 const fid = (s: string) => s as FloorId;
@@ -28,6 +30,7 @@ describe("map store selectors", () => {
       isEditMode: false,
       activeDrawTool: "wall",
       selectedWallColor: "slate",
+      wallEraserSize: 3,
       highlightedDeviceIds: [did("device-a")],
       highlightedDeviceIdSet: new Set([did("device-a")]),
     });
@@ -43,6 +46,7 @@ describe("map store selectors", () => {
     expect(renderHook(() => useSelectedWallColor()).result.current).toBe(
       "slate",
     );
+    expect(renderHook(() => useWallEraserSize()).result.current).toBe(3);
     expect(renderHook(() => useHighlightedDeviceIds()).result.current).toEqual([
       did("device-a"),
     ]);
@@ -58,5 +62,15 @@ describe("map store selectors", () => {
     expect(
       renderHook(() => useIsDeviceHighlighted(did("device-b"))).result.current,
     ).toBe(false);
+  });
+
+  it("clamps wall eraser size to the supported range", () => {
+    const { setWallEraserSize } = useMapStore.getState();
+
+    setWallEraserSize(9);
+    expect(useMapStore.getState().wallEraserSize).toBe(5);
+
+    setWallEraserSize(0);
+    expect(useMapStore.getState().wallEraserSize).toBe(1);
   });
 });

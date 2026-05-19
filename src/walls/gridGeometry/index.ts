@@ -10,6 +10,14 @@ export {
   WALL_GRID_OFFSET,
 } from "./cells";
 
-export { resolveWallEraseCandidate } from "./erase";
+export {
+  getWallEraserRect,
+  resolveWallEraseCandidate,
+  resolveWallEraseCandidates,
+} from "./erase";
 
-export { computeMergedWallGroups, computeSingleWallPath } from "./render";
+export {
+  computeMergedWallGroups,
+  computeSingleWallPath,
+  computeWallRectUnionPath,
+} from "./render";

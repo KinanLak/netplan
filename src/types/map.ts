@@ -159,6 +159,7 @@ export interface WallPointerInput {
   floorId: FloorId;
   pointer: Position;
   snappedPoint: Position;
+  eraserSize: number;
 }
 
 export interface WallStrokeInput {
@@ -167,6 +168,7 @@ export interface WallStrokeInput {
   fromSnappedPoint: Position;
   toPointer: Position;
   toSnappedPoint: Position;
+  eraserSize: number;
 }
 
 // ── UI store (Zustand): only ephemeral interaction state ─────────────────────
@@ -181,6 +183,7 @@ export interface MapInteractionState {
   highlightedDeviceIdSet: ReadonlySet<DeviceId>;
   activeDrawTool: DrawTool;
   selectedWallColor: WallColor;
+  wallEraserSize: number;
 }
 
 export interface MapInteractionActions {
@@ -191,6 +194,7 @@ export interface MapInteractionActions {
   toggleEditMode: () => void;
   setActiveDrawTool: (tool: DrawTool) => void;
   setSelectedWallColor: (color: WallColor) => void;
+  setWallEraserSize: (size: number) => void;
   setHighlightedDevices: (deviceIds: Array<DeviceId>) => void;
 }
 

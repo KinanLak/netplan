@@ -41,6 +41,8 @@ export type ShortcutAction =
   | "tool-wall"
   | "tool-wall-brush"
   | "tool-wall-erase"
+  | "wall-eraser-size-increase"
+  | "wall-eraser-size-decrease"
   | "tool-room"
   // Tools - Devices (number hotbar)
   | DeviceToolShortcutAction
@@ -219,6 +221,37 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
     keys: ["4", "X"],
     label: "Suppression murs",
     description: "Effacer des blocs de mur",
+    scope: "canvas",
+  },
+  "wall-eraser-size-increase": {
+    keys: [
+      { key: "+", shift: true, display: "Shift +" },
+      { key: "=", code: "Equal", shift: true, hiddenFromDisplay: true },
+      {
+        key: "+",
+        code: "NumpadAdd",
+        shift: true,
+        display: "Shift Num +",
+      },
+    ],
+    label: "Gomme +",
+    description: "Agrandir la zone de gomme",
+    scope: "canvas",
+  },
+  "wall-eraser-size-decrease": {
+    keys: [
+      { key: "-", shift: true, display: "Shift -" },
+      { key: "_", shift: true, hiddenFromDisplay: true },
+      { key: "_", code: "Minus", shift: true, hiddenFromDisplay: true },
+      {
+        key: "-",
+        code: "NumpadSubtract",
+        shift: true,
+        display: "Shift Num -",
+      },
+    ],
+    label: "Gomme -",
+    description: "Réduire la zone de gomme",
     scope: "canvas",
   },
 

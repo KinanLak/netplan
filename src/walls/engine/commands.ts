@@ -10,7 +10,7 @@ import {
 } from "@/walls/gridGeometry/drafts";
 import {
   buildWallSnapPath,
-  resolveWallEraseCandidate,
+  resolveWallEraseCandidates,
 } from "@/walls/gridGeometry/erase";
 import type {
   WallCommandReason,
@@ -151,33 +151,37 @@ const eraseAtPointerCore = (
   input: EraseAtPointerCommandInput,
   previewOnly: boolean,
 ): EngineResult => {
-  const candidate = resolveWallEraseCandidate(
+  const candidates = resolveWallEraseCandidates(
     input.walls,
     input.floorId,
     input.pointer,
-    input.snappedPoint,
+    input.eraserSize,
   );
 
-  if (!candidate) {
+  if (candidates.length === 0) {
     return unchangedResult(
       input.walls,
       previewOnly ? "preview-miss" : "no-wall-at-pointer",
     );
   }
 
+  const affectedKeys = candidates.map((candidate) => candidate.key);
+
   if (previewOnly) {
-    return unchangedResult(input.walls, "preview-hit", [candidate.key]);
+    return unchangedResult(input.walls, "preview-hit", affectedKeys);
   }
 
+  const affectedKeySet = new Set(affectedKeys);
+
   const nextWalls = input.walls.filter(
-    (wall) => getWallBlockKey(wall) !== candidate.key,
+    (wall) => !affectedKeySet.has(getWallBlockKey(wall) ?? ""),
   );
 
   if (nextWalls.length === input.walls.length) {
     return unchangedResult(input.walls, "no-wall-at-pointer");
   }
 
-  return changedResult(nextWalls, [candidate.key]);
+  return changedResult(nextWalls, affectedKeys);
 };
 
 export const previewEraseAtPointer = (
@@ -215,6 +219,7 @@ export const eraseStroke = (input: EraseStrokeCommandInput): EngineResult => {
         floorId: input.floorId,
         pointer,
         snappedPoint,
+        eraserSize: input.eraserSize,
       },
       false,
     );

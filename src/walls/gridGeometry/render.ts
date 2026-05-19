@@ -37,6 +37,10 @@ export function computeMergedWallGroups(
   return merged;
 }
 
+export function computeWallRectUnionPath(rects: Array<Rect>): string | null {
+  return computeRectUnionPath(rects, CORNER_RADIUS);
+}
+
 export function computeSingleWallPath(wall: WallShape): string | null {
   return computeRectUnionPath([getWallRenderRect(wall)], 0);
 }

@@ -20,6 +20,7 @@ export interface WallInteractionContext {
   activeDrawTool: DrawTool;
   currentFloorId: FloorId | null;
   selectedWallColor: WallColor;
+  wallEraserSize: number;
   trackPointerPosition: boolean;
 }
 
@@ -58,6 +59,8 @@ export interface WallInteractionViewModel {
   drawMessage: string | null;
   previewSegments: Array<WallDraft>;
   erasePreviewKeys: Array<string>;
+  erasePreviewPointer: Position | null;
+  wallEraserSize: number;
   paneCursorClass: string;
 }
 

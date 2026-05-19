@@ -7,6 +7,7 @@ import type {
   MapStore,
   WallColor,
 } from "@/types/map";
+import { WALL_ERASER_DEFAULT_SIZE, clampWallEraserSize } from "@/lib/constants";
 
 const EMPTY_HIGHLIGHT_SET: ReadonlySet<DeviceId> = new Set<DeviceId>();
 const toHighlightedDeviceIdSet = (
@@ -25,6 +26,7 @@ export const useMapStore = create<MapStore>()((set) => ({
   highlightedDeviceIdSet: toHighlightedDeviceIdSet([]),
   activeDrawTool: "device" as DrawTool,
   selectedWallColor: "concrete" as WallColor,
+  wallEraserSize: WALL_ERASER_DEFAULT_SIZE,
 
   setCurrentBuilding: (buildingId: BuildingId | null) => {
     set({
@@ -70,6 +72,14 @@ export const useMapStore = create<MapStore>()((set) => ({
   },
   setSelectedWallColor: (color) => {
     set({ selectedWallColor: color });
+  },
+  setWallEraserSize: (size) => {
+    set((state) => {
+      const nextSize = clampWallEraserSize(size);
+      return state.wallEraserSize === nextSize
+        ? state
+        : { wallEraserSize: nextSize };
+    });
   },
   setHighlightedDevices: (deviceIds) => {
     set((state) => {

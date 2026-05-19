@@ -13,6 +13,7 @@ export type MapStoreSeed = Partial<
     | "highlightedDeviceIdSet"
     | "activeDrawTool"
     | "selectedWallColor"
+    | "wallEraserSize"
   >
 >;
 

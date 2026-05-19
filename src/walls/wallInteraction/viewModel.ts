@@ -38,6 +38,11 @@ export const getWallInteractionViewModel = (
     context.selectedWallColor,
   ),
   erasePreviewKeys: state.erasePreviewKeys,
+  erasePreviewPointer:
+    context.isEditMode && context.activeDrawTool === "wall-erase"
+      ? state.pointerPosition
+      : null,
+  wallEraserSize: context.wallEraserSize,
   paneCursorClass: computePaneCursorClass(
     context.isEditMode,
     context.activeDrawTool,

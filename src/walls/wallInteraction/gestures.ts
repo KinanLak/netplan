@@ -25,7 +25,7 @@ export const moveWallPointer = (
     return state;
   }
 
-  const withPointer = applyPointerTracking(state, context, sample);
+  const withPointer = applyPointerTracking(state, sample);
 
   if (context.activeDrawTool === "wall-erase") {
     return moveErasePointer(withPointer, context, adapter, sample, buttons);
@@ -80,13 +80,8 @@ const canUseWallTool = (context: WallInteractionContext): boolean =>
 
 const applyPointerTracking = (
   state: WallInteractionState,
-  context: WallInteractionContext,
   sample: PointerSample,
 ): WallInteractionState => {
-  if (!context.trackPointerPosition) {
-    return state;
-  }
-
   return {
     ...state,
     pointerPosition: sample.pointer,
@@ -107,6 +102,7 @@ const previewErase = (
     floorId: context.currentFloorId,
     pointer: sample.pointer,
     snappedPoint: sample.snappedPoint,
+    eraserSize: context.wallEraserSize,
   }).affectedKeys;
 };
 
@@ -176,6 +172,7 @@ const moveErasePointer = (
     fromSnappedPoint: previous.snappedPoint,
     toPointer: sample.pointer,
     toSnappedPoint: sample.snappedPoint,
+    eraserSize: context.wallEraserSize,
   });
 
   return {
@@ -267,6 +264,7 @@ const clickErasePane = (
     floorId: context.currentFloorId,
     pointer: sample.pointer,
     snappedPoint: sample.snappedPoint,
+    eraserSize: context.wallEraserSize,
   });
 
   return {

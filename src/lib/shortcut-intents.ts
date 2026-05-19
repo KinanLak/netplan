@@ -62,6 +62,8 @@ const shortcutRoutingPriority: Array<ShortcutAction> = [
   "sidebar-toggle",
   "toggle-edit-mode",
   "toggle-wall-debug",
+  "wall-eraser-size-increase",
+  "wall-eraser-size-decrease",
   "zoom-in",
   "zoom-out",
   "zoom-reset",
@@ -237,6 +239,13 @@ const isActionAllowedByContext = (
       return runtime.isEditMode;
     case "toggle-wall-debug":
       return runtime.isEditMode && runtime.activeDrawTool !== "device";
+    case "wall-eraser-size-increase":
+    case "wall-eraser-size-decrease":
+      return (
+        runtime.isEditMode &&
+        runtime.activeDrawTool === "wall-erase" &&
+        runtime.currentFloorId !== null
+      );
     case "undo":
     case "redo":
       return runtime.isEditMode;

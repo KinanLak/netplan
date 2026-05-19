@@ -153,6 +153,45 @@ describe("shortcut intents", () => {
     ).toBe(null);
   });
 
+  it("routes eraser size shortcuts only while the wall eraser is active", () => {
+    const eraseRuntime: ShortcutIntentRuntime = {
+      ...baseRuntime,
+      activeDrawTool: "wall-erase",
+    };
+
+    expect(
+      resolveAction({
+        actions: ["wall-eraser-size-increase"],
+        event: keyEvent({ code: "Equal", key: "+", shiftKey: true }),
+        runtime: eraseRuntime,
+      }),
+    ).toBe("wall-eraser-size-increase");
+
+    expect(
+      resolveAction({
+        actions: ["wall-eraser-size-decrease"],
+        event: keyEvent({ code: "Minus", key: "_", shiftKey: true }),
+        runtime: eraseRuntime,
+      }),
+    ).toBe("wall-eraser-size-decrease");
+
+    expect(
+      resolveAction({
+        actions: ["wall-eraser-size-decrease"],
+        event: keyEvent({ code: "Equal", key: "_", shiftKey: true }),
+        runtime: eraseRuntime,
+      }),
+    ).toBe("wall-eraser-size-decrease");
+
+    expect(
+      resolveAction({
+        actions: ["wall-eraser-size-increase"],
+        event: keyEvent({ code: "Equal", key: "+", shiftKey: true }),
+        runtime: { ...baseRuntime, activeDrawTool: "wall-brush" },
+      }),
+    ).toBe(null);
+  });
+
   it("matches single character shortcuts case-insensitively before physical code fallback", () => {
     expect(
       matchesShortcutBinding(keyEvent({ code: "KeyW", key: "z" }), "Z"),
