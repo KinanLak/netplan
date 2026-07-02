@@ -6,6 +6,7 @@ import type {
 import { arePositionsEqual } from "@/walls/gridGeometry/cells";
 import { createBrushWallDraft } from "@/walls/gridGeometry/drafts";
 import { toLineFailureMessage, toRoomFailureMessage } from "./messages";
+import { stabilizeWallInteractionState } from "./state";
 import type {
   PointerSample,
   WallInteractionAdapter,
@@ -20,12 +21,24 @@ export const moveWallPointer = (
   adapter: WallInteractionAdapter,
   sample: PointerSample,
   buttons: number,
+): WallInteractionState =>
+  stabilizeWallInteractionState(
+    state,
+    computeMovedWallPointer(state, context, adapter, sample, buttons),
+  );
+
+const computeMovedWallPointer = (
+  state: WallInteractionState,
+  context: WallInteractionContext,
+  adapter: WallInteractionAdapter,
+  sample: PointerSample,
+  buttons: number,
 ): WallInteractionState => {
   if (!canUseWallTool(context)) {
     return state;
   }
 
-  const withPointer = applyPointerTracking(state, sample);
+  const withPointer = applyPointerTracking(state, context, sample);
 
   if (context.activeDrawTool === "wall-erase") {
     return moveErasePointer(withPointer, context, adapter, sample, buttons);
@@ -44,6 +57,19 @@ export const moveWallPointer = (
 };
 
 export const clickWallPane = (
+  state: WallInteractionState,
+  context: WallInteractionContext,
+  adapter: WallInteractionAdapter,
+  sample: PointerSample,
+): WallInteractionResult => {
+  const result = computeClickedWallPane(state, context, adapter, sample);
+  return {
+    state: stabilizeWallInteractionState(state, result.state),
+    handled: result.handled,
+  };
+};
+
+const computeClickedWallPane = (
   state: WallInteractionState,
   context: WallInteractionContext,
   adapter: WallInteractionAdapter,
@@ -80,8 +106,17 @@ const canUseWallTool = (context: WallInteractionContext): boolean =>
 
 const applyPointerTracking = (
   state: WallInteractionState,
+  context: WallInteractionContext,
   sample: PointerSample,
 ): WallInteractionState => {
+  // The raw pointer is only rendered by the debug panel and the eraser
+  // preview; skipping it elsewhere lets same-cell moves keep state identity.
+  const isPointerRendered =
+    context.trackPointerPosition || context.activeDrawTool === "wall-erase";
+  if (!isPointerRendered) {
+    return state;
+  }
+
   return {
     ...state,
     pointerPosition: sample.pointer,

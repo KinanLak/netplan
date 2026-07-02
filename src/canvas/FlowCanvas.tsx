@@ -11,7 +11,11 @@ import {
   useIsEditMode,
   useSelectedDeviceId,
 } from "@/store/selectors";
-import { useMapDocument } from "@/map-session/useMapDocument";
+import {
+  useMapDocumentActions,
+  useMapDocumentData,
+  useMapDocumentReady,
+} from "@/map-session/useMapDocument";
 import { GRID_SIZE } from "@/lib/grid";
 import { cn } from "@/lib/utils";
 import { CanvasZoomControls } from "@/canvas/components/CanvasZoomControls";
@@ -208,7 +212,9 @@ export default function FlowCanvas() {
   const setHoveredDevice = useMapStore((s) => s.setHoveredDevice);
   const reactFlow = useReactFlow();
 
-  const { document, commands, isReady } = useMapDocument();
+  const { document } = useMapDocumentData();
+  const isReady = useMapDocumentReady();
+  const { commands } = useMapDocumentActions();
   const { devices, walls } = document;
   const { updateDevicePosition, checkCollision } = commands;
 

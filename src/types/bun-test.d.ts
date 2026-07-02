@@ -1,6 +1,10 @@
 declare module "bun:test" {
   export function describe(name: string, fn: () => void): void;
-  export function it(name: string, fn: () => void | Promise<void>): void;
+  export function it(
+    name: string,
+    fn: () => void | Promise<void>,
+    timeoutMs?: number,
+  ): void;
   export function beforeEach(fn: () => void | Promise<void>): void;
   export function afterEach(fn: () => void | Promise<void>): void;
   export function beforeAll(fn: () => void | Promise<void>): void;
@@ -20,9 +24,15 @@ declare module "bun:test" {
     mockReturnValue: (value: TReturn) => Mock<TArgs, TReturn>;
   }
 
-  export function mock<TArgs extends Array<unknown>, TReturn>(
-    fn?: (...args: TArgs) => TReturn,
-  ): Mock<TArgs, TReturn>;
+  export interface MockFactory {
+    <TArgs extends Array<unknown>, TReturn>(
+      fn?: (...args: TArgs) => TReturn,
+    ): Mock<TArgs, TReturn>;
+    /** Replaces a module in the registry for the current test process. */
+    module: (specifier: string, factory: () => unknown) => void;
+  }
+
+  export const mock: MockFactory;
 
   export interface Matchers {
     toBe: <TExpected>(expected: TExpected) => void;

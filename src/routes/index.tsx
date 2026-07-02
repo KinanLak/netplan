@@ -10,14 +10,14 @@ import Toolbar from "@/panels/Toolbar";
 import DeviceDrawer from "@/panels/DeviceDrawer";
 import { MapDocumentProvider } from "@/map-session/MapDocumentProvider";
 import { MapDocumentStatus } from "@/map-session/MapDocumentStatus";
-import { useMapDocument } from "@/map-session/useMapDocument";
+import {
+  useMapDocumentActions,
+  useMapDocumentReady,
+} from "@/map-session/useMapDocument";
 import { useMapStore } from "@/store/useMapStore";
 import {
-  useActiveDrawTool,
   useCurrentBuildingId,
   useCurrentFloorId,
-  useHighlightedDeviceIds,
-  useHoveredDeviceId,
   useIsEditMode,
   useSelectedDeviceId,
 } from "@/store/selectors";
@@ -28,7 +28,6 @@ import {
   ShortcutIntentProvider,
   useShortcutIntentEffect,
 } from "@/hooks/use-shortcuts";
-import { useUndoRedo } from "@/hooks/use-undo-redo";
 import { ShortcutsDialog } from "@/components/shortcuts-dialog";
 import { ShortcutHintAbsolute } from "@/components/ui/shortcut-hint";
 import { getNextConnectionHighlightIds } from "@/lib/shortcut-intents";
@@ -116,11 +115,9 @@ function HomePageContent() {
 function MapWorkspace({ sortedFloors }: { sortedFloors: Array<Floor> }) {
   const currentFloorId = useCurrentFloorId();
   const selectedDeviceId = useSelectedDeviceId();
-  const hoveredDeviceId = useHoveredDeviceId();
-  const highlightedDeviceIds = useHighlightedDeviceIds();
   const isEditMode = useIsEditMode();
-  const activeDrawTool = useActiveDrawTool();
-  const { document, commands, isReady, history } = useMapDocument();
+  const isReady = useMapDocumentReady();
+  const { commands, undo, redo, getDocument } = useMapDocumentActions();
 
   const setCurrentFloor = useMapStore((s) => s.setCurrentFloor);
   const toggleEditMode = useMapStore((s) => s.toggleEditMode);
@@ -129,7 +126,6 @@ function MapWorkspace({ sortedFloors }: { sortedFloors: Array<Floor> }) {
   const setHighlightedDevices = useMapStore((s) => s.setHighlightedDevices);
 
   const { theme, setTheme } = useTheme();
-  const { handleUndo, handleRedo } = useUndoRedo();
 
   const currentFloorIndex = sortedFloors.findIndex(
     (floor) => floor.id === currentFloorId,
@@ -166,9 +162,12 @@ function MapWorkspace({ sortedFloors }: { sortedFloors: Array<Floor> }) {
     selectDevice(null);
   };
 
+  // Reads hover/highlight state lazily so the workspace does not re-render
+  // on every pointer hover; it is only needed when the shortcut fires.
   const highlightConnections = () => {
+    const { hoveredDeviceId, highlightedDeviceIds } = useMapStore.getState();
     const next = getNextConnectionHighlightIds({
-      links: document.links,
+      links: getDocument().links,
       highlightedDeviceIds,
       hoveredDeviceId,
       selectedDeviceId,
@@ -185,15 +184,15 @@ function MapWorkspace({ sortedFloors }: { sortedFloors: Array<Floor> }) {
   useShortcutIntentEffect("delete-device", deleteSelectedDevice);
   useShortcutIntentEffect("highlight-connections", highlightConnections);
   useShortcutIntentEffect("escape", () => {
-    if (isEditMode && activeDrawTool === "device") {
+    if (isEditMode && useMapStore.getState().activeDrawTool === "device") {
       toggleEditMode();
     }
   });
   useShortcutIntentEffect("undo", () => {
-    if (isEditMode && isReady && history.canUndo) handleUndo();
+    if (isEditMode && isReady) undo();
   });
   useShortcutIntentEffect("redo", () => {
-    if (isEditMode && isReady && history.canRedo) handleRedo();
+    if (isEditMode && isReady) redo();
   });
   useShortcutIntentEffect("floor-up", navigateFloorUp);
   useShortcutIntentEffect("floor-down", navigateFloorDown);

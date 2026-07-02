@@ -18,7 +18,7 @@ import {
   useSelectedWallColor,
   useWallEraserSize,
 } from "@/store/selectors";
-import { useMapDocument } from "@/map-session/useMapDocument";
+import { useMapDocumentActions } from "@/map-session/useMapDocument";
 import { snapPositionToWallGrid } from "@/walls/gridGeometry";
 import {
   cancelWallTool,
@@ -71,24 +71,17 @@ export const useWallToolSession = (): WallToolSession => {
 
   const setActiveDrawTool = useMapStore((state) => state.setActiveDrawTool);
   const setWallEraserSize = useMapStore((state) => state.setWallEraserSize);
-  const { commands } = useMapDocument();
+  const { commands } = useMapDocumentActions();
 
   const [interactionState, setInteractionState] = useState(
     createWallInteractionState,
   );
   const stateRef = useRef(interactionState);
   const isHistoryGroupOpenRef = useRef(false);
-  const beginHistoryGroupRef = useRef(commands.beginHistoryGroup);
-  const endHistoryGroupRef = useRef(commands.endHistoryGroup);
 
   useLayoutEffect(() => {
     stateRef.current = interactionState;
   }, [interactionState]);
-
-  useEffect(() => {
-    beginHistoryGroupRef.current = commands.beginHistoryGroup;
-    endHistoryGroupRef.current = commands.endHistoryGroup;
-  }, [commands.beginHistoryGroup, commands.endHistoryGroup]);
 
   const context: WallInteractionContext = {
     isEditMode,
@@ -150,9 +143,9 @@ export const useWallToolSession = (): WallToolSession => {
 
   const closeHistoryGroup = useCallback(() => {
     if (!isHistoryGroupOpenRef.current) return;
-    endHistoryGroupRef.current();
+    commands.endHistoryGroup();
     isHistoryGroupOpenRef.current = false;
-  }, []);
+  }, [commands]);
 
   const openStrokeHistoryGroup = (buttons: number) => {
     const isStrokeTool =
@@ -160,7 +153,7 @@ export const useWallToolSession = (): WallToolSession => {
     const isPrimaryButtonPressed = (buttons & 1) === 1;
     if (!isStrokeTool || !isPrimaryButtonPressed) return;
     if (isHistoryGroupOpenRef.current) return;
-    beginHistoryGroupRef.current();
+    commands.beginHistoryGroup();
     isHistoryGroupOpenRef.current = true;
   };
 

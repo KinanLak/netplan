@@ -3,7 +3,10 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { Cancel01Icon, UserIcon, WasteIcon } from "@hugeicons/core-free-icons";
 import type { DeviceId, DeviceStatus } from "@/types/map";
 import { useMapStore } from "@/store/useMapStore";
-import { useMapDocument } from "@/map-session/useMapDocument";
+import {
+  useMapDocumentActions,
+  useMapDocumentData,
+} from "@/map-session/useMapDocument";
 import {
   useHighlightedDeviceIds,
   useIsEditMode,
@@ -35,7 +38,8 @@ export default function DeviceDrawer() {
   const selectDevice = useMapStore((s) => s.selectDevice);
   const setHighlightedDevices = useMapStore((s) => s.setHighlightedDevices);
 
-  const { document, commands } = useMapDocument();
+  const { document } = useMapDocumentData();
+  const { commands } = useMapDocumentActions();
   const { devices, links } = document;
   const { deleteDevice } = commands;
 

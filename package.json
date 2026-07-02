@@ -14,7 +14,9 @@
     "desktop:dev": "concurrently -k 'bun run db' 'bun run web --host 127.0.0.1 --port 3000' 'NETPLAN_DESKTOP_URL=http://127.0.0.1:3000 electrobun dev'",
     "desktop:build": "bun run build && NETPLAN_ELECTROBUN_INCLUDE_WEB_BUILD=1 electrobun build --env=stable",
     "desktop:build:dev": "bun run build && NETPLAN_ELECTROBUN_INCLUDE_WEB_BUILD=1 electrobun build",
-    "desktop:dev:build": "bun run desktop:build:dev"
+    "desktop:dev:build": "bun run desktop:build:dev",
+    "bench:engine": "bun run scripts/bench-engine.ts",
+    "perf:render": "bun test test/perf/renderCounts.test.tsx"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
@@ -61,6 +63,7 @@
     "convex-test": "^0.0.53",
     "eslint-plugin-react-hooks": "^7.1.1",
     "happy-dom": "^20.9.0",
+    "mitata": "^1.0.34",
     "oxfmt": "^0.51.0",
     "oxlint": "^1.66.0",
     "oxlint-tsgolint": "^0.23.0",

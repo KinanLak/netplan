@@ -1,4 +1,8 @@
-import { useMapDocument } from "./useMapDocument";
+import {
+  useMapDocumentActions,
+  useMapDocumentReady,
+  useMapDocumentSyncStatus,
+} from "./useMapDocument";
 
 export const getRejectedOperationMessage = (message: string): string => {
   const normalized = message.toLowerCase();
@@ -13,14 +17,14 @@ export const getRejectedOperationMessage = (message: string): string => {
 };
 
 export function MapDocumentStatus() {
+  const isReady = useMapDocumentReady();
   const {
-    isReady,
     isSaving,
     isRetrying,
     hasBackgroundPendingOperations,
     rejectedMessage,
-    dismissRejectedOperation,
-  } = useMapDocument();
+  } = useMapDocumentSyncStatus();
+  const { dismissRejectedOperation } = useMapDocumentActions();
 
   const statusMessage = getDocumentActivityMessage({
     isReady,

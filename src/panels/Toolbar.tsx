@@ -8,7 +8,10 @@ import { useDevicePlacement } from "@/devices/useDevicePlacement";
 import type { AvailableDevice } from "@/devices/deviceCatalog";
 import type { ToolbarAction } from "@/panels/toolbar-actions";
 import { useMapStore } from "@/store/useMapStore";
-import { useMapDocument } from "@/map-session/useMapDocument";
+import {
+  useMapDocumentActions,
+  useMapDocumentReady,
+} from "@/map-session/useMapDocument";
 import {
   useActiveDrawTool,
   useCurrentFloorId,
@@ -50,7 +53,8 @@ export default function Toolbar() {
   const setActiveDrawTool = useMapStore((s) => s.setActiveDrawTool);
   const setSelectedWallColor = useMapStore((s) => s.setSelectedWallColor);
   const selectDevice = useMapStore((s) => s.selectDevice);
-  const { commands, isReady } = useMapDocument();
+  const { commands } = useMapDocumentActions();
+  const isReady = useMapDocumentReady();
   const { addDevice, checkCollision } = commands;
   const devicePlacement = useDevicePlacement(checkCollision);
   const reactFlow = useReactFlow();

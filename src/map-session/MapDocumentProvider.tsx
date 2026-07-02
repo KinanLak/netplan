@@ -2,10 +2,11 @@ import {
   createContext,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
-import type { ReactNode } from "react";
+import type { Dispatch, ReactNode, RefObject, SetStateAction } from "react";
 import { useConvexConnectionState, useMutation, useQuery } from "convex/react";
 import { applyOperation } from "@/map-engine/applyOperation";
 import { buildInverseOperation } from "@/map-engine/buildInverseOperation";
@@ -16,6 +17,7 @@ import {
   createOperationMeta,
   useIdentity,
 } from "@/lib/identity";
+import type { Identity } from "@/lib/identity";
 import { rectanglesOverlap } from "@/lib/geometry";
 import type {
   Device,
@@ -60,9 +62,10 @@ import type { SessionHistoryEntry } from "./history";
 import { SequentialOutbox } from "./outbox";
 import type { OutboxState } from "./outbox";
 import {
-  removeObservedOperationLogEntries,
-  removeObservedPendingOperations,
+  pruneAckedRevisionsInPlace,
   reconcileObservedOperationLogEntries,
+  removeAckedPendingOperations,
+  removeObservedOperationLogEntries,
 } from "./pendingOperations";
 import type {
   PendingOperationEntry,
@@ -91,29 +94,41 @@ export interface MapDocumentCommands {
   endHistoryGroup: () => void;
 }
 
-export interface MapDocumentSession {
+/** Document data — changes when local edits or server updates land. */
+export interface MapDocumentData {
   floorId: FloorId | null;
   document: MapDocumentSnapshot;
   serverDocument: MapDocumentSnapshot;
   pendingOperations: ReadonlyArray<MapOperation>;
-  isReady: boolean;
+}
+
+/** Save/connection status — flickers with the outbox lifecycle. */
+export interface MapDocumentSyncStatus {
   isSaving: boolean;
   isRetrying: boolean;
   hasBackgroundPendingOperations: boolean;
   hasRejectedOperations: boolean;
   rejectedMessage: string | null;
   connectionState: "connecting" | "connected" | "disconnected";
+}
+
+/** Per-floor undo/redo stacks — changes on every recorded edit. */
+export interface MapDocumentHistoryState {
+  undoStack: ReadonlyArray<SessionHistoryEntry>;
+  redoStack: ReadonlyArray<SessionHistoryEntry>;
+  canUndo: boolean;
+  canRedo: boolean;
+}
+
+/** Imperative session API — stable for the provider's lifetime. */
+export interface MapDocumentActions {
   dispatch: (operation: MapOperation) => void;
   commands: MapDocumentCommands;
   undo: () => void;
   redo: () => void;
   dismissRejectedOperation: () => void;
-  history: {
-    undoStack: ReadonlyArray<SessionHistoryEntry>;
-    redoStack: ReadonlyArray<SessionHistoryEntry>;
-    canUndo: boolean;
-    canRedo: boolean;
-  };
+  /** Snapshot accessor for event handlers that must not subscribe to data. */
+  getDocument: () => MapDocumentSnapshot;
 }
 
 interface MapDocumentProviderProps {
@@ -121,9 +136,16 @@ interface MapDocumentProviderProps {
   children: ReactNode;
 }
 
-export const MapDocumentContext = createContext<MapDocumentSession | null>(
+export const MapDocumentDataContext = createContext<MapDocumentData | null>(
   null,
 );
+export const MapDocumentReadyContext = createContext<boolean | null>(null);
+export const MapDocumentSyncStatusContext =
+  createContext<MapDocumentSyncStatus | null>(null);
+export const MapDocumentHistoryContext =
+  createContext<MapDocumentHistoryState | null>(null);
+export const MapDocumentActionsContext =
+  createContext<MapDocumentActions | null>(null);
 
 const emptyDocument = (floorId: FloorId): MapDocumentSnapshot => ({
   floorId,
@@ -135,6 +157,7 @@ const emptyDocument = (floorId: FloorId): MapDocumentSnapshot => ({
 
 const NONE_FLOOR_ID = "floor:none" as FloorId;
 const MAX_OBSERVED_PENDING_OP_IDS = 100;
+const EMPTY_OPERATIONS: ReadonlyArray<MapOperation> = [];
 
 const unchangedWallResult = (
   walls: Array<WallSegment>,
@@ -165,10 +188,10 @@ interface FloorHistoryState {
 
 type HistoryByFloor = Record<string, FloorHistoryState>;
 
-const emptyHistoryState = (): FloorHistoryState => ({
+const EMPTY_FLOOR_HISTORY: FloorHistoryState = {
   undoStack: [],
   redoStack: [],
-});
+};
 
 const operationFloorId = (
   operation: MapOperation,
@@ -204,7 +227,7 @@ const updateFloorHistory = (
   updater: (history: FloorHistoryState) => FloorHistoryState,
 ): HistoryByFloor => ({
   ...current,
-  [floorId]: updater(current[floorId] ?? emptyHistoryState()),
+  [floorId]: updater(current[floorId] ?? EMPTY_FLOOR_HISTORY),
 });
 
 const replaceGroupedPendingOperations = (
@@ -232,6 +255,410 @@ const replaceGroupedPendingOperations = (
   return inserted ? next : [...next, { operation, floorId }];
 };
 
+interface SessionActionDeps {
+  identityRef: RefObject<Identity | null>;
+  isReadyRef: RefObject<boolean>;
+  activeFloorIdRef: RefObject<FloorId>;
+  documentRef: RefObject<MapDocumentSnapshot>;
+  undoStackRef: RefObject<ReadonlyArray<SessionHistoryEntry>>;
+  redoStackRef: RefObject<ReadonlyArray<SessionHistoryEntry>>;
+  historyGroupRef: RefObject<PendingHistoryGroup | null>;
+  outboxRef: RefObject<SequentialOutbox | null>;
+  setPendingEntries: Dispatch<
+    SetStateAction<ReadonlyArray<PendingOperationEntry>>
+  >;
+  setHistoryByFloor: Dispatch<SetStateAction<HistoryByFloor>>;
+  setRejectedMessage: Dispatch<SetStateAction<string | null>>;
+}
+
+/**
+ * Builds the imperative session API once. Every closure reads the live
+ * session through refs, so the resulting object identity never changes and
+ * action consumers never re-render because of document or outbox churn.
+ */
+const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
+  const {
+    identityRef,
+    isReadyRef,
+    activeFloorIdRef,
+    documentRef,
+    undoStackRef,
+    redoStackRef,
+    historyGroupRef,
+    outboxRef,
+    setPendingEntries,
+    setHistoryByFloor,
+    setRejectedMessage,
+  } = deps;
+
+  const freshMeta = () => {
+    const identity = identityRef.current;
+    if (!identity) return null;
+    return createOperationMeta(identity);
+  };
+
+  const pushUndoOperation = (operation: MapOperation, sourceOpId: string) => {
+    setHistoryByFloor((current) =>
+      updateFloorHistory(current, activeFloorIdRef.current, (history) => ({
+        undoStack: [
+          ...appendCappedHistory(history.undoStack, {
+            label: operationLabel(operation),
+            operation,
+            sourceOpIds: [sourceOpId],
+          }),
+        ],
+        redoStack: [],
+      })),
+    );
+  };
+
+  const recordHistory = (
+    snapshotBefore: MapDocumentSnapshot,
+    operation: MapOperation,
+  ) => {
+    const inverse = buildInverseOperation(snapshotBefore, operation);
+    if (inverse) pushUndoOperation(inverse, operation.meta.opId);
+  };
+
+  const dispatchOperation = (
+    operation: MapOperation,
+    options: { recordHistory: boolean } = { recordHistory: true },
+  ) => {
+    const snapshotBefore = documentRef.current;
+    const historyGroup = options.recordHistory ? historyGroupRef.current : null;
+    if (historyGroup) {
+      historyGroup.entries.push({ operation, sourceOpId: operation.meta.opId });
+    } else if (options.recordHistory) {
+      recordHistory(snapshotBefore, operation);
+    }
+    const targetFloorId = operationFloorId(operation, activeFloorIdRef.current);
+    setPendingEntries((current) => [
+      ...current,
+      { operation, floorId: targetFloorId, deferred: historyGroup !== null },
+    ]);
+    if (!historyGroup) outboxRef.current?.enqueue(operation);
+  };
+
+  const addDevice = (draft: DeviceDraft): DeviceId | null => {
+    const identity = identityRef.current;
+    if (!isReadyRef.current || !identity) return null;
+    const id = createObjectId("device", identity) as DeviceId;
+    const meta = freshMeta();
+    if (!meta) return null;
+    const device: Device = { id, ...draft };
+    dispatchOperation({ kind: "device.create", meta, device });
+    return id;
+  };
+
+  const updateDevicePosition = (deviceId: DeviceId, position: Position) => {
+    if (!isReadyRef.current) return;
+    const device = documentRef.current.devices.find(
+      (item) => item.id === deviceId,
+    );
+    if (!device) return;
+    if (device.position.x === position.x && device.position.y === position.y)
+      return;
+    const meta = freshMeta();
+    if (!meta) return;
+    dispatchOperation({
+      kind: "device.patch",
+      meta,
+      deviceId,
+      patch: { position },
+    });
+  };
+
+  const deleteDevice = (deviceId: DeviceId) => {
+    if (!isReadyRef.current) return;
+    if (!documentRef.current.devices.some((device) => device.id === deviceId))
+      return;
+    const meta = freshMeta();
+    if (!meta) return;
+    dispatchOperation({ kind: "device.delete", meta, deviceId });
+  };
+
+  const createLink = (linkWithoutId: Omit<LinkDoc, "id">): LinkId | null => {
+    const identity = identityRef.current;
+    if (!isReadyRef.current || !identity) return null;
+    const id = createObjectId("link", identity) as LinkId;
+    const meta = freshMeta();
+    if (!meta) return null;
+    dispatchOperation({
+      kind: "link.create",
+      meta,
+      link: { id, ...linkWithoutId },
+    });
+    return id;
+  };
+
+  const deleteLink = (linkId: LinkId) => {
+    if (!isReadyRef.current) return;
+    const meta = freshMeta();
+    if (!meta) return;
+    dispatchOperation({ kind: "link.delete", meta, linkId });
+  };
+
+  const checkCollision = (
+    targetFloorId: FloorId,
+    deviceId: DeviceId,
+    position: Position,
+    size: Size,
+  ): boolean => {
+    if (!isReadyRef.current) return true;
+
+    for (const other of documentRef.current.devices) {
+      if (other.floorId !== targetFloorId) continue;
+      if (other.id === deviceId) continue;
+      if (rectanglesOverlap(position, size, other.position, other.size)) {
+        return true;
+      }
+    }
+    for (const wall of documentRef.current.walls) {
+      if (wall.floorId !== targetFloorId) continue;
+      const rect = getWallCollisionRect(wall);
+      if (
+        rectanglesOverlap(
+          position,
+          size,
+          { x: rect.x, y: rect.y },
+          { width: rect.width, height: rect.height },
+        )
+      ) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const dispatchAddedWalls = (
+    floorWallsBefore: Array<WallSegment>,
+    nextWalls: Array<WallSegment>,
+  ) => {
+    const existingIds = new Set(floorWallsBefore.map((wall) => wall.id));
+    const added = nextWalls.filter((wall) => !existingIds.has(wall.id));
+    if (added.length === 0) return;
+    const meta = freshMeta();
+    if (!meta) return;
+    dispatchOperation({ kind: "walls.add", meta, walls: added });
+  };
+
+  const dispatchDeletedWalls = (
+    floorWallsBefore: Array<WallSegment>,
+    nextWalls: Array<WallSegment>,
+  ) => {
+    const remainingIds = new Set(nextWalls.map((wall) => wall.id));
+    const removed = floorWallsBefore.filter(
+      (wall) => !remainingIds.has(wall.id),
+    );
+    if (removed.length === 0) return;
+    const meta = freshMeta();
+    if (!meta) return;
+    dispatchOperation({
+      kind: "walls.delete",
+      meta,
+      wallIds: removed.map((wall) => wall.id),
+    });
+  };
+
+  const floorWallsOf = (floorId: FloorId): Array<WallSegment> =>
+    documentRef.current.walls.filter((wall) => wall.floorId === floorId);
+
+  const floorDevicesOf = (floorId: FloorId): Array<Device> =>
+    documentRef.current.devices.filter((device) => device.floorId === floorId);
+
+  const addWallLine = (line: WallDraft): WallCommandResult => {
+    const identity = identityRef.current;
+    const floorWalls = floorWallsOf(line.floorId);
+    if (!isReadyRef.current || !identity)
+      return unchangedWallResult(floorWalls, "invalid-line");
+    const result = addLine({
+      walls: floorWalls,
+      floorId: line.floorId,
+      color: line.color,
+      start: line.start,
+      end: line.end,
+      generateWallId: () => createObjectId("wall", identity) as WallId,
+      collidesWithBlock: (block) =>
+        wallCollidesWithDevices(block, floorDevicesOf(line.floorId)),
+    });
+    if (result.changed) dispatchAddedWalls(floorWalls, result.nextWalls);
+    return result;
+  };
+
+  const addWallRoom = (room: RoomDraft): WallCommandResult => {
+    const identity = identityRef.current;
+    const floorWalls = floorWallsOf(room.floorId);
+    if (!isReadyRef.current || !identity)
+      return unchangedWallResult(floorWalls, "invalid-room");
+    const result = addRoom({
+      walls: floorWalls,
+      floorId: room.floorId,
+      color: room.color,
+      start: room.start,
+      end: room.end,
+      generateWallId: () => createObjectId("wall", identity) as WallId,
+      collidesWithBlock: (block) =>
+        wallCollidesWithDevices(block, floorDevicesOf(room.floorId)),
+    });
+    if (result.changed) dispatchAddedWalls(floorWalls, result.nextWalls);
+    return result;
+  };
+
+  const eraseWallAtPointer = (input: WallPointerInput): WallCommandResult => {
+    const floorWalls = floorWallsOf(input.floorId);
+    if (!isReadyRef.current)
+      return unchangedWallResult(floorWalls, "no-wall-at-pointer");
+    const result = eraseAtPointer({ walls: floorWalls, ...input });
+    if (result.changed) dispatchDeletedWalls(floorWalls, result.nextWalls);
+    return result;
+  };
+
+  const eraseWallStrokeCommand = (
+    input: WallStrokeInput,
+  ): WallCommandResult => {
+    const floorWalls = floorWallsOf(input.floorId);
+    if (!isReadyRef.current)
+      return unchangedWallResult(floorWalls, "empty-stroke");
+    const result = eraseStroke({ walls: floorWalls, ...input });
+    if (result.changed) dispatchDeletedWalls(floorWalls, result.nextWalls);
+    return result;
+  };
+
+  const previewEraseWallAtPointer = (
+    input: WallPointerInput,
+  ): WallCommandResult => {
+    const floorWalls = floorWallsOf(input.floorId);
+    if (!isReadyRef.current)
+      return unchangedWallResult(floorWalls, "preview-miss");
+    return previewEraseAtPointer({ walls: floorWalls, ...input });
+  };
+
+  const beginHistoryGroup = () => {
+    if (historyGroupRef.current) return;
+    historyGroupRef.current = {
+      snapshotBefore: documentRef.current,
+      entries: [],
+    };
+  };
+
+  const endHistoryGroup = () => {
+    const group = historyGroupRef.current;
+    historyGroupRef.current = null;
+    if (!group || group.entries.length === 0) return;
+    const operation = coalesceHistoryGroupOperations(
+      group.entries.map((entry) => entry.operation),
+    );
+    if (!operation) return;
+
+    const sourceOpIds = group.entries.map((entry) => entry.sourceOpId);
+    const targetFloorId = operationFloorId(operation, activeFloorIdRef.current);
+    setPendingEntries((current) =>
+      replaceGroupedPendingOperations(
+        current,
+        sourceOpIds,
+        operation,
+        targetFloorId,
+      ),
+    );
+    recordHistory(group.snapshotBefore, operation);
+    outboxRef.current?.enqueue(operation);
+  };
+
+  const runHistoryOperation = (
+    entry: SessionHistoryEntry,
+    type: "undo" | "redo",
+  ) => {
+    const identity = identityRef.current;
+    if (!identity || !isReadyRef.current) return;
+    const snapshotBefore = documentRef.current;
+    const operation = withOperationMeta(
+      entry.operation,
+      createOperationMeta(identity),
+    );
+    const preview = applyOperation(snapshotBefore, operation);
+    if (!preview.applied) {
+      setRejectedMessage(
+        "Impossible d'annuler: l'element a ete modifie par un autre utilisateur.",
+      );
+      return;
+    }
+    const opposite = buildInverseOperation(snapshotBefore, operation);
+    dispatchOperation(operation, { recordHistory: false });
+    if (opposite) {
+      const nextEntry = {
+        label: operationLabel(opposite),
+        operation: opposite,
+        sourceOpIds: [operation.meta.opId],
+      };
+      if (type === "undo") {
+        setHistoryByFloor((current) =>
+          updateFloorHistory(current, activeFloorIdRef.current, (history) => ({
+            ...history,
+            redoStack: [...appendCappedHistory(history.redoStack, nextEntry)],
+          })),
+        );
+      } else {
+        setHistoryByFloor((current) =>
+          updateFloorHistory(current, activeFloorIdRef.current, (history) => ({
+            ...history,
+            undoStack: [...appendCappedHistory(history.undoStack, nextEntry)],
+          })),
+        );
+      }
+    }
+    dispatchUndoRedoEvent(type);
+  };
+
+  const undo = () => {
+    if (!isReadyRef.current) return;
+    const entry = undoStackRef.current.at(-1);
+    if (!entry) return;
+    setHistoryByFloor((current) =>
+      updateFloorHistory(current, activeFloorIdRef.current, (history) => ({
+        ...history,
+        undoStack: history.undoStack.slice(0, -1),
+      })),
+    );
+    runHistoryOperation(entry, "undo");
+  };
+
+  const redo = () => {
+    if (!isReadyRef.current) return;
+    const entry = redoStackRef.current.at(-1);
+    if (!entry) return;
+    setHistoryByFloor((current) =>
+      updateFloorHistory(current, activeFloorIdRef.current, (history) => ({
+        ...history,
+        redoStack: history.redoStack.slice(0, -1),
+      })),
+    );
+    runHistoryOperation(entry, "redo");
+  };
+
+  return {
+    dispatch: (operation) => dispatchOperation(operation),
+    commands: {
+      addDevice,
+      updateDevicePosition,
+      deleteDevice,
+      createLink,
+      deleteLink,
+      checkCollision,
+      addWallLine,
+      addWallRoom,
+      eraseWallAtPointer,
+      eraseWallStroke: eraseWallStrokeCommand,
+      previewEraseWallAtPointer,
+      beginHistoryGroup,
+      endHistoryGroup,
+    },
+    undo,
+    redo,
+    dismissRejectedOperation: () => setRejectedMessage(null),
+    getDocument: () => documentRef.current,
+  };
+};
+
 export function MapDocumentProvider({
   floorId,
   children,
@@ -250,7 +677,7 @@ export function MapDocumentProvider({
   );
 
   const [pendingEntries, setPendingEntries] = useState<
-    Array<PendingOperationEntry>
+    ReadonlyArray<PendingOperationEntry>
   >([]);
   const [historyByFloor, setHistoryByFloor] = useState<HistoryByFloor>({});
   const [rejectedMessage, setRejectedMessage] = useState<string | null>(null);
@@ -263,31 +690,55 @@ export function MapDocumentProvider({
   });
 
   const activeFloorId = floorId ?? NONE_FLOOR_ID;
-  const queriedDocument = queriedDocumentRaw
-    ? ({
-        floorId: queriedDocumentRaw.floorId as FloorId,
-        revision: queriedDocumentRaw.revision,
-        devices: queriedDocumentRaw.devices as Array<Device>,
-        walls: queriedDocumentRaw.walls as Array<WallSegment>,
-        links: queriedDocumentRaw.links as Array<LinkDoc>,
-      } satisfies MapDocumentSnapshot)
-    : undefined;
-  const serverDocument = queriedDocument ?? emptyDocument(activeFloorId);
-  const pendingOperations = pendingEntries
-    .filter((entry) => entry.floorId === activeFloorId)
-    .map((entry) => entry.operation);
-  const document = materializeDocument(serverDocument, pendingOperations);
+
+  // Identity-stable derivations: consumers subscribe per-context, so every
+  // object below must keep its identity as long as its inputs are unchanged.
+  const queriedDocument = useMemo(
+    () =>
+      queriedDocumentRaw
+        ? ({
+            floorId: queriedDocumentRaw.floorId as FloorId,
+            revision: queriedDocumentRaw.revision,
+            devices: queriedDocumentRaw.devices as Array<Device>,
+            walls: queriedDocumentRaw.walls as Array<WallSegment>,
+            links: queriedDocumentRaw.links as Array<LinkDoc>,
+          } satisfies MapDocumentSnapshot)
+        : undefined,
+    [queriedDocumentRaw],
+  );
+  const serverDocument = useMemo(
+    () => queriedDocument ?? emptyDocument(activeFloorId),
+    [queriedDocument, activeFloorId],
+  );
+  const pendingOperations = useMemo(() => {
+    const operations = pendingEntries
+      .filter((entry) => entry.floorId === activeFloorId)
+      .map((entry) => entry.operation);
+    return operations.length === 0 ? EMPTY_OPERATIONS : operations;
+  }, [pendingEntries, activeFloorId]);
+  const document = useMemo(
+    () =>
+      pendingOperations.length === 0
+        ? serverDocument
+        : materializeDocument(serverDocument, pendingOperations),
+    [serverDocument, pendingOperations],
+  );
+
   const isReady = Boolean(floorId && identity && queriedDocument !== undefined);
-  const activeHistory = historyByFloor[activeFloorId] ?? emptyHistoryState();
+  const activeHistory = historyByFloor[activeFloorId] ?? EMPTY_FLOOR_HISTORY;
   const undoStack = activeHistory.undoStack;
   const redoStack = activeHistory.redoStack;
   const hasBackgroundPendingOperations = pendingEntries.some(
     (entry) => entry.floorId !== activeFloorId,
   );
-  const observedPendingOpIds = pendingEntries
-    .filter((entry) => !entry.deferred)
-    .slice(0, MAX_OBSERVED_PENDING_OP_IDS)
-    .map((entry) => entry.operation.meta.opId);
+  const observedPendingOpIds = useMemo(
+    () =>
+      pendingEntries
+        .filter((entry) => !entry.deferred)
+        .slice(0, MAX_OBSERVED_PENDING_OP_IDS)
+        .map((entry) => entry.operation.meta.opId),
+    [pendingEntries],
+  );
   const observedPendingRaw = useQuery(
     api.mapOperations.observePending,
     observedPendingOpIds.length > 0 ? { opIds: observedPendingOpIds } : "skip",
@@ -297,8 +748,15 @@ export function MapDocumentProvider({
     | undefined;
 
   const documentRef = useRef(document);
-  const undoStackRef = useRef(undoStack);
-  const redoStackRef = useRef(redoStack);
+  const undoStackRef = useRef<ReadonlyArray<SessionHistoryEntry>>(undoStack);
+  const redoStackRef = useRef<ReadonlyArray<SessionHistoryEntry>>(redoStack);
+  const identityRef = useRef<Identity | null>(identity);
+  const isReadyRef = useRef(isReady);
+  const activeFloorIdRef = useRef(activeFloorId);
+  const serverRevisionRef = useRef(serverDocument.revision);
+  // Acks live in a ref: recording one must not re-render the tree. Removal is
+  // triggered explicitly (onAck + revision effect) through setPendingEntries.
+  const ackedRevisionsRef = useRef<Map<string, number>>(new Map());
   const historyGroupRef = useRef<PendingHistoryGroup | null>(null);
   const outboxRef = useRef<SequentialOutbox | null>(null);
 
@@ -306,18 +764,49 @@ export function MapDocumentProvider({
     documentRef.current = document;
     undoStackRef.current = undoStack;
     redoStackRef.current = redoStack;
+    identityRef.current = identity;
+    isReadyRef.current = isReady;
+    activeFloorIdRef.current = activeFloorId;
+    serverRevisionRef.current = serverDocument.revision;
+    pruneAckedRevisionsInPlace(ackedRevisionsRef.current, pendingEntries);
   });
+
+  // The initializer only wires refs into event-handler closures; no ref is
+  // read during render.
+  // oxlint-disable-next-line
+  const [actions] = useState(() =>
+    createSessionActions({
+      identityRef,
+      isReadyRef,
+      activeFloorIdRef,
+      documentRef,
+      undoStackRef,
+      redoStackRef,
+      historyGroupRef,
+      outboxRef,
+      setPendingEntries,
+      setHistoryByFloor,
+      setRejectedMessage,
+    }),
+  );
 
   useEffect(() => {
     const outbox = new SequentialOutbox({
       send: (operation) =>
         applyMutation({ operation: toServerOperation(operation) }),
       onAck: (operation, result) => {
+        ackedRevisionsRef.current.set(
+          operation.meta.opId,
+          result.appliedRevision ?? 0,
+        );
+        // The document subscription may already be past the acked revision;
+        // identity-preserving removal makes this a no-op render otherwise.
         setPendingEntries((current) =>
-          current.map((entry) =>
-            entry.operation.meta.opId === operation.meta.opId
-              ? { ...entry, ackedRevision: result.appliedRevision ?? 0 }
-              : entry,
+          removeAckedPendingOperations(
+            current,
+            activeFloorIdRef.current,
+            serverRevisionRef.current,
+            ackedRevisionsRef.current,
           ),
         );
       },
@@ -373,10 +862,11 @@ export function MapDocumentProvider({
     queueMicrotask(() => {
       if (cancelled) return;
       setPendingEntries((current) =>
-        removeObservedPendingOperations(
+        removeAckedPendingOperations(
           current,
           activeFloorId,
           serverDocument.revision,
+          ackedRevisionsRef.current,
         ),
       );
     });
@@ -454,409 +944,55 @@ export function MapDocumentProvider({
     return () => window.clearTimeout(timeout);
   }, [rejectedMessage]);
 
-  const pushUndoOperation = (operation: MapOperation, sourceOpId: string) => {
-    setHistoryByFloor((current) =>
-      updateFloorHistory(current, activeFloorId, (history) => ({
-        undoStack: [
-          ...appendCappedHistory(history.undoStack, {
-            label: operationLabel(operation),
-            operation,
-            sourceOpIds: [sourceOpId],
-          }),
-        ],
-        redoStack: [],
-      })),
-    );
-  };
-
-  const recordHistory = (
-    snapshotBefore: MapDocumentSnapshot,
-    operation: MapOperation,
-  ) => {
-    const inverse = buildInverseOperation(snapshotBefore, operation);
-    if (inverse) pushUndoOperation(inverse, operation.meta.opId);
-  };
-
-  const dispatchOperation = (
-    operation: MapOperation,
-    options: { recordHistory: boolean } = { recordHistory: true },
-  ) => {
-    const snapshotBefore = documentRef.current;
-    const historyGroup = options.recordHistory ? historyGroupRef.current : null;
-    if (historyGroup) {
-      historyGroup.entries.push({ operation, sourceOpId: operation.meta.opId });
-    } else if (options.recordHistory) {
-      recordHistory(snapshotBefore, operation);
-    }
-    const targetFloorId = operationFloorId(operation, activeFloorId);
-    setPendingEntries((current) => [
-      ...current,
-      { operation, floorId: targetFloorId, deferred: historyGroup !== null },
-    ]);
-    if (!historyGroup) outboxRef.current?.enqueue(operation);
-  };
-
-  const freshMeta = () => {
-    if (!identity) return null;
-    return createOperationMeta(identity);
-  };
-
-  const dispatch = (operation: MapOperation) => {
-    dispatchOperation(operation);
-  };
-
-  const addDevice = (draft: DeviceDraft): DeviceId | null => {
-    if (!isReady || !identity) return null;
-    const id = createObjectId("device", identity) as DeviceId;
-    const meta = freshMeta();
-    if (!meta) return null;
-    const device: Device = { id, ...draft };
-    dispatchOperation({ kind: "device.create", meta, device });
-    return id;
-  };
-
-  const updateDevicePosition = (deviceId: DeviceId, position: Position) => {
-    if (!isReady) return;
-    const device = documentRef.current.devices.find(
-      (item) => item.id === deviceId,
-    );
-    if (!device) return;
-    if (device.position.x === position.x && device.position.y === position.y)
-      return;
-    const meta = freshMeta();
-    if (!meta) return;
-    dispatchOperation({
-      kind: "device.patch",
-      meta,
-      deviceId,
-      patch: { position },
-    });
-  };
-
-  const deleteDevice = (deviceId: DeviceId) => {
-    if (!isReady) return;
-    if (!documentRef.current.devices.some((device) => device.id === deviceId))
-      return;
-    const meta = freshMeta();
-    if (!meta) return;
-    dispatchOperation({ kind: "device.delete", meta, deviceId });
-  };
-
-  const createLink = (linkWithoutId: Omit<LinkDoc, "id">): LinkId | null => {
-    if (!isReady || !identity) return null;
-    const id = createObjectId("link", identity) as LinkId;
-    const meta = freshMeta();
-    if (!meta) return null;
-    dispatchOperation({
-      kind: "link.create",
-      meta,
-      link: { id, ...linkWithoutId },
-    });
-    return id;
-  };
-
-  const deleteLink = (linkId: LinkId) => {
-    if (!isReady) return;
-    const meta = freshMeta();
-    if (!meta) return;
-    dispatchOperation({ kind: "link.delete", meta, linkId });
-  };
-
-  const checkCollision = (
-    targetFloorId: FloorId,
-    deviceId: DeviceId,
-    position: Position,
-    size: Size,
-  ): boolean => {
-    if (!isReady) return true;
-
-    for (const other of documentRef.current.devices) {
-      if (other.floorId !== targetFloorId) continue;
-      if (other.id === deviceId) continue;
-      if (rectanglesOverlap(position, size, other.position, other.size)) {
-        return true;
-      }
-    }
-    for (const wall of documentRef.current.walls) {
-      if (wall.floorId !== targetFloorId) continue;
-      const rect = getWallCollisionRect(wall);
-      if (
-        rectanglesOverlap(
-          position,
-          size,
-          { x: rect.x, y: rect.y },
-          { width: rect.width, height: rect.height },
-        )
-      ) {
-        return true;
-      }
-    }
-    return false;
-  };
-
-  const dispatchAddedWalls = (
-    floorWallsBefore: Array<WallSegment>,
-    nextWalls: Array<WallSegment>,
-  ) => {
-    const existingIds = new Set(floorWallsBefore.map((wall) => wall.id));
-    const added = nextWalls.filter((wall) => !existingIds.has(wall.id));
-    if (added.length === 0) return;
-    const meta = freshMeta();
-    if (!meta) return;
-    dispatchOperation({ kind: "walls.add", meta, walls: added });
-  };
-
-  const dispatchDeletedWalls = (
-    floorWallsBefore: Array<WallSegment>,
-    nextWalls: Array<WallSegment>,
-  ) => {
-    const remainingIds = new Set(nextWalls.map((wall) => wall.id));
-    const removed = floorWallsBefore.filter(
-      (wall) => !remainingIds.has(wall.id),
-    );
-    if (removed.length === 0) return;
-    const meta = freshMeta();
-    if (!meta) return;
-    dispatchOperation({
-      kind: "walls.delete",
-      meta,
-      wallIds: removed.map((wall) => wall.id),
-    });
-  };
-
-  const addWallLine = (line: WallDraft): WallCommandResult => {
-    const floorWalls = documentRef.current.walls.filter(
-      (wall) => wall.floorId === line.floorId,
-    );
-    if (!isReady || !identity)
-      return unchangedWallResult(floorWalls, "invalid-line");
-    const floorDevices = documentRef.current.devices.filter(
-      (device) => device.floorId === line.floorId,
-    );
-    const result = addLine({
-      walls: floorWalls,
-      floorId: line.floorId,
-      color: line.color,
-      start: line.start,
-      end: line.end,
-      generateWallId: () => createObjectId("wall", identity) as WallId,
-      collidesWithBlock: (block) =>
-        wallCollidesWithDevices(block, floorDevices),
-    });
-    if (result.changed) dispatchAddedWalls(floorWalls, result.nextWalls);
-    return result;
-  };
-
-  const addWallRoom = (room: RoomDraft): WallCommandResult => {
-    const floorWalls = documentRef.current.walls.filter(
-      (wall) => wall.floorId === room.floorId,
-    );
-    if (!isReady || !identity)
-      return unchangedWallResult(floorWalls, "invalid-room");
-    const floorDevices = documentRef.current.devices.filter(
-      (device) => device.floorId === room.floorId,
-    );
-    const result = addRoom({
-      walls: floorWalls,
-      floorId: room.floorId,
-      color: room.color,
-      start: room.start,
-      end: room.end,
-      generateWallId: () => createObjectId("wall", identity) as WallId,
-      collidesWithBlock: (block) =>
-        wallCollidesWithDevices(block, floorDevices),
-    });
-    if (result.changed) dispatchAddedWalls(floorWalls, result.nextWalls);
-    return result;
-  };
-
-  const eraseWallAtPointer = (input: WallPointerInput): WallCommandResult => {
-    const floorWalls = documentRef.current.walls.filter(
-      (wall) => wall.floorId === input.floorId,
-    );
-    if (!isReady) return unchangedWallResult(floorWalls, "no-wall-at-pointer");
-    const result = eraseAtPointer({ walls: floorWalls, ...input });
-    if (result.changed) dispatchDeletedWalls(floorWalls, result.nextWalls);
-    return result;
-  };
-
-  const eraseWallStrokeCommand = (
-    input: WallStrokeInput,
-  ): WallCommandResult => {
-    const floorWalls = documentRef.current.walls.filter(
-      (wall) => wall.floorId === input.floorId,
-    );
-    if (!isReady) return unchangedWallResult(floorWalls, "empty-stroke");
-    const result = eraseStroke({ walls: floorWalls, ...input });
-    if (result.changed) dispatchDeletedWalls(floorWalls, result.nextWalls);
-    return result;
-  };
-
-  const previewEraseWallAtPointer = (
-    input: WallPointerInput,
-  ): WallCommandResult => {
-    const floorWalls = documentRef.current.walls.filter(
-      (wall) => wall.floorId === input.floorId,
-    );
-    if (!isReady) return unchangedWallResult(floorWalls, "preview-miss");
-    return previewEraseAtPointer({ walls: floorWalls, ...input });
-  };
-
-  const beginHistoryGroup = () => {
-    if (historyGroupRef.current) return;
-    historyGroupRef.current = {
-      snapshotBefore: documentRef.current,
-      entries: [],
-    };
-  };
-
-  const endHistoryGroup = () => {
-    const group = historyGroupRef.current;
-    historyGroupRef.current = null;
-    if (!group || group.entries.length === 0) return;
-    const operation = coalesceHistoryGroupOperations(
-      group.entries.map((entry) => entry.operation),
-    );
-    if (!operation) return;
-
-    const sourceOpIds = group.entries.map((entry) => entry.sourceOpId);
-    const targetFloorId = operationFloorId(operation, activeFloorId);
-    setPendingEntries((current) =>
-      replaceGroupedPendingOperations(
-        current,
-        sourceOpIds,
-        operation,
-        targetFloorId,
-      ),
-    );
-    recordHistory(group.snapshotBefore, operation);
-    outboxRef.current?.enqueue(operation);
-  };
-
-  const runHistoryOperation = (
-    entry: SessionHistoryEntry,
-    type: "undo" | "redo",
-  ) => {
-    if (!identity || !isReady) return;
-    const snapshotBefore = documentRef.current;
-    const operation = withOperationMeta(
-      entry.operation,
-      createOperationMeta(identity),
-    );
-    const preview = applyOperation(snapshotBefore, operation);
-    if (!preview.applied) {
-      setRejectedMessage(
-        "Impossible d'annuler: l'element a ete modifie par un autre utilisateur.",
-      );
-      return;
-    }
-    const opposite = buildInverseOperation(snapshotBefore, operation);
-    dispatchOperation(operation, { recordHistory: false });
-    if (opposite) {
-      const nextEntry = {
-        label: operationLabel(opposite),
-        operation: opposite,
-        sourceOpIds: [operation.meta.opId],
-      };
-      if (type === "undo") {
-        setHistoryByFloor((current) =>
-          updateFloorHistory(current, activeFloorId, (history) => ({
-            ...history,
-            redoStack: [...appendCappedHistory(history.redoStack, nextEntry)],
-          })),
-        );
-      } else {
-        setHistoryByFloor((current) =>
-          updateFloorHistory(current, activeFloorId, (history) => ({
-            ...history,
-            undoStack: [...appendCappedHistory(history.undoStack, nextEntry)],
-          })),
-        );
-      }
-    }
-    dispatchUndoRedoEvent(type);
-  };
-
-  const undo = () => {
-    if (!isReady) return;
-    const entry = undoStackRef.current.at(-1);
-    if (!entry) return;
-    setHistoryByFloor((current) =>
-      updateFloorHistory(current, activeFloorId, (history) => ({
-        ...history,
-        undoStack: history.undoStack.slice(0, -1),
-      })),
-    );
-    runHistoryOperation(entry, "undo");
-  };
-
-  const redo = () => {
-    if (!isReady) return;
-    const entry = redoStackRef.current.at(-1);
-    if (!entry) return;
-    setHistoryByFloor((current) =>
-      updateFloorHistory(current, activeFloorId, (history) => ({
-        ...history,
-        redoStack: history.redoStack.slice(0, -1),
-      })),
-    );
-    runHistoryOperation(entry, "redo");
-  };
-
-  const dismissRejectedOperation = () => {
-    setRejectedMessage(null);
-  };
-
-  const commands: MapDocumentCommands = {
-    addDevice,
-    updateDevicePosition,
-    deleteDevice,
-    createLink,
-    deleteLink,
-    checkCollision,
-    addWallLine,
-    addWallRoom,
-    eraseWallAtPointer,
-    eraseWallStroke: eraseWallStrokeCommand,
-    previewEraseWallAtPointer,
-    beginHistoryGroup,
-    endHistoryGroup,
-  };
-
   const connectionState = !convexConnectionState.hasEverConnected
     ? "connecting"
     : convexConnectionState.isWebSocketConnected
       ? "connected"
       : "disconnected";
+  const isSaving = pendingEntries.length > 0 || outboxState.pendingCount > 0;
 
-  const value: MapDocumentSession = {
-    floorId,
-    document,
-    serverDocument,
-    pendingOperations,
-    isReady,
-    isSaving: pendingEntries.length > 0 || outboxState.pendingCount > 0,
-    isRetrying: outboxState.isRetrying,
-    hasBackgroundPendingOperations,
-    hasRejectedOperations: rejectedMessage !== null,
-    rejectedMessage,
-    connectionState,
-    dispatch,
-    commands,
-    undo,
-    redo,
-    dismissRejectedOperation,
-    history: {
+  const data = useMemo<MapDocumentData>(
+    () => ({ floorId, document, serverDocument, pendingOperations }),
+    [floorId, document, serverDocument, pendingOperations],
+  );
+  const syncStatus = useMemo<MapDocumentSyncStatus>(
+    () => ({
+      isSaving,
+      isRetrying: outboxState.isRetrying,
+      hasBackgroundPendingOperations,
+      hasRejectedOperations: rejectedMessage !== null,
+      rejectedMessage,
+      connectionState,
+    }),
+    [
+      isSaving,
+      outboxState.isRetrying,
+      hasBackgroundPendingOperations,
+      rejectedMessage,
+      connectionState,
+    ],
+  );
+  const history = useMemo<MapDocumentHistoryState>(
+    () => ({
       undoStack,
       redoStack,
       canUndo: undoStack.length > 0,
       canRedo: redoStack.length > 0,
-    },
-  };
+    }),
+    [undoStack, redoStack],
+  );
 
   return (
-    <MapDocumentContext.Provider value={value}>
-      {children}
-    </MapDocumentContext.Provider>
+    <MapDocumentActionsContext.Provider value={actions}>
+      <MapDocumentReadyContext.Provider value={isReady}>
+        <MapDocumentSyncStatusContext.Provider value={syncStatus}>
+          <MapDocumentHistoryContext.Provider value={history}>
+            <MapDocumentDataContext.Provider value={data}>
+              {children}
+            </MapDocumentDataContext.Provider>
+          </MapDocumentHistoryContext.Provider>
+        </MapDocumentSyncStatusContext.Provider>
+      </MapDocumentReadyContext.Provider>
+    </MapDocumentActionsContext.Provider>
   );
 }

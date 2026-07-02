@@ -7,10 +7,12 @@ export type {
 } from "./types";
 
 export {
+  areWallInteractionStatesEqual,
   cancelWallTool,
   createWallInteractionState,
   releaseWallPointer,
   resetWallInteractionState,
+  stabilizeWallInteractionState,
   suppressWallContextMenu,
 } from "./state";
 
