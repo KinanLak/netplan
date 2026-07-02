@@ -9,6 +9,7 @@ import {
   getWallCollisionRect,
   snapPositionToGrid,
   snapPositionToWallGrid,
+  snapToWallGrid,
 } from "./cells";
 import type { Rect, WallEraseCandidate } from "./types";
 
@@ -55,44 +56,103 @@ const rectsOverlap = (a: Rect, b: Rect): boolean =>
     { width: b.width, height: b.height },
   );
 
-export const resolveWallEraseCandidates = (
+/**
+ * Cell-bucketed index of a floor's walls. Built once per gesture (or cached
+ * per document), it turns each eraser lookup into O(cells under the eraser)
+ * instead of a scan of every wall on the floor per mouse move.
+ */
+export interface WallEraseIndex {
+  floorId: FloorId;
+  wallsByCell: Map<string, Array<WallSegment>>;
+}
+
+const cellKeyOf = (x: number, y: number): string => `${x}:${y}`;
+
+const forEachCellCenter = (
+  rect: Rect,
+  visit: (x: number, y: number) => void,
+): void => {
+  const startX = snapToWallGrid(rect.x + GRID_SIZE / 2);
+  const startY = snapToWallGrid(rect.y + GRID_SIZE / 2);
+  for (let x = startX; x < rect.x + rect.width; x += GRID_SIZE) {
+    for (let y = startY; y < rect.y + rect.height; y += GRID_SIZE) {
+      visit(x, y);
+    }
+  }
+};
+
+export const buildWallEraseIndex = (
   walls: ReadonlyArray<WallSegment>,
   floorId: FloorId,
-  pointer: Position,
-  eraserSize: number,
-): Array<WallEraseCandidate> => {
-  const floorWalls = selectFloorWalls(walls, floorId);
-  if (floorWalls.length === 0) {
-    return [];
-  }
+): WallEraseIndex => {
+  const wallsByCell = new Map<string, Array<WallSegment>>();
 
-  const eraserRect = getWallEraserRect(pointer, eraserSize);
-  const candidates: Array<WallEraseCandidate> = [];
-
-  for (const wall of floorWalls) {
-    const key = getWallBlockKey(wall);
-    if (!key) {
-      continue;
-    }
-
-    const center = getWallCenter(wall);
-    if (!center || !rectsOverlap(eraserRect, getWallCollisionRect(wall))) {
-      continue;
-    }
-
-    candidates.push({
-      key,
-      wall,
-      direction: "center",
-      distanceSquared: pointToWallCellDistanceSquared(pointer, center),
+  for (const wall of walls) {
+    if (wall.floorId !== floorId) continue;
+    forEachCellCenter(getWallCollisionRect(wall), (x, y) => {
+      const key = cellKeyOf(x, y);
+      const bucket = wallsByCell.get(key);
+      if (bucket) {
+        bucket.push(wall);
+      } else {
+        wallsByCell.set(key, [wall]);
+      }
     });
   }
+
+  return { floorId, wallsByCell };
+};
+
+export const resolveWallEraseCandidatesFromIndex = (
+  index: WallEraseIndex,
+  pointer: Position,
+  eraserSize: number,
+  excludedKeys?: ReadonlySet<string>,
+): Array<WallEraseCandidate> => {
+  const eraserRect = getWallEraserRect(pointer, eraserSize);
+  const seenKeys = new Set<string>();
+  const candidates: Array<WallEraseCandidate> = [];
+
+  forEachCellCenter(eraserRect, (x, y) => {
+    const bucket = index.wallsByCell.get(cellKeyOf(x, y));
+    if (!bucket) return;
+
+    for (const wall of bucket) {
+      const key = getWallBlockKey(wall);
+      if (!key || seenKeys.has(key) || excludedKeys?.has(key)) continue;
+
+      const center = getWallCenter(wall);
+      if (!center || !rectsOverlap(eraserRect, getWallCollisionRect(wall))) {
+        continue;
+      }
+
+      seenKeys.add(key);
+      candidates.push({
+        key,
+        wall,
+        direction: "center",
+        distanceSquared: pointToWallCellDistanceSquared(pointer, center),
+      });
+    }
+  });
 
   return candidates.toSorted(
     (a, b) =>
       a.distanceSquared - b.distanceSquared || a.key.localeCompare(b.key),
   );
 };
+
+export const resolveWallEraseCandidates = (
+  walls: ReadonlyArray<WallSegment>,
+  floorId: FloorId,
+  pointer: Position,
+  eraserSize: number,
+): Array<WallEraseCandidate> =>
+  resolveWallEraseCandidatesFromIndex(
+    buildWallEraseIndex(walls, floorId),
+    pointer,
+    eraserSize,
+  );
 
 export const resolveWallEraseCandidate = (
   walls: ReadonlyArray<WallSegment>,

@@ -1,5 +1,52 @@
 # Performance — re-renders, session de document et rendu des murs
 
+## Volet 3 — audit proactif : gomme, serveur Convex, composants (juillet 2026)
+
+Audit systématique (complexités, abonnements, identités) sans symptôme
+rapporté. Corrigé :
+
+1. **Gomme O(chemin × murs) par mousemove.** `eraseStroke` rejouait un scan
+   de tous les murs (avec recopie du tableau) pour chaque cellule du chemin ;
+   la préview scannait tout l'étage à chaque survol. Correctif : index
+   spatial par cellule (`buildWallEraseIndex`), mis en cache par identité du
+   document dans les actions de session — chaque lookup gomme devient
+   O(cellules sous la gomme), le tableau des murs n'est filtré qu'une fois
+   par trait. Mesures (~1250 murs) : préview **29 µs → 1,9 µs**/move, stroke
+   rapide (12 cellules) **1,21 ms → 115 µs**/événement ; construction de
+   l'index 130 µs, une fois par modification du document.
+
+2. **`buildPlanningState` (Convex) chargeait TOUTE la base à chaque
+   mutation** — tous les étages, tous les bâtiments — pour valider une seule
+   opération, faisant de chaque mutation un conflit potentiel avec toutes les
+   autres (OCC). Correctif : `collectOperationScope` résout les objets
+   référencés par point-lookups indexés (`by_object_id`) puis ne charge que
+   les étages affectés (`by_floor`). Lectures par op : O(base) → O(étage).
+
+3. **`collidesWithBlock` re-filtrait tous les devices pour CHAQUE bloc**
+   (pinceau : par mousemove ; salle : par périmètre). Correctif : filtre
+   hissé hors du callback.
+
+4. **`DeviceDrawer` : O(liens × devices) par render** (`devices.find` dans la
+   boucle des liens, à chaque édition du document tant qu'un device est
+   ouvert). Correctif : `Map` par id — O(liens + devices).
+
+5. **`useOptionHeld` à la racine de la sidebar** : chaque appui sur
+   Ctrl/Cmd (donc chaque Ctrl+Z) re-rendait toute la sidebar pour un
+   indice clavier. Correctif : `SidebarFloorShortcutHint` isolé.
+
+6. Divers : timeout du flash undo/redo de la Toolbar non nettoyé (fuite de
+   `setState` après démontage) ; valeur du `ShortcutIntentContext` non
+   mémoïsée.
+
+Identifié mais **pas encore corrigé** (candidat au prochain volet) :
+`getFloorDocument` renvoie le document entier — chaque édition re-transmet
+tous les murs/devices/liens de l'étage à chaque client abonné. Le découper en
+quatre requêtes (devices / walls / links / revision) réduirait le payload par
+édition à la seule collection touchée (les résultats Convex restent cohérents
+entre eux à un même timestamp logique).
+
+---
+
 ## Volet 2 — interactions murs et passage à l'échelle (juillet 2026)
 
 Symptômes traités : un long trait au pinceau ralentissait progressivement ;

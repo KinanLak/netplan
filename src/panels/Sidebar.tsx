@@ -42,6 +42,43 @@ import { ModeToggle } from "@/components/mode-toggle";
 import { api } from "../../convex/_generated/api";
 
 /**
+ * Isolated so holding the shortcut modifier key (Ctrl/Cmd — pressed for
+ * every undo/redo) only re-renders this hint, not the whole sidebar.
+ */
+function SidebarFloorShortcutHint() {
+  const { isVisible: isModifierVisible } = useOptionHeld();
+
+  const floorUpKeys = getShortcutDisplay("floor-up")[0] ?? [];
+  const floorDownKeys = getShortcutDisplay("floor-down")[0] ?? [];
+  const sharedFloorModifier =
+    floorUpKeys.length > 1 &&
+    floorDownKeys.length > 1 &&
+    floorUpKeys[0] === floorDownKeys[0]
+      ? floorUpKeys[0]
+      : null;
+  const floorUpArrow = floorUpKeys.at(-1) ?? "↑";
+  const floorDownArrow = floorDownKeys.at(-1) ?? "↓";
+
+  return (
+    <div
+      className={cn(
+        "inline-flex items-center gap-1 text-xs text-muted-foreground transition-opacity duration-200",
+        isModifierVisible ? "opacity-100" : "opacity-0",
+      )}
+    >
+      <KbdGroup>
+        {sharedFloorModifier ? <Kbd>{sharedFloorModifier}</Kbd> : null}
+        <Kbd>{floorUpArrow}</Kbd>
+      </KbdGroup>
+      <span>/</span>
+      <KbdGroup>
+        <Kbd>{floorDownArrow}</Kbd>
+      </KbdGroup>
+    </div>
+  );
+}
+
+/**
  * Isolated so undo/redo history changes only re-render these two buttons,
  * not the whole sidebar (buildings, floors, connected users).
  */
@@ -101,19 +138,6 @@ export default function AppSidebar() {
     currentBuildingId ? { buildingId: currentBuildingId } : "skip",
   );
 
-  const { isVisible: isModifierVisible } = useOptionHeld();
-
-  const floorUpKeys = getShortcutDisplay("floor-up")[0] ?? [];
-  const floorDownKeys = getShortcutDisplay("floor-down")[0] ?? [];
-  const sharedFloorModifier =
-    floorUpKeys.length > 1 &&
-    floorDownKeys.length > 1 &&
-    floorUpKeys[0] === floorDownKeys[0]
-      ? floorUpKeys[0]
-      : null;
-  const floorUpArrow = floorUpKeys.at(-1) ?? "↑";
-  const floorDownArrow = floorDownKeys.at(-1) ?? "↓";
-
   const currentBuilding = buildings.find((b) => b.id === currentBuildingId);
   const sortedFloors = floorsForCurrent
     ? [...floorsForCurrent].sort((a, b) => a.order - b.order)
@@ -164,21 +188,7 @@ export default function AppSidebar() {
         <SidebarGroup>
           <div className="flex items-center justify-between px-2">
             <SidebarGroupLabel className="px-0">Bâtiments</SidebarGroupLabel>
-            <div
-              className={cn(
-                "inline-flex items-center gap-1 text-xs text-muted-foreground transition-opacity duration-200",
-                isModifierVisible ? "opacity-100" : "opacity-0",
-              )}
-            >
-              <KbdGroup>
-                {sharedFloorModifier ? <Kbd>{sharedFloorModifier}</Kbd> : null}
-                <Kbd>{floorUpArrow}</Kbd>
-              </KbdGroup>
-              <span>/</span>
-              <KbdGroup>
-                <Kbd>{floorDownArrow}</Kbd>
-              </KbdGroup>
-            </div>
+            <SidebarFloorShortcutHint />
           </div>
           <SidebarGroupContent>
             <SidebarMenu>

@@ -45,7 +45,10 @@ export default function DeviceDrawer() {
 
   const reactFlow = useReactFlow();
 
-  const device = devices.find((d) => d.id === selectedDeviceId);
+  const deviceById = new Map(devices.map((item) => [item.id, item]));
+  const device = selectedDeviceId
+    ? deviceById.get(selectedDeviceId)
+    : undefined;
 
   const connectedDevices: Array<ConnectedDeviceSummary> = (() => {
     if (!device) return [];
@@ -60,7 +63,7 @@ export default function DeviceDrawer() {
             : null;
       if (!otherId || seen.has(otherId)) continue;
       seen.add(otherId);
-      const other = devices.find((d) => d.id === otherId);
+      const other = deviceById.get(otherId);
       if (!other) continue;
       out.push({
         id: other.id,
@@ -75,8 +78,9 @@ export default function DeviceDrawer() {
   const isCurrentDeviceHighlighted = (() => {
     if (!device || connectedDevices.length === 0) return false;
     if (highlightedDeviceIds.length === 0) return false;
+    const highlightedIdSet = new Set(highlightedDeviceIds);
     const allIds = [device.id, ...connectedDevices.map((c) => c.id)];
-    return allIds.every((id) => highlightedDeviceIds.includes(id));
+    return allIds.every((id) => highlightedIdSet.has(id));
   })();
 
   const handleHighlightConnections = () => {

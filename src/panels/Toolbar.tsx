@@ -71,17 +71,21 @@ export default function Toolbar() {
 
   // Listen for undo/redo events and flash the toolbar background
   useEffect(() => {
+    let timeout: ReturnType<typeof setTimeout> | null = null;
     const handler = (e: Event) => {
       const type = (e as CustomEvent<{ type: "undo" | "redo" }>).detail.type;
       setFlashType(type);
-      const timeout = setTimeout(
+      if (timeout !== null) clearTimeout(timeout);
+      timeout = setTimeout(
         () => setFlashType(null),
         UNDO_REDO_FLASH_DURATION_MS,
       );
-      return () => clearTimeout(timeout);
     };
     window.addEventListener(UNDO_REDO_EVENT_NAME, handler);
-    return () => window.removeEventListener(UNDO_REDO_EVENT_NAME, handler);
+    return () => {
+      window.removeEventListener(UNDO_REDO_EVENT_NAME, handler);
+      if (timeout !== null) clearTimeout(timeout);
+    };
   }, []);
 
   // Track button elements in a ref to avoid toolbar re-renders during mount.

@@ -49,6 +49,8 @@ import {
   getWallCollisionRect,
   wallCollidesWithDevices,
 } from "@/walls/gridGeometry";
+import { buildWallEraseIndex } from "@/walls/gridGeometry/erase";
+import type { WallEraseIndex } from "@/walls/gridGeometry/erase";
 import { api } from "../../convex/_generated/api";
 import {
   appendCappedHistory,
@@ -471,11 +473,34 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
   const floorDevicesOf = (floorId: FloorId): Array<Device> =>
     documentRef.current.devices.filter((device) => device.floorId === floorId);
 
+  // Eraser cell indexes, cached per walls-array identity: hover previews and
+  // stroke steps between edits reuse the same index instead of rescanning
+  // every wall on the floor per mouse move.
+  const eraseIndexCache = new WeakMap<
+    ReadonlyArray<WallSegment>,
+    Map<FloorId, WallEraseIndex>
+  >();
+  const floorEraseIndexOf = (floorId: FloorId): WallEraseIndex => {
+    const walls = documentRef.current.walls;
+    let byFloor = eraseIndexCache.get(walls);
+    if (!byFloor) {
+      byFloor = new Map();
+      eraseIndexCache.set(walls, byFloor);
+    }
+    let index = byFloor.get(floorId);
+    if (!index) {
+      index = buildWallEraseIndex(walls, floorId);
+      byFloor.set(floorId, index);
+    }
+    return index;
+  };
+
   const addWallLine = (line: WallDraft): WallCommandResult => {
     const identity = identityRef.current;
     const floorWalls = floorWallsOf(line.floorId);
     if (!isReadyRef.current || !identity)
       return unchangedWallResult(floorWalls, "invalid-line");
+    const floorDevices = floorDevicesOf(line.floorId);
     const result = addLine({
       walls: floorWalls,
       floorId: line.floorId,
@@ -484,7 +509,7 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
       end: line.end,
       generateWallId: () => createObjectId("wall", identity) as WallId,
       collidesWithBlock: (block) =>
-        wallCollidesWithDevices(block, floorDevicesOf(line.floorId)),
+        wallCollidesWithDevices(block, floorDevices),
     });
     if (result.changed) dispatchAddedWalls(floorWalls, result.nextWalls);
     return result;
@@ -495,6 +520,7 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
     const floorWalls = floorWallsOf(room.floorId);
     if (!isReadyRef.current || !identity)
       return unchangedWallResult(floorWalls, "invalid-room");
+    const floorDevices = floorDevicesOf(room.floorId);
     const result = addRoom({
       walls: floorWalls,
       floorId: room.floorId,
@@ -503,7 +529,7 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
       end: room.end,
       generateWallId: () => createObjectId("wall", identity) as WallId,
       collidesWithBlock: (block) =>
-        wallCollidesWithDevices(block, floorDevicesOf(room.floorId)),
+        wallCollidesWithDevices(block, floorDevices),
     });
     if (result.changed) dispatchAddedWalls(floorWalls, result.nextWalls);
     return result;
@@ -513,7 +539,11 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
     const floorWalls = floorWallsOf(input.floorId);
     if (!isReadyRef.current)
       return unchangedWallResult(floorWalls, "no-wall-at-pointer");
-    const result = eraseAtPointer({ walls: floorWalls, ...input });
+    const result = eraseAtPointer({
+      walls: floorWalls,
+      ...input,
+      eraseIndex: floorEraseIndexOf(input.floorId),
+    });
     if (result.changed) dispatchDeletedWalls(floorWalls, result.nextWalls);
     return result;
   };
@@ -524,7 +554,11 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
     const floorWalls = floorWallsOf(input.floorId);
     if (!isReadyRef.current)
       return unchangedWallResult(floorWalls, "empty-stroke");
-    const result = eraseStroke({ walls: floorWalls, ...input });
+    const result = eraseStroke({
+      walls: floorWalls,
+      ...input,
+      eraseIndex: floorEraseIndexOf(input.floorId),
+    });
     if (result.changed) dispatchDeletedWalls(floorWalls, result.nextWalls);
     return result;
   };
@@ -535,7 +569,11 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
     const floorWalls = floorWallsOf(input.floorId);
     if (!isReadyRef.current)
       return unchangedWallResult(floorWalls, "preview-miss");
-    return previewEraseAtPointer({ walls: floorWalls, ...input });
+    return previewEraseAtPointer({
+      walls: floorWalls,
+      ...input,
+      eraseIndex: floorEraseIndexOf(input.floorId),
+    });
   };
 
   const beginHistoryGroup = () => {

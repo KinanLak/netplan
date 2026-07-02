@@ -237,13 +237,138 @@ const plannedLinkPayload = (link: PlannedLink) => ({
 const wallGeometryKey = (floorId: string, geometryKey: string): string =>
   `${floorId}:${geometryKey}`;
 
-const buildPlanningState = async (ctx: MutationCtx): Promise<PlanningState> => {
-  const [floors, devices, walls, links] = await Promise.all([
-    ctx.db.query("floors").collect(),
-    ctx.db.query("devices").collect(),
-    ctx.db.query("walls").collect(),
-    ctx.db.query("links").collect(),
+interface OperationScope {
+  floorIds: Set<string>;
+  deviceIds: Set<string>;
+  wallIds: Set<string>;
+  linkIds: Set<string>;
+}
+
+/**
+ * Object ids and floors an operation can touch, collected before planning so
+ * the mutation only reads the affected floor(s) instead of the whole
+ * database (which would also make every mutation conflict with every other).
+ */
+const collectOperationScope = (
+  operation: OperationInput,
+  scope: OperationScope = {
+    floorIds: new Set(),
+    deviceIds: new Set(),
+    wallIds: new Set(),
+    linkIds: new Set(),
+  },
+): OperationScope => {
+  switch (operation.kind) {
+    case "device.create":
+      scope.floorIds.add(operation.device.floorId);
+      scope.deviceIds.add(operation.device.id);
+      break;
+    case "device.patch":
+    case "device.delete":
+      scope.deviceIds.add(operation.deviceId);
+      break;
+    case "link.create":
+      scope.floorIds.add(operation.link.floorId);
+      scope.linkIds.add(operation.link.id);
+      scope.deviceIds.add(operation.link.fromDeviceId);
+      scope.deviceIds.add(operation.link.toDeviceId);
+      break;
+    case "link.delete":
+      scope.linkIds.add(operation.linkId);
+      break;
+    case "walls.add":
+      // Created wall ids are covered by loading their declared floor;
+      // replayed operations are already deduplicated by opId upstream.
+      for (const wall of operation.walls) scope.floorIds.add(wall.floorId);
+      break;
+    case "walls.delete":
+      for (const wallId of operation.wallIds) scope.wallIds.add(wallId);
+      break;
+    case "batch":
+      for (const subOperation of operation.operations) {
+        collectOperationScope(
+          { ...subOperation, meta: operation.meta } as OperationInput,
+          scope,
+        );
+      }
+      break;
+  }
+  return scope;
+};
+
+const buildPlanningState = async (
+  ctx: MutationCtx,
+  operation: OperationInput,
+): Promise<PlanningState> => {
+  const scope = collectOperationScope(operation);
+
+  // Resolve the floors of referenced objects through point lookups, then
+  // load only those floors' rows.
+  const [deviceRefs, wallRefs, linkRefs] = await Promise.all([
+    Promise.all(
+      [...scope.deviceIds].map((objectId) =>
+        ctx.db
+          .query("devices")
+          .withIndex("by_object_id", (q) => q.eq("objectId", objectId))
+          .unique(),
+      ),
+    ),
+    Promise.all(
+      [...scope.wallIds].map((objectId) =>
+        ctx.db
+          .query("walls")
+          .withIndex("by_object_id", (q) => q.eq("objectId", objectId))
+          .unique(),
+      ),
+    ),
+    Promise.all(
+      [...scope.linkIds].map((objectId) =>
+        ctx.db
+          .query("links")
+          .withIndex("by_object_id", (q) => q.eq("objectId", objectId))
+          .unique(),
+      ),
+    ),
   ]);
+
+  const floorIds = new Set(scope.floorIds);
+  for (const row of [...deviceRefs, ...wallRefs, ...linkRefs]) {
+    if (row) floorIds.add(row.floorId);
+  }
+
+  const floorIdList = [...floorIds];
+  const [floors, devicesByFloor, wallsByFloor, linksByFloor] =
+    await Promise.all([
+      ctx.db.query("floors").collect(),
+      Promise.all(
+        floorIdList.map((floorId) =>
+          ctx.db
+            .query("devices")
+            .withIndex("by_floor", (q) => q.eq("floorId", floorId))
+            .collect(),
+        ),
+      ),
+      Promise.all(
+        floorIdList.map((floorId) =>
+          ctx.db
+            .query("walls")
+            .withIndex("by_floor", (q) => q.eq("floorId", floorId))
+            .collect(),
+        ),
+      ),
+      Promise.all(
+        floorIdList.map((floorId) =>
+          ctx.db
+            .query("links")
+            .withIndex("by_floor", (q) => q.eq("floorId", floorId))
+            .collect(),
+        ),
+      ),
+    ]);
+
+  const devices = devicesByFloor.flat();
+  const walls = wallsByFloor.flat();
+  const links = linksByFloor.flat();
 
   return {
     floors: new Set(floors.map((floor) => floor.objectId)),
@@ -850,7 +975,7 @@ export const apply = mutation({
       ...operation,
       meta: { ...operation.meta, createdAt: now },
     } as OperationInput;
-    const state = await buildPlanningState(ctx);
+    const state = await buildPlanningState(ctx, planningOperation);
     const planningError = planOperation(state, planningOperation);
     const error = planningError ?? validateSingleAffectedFloor(state);
     const status: "applied" | "rejected" = error ? "rejected" : "applied";

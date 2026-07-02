@@ -7,6 +7,7 @@ import type {
   WallId,
   WallSegment,
 } from "@/types/map";
+import type { WallEraseIndex } from "@/walls/gridGeometry/erase";
 
 export type EngineResult = WallCommandResult;
 
@@ -36,6 +37,8 @@ export interface EraseAtPointerCommandInput {
   pointer: Position;
   snappedPoint: Position;
   eraserSize: number;
+  /** Prebuilt cell index for the floor's walls; built on demand otherwise. */
+  eraseIndex?: WallEraseIndex;
 }
 
 export interface EraseStrokeCommandInput {
@@ -46,4 +49,6 @@ export interface EraseStrokeCommandInput {
   toPointer: Position;
   toSnappedPoint: Position;
   eraserSize: number;
+  /** Prebuilt cell index for the floor's walls; built on demand otherwise. */
+  eraseIndex?: WallEraseIndex;
 }

@@ -18,6 +18,8 @@ import {
   computeMergedWallGroups,
   snapPositionToWallGrid,
 } from "@/walls/gridGeometry";
+import { eraseStroke, previewEraseAtPointer } from "@/walls/engine";
+import { buildWallEraseIndex } from "@/walls/gridGeometry/erase";
 import { removeObservedOperationLogEntries } from "@/map-session/pendingOperations";
 import type { PendingOperationEntry } from "@/map-session/pendingOperations";
 import {
@@ -105,6 +107,39 @@ group("wall geometry merge (room floorplans)", () => {
       computeMergedWallGroups(walls);
     });
   }
+});
+
+group("eraser engine (48 rooms, ~1250 walls)", () => {
+  const walls = buildBenchRoomWalls(48);
+  const eraseIndex = buildWallEraseIndex(walls, BENCH_FLOOR_ID);
+
+  bench("buildWallEraseIndex (once per document change)", () => {
+    buildWallEraseIndex(walls, BENCH_FLOOR_ID);
+  });
+
+  bench("previewEraseAtPointer (cached index — app hover path)", () => {
+    previewEraseAtPointer({
+      walls,
+      floorId: BENCH_FLOOR_ID,
+      pointer: { x: 130, y: 130 },
+      snappedPoint: { x: 130, y: 130 },
+      eraserSize: 3,
+      eraseIndex,
+    });
+  });
+
+  bench("eraseStroke (cached index, drag across 12 cells)", () => {
+    eraseStroke({
+      walls,
+      floorId: BENCH_FLOOR_ID,
+      fromPointer: { x: 30, y: 110 },
+      fromSnappedPoint: { x: 30, y: 110 },
+      toPointer: { x: 30 + 12 * 20, y: 110 },
+      toSnappedPoint: { x: 30 + 12 * 20, y: 110 },
+      eraserSize: 3,
+      eraseIndex,
+    });
+  });
 });
 
 group("device node adapter", () => {
