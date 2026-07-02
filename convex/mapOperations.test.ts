@@ -15,6 +15,19 @@ const meta = (seq: number) => ({
   createdAt: seq,
 });
 
+async function getFloorDocument(
+  t: ReturnType<typeof convexTest>,
+  floorId: string,
+) {
+  const [devices, walls, links, revision] = await Promise.all([
+    t.query(api.mapDocument.getFloorDevices, { floorId }),
+    t.query(api.mapDocument.getFloorWalls, { floorId }),
+    t.query(api.mapDocument.getFloorLinks, { floorId }),
+    t.query(api.mapDocument.getFloorRevision, { floorId }),
+  ]);
+  return { floorId, revision, devices, walls, links };
+}
+
 async function freshFloor(t: ReturnType<typeof convexTest>) {
   counter += 1;
   const buildingId = await t.mutation(api.buildings.create, {
@@ -76,9 +89,7 @@ describe("mapOperations.apply", () => {
       expect(await ctx.db.query("clientOperations").collect()).toHaveLength(1);
       expect(await ctx.db.query("devices").collect()).toHaveLength(1);
     });
-    const document = await t.query(api.mapDocument.getFloorDocument, {
-      floorId,
-    });
+    const document = await getFloorDocument(t, floorId);
     expect(document.revision).toBe(first.appliedRevision);
   });
 
@@ -270,9 +281,7 @@ describe("mapOperations.apply", () => {
       },
     });
 
-    const document = await t.query(api.mapDocument.getFloorDocument, {
-      floorId,
-    });
+    const document = await getFloorDocument(t, floorId);
     expect(document.devices.map((item) => item.id)).toEqual(["device:b"]);
     expect(document.links).toEqual([]);
   });
@@ -315,9 +324,7 @@ describe("mapOperations.apply", () => {
 
     expect(result.status).toBe("rejected");
     expect(result.error).toContain("device");
-    const document = await t.query(api.mapDocument.getFloorDocument, {
-      floorId,
-    });
+    const document = await getFloorDocument(t, floorId);
     expect(document.walls).toEqual([]);
   });
 
@@ -349,9 +356,7 @@ describe("mapOperations.apply", () => {
 
     expect(result.status).toBe("rejected");
     expect(result.error).toContain("endpoint");
-    const document = await t.query(api.mapDocument.getFloorDocument, {
-      floorId,
-    });
+    const document = await getFloorDocument(t, floorId);
     expect(document.devices).toEqual([]);
     expect(document.links).toEqual([]);
   });
@@ -390,9 +395,7 @@ describe("mapOperations.apply", () => {
     expect(result.status).toBe("applied");
     expect(result.floorId).toBe(floorId);
     expect(replay).toEqual(result);
-    const document = await t.query(api.mapDocument.getFloorDocument, {
-      floorId,
-    });
+    const document = await getFloorDocument(t, floorId);
     expect(document.devices.map((item) => item.id).sort()).toEqual([
       "device:batch-a",
       "device:batch-b",
@@ -440,9 +443,7 @@ describe("mapOperations.apply", () => {
 
     expect(result.status).toBe("rejected");
     expect(result.error).toContain("Too many operations");
-    const document = await t.query(api.mapDocument.getFloorDocument, {
-      floorId,
-    });
+    const document = await getFloorDocument(t, floorId);
     expect(document.devices).toEqual([]);
   });
 
@@ -530,9 +531,7 @@ describe("mapOperations.apply", () => {
     });
 
     expect(result.status).toBe("applied");
-    const document = await t.query(api.mapDocument.getFloorDocument, {
-      floorId,
-    });
+    const document = await getFloorDocument(t, floorId);
     expect(document.walls.map((item) => item.geometryKey)).toEqual([
       "10:10:10:10",
       "30:10:30:10",
@@ -562,9 +561,7 @@ describe("mapOperations.apply", () => {
     });
 
     expect(result.status).toBe("applied");
-    const document = await t.query(api.mapDocument.getFloorDocument, {
-      floorId,
-    });
+    const document = await getFloorDocument(t, floorId);
     expect(document.walls[0]?.start).toEqual({ x: 0, y: 0 });
     expect(document.walls[0]?.end).toEqual({ x: 20, y: 0 });
     expect(document.walls[0]?.geometryKey).toBe("0:0:20:0");

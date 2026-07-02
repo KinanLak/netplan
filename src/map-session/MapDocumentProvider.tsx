@@ -714,10 +714,14 @@ export function MapDocumentProvider({
   ): ApplyMutationArgs["operation"] =>
     operation as ApplyMutationArgs["operation"];
   const convexConnectionState = useConvexConnectionState();
-  const queriedDocumentRaw = useQuery(
-    api.mapDocument.getFloorDocument,
-    floorId ? { floorId } : "skip",
-  );
+  // One subscription per collection: an edit only pushes the collection it
+  // touched (and the revision), so moving a device never re-sends the walls.
+  // Convex updates all of them at the same logical timestamp.
+  const queryArgs = floorId ? { floorId } : ("skip" as const);
+  const queriedDevices = useQuery(api.mapDocument.getFloorDevices, queryArgs);
+  const queriedWalls = useQuery(api.mapDocument.getFloorWalls, queryArgs);
+  const queriedLinks = useQuery(api.mapDocument.getFloorLinks, queryArgs);
+  const queriedRevision = useQuery(api.mapDocument.getFloorRevision, queryArgs);
 
   const [pendingEntries, setPendingEntries] = useState<
     ReadonlyArray<PendingOperationEntry>
@@ -736,18 +740,29 @@ export function MapDocumentProvider({
 
   // Identity-stable derivations: consumers subscribe per-context, so every
   // object below must keep its identity as long as its inputs are unchanged.
+  // Collection arrays keep their identity across edits that do not touch
+  // them (e.g. device moves leave `walls` untouched).
   const queriedDocument = useMemo(
     () =>
-      queriedDocumentRaw
+      queriedDevices !== undefined &&
+      queriedWalls !== undefined &&
+      queriedLinks !== undefined &&
+      queriedRevision !== undefined
         ? ({
-            floorId: queriedDocumentRaw.floorId as FloorId,
-            revision: queriedDocumentRaw.revision,
-            devices: queriedDocumentRaw.devices as Array<Device>,
-            walls: queriedDocumentRaw.walls as Array<WallSegment>,
-            links: queriedDocumentRaw.links as Array<LinkDoc>,
+            floorId: activeFloorId,
+            revision: queriedRevision,
+            devices: queriedDevices as Array<Device>,
+            walls: queriedWalls as Array<WallSegment>,
+            links: queriedLinks as Array<LinkDoc>,
           } satisfies MapDocumentSnapshot)
         : undefined,
-    [queriedDocumentRaw],
+    [
+      queriedDevices,
+      queriedWalls,
+      queriedLinks,
+      queriedRevision,
+      activeFloorId,
+    ],
   );
   const serverDocument = useMemo(
     () => queriedDocument ?? emptyDocument(activeFloorId),

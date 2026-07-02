@@ -3,14 +3,6 @@ import { query } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
 import { device, link, wallSegment } from "./mapValidators";
 
-const snapshotValidator = v.object({
-  floorId: v.string(),
-  revision: v.number(),
-  devices: v.array(device),
-  walls: v.array(wallSegment),
-  links: v.array(link),
-});
-
 const toDevice = (row: Doc<"devices">) => ({
   id: row.objectId,
   floorId: row.floorId,
@@ -41,33 +33,55 @@ const toLink = (row: Doc<"links">) => ({
   label: row.label,
 });
 
-export const getFloorDocument = query({
+// The floor document is split into one query per collection so an edit only
+// re-sends the collection it touched to subscribed clients (moving a device
+// does not re-transmit every wall). Convex updates all subscribed queries at
+// the same logical timestamp, so the combined snapshot stays consistent.
+
+export const getFloorDevices = query({
   args: { floorId: v.string() },
-  returns: snapshotValidator,
+  returns: v.array(device),
   handler: async (ctx, { floorId }) => {
-    const devices = await ctx.db
+    const rows = await ctx.db
       .query("devices")
       .withIndex("by_floor", (q) => q.eq("floorId", floorId))
       .collect();
-    const walls = await ctx.db
+    return rows.map(toDevice);
+  },
+});
+
+export const getFloorWalls = query({
+  args: { floorId: v.string() },
+  returns: v.array(wallSegment),
+  handler: async (ctx, { floorId }) => {
+    const rows = await ctx.db
       .query("walls")
       .withIndex("by_floor", (q) => q.eq("floorId", floorId))
       .collect();
-    const links = await ctx.db
+    return rows.map(toWall);
+  },
+});
+
+export const getFloorLinks = query({
+  args: { floorId: v.string() },
+  returns: v.array(link),
+  handler: async (ctx, { floorId }) => {
+    const rows = await ctx.db
       .query("links")
       .withIndex("by_floor", (q) => q.eq("floorId", floorId))
       .collect();
+    return rows.map(toLink);
+  },
+});
+
+export const getFloorRevision = query({
+  args: { floorId: v.string() },
+  returns: v.number(),
+  handler: async (ctx, { floorId }) => {
     const revision = await ctx.db
       .query("documentRevisions")
       .withIndex("by_floor", (q) => q.eq("floorId", floorId))
       .unique();
-
-    return {
-      floorId,
-      revision: revision?.revision ?? 0,
-      devices: devices.map(toDevice),
-      walls: walls.map(toWall),
-      links: links.map(toLink),
-    };
+    return revision?.revision ?? 0;
   },
 });

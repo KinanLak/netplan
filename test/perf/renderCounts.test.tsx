@@ -6,7 +6,7 @@ import { getFunctionName } from "convex/server";
 import { api } from "../../convex/_generated/api";
 import { applyOperation } from "@/map-engine/applyOperation";
 import type { MapOperation } from "@/map-engine/types";
-import type { DeviceId } from "@/types/map";
+import type { DeviceId, MapDocumentSnapshot } from "@/types/map";
 import { GRID_SIZE } from "@/lib/grid";
 import { useMapStore } from "@/store/useMapStore";
 import type { SubtreeStats } from "./probes";
@@ -21,8 +21,21 @@ mock.module("convex/react", () => createConvexReactModuleMock(backend));
 
 const { BenchTree, RenderStats, createBenchHandles } = await import("./probes");
 
-const DOC_QUERY = getFunctionName(api.mapDocument.getFloorDocument);
+const DEVICES_QUERY = getFunctionName(api.mapDocument.getFloorDevices);
+const WALLS_QUERY = getFunctionName(api.mapDocument.getFloorWalls);
+const LINKS_QUERY = getFunctionName(api.mapDocument.getFloorLinks);
+const REVISION_QUERY = getFunctionName(api.mapDocument.getFloorRevision);
 const OBSERVE_QUERY = getFunctionName(api.mapOperations.observePending);
+
+// Mirrors the split subscriptions: collection arrays keep their identity
+// when an edit does not touch them, exactly like Convex only re-sends the
+// invalidated queries.
+const setFloorDocument = (doc: MapDocumentSnapshot) => {
+  backend.setQueryResult(DEVICES_QUERY, doc.devices);
+  backend.setQueryResult(WALLS_QUERY, doc.walls);
+  backend.setQueryResult(LINKS_QUERY, doc.links);
+  backend.setQueryResult(REVISION_QUERY, doc.revision);
+};
 
 const collected: Record<string, Record<string, SubtreeStats>> = {};
 
@@ -84,7 +97,7 @@ afterAll(() => {
 describe("render counts under realistic interaction bursts", () => {
   it("S1: wall tool pane hover (300 moves in one cell, then 60 crossing cells)", async () => {
     seedStore({ activeDrawTool: "wall" });
-    backend.setQueryResult(DOC_QUERY, buildBenchDocument());
+    setFloorDocument(buildBenchDocument());
     const { stats, handles, view } = await mountTree();
 
     for (let i = 0; i < 300; i += 1) {
@@ -121,12 +134,12 @@ describe("render counts under realistic interaction bursts", () => {
   it("S2: 50 sequential device moves dispatched and acked", async () => {
     seedStore();
     let serverDoc = buildBenchDocument();
-    backend.setQueryResult(DOC_QUERY, serverDoc);
+    setFloorDocument(serverDoc);
     backend.mutationImpl = (_name, args) => {
       const operation = args.operation as MapOperation;
       const applied = applyOperation(serverDoc, operation);
       serverDoc = { ...applied.snapshot, revision: serverDoc.revision + 1 };
-      backend.setQueryResult(DOC_QUERY, serverDoc);
+      setFloorDocument(serverDoc);
       return Promise.resolve({
         status: "applied",
         opId: operation.meta.opId,
@@ -161,7 +174,7 @@ describe("render counts under realistic interaction bursts", () => {
   it("S3: 20 remote document updates pushed by the server", async () => {
     seedStore();
     let serverDoc = buildBenchDocument();
-    backend.setQueryResult(DOC_QUERY, serverDoc);
+    setFloorDocument(serverDoc);
     const { stats, view } = await mountTree();
 
     for (let i = 0; i < 20; i += 1) {
@@ -181,7 +194,7 @@ describe("render counts under realistic interaction bursts", () => {
         ),
       };
       await act(async () => {
-        backend.setQueryResult(DOC_QUERY, serverDoc);
+        setFloorDocument(serverDoc);
         await flushMicrotasks(4);
       });
     }
@@ -199,7 +212,7 @@ describe("render counts under realistic interaction bursts", () => {
 
   it("S4: 200 hover on/off toggles on devices", async () => {
     seedStore();
-    backend.setQueryResult(DOC_QUERY, buildBenchDocument());
+    setFloorDocument(buildBenchDocument());
     const { stats, view } = await mountTree();
 
     for (let i = 0; i < 200; i += 1) {
@@ -222,7 +235,7 @@ describe("render counts under realistic interaction bursts", () => {
   it("S5: applied op observed while the doc subscription lags behind", async () => {
     seedStore();
     const serverDoc = buildBenchDocument();
-    backend.setQueryResult(DOC_QUERY, serverDoc);
+    setFloorDocument(serverDoc);
     backend.mutationImpl = (_name, args) => {
       const operation = args.operation as MapOperation;
       return Promise.resolve({
@@ -269,7 +282,7 @@ describe("render counts under realistic interaction bursts", () => {
     expect(commitsOf(snapshot, "root")).toBeLessThanOrEqual(5);
 
     // Let the doc subscription catch up so the loop can settle.
-    backend.setQueryResult(DOC_QUERY, {
+    setFloorDocument({
       ...serverDoc,
       revision: serverDoc.revision + 1,
     });
@@ -284,12 +297,12 @@ describe("render counts under realistic interaction bursts", () => {
   it("S6: 60-point brush stroke without releasing the mouse", async () => {
     seedStore({ activeDrawTool: "wall-brush" });
     let serverDoc = buildBenchDocument({ rooms: 24 });
-    backend.setQueryResult(DOC_QUERY, serverDoc);
+    setFloorDocument(serverDoc);
     backend.mutationImpl = (_name, args) => {
       const operation = args.operation as MapOperation;
       const applied = applyOperation(serverDoc, operation);
       serverDoc = { ...applied.snapshot, revision: serverDoc.revision + 1 };
-      backend.setQueryResult(DOC_QUERY, serverDoc);
+      setFloorDocument(serverDoc);
       return Promise.resolve({
         status: "applied",
         opId: operation.meta.opId,
@@ -339,7 +352,7 @@ describe("render counts under realistic interaction bursts", () => {
 
   it("S7: hovering a wall preview over a floor with 48 rooms (~1250 walls)", async () => {
     seedStore({ activeDrawTool: "wall" });
-    backend.setQueryResult(DOC_QUERY, buildBenchDocument({ rooms: 48 }));
+    setFloorDocument(buildBenchDocument({ rooms: 48 }));
     const { stats, handles, view } = await mountTree();
 
     // Anchor a wall start so every subsequent move renders a live preview.

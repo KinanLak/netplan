@@ -38,12 +38,21 @@ rapporté. Corrigé :
    `setState` après démontage) ; valeur du `ShortcutIntentContext` non
    mémoïsée.
 
-Identifié mais **pas encore corrigé** (candidat au prochain volet) :
-`getFloorDocument` renvoie le document entier — chaque édition re-transmet
-tous les murs/devices/liens de l'étage à chaque client abonné. Le découper en
-quatre requêtes (devices / walls / links / revision) réduirait le payload par
-édition à la seule collection touchée (les résultats Convex restent cohérents
-entre eux à un même timestamp logique).
+7. **`getFloorDocument` renvoyait le document entier à chaque édition** —
+   déplacer un device re-transmettait tous les murs et liens de l'étage à
+   chaque client abonné. Correctif : découpage en quatre requêtes
+   (`getFloorDevices` / `getFloorWalls` / `getFloorLinks` /
+   `getFloorRevision`) — Convex n'invalide que les requêtes dont le read-set
+   a changé, donc une édition ne pousse que sa collection (+ la révision), et
+   les résultats restent cohérents entre eux au même timestamp logique. Effet
+   client bonus : les identités de tableaux non touchés sont préservées de
+   bout en bout (un déplacement de device ne re-déclenche plus rien côté
+   murs).
+
+Backlog documenté, non corrigé : index spatial des devices côté serveur pour
+`planWallsAdd`/`validateDevicePlacement` (O(murs*op × devices*étage) par
+mutation, borné à 500×500) ; `applyBatch`/inverse en O(sous-ops × snapshot)
+(atténué par la coalescence des traits).
 
 ---
 
