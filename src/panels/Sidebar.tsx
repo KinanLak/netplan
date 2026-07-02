@@ -41,11 +41,52 @@ import {
 import { ModeToggle } from "@/components/mode-toggle";
 import { api } from "../../convex/_generated/api";
 
+/**
+ * Isolated so undo/redo history changes only re-render these two buttons,
+ * not the whole sidebar (buildings, floors, connected users).
+ */
+function SidebarUndoRedo() {
+  const isEditMode = useIsEditMode();
+  const { handleUndo, handleRedo } = useUndoRedo();
+  const canUndo = useTemporalStore((s) => s.pastStates.length > 0);
+  const canRedo = useTemporalStore((s) => s.futureStates.length > 0);
+
+  return (
+    <div className={`border-t ${isEditMode ? "" : "hidden"}`}>
+      <div className="flex h-10 w-full">
+        <button
+          type="button"
+          onClick={handleUndo}
+          disabled={!isEditMode || !canUndo}
+          className="group flex h-full flex-1 items-center justify-center border-0 border-r border-border text-xs text-sidebar-foreground transition-[background-color,color,box-shadow] hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-inset active:bg-sidebar-accent active:text-sidebar-accent-foreground active:shadow-[inset_0_1px_2px_var(--color-border)] disabled:pointer-events-none disabled:opacity-50"
+          title="Annuler (Ctrl+Z)"
+        >
+          <span className="flex items-center gap-1.5 transition-transform duration-75">
+            <HugeiconsIcon icon={UndoIcon} size={14} strokeWidth={1.5} />
+            Annuler
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={handleRedo}
+          disabled={!isEditMode || !canRedo}
+          className="group flex h-full flex-1 items-center justify-center text-xs text-sidebar-foreground transition-[background-color,color,box-shadow] hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-inset active:bg-sidebar-accent active:text-sidebar-accent-foreground active:shadow-[inset_0_1px_2px_var(--color-border)] disabled:pointer-events-none disabled:opacity-50"
+          title="Rétablir (Ctrl+Shift+Z)"
+        >
+          <span className="flex items-center gap-1.5 transition-transform duration-75">
+            Rétablir
+            <HugeiconsIcon icon={RedoIcon} size={14} strokeWidth={1.5} />
+          </span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function AppSidebar() {
   const buildings = useQuery(api.buildings.list) ?? [];
   const currentBuildingId = useCurrentBuildingId();
   const currentFloorId = useCurrentFloorId();
-  const isEditMode = useIsEditMode();
 
   const setCurrentBuilding = useMapStore((s) => s.setCurrentBuilding);
   const setCurrentFloor = useMapStore((s) => s.setCurrentFloor);
@@ -60,9 +101,6 @@ export default function AppSidebar() {
     currentBuildingId ? { buildingId: currentBuildingId } : "skip",
   );
 
-  const { handleUndo, handleRedo } = useUndoRedo();
-  const canUndo = useTemporalStore((s) => s.pastStates.length > 0);
-  const canRedo = useTemporalStore((s) => s.futureStates.length > 0);
   const { isVisible: isModifierVisible } = useOptionHeld();
 
   const floorUpKeys = getShortcutDisplay("floor-up")[0] ?? [];
@@ -206,34 +244,7 @@ export default function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <div className={`border-t ${isEditMode ? "" : "hidden"}`}>
-        <div className="flex h-10 w-full">
-          <button
-            type="button"
-            onClick={handleUndo}
-            disabled={!isEditMode || !canUndo}
-            className="group flex h-full flex-1 items-center justify-center border-0 border-r border-border text-xs text-sidebar-foreground transition-[background-color,color,box-shadow] hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-inset active:bg-sidebar-accent active:text-sidebar-accent-foreground active:shadow-[inset_0_1px_2px_var(--color-border)] disabled:pointer-events-none disabled:opacity-50"
-            title="Annuler (Ctrl+Z)"
-          >
-            <span className="flex items-center gap-1.5 transition-transform duration-75">
-              <HugeiconsIcon icon={UndoIcon} size={14} strokeWidth={1.5} />
-              Annuler
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={handleRedo}
-            disabled={!isEditMode || !canRedo}
-            className="group flex h-full flex-1 items-center justify-center text-xs text-sidebar-foreground transition-[background-color,color,box-shadow] hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-inset active:bg-sidebar-accent active:text-sidebar-accent-foreground active:shadow-[inset_0_1px_2px_var(--color-border)] disabled:pointer-events-none disabled:opacity-50"
-            title="Rétablir (Ctrl+Shift+Z)"
-          >
-            <span className="flex items-center gap-1.5 transition-transform duration-75">
-              Rétablir
-              <HugeiconsIcon icon={RedoIcon} size={14} strokeWidth={1.5} />
-            </span>
-          </button>
-        </div>
-      </div>
+      <SidebarUndoRedo />
 
       <ConnectedUsers floorId={currentFloorId} />
 

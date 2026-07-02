@@ -14,13 +14,17 @@ import type {
   WallInteractionAdapter,
   WallInteractionContext,
 } from "@/walls/wallInteraction";
-import { snapPositionToWallGrid } from "@/walls/gridGeometry";
+import {
+  computeMergedWallGroups,
+  snapPositionToWallGrid,
+} from "@/walls/gridGeometry";
 import { removeObservedOperationLogEntries } from "@/map-session/pendingOperations";
 import type { PendingOperationEntry } from "@/map-session/pendingOperations";
 import {
   BENCH_FLOOR_ID,
   buildBenchDocument,
   buildBenchPatchOperations,
+  buildBenchRoomWalls,
 } from "../test/perf/fixtures";
 
 const serverDocument = buildBenchDocument();
@@ -92,6 +96,15 @@ group("wall tool pointer move (same snapped cell)", () => {
       getWallInteractionViewModel(next, wallContext);
     });
   });
+});
+
+group("wall geometry merge (room floorplans)", () => {
+  for (const rooms of [12, 24, 48]) {
+    const walls = buildBenchRoomWalls(rooms);
+    bench(`computeMergedWallGroups (${rooms} rooms, ${walls.length} walls)`, () => {
+      computeMergedWallGroups(walls);
+    });
+  }
 });
 
 group("device node adapter", () => {

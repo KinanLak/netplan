@@ -89,7 +89,7 @@ describe("render counts under realistic interaction bursts", () => {
 
     for (let i = 0; i < 300; i += 1) {
       act(() => {
-        handles.session?.handlePaneMouseMove(
+        handles.bridge?.onPaneMouseMove(
           fakeMouseEvent(105 + (i % 7) * 0.5, 105 + ((i * 3) % 5) * 0.5),
         );
       });
@@ -100,7 +100,7 @@ describe("render counts under realistic interaction bursts", () => {
 
     for (let i = 0; i < 60; i += 1) {
       act(() => {
-        handles.session?.handlePaneMouseMove(
+        handles.bridge?.onPaneMouseMove(
           fakeMouseEvent(105 + i * GRID_SIZE, 105),
         );
       });
@@ -108,11 +108,13 @@ describe("render counts under realistic interaction bursts", () => {
     const crossingCells = stats.snapshot();
     collected["S1b-hover-60-moves-crossing-cells"] = crossingCells;
 
-    expect(handles.session).not.toBeNull();
+    expect(handles.bridge).not.toBeNull();
     // Hovering inside one cell must not re-render the canvas per mouse move.
-    expect(commitsOf(sameCell, "canvas")).toBeLessThanOrEqual(5);
+    expect(commitsOf(sameCell, "canvas-shell")).toBeLessThanOrEqual(2);
+    expect(commitsOf(sameCell, "wall-layer")).toBeLessThanOrEqual(5);
     // Crossing cells must still update the hover preview.
-    expect(commitsOf(crossingCells, "canvas")).toBeGreaterThanOrEqual(55);
+    expect(commitsOf(crossingCells, "wall-layer")).toBeGreaterThanOrEqual(55);
+    expect(commitsOf(crossingCells, "canvas-shell")).toBeLessThanOrEqual(2);
     view.unmount();
   });
 
@@ -187,7 +189,7 @@ describe("render counts under realistic interaction bursts", () => {
     collected["S3-remote-doc-20-updates"] = snapshot;
 
     // Remote updates only concern document-data consumers.
-    expect(commitsOf(snapshot, "canvas")).toBeGreaterThanOrEqual(20);
+    expect(commitsOf(snapshot, "canvas-shell")).toBeGreaterThanOrEqual(20);
     expect(commitsOf(snapshot, "toolbar")).toBeLessThanOrEqual(2);
     expect(commitsOf(snapshot, "sidebar-history")).toBeLessThanOrEqual(2);
     expect(commitsOf(snapshot, "workspace")).toBeLessThanOrEqual(2);
@@ -278,4 +280,88 @@ describe("render counts under realistic interaction bursts", () => {
     });
     view.unmount();
   }, 20_000);
+
+  it("S6: 60-point brush stroke without releasing the mouse", async () => {
+    seedStore({ activeDrawTool: "wall-brush" });
+    let serverDoc = buildBenchDocument({ rooms: 24 });
+    backend.setQueryResult(DOC_QUERY, serverDoc);
+    backend.mutationImpl = (_name, args) => {
+      const operation = args.operation as MapOperation;
+      const applied = applyOperation(serverDoc, operation);
+      serverDoc = { ...applied.snapshot, revision: serverDoc.revision + 1 };
+      backend.setQueryResult(DOC_QUERY, serverDoc);
+      return Promise.resolve({
+        status: "applied",
+        opId: operation.meta.opId,
+        appliedRevision: serverDoc.revision,
+        floorId: BENCH_FLOOR_ID,
+      });
+    };
+    const { stats, handles, view } = await mountTree();
+
+    // Stroke start far away from the seeded walls, one new cell per move.
+    const strokeAt = (index: number) =>
+      fakeMouseEvent(10_005 + index * GRID_SIZE, 10_005, 1);
+
+    for (let i = 0; i < 30; i += 1) {
+      act(() => {
+        handles.bridge?.onPaneMouseMove(strokeAt(i));
+      });
+    }
+    const firstHalf = stats.snapshot();
+    collected["S6a-brush-stroke-points-1-30"] = firstHalf;
+    stats.reset();
+
+    for (let i = 30; i < 60; i += 1) {
+      act(() => {
+        handles.bridge?.onPaneMouseMove(strokeAt(i));
+      });
+    }
+    const secondHalf = stats.snapshot();
+    collected["S6b-brush-stroke-points-31-60"] = secondHalf;
+    stats.reset();
+
+    // The whole stroke must stay coalesced into ONE pending operation, so
+    // materialization stays O(points) instead of O(points²).
+    expect(handles.pendingOperationCount).toBe(1);
+    expect(commitsOf(secondHalf, "canvas-shell")).toBeLessThanOrEqual(32);
+    expect(commitsOf(secondHalf, "wall-layer")).toBeLessThanOrEqual(32);
+
+    await act(async () => {
+      window.dispatchEvent(new Event("mouseup"));
+      await flushMicrotasks(8);
+    });
+    collected["S6c-brush-stroke-release"] = stats.snapshot();
+
+    expect(backend.mutationCalls.length).toBeGreaterThanOrEqual(1);
+    view.unmount();
+  }, 60_000);
+
+  it("S7: hovering a wall preview over a floor with 48 rooms (~1250 walls)", async () => {
+    seedStore({ activeDrawTool: "wall" });
+    backend.setQueryResult(DOC_QUERY, buildBenchDocument({ rooms: 48 }));
+    const { stats, handles, view } = await mountTree();
+
+    // Anchor a wall start so every subsequent move renders a live preview.
+    act(() => {
+      handles.bridge?.onPaneClick(fakeMouseEvent(10_005, 10_005));
+    });
+    stats.reset();
+
+    for (let i = 1; i <= 10; i += 1) {
+      act(() => {
+        handles.bridge?.onPaneMouseMove(
+          fakeMouseEvent(10_005 + i * GRID_SIZE, 10_005),
+        );
+      });
+    }
+    const snapshot = stats.snapshot();
+    collected["S7-wall-preview-10-moves-48-rooms"] = snapshot;
+
+    expect(commitsOf(snapshot, "wall-layer")).toBeGreaterThanOrEqual(10);
+    // The canvas shell (and therefore the device nodes) must stay untouched
+    // while a wall preview follows the pointer.
+    expect(commitsOf(snapshot, "canvas-shell")).toBe(0);
+    view.unmount();
+  }, 60_000);
 });

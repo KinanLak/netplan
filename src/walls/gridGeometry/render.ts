@@ -1,4 +1,5 @@
 import type { Position, WallColor } from "@/types/map";
+import { GRID_SIZE } from "@/lib/grid";
 import { arePositionsEqual, getWallCellRect, WALL_THICKNESS } from "./cells";
 import type {
   ColoredWallShape,
@@ -39,6 +40,16 @@ export function computeMergedWallGroups(
 
 export function computeWallRectUnionPath(rects: Array<Rect>): string | null {
   return computeRectUnionPath(rects, CORNER_RADIUS);
+}
+
+/** Merged outline path for one set of walls (a single color group). */
+export function computeWallUnionPath(
+  walls: ReadonlyArray<WallShape>,
+): string | null {
+  return computeRectUnionPath(
+    walls.map((wall) => getWallRenderRect(wall)),
+    CORNER_RADIUS,
+  );
 }
 
 export function computeSingleWallPath(wall: WallShape): string | null {
@@ -83,6 +94,88 @@ function computeRectUnionPath(
     return null;
   }
 
+  if (rects.every(isGridAlignedRect)) {
+    return computeGridCellUnionPath(rects, cornerRadius);
+  }
+
+  return computeGenericRectUnionPath(rects, cornerRadius);
+}
+
+const isGridAlignedRect = (rect: Rect): boolean =>
+  rect.x % GRID_SIZE === 0 &&
+  rect.y % GRID_SIZE === 0 &&
+  rect.width % GRID_SIZE === 0 &&
+  rect.height % GRID_SIZE === 0;
+
+/**
+ * Wall rects always sit on the GRID_SIZE lattice, so the union can be
+ * rasterized exactly into occupied cells and traced along cell boundaries in
+ * O(occupied cells) — the generic algorithm below scans every rect for every
+ * grid intersection, which is unusable on large floorplans.
+ */
+// Packs a (col, row) cell into one integer key; supports map coordinates up
+// to ±PACK_OFFSET × GRID_SIZE pixels from the origin.
+const PACK_OFFSET = 1 << 15;
+const packCell = (col: number, row: number): number =>
+  ((col + PACK_OFFSET) << 16) | (row + PACK_OFFSET);
+const unpackCol = (key: number): number => (key >>> 16) - PACK_OFFSET;
+const unpackRow = (key: number): number => (key & 0xffff) - PACK_OFFSET;
+
+function computeGridCellUnionPath(
+  rects: Array<Rect>,
+  cornerRadius: number,
+): string | null {
+  const occupied = new Set<number>();
+
+  for (const rect of rects) {
+    const colStart = rect.x / GRID_SIZE;
+    const colEnd = colStart + rect.width / GRID_SIZE;
+    const rowStart = rect.y / GRID_SIZE;
+    const rowEnd = rowStart + rect.height / GRID_SIZE;
+
+    for (let col = colStart; col < colEnd; col += 1) {
+      for (let row = rowStart; row < rowEnd; row += 1) {
+        occupied.add(packCell(col, row));
+      }
+    }
+  }
+
+  if (occupied.size === 0) {
+    return null;
+  }
+
+  const edges: Array<DirectedEdge> = [];
+
+  for (const key of occupied) {
+    const col = unpackCol(key);
+    const row = unpackRow(key);
+    const x0 = col * GRID_SIZE;
+    const x1 = x0 + GRID_SIZE;
+    const y0 = row * GRID_SIZE;
+    const y1 = y0 + GRID_SIZE;
+
+    // Directed clockwise around filled area, matching the generic tracer.
+    if (!occupied.has(packCell(col, row - 1))) {
+      edges.push({ from: { x: x0, y: y0 }, to: { x: x1, y: y0 } });
+    }
+    if (!occupied.has(packCell(col, row + 1))) {
+      edges.push({ from: { x: x1, y: y1 }, to: { x: x0, y: y1 } });
+    }
+    if (!occupied.has(packCell(col - 1, row))) {
+      edges.push({ from: { x: x0, y: y1 }, to: { x: x0, y: y0 } });
+    }
+    if (!occupied.has(packCell(col + 1, row))) {
+      edges.push({ from: { x: x1, y: y0 }, to: { x: x1, y: y1 } });
+    }
+  }
+
+  return edgesToSVGPaths(edges, cornerRadius);
+}
+
+function computeGenericRectUnionPath(
+  rects: Array<Rect>,
+  cornerRadius: number,
+): string | null {
   const xsSet = new Set<number>();
   const ysSet = new Set<number>();
 
@@ -174,6 +267,13 @@ function computeRectUnionPath(
     }
   }
 
+  return edgesToSVGPaths(edges, cornerRadius);
+}
+
+function edgesToSVGPaths(
+  edges: Array<DirectedEdge>,
+  cornerRadius: number,
+): string | null {
   if (edges.length === 0) {
     return null;
   }

@@ -1,17 +1,24 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { ViewportPortal } from "@xyflow/react";
-import type { DrawTool, Position, WallDraft, WallSegment } from "@/types/map";
+import type {
+  DrawTool,
+  Position,
+  WallColor,
+  WallDraft,
+  WallSegment,
+} from "@/types/map";
 import { WALL_COLOR_ORDER, WALL_COLOR_TONES } from "@/lib/walls";
+import { useContentStableArray } from "@/hooks/use-content-stable-array";
 import {
-  computeMergedWallGroups,
   computeWallRectUnionPath,
   computeWallMaskBounds,
+  computeWallUnionPath,
   getWallBlockKey,
   getWallCellRect,
   getWallCollisionRect,
   getWallEraserRect,
 } from "@/walls/gridGeometry";
-import type { Rect } from "@/walls/gridGeometry";
+import type { MergedWallGroup, Rect } from "@/walls/gridGeometry";
 
 const WALL_TOOL_GHOST_ANIMATION_MS = 120;
 
@@ -259,43 +266,95 @@ export function WallOverlay({
   const stripePatternId = `wall-erase-stripes-${useId().replace(/:/g, "")}`;
   const hasPreview = previewSegments.length > 0;
 
-  const mergedWallGroups = useMemo(
+  // Walls are merged per color on content-stable slices: a stroke or preview
+  // only re-merges the color it touches, the other colors reuse their paths.
+  const sandWalls = useContentStableArray(
+    useMemo(
+      () => floorWalls.filter((wall) => wall.color === "sand"),
+      [floorWalls],
+    ),
+  );
+  const concreteWalls = useContentStableArray(
+    useMemo(
+      () => floorWalls.filter((wall) => wall.color === "concrete"),
+      [floorWalls],
+    ),
+  );
+  const slateWalls = useContentStableArray(
+    useMemo(
+      () => floorWalls.filter((wall) => wall.color === "slate"),
+      [floorWalls],
+    ),
+  );
+  const wallsByColor = {
+    sand: sandWalls,
+    concrete: concreteWalls,
+    slate: slateWalls,
+  } satisfies Record<WallColor, ReadonlyArray<WallSegment>>;
+
+  const sandPath = useMemo(() => computeWallUnionPath(sandWalls), [sandWalls]);
+  const concretePath = useMemo(
+    () => computeWallUnionPath(concreteWalls),
+    [concreteWalls],
+  );
+  const slatePath = useMemo(
+    () => computeWallUnionPath(slateWalls),
+    [slateWalls],
+  );
+
+  const mergedWallGroups = useMemo(() => {
+    const groups: Array<MergedWallGroup> = [];
+    const pathByColor = {
+      sand: sandPath,
+      concrete: concretePath,
+      slate: slatePath,
+    } satisfies Record<WallColor, string | null>;
+
+    for (const color of WALL_COLOR_ORDER) {
+      const path = pathByColor[color];
+      if (path) groups.push({ color, path });
+    }
+    return groups;
+  }, [sandPath, concretePath, slatePath]);
+
+  const previewColor = hasPreview ? previewSegments[0].color : null;
+  const previewColorWalls = previewColor ? wallsByColor[previewColor] : null;
+  const previewCombinedPath = useMemo(
     () =>
-      computeMergedWallGroups(floorWalls).sort(
-        (a, b) =>
-          WALL_COLOR_ORDER.indexOf(a.color) - WALL_COLOR_ORDER.indexOf(b.color),
-      ),
-    [floorWalls],
+      previewColorWalls
+        ? computeWallUnionPath([...previewColorWalls, ...previewSegments])
+        : null,
+    [previewColorWalls, previewSegments],
   );
 
   const combinedMergedWallGroups = useMemo(() => {
-    if (!hasPreview) {
+    if (!previewColor) {
       return mergedWallGroups;
     }
 
-    return computeMergedWallGroups([...floorWalls, ...previewSegments]).sort(
+    const groups = mergedWallGroups.filter(
+      (group) => group.color !== previewColor,
+    );
+    if (previewCombinedPath) {
+      groups.push({ color: previewColor, path: previewCombinedPath });
+    }
+    return groups.sort(
       (a, b) =>
         WALL_COLOR_ORDER.indexOf(a.color) - WALL_COLOR_ORDER.indexOf(b.color),
     );
-  }, [hasPreview, floorWalls, mergedWallGroups, previewSegments]);
+  }, [mergedWallGroups, previewColor, previewCombinedPath]);
 
   const existingPathByColor = useMemo(
     () => new Map(mergedWallGroups.map((group) => [group.color, group.path])),
     [mergedWallGroups],
   );
 
-  const floorWallRects = useMemo(
-    () =>
-      floorWalls.map((wall) => ({
-        key: getWallBlockKey(wall) ?? wall.id,
-        rect: getWallCollisionRect(wall),
-      })),
-    [floorWalls],
-  );
-
   const wallMaskBounds = useMemo(
-    () => computeWallMaskBounds([...floorWalls, ...previewSegments]),
-    [floorWalls, previewSegments],
+    () =>
+      hasPreview
+        ? computeWallMaskBounds([...floorWalls, ...previewSegments])
+        : null,
+    [hasPreview, floorWalls, previewSegments],
   );
 
   const erasePreviewRects = useMemo(() => {
@@ -304,8 +363,13 @@ export function WallOverlay({
     }
 
     const erasePreviewKeySet = new Set(erasePreviewKeys);
-    return floorWallRects.filter((item) => erasePreviewKeySet.has(item.key));
-  }, [activeDrawTool, erasePreviewKeys, floorWallRects]);
+    return floorWalls
+      .map((wall) => ({
+        key: getWallBlockKey(wall) ?? wall.id,
+        rect: getWallCollisionRect(wall),
+      }))
+      .filter((item) => erasePreviewKeySet.has(item.key));
+  }, [activeDrawTool, erasePreviewKeys, floorWalls]);
   const erasePreviewPath = useMemo(
     () =>
       erasePreviewRects.length > 0

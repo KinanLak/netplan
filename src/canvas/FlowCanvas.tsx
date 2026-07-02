@@ -19,11 +19,13 @@ import {
 import { GRID_SIZE } from "@/lib/grid";
 import { cn } from "@/lib/utils";
 import { CanvasZoomControls } from "@/canvas/components/CanvasZoomControls";
-import { WallToolsLayer } from "@/canvas/components/WallToolsLayer";
+import {
+  WallInteractionLayer,
+  createWallPaneEventBridge,
+} from "@/canvas/components/WallInteractionLayer";
 import { useCanvasDeviceNodes } from "@/canvas/hooks/useCanvasDeviceNodes";
 import { useCanvasDragState } from "@/canvas/hooks/useCanvasDragState";
 import { useCanvasKeyboardShortcuts } from "@/canvas/hooks/useCanvasKeyboardShortcuts";
-import { useWallToolSession } from "@/walls/useWallToolSession";
 import {
   FLOW_CANVAS_BACKGROUND_COLOR,
   FLOW_CANVAS_BACKGROUND_DOT_SIZE,
@@ -32,7 +34,6 @@ import {
   FLOW_CANVAS_HALO_SHADOWS,
   FLOW_CANVAS_MAX_ZOOM,
   FLOW_CANVAS_MIN_ZOOM,
-  FLOW_CANVAS_PANE_HOVER_COLORS,
   FLOW_CANVAS_ZOOM_DURATION_MS,
 } from "@/lib/constants";
 
@@ -249,40 +250,11 @@ export default function FlowCanvas() {
     handleNodeDragStart,
     handleNodeDragStop,
   } = useCanvasDragState();
-  const wallToolSession = useWallToolSession();
+  // Wall pointer interaction lives in WallInteractionLayer below; the shell
+  // only hands ReactFlow these identity-stable bridge callbacks.
+  const [paneBridge] = useState(createWallPaneEventBridge);
 
-  useCanvasKeyboardShortcuts({
-    reactFlow,
-    cancelWallTool: wallToolSession.cancelTool,
-    toggleWallDebugPanel: wallToolSession.toggleDebugPanel,
-  });
-
-  const handlePaneClick = (event: React.MouseEvent) => {
-    if (!currentFloorId) {
-      selectDevice(null);
-      return;
-    }
-
-    if (!isEditMode) {
-      selectDevice(null);
-      return;
-    }
-
-    if (activeDrawTool === "device") {
-      selectDevice(null);
-      return;
-    }
-
-    if (!isReady) return;
-
-    selectDevice(null);
-    wallToolSession.handlePaneClick(event);
-  };
-
-  const handleContextMenu = (event: React.MouseEvent | MouseEvent) => {
-    if (!isReady) return;
-    wallToolSession.handleContextMenu(event);
-  };
+  useCanvasKeyboardShortcuts({ reactFlow });
 
   const handleZoomInClick = () => {
     reactFlow.zoomIn({ duration: FLOW_CANVAS_ZOOM_DURATION_MS });
@@ -309,12 +281,6 @@ export default function FlowCanvas() {
   const editModeHaloColor = isWallDeleteTool
     ? FLOW_CANVAS_HALO_SHADOWS.erase
     : FLOW_CANVAS_HALO_SHADOWS.draw;
-  const paneHoverFillColor = isWallDeleteTool
-    ? FLOW_CANVAS_PANE_HOVER_COLORS.erase.fill
-    : FLOW_CANVAS_PANE_HOVER_COLORS.draw.fill;
-  const paneHoverStrokeColor = isWallDeleteTool
-    ? FLOW_CANVAS_PANE_HOVER_COLORS.erase.stroke
-    : FLOW_CANVAS_PANE_HOVER_COLORS.draw.stroke;
   const haloContextKey = `${isEditMode}:${activeDrawTool}`;
   const [previousHaloContextKey, setPreviousHaloContextKey] =
     useState(haloContextKey);
@@ -343,14 +309,10 @@ export default function FlowCanvas() {
         onNodeMouseLeave={handleNodeMouseLeave}
         onNodeDragStart={handleNodeDragStart}
         onNodeDragStop={handleNodeDragStop}
-        onNodeContextMenu={handleContextMenu}
-        onPaneClick={handlePaneClick}
-        onPaneMouseMove={(event) => {
-          if (isReady && isEditMode && activeDrawTool !== "device") {
-            wallToolSession.handlePaneMouseMove(event);
-          }
-        }}
-        onPaneContextMenu={handleContextMenu}
+        onNodeContextMenu={paneBridge.onContextMenu}
+        onPaneClick={paneBridge.onPaneClick}
+        onPaneMouseMove={paneBridge.onPaneMouseMove}
+        onPaneContextMenu={paneBridge.onContextMenu}
         onMoveStart={handleMoveStart}
         onMoveEnd={handleMoveEnd}
         nodeTypes={nodeTypes}
@@ -364,22 +326,12 @@ export default function FlowCanvas() {
         panOnScroll={true}
         deleteKeyCode={null}
         nodesDraggable={canEditDevices}
-        className={cn(
-          wallToolSession.paneCursorClass,
-          isCursorDragging && "canvas-cursor-grabbing",
-        )}
+        className={cn(isCursorDragging && "canvas-cursor-grabbing")}
         proOptions={PRO_OPTIONS}
       >
         <FlowCanvasBackground />
 
-        <WallToolsLayer
-          session={wallToolSession}
-          floorWalls={floorWalls}
-          activeDrawTool={activeDrawTool}
-          isEditMode={isEditMode && isReady}
-          paneHoverFillColor={paneHoverFillColor}
-          paneHoverStrokeColor={paneHoverStrokeColor}
-        />
+        <WallInteractionLayer bridge={paneBridge} floorWalls={floorWalls} />
       </ReactFlow>
 
       <CanvasZoomControls

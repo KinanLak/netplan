@@ -62,6 +62,7 @@ import type { SessionHistoryEntry } from "./history";
 import { SequentialOutbox } from "./outbox";
 import type { OutboxState } from "./outbox";
 import {
+  appendPendingOperation,
   pruneAckedRevisionsInPlace,
   reconcileObservedOperationLogEntries,
   removeAckedPendingOperations,
@@ -332,10 +333,14 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
       recordHistory(snapshotBefore, operation);
     }
     const targetFloorId = operationFloorId(operation, activeFloorIdRef.current);
-    setPendingEntries((current) => [
-      ...current,
-      { operation, floorId: targetFloorId, deferred: historyGroup !== null },
-    ]);
+    setPendingEntries((current) =>
+      appendPendingOperation(
+        current,
+        operation,
+        targetFloorId,
+        historyGroup !== null,
+      ),
+    );
     if (!historyGroup) outboxRef.current?.enqueue(operation);
   };
 

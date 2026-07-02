@@ -8,14 +8,10 @@ import {
 
 interface UseCanvasKeyboardShortcutsOptions {
   reactFlow: ReactFlowInstance;
-  cancelWallTool: () => void;
-  toggleWallDebugPanel: () => void;
 }
 
 export function useCanvasKeyboardShortcuts({
   reactFlow,
-  cancelWallTool,
-  toggleWallDebugPanel,
 }: UseCanvasKeyboardShortcutsOptions) {
   useShortcutIntentEffect("zoom-in", () => {
     reactFlow.zoomIn({ duration: FLOW_CANVAS_ZOOM_DURATION_MS });
@@ -30,14 +26,6 @@ export function useCanvasKeyboardShortcuts({
       { x: 0, y: 0, zoom: 1 },
       { duration: FLOW_CANVAS_RESET_DURATION_MS },
     );
-  });
-
-  useShortcutIntentEffect("cancel-wall-tool", () => {
-    cancelWallTool();
-  });
-
-  useShortcutIntentEffect("toggle-wall-debug", () => {
-    toggleWallDebugPanel();
   });
 
   // Pan shortcuts — move the canvas with arrow keys

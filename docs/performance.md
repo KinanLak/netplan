@@ -1,4 +1,59 @@
-# Performance — re-renders et session de document
+# Performance — re-renders, session de document et rendu des murs
+
+## Volet 2 — interactions murs et passage à l'échelle (juillet 2026)
+
+Symptômes traités : un long trait au pinceau ralentissait progressivement ;
+poser des blocs ralentissait avec le nombre de blocs existants ; bouger la
+souris re-rendait le canvas entier (donc les nodes) ; l'historique re-rendait
+toute la sidebar.
+
+### Causes et correctifs
+
+1. **`computeRectUnionPath` était O(n³)** (grille de coordonnées uniques ×
+   scan de tous les rects par cellule), recalculé à chaque pose de bloc et, en
+   préview, à chaque mousemove sur la totalité des murs. Correctif : les murs
+   vivent sur la grille de 20 px → rasterisation exacte en cellules occupées
+   (clés numériques packées) et traçage des contours en O(cellules), avec
+   repli sur l'algo générique pour les rects animés non alignés
+   (`src/walls/gridGeometry/render.ts`).
+
+2. **Le merge géométrique fusionnait toutes les couleurs à chaque préview.**
+   `WallOverlay` merge maintenant par couleur sur des tranches à identité
+   stable (`useContentStableArray`) : un trait ou une préview ne re-fusionne
+   que la couleur touchée.
+
+3. **Chaque point d'un trait ajoutait une opération en attente** →
+   rematérialisation O(points²) sur la durée du trait. Correctif :
+   `appendPendingOperation` fusionne les opérations murales différées
+   consécutives d'un même trait en UNE opération (le groupe d'historique et
+   l'outbox restent inchangés) — vérifié par assertion : 60 points = 1 op.
+
+4. **La session de pointeur vivait dans `FlowCanvas`** → chaque mousemove
+   re-rendait le shell, `<ReactFlow>` et son arbre interne (nodes compris).
+   Correctif : `WallInteractionLayer` (enfant de ReactFlow) héberge la
+   session ; le shell passe à ReactFlow des callbacks pont à identité stable
+   (`WallPaneEventBridge`) et la classe curseur est appliquée impérativement
+   au conteneur. Le shell ne re-rend plus jamais au mousemove — vérifié par
+   assertion (`canvas-shell === 0` pendant les scénarios de survol).
+
+5. **La sidebar entière s'abonnait à l'historique** pour deux boutons.
+   Correctif : composant `SidebarUndoRedo` isolé ; `AppSidebar` ne consomme
+   plus aucun contexte de session.
+
+### Avant/après (volet 2)
+
+| Scénario                                                    |                     Avant |                   Après |
+| ----------------------------------------------------------- | ------------------------: | ----------------------: |
+| S6 — trait de 60 points (~620 blocs existants), points 1–30 |                    147 ms |                   44 ms |
+| S6 — même trait, points 31–60 (dérive quadratique)          |        **220 ms (+50 %)** |      **33 ms (stable)** |
+| S7 — 10 mousemove de préview au-dessus de ~1250 blocs       | **107 ms (10,7 ms/move)** | **11 ms (1,1 ms/move)** |
+| Merge géométrique de 1152 murs (mitata)                     |                   3,89 ms |   **0,69 ms**, linéaire |
+| Shell canvas re-rendu pendant survol/préview                |        à chaque mousemove |                   **0** |
+| Sidebar re-rendue par édition (undo/redo)                   |                   entière |       boutons seulement |
+
+---
+
+# Volet 1 — re-renders et session de document
 
 Audit et optimisation des re-renders (juillet 2026). Ce document décrit les
 problèmes trouvés, les correctifs, et les mesures avant/après. Les benchmarks

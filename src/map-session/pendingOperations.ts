@@ -39,6 +39,59 @@ const preserveIdentity = <T>(
   next: ReadonlyArray<T>,
 ): ReadonlyArray<T> => (next.length === entries.length ? entries : next);
 
+/**
+ * Appends a pending operation. Consecutive deferred wall operations of a
+ * stroke are merged into a single entry so the materialized overlay applies
+ * one operation per recompute instead of one per stroke point — a long
+ * uninterrupted stroke stays O(points) instead of O(points²).
+ */
+export const appendPendingOperation = (
+  entries: ReadonlyArray<PendingOperationEntry>,
+  operation: MapOperation,
+  floorId: FloorId,
+  deferred: boolean,
+): ReadonlyArray<PendingOperationEntry> => {
+  if (deferred) {
+    const last = entries.at(-1);
+    if (last?.deferred && last.floorId === floorId) {
+      if (
+        last.operation.kind === "walls.add" &&
+        operation.kind === "walls.add"
+      ) {
+        return [
+          ...entries.slice(0, -1),
+          {
+            operation: {
+              ...last.operation,
+              walls: [...last.operation.walls, ...operation.walls],
+            },
+            floorId,
+            deferred: true,
+          },
+        ];
+      }
+      if (
+        last.operation.kind === "walls.delete" &&
+        operation.kind === "walls.delete"
+      ) {
+        return [
+          ...entries.slice(0, -1),
+          {
+            operation: {
+              ...last.operation,
+              wallIds: [...last.operation.wallIds, ...operation.wallIds],
+            },
+            floorId,
+            deferred: true,
+          },
+        ];
+      }
+    }
+  }
+
+  return [...entries, { operation, floorId, deferred }];
+};
+
 export const removeAckedPendingOperations = (
   entries: ReadonlyArray<PendingOperationEntry>,
   floorId: FloorId,

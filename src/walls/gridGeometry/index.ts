@@ -20,4 +20,5 @@ export {
   computeMergedWallGroups,
   computeSingleWallPath,
   computeWallRectUnionPath,
+  computeWallUnionPath,
 } from "./render";

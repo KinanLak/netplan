@@ -1,4 +1,4 @@
-import { Profiler, useEffect } from "react";
+import { Profiler, useEffect, useState } from "react";
 import type { ProfilerOnRenderCallback, ReactNode } from "react";
 import { ReactFlowProvider } from "@xyflow/react";
 import { ShortcutIntentProvider } from "@/hooks/use-shortcuts";
@@ -12,9 +12,11 @@ import {
 } from "@/map-session/useMapDocument";
 import { useTemporalStore, useUndoRedo } from "@/hooks/use-undo-redo";
 import { useCanvasDeviceNodes } from "@/canvas/hooks/useCanvasDeviceNodes";
-import { WallToolsLayer } from "@/canvas/components/WallToolsLayer";
-import { useWallToolSession } from "@/walls/useWallToolSession";
-import type { WallToolSession } from "@/walls/useWallToolSession";
+import {
+  WallInteractionLayer,
+  createWallPaneEventBridge,
+} from "@/canvas/components/WallInteractionLayer";
+import type { WallPaneEventBridge } from "@/canvas/components/WallInteractionLayer";
 import { useMapStore } from "@/store/useMapStore";
 import {
   useActiveDrawTool,
@@ -40,6 +42,14 @@ export class RenderStats {
     this.subtrees.set(id, entry);
   };
 
+  /** Counts a component-body execution (for parents whose Profiler would
+   * also fire for child-only commits). */
+  recordRender(id: string) {
+    const entry = this.subtrees.get(id) ?? { commits: 0, duration: 0 };
+    entry.commits += 1;
+    this.subtrees.set(id, entry);
+  }
+
   reset() {
     this.subtrees.clear();
   }
@@ -52,19 +62,36 @@ export class RenderStats {
 }
 
 export class BenchHandles {
-  session: WallToolSession | null = null;
+  bridge: WallPaneEventBridge | null = null;
   commands: MapDocumentCommands | null = null;
+  pendingOperationCount = 0;
 
-  capture(session: WallToolSession, commands: MapDocumentCommands) {
-    this.session = session;
+  capture(
+    bridge: WallPaneEventBridge,
+    commands: MapDocumentCommands,
+    pendingOperationCount: number,
+  ) {
+    this.bridge = bridge;
     this.commands = commands;
+    this.pendingOperationCount = pendingOperationCount;
   }
 }
 
 export const createBenchHandles = (): BenchHandles => new BenchHandles();
 
-/** Mirrors FlowCanvas: document + commands + wall tool session + node sync. */
-function CanvasProbe({ handles }: { handles: BenchHandles }) {
+/**
+ * Mirrors the FlowCanvas shell: document + commands + node sync, with the
+ * real WallInteractionLayer mounted below under its own profiler so pointer
+ * interaction renders are measured separately from the shell.
+ */
+function CanvasShellProbe({
+  handles,
+  stats,
+}: {
+  handles: BenchHandles;
+  stats: RenderStats;
+}) {
+  stats.recordRender("canvas-shell");
   const currentFloorId = useCurrentFloorId();
   const selectedDeviceId = useSelectedDeviceId();
   const isEditMode = useIsEditMode();
@@ -72,7 +99,7 @@ function CanvasProbe({ handles }: { handles: BenchHandles }) {
   const selectDevice = useMapStore((s) => s.selectDevice);
   const setHoveredDevice = useMapStore((s) => s.setHoveredDevice);
 
-  const { document } = useMapDocumentData();
+  const { document, pendingOperations } = useMapDocumentData();
   const isReady = useMapDocumentReady();
   const { commands } = useMapDocumentActions();
   const canEditDevices = isEditMode && activeDrawTool === "device" && isReady;
@@ -92,21 +119,16 @@ function CanvasProbe({ handles }: { handles: BenchHandles }) {
     setHoveredDevice,
   });
 
-  const wallToolSession = useWallToolSession();
+  const [paneBridge] = useState(createWallPaneEventBridge);
   useEffect(() => {
-    handles.capture(wallToolSession, commands);
+    handles.capture(paneBridge, commands, pendingOperations.length);
   });
 
   return (
     <div data-nodes={nodes.length}>
-      <WallToolsLayer
-        session={wallToolSession}
-        floorWalls={floorWalls}
-        activeDrawTool={activeDrawTool}
-        isEditMode={isEditMode && isReady}
-        paneHoverFillColor="#000"
-        paneHoverStrokeColor="#000"
-      />
+      <Profiler id="wall-layer" onRender={stats.onRender}>
+        <WallInteractionLayer bridge={paneBridge} floorWalls={floorWalls} />
+      </Profiler>
     </div>
   );
 }
@@ -193,9 +215,7 @@ export function BenchTree({ stats, handles }: BenchTreeProps) {
       <ShortcutIntentProvider>
         <MapDocumentProvider floorId={BENCH_FLOOR_ID}>
           <ReactFlowProvider>
-            <Subtree id="canvas" stats={stats}>
-              <CanvasProbe handles={handles} />
-            </Subtree>
+            <CanvasShellProbe handles={handles} stats={stats} />
             <Subtree id="toolbar" stats={stats}>
               <ToolbarProbe />
             </Subtree>

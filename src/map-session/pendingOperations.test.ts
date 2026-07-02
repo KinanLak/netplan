@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import type { DeviceId, FloorId, OperationMeta } from "@/types/map";
 import type { MapOperation } from "@/map-engine/types";
 import {
+  appendPendingOperation,
   pruneAckedRevisionsInPlace,
   reconcileObservedOperationLogEntries,
   removeAckedPendingOperations,
@@ -34,6 +35,118 @@ const operation = (seq: number, floorId: FloorId): MapOperation => ({
 
 const acked = (pairs: Array<[MapOperation, number]>): Map<string, number> =>
   new Map(pairs.map(([op, revision]) => [op.meta.opId, revision]));
+
+const wallsAddOperation = (seq: number, floorId: FloorId): MapOperation => ({
+  kind: "walls.add",
+  meta: meta(seq),
+  walls: [
+    {
+      id: `wall:${seq}` as never,
+      floorId,
+      start: { x: seq * 20, y: 0 },
+      end: { x: seq * 20, y: 0 },
+      color: "concrete",
+      geometryKey: `${floorId}:${seq * 20}:0`,
+    },
+  ],
+});
+
+const wallsDeleteOperation = (seq: number): MapOperation => ({
+  kind: "walls.delete",
+  meta: meta(seq),
+  wallIds: [`wall:${seq}` as never],
+});
+
+describe("appendPendingOperation", () => {
+  it("merges consecutive deferred walls.add operations of a stroke", () => {
+    const first = appendPendingOperation(
+      [],
+      wallsAddOperation(1, floorA),
+      floorA,
+      true,
+    );
+    const second = appendPendingOperation(
+      first,
+      wallsAddOperation(2, floorA),
+      floorA,
+      true,
+    );
+
+    expect(second).toHaveLength(1);
+    const operation = second[0].operation;
+    expect(operation.kind).toBe("walls.add");
+    if (operation.kind === "walls.add") {
+      expect(operation.walls).toHaveLength(2);
+    }
+    // The merged entry keeps the first operation's identity so history-group
+    // replacement by source op ids still matches it.
+    expect(operation.meta.opId).toBe(wallsAddOperation(1, floorA).meta.opId);
+  });
+
+  it("merges consecutive deferred walls.delete operations of a stroke", () => {
+    const first = appendPendingOperation(
+      [],
+      wallsDeleteOperation(1),
+      floorA,
+      true,
+    );
+    const second = appendPendingOperation(
+      first,
+      wallsDeleteOperation(2),
+      floorA,
+      true,
+    );
+
+    expect(second).toHaveLength(1);
+    const operation = second[0].operation;
+    if (operation.kind === "walls.delete") {
+      expect(operation.wallIds).toHaveLength(2);
+    } else {
+      throw new Error("expected a walls.delete operation");
+    }
+  });
+
+  it("does not merge non-deferred operations", () => {
+    const first = appendPendingOperation(
+      [],
+      wallsAddOperation(1, floorA),
+      floorA,
+      false,
+    );
+    const second = appendPendingOperation(
+      first,
+      wallsAddOperation(2, floorA),
+      floorA,
+      false,
+    );
+
+    expect(second).toHaveLength(2);
+  });
+
+  it("does not merge across floors or operation kinds", () => {
+    const first = appendPendingOperation(
+      [],
+      wallsAddOperation(1, floorA),
+      floorA,
+      true,
+    );
+    const acrossFloor = appendPendingOperation(
+      first,
+      wallsAddOperation(2, floorB),
+      floorB,
+      true,
+    );
+    expect(acrossFloor).toHaveLength(2);
+
+    const acrossKind = appendPendingOperation(
+      first,
+      wallsDeleteOperation(3),
+      floorA,
+      true,
+    );
+    expect(acrossKind).toHaveLength(2);
+  });
+});
 
 describe("pending operation reconciliation", () => {
   it("keeps acked operations until the server revision is observed", () => {

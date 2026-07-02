@@ -62,9 +62,61 @@ export const buildBenchLink = (
   toDeviceId: `device:bench-${(index + 1) % deviceCount}` as DeviceId,
 });
 
+/**
+ * Perimeter wall blocks for room-like floorplans spread across a large map —
+ * the realistic worst case for wall-geometry merging (many unique
+ * coordinates), unlike the compact block used by `buildBenchWall`.
+ */
+export const buildBenchRoomWalls = (
+  roomCount: number,
+  floorId = BENCH_FLOOR_ID,
+): Array<WallSegment> => {
+  const walls: Array<WallSegment> = [];
+  const roomCols = 8;
+  const roomRows = 6;
+  const spacingCells = 12;
+  const roomsPerRow = 10;
+  const half = GRID_SIZE / 2;
+
+  for (let room = 0; room < roomCount; room += 1) {
+    const originX =
+      (room % roomsPerRow) * spacingCells * GRID_SIZE + GRID_SIZE + half;
+    const originY =
+      Math.floor(room / roomsPerRow) * spacingCells * GRID_SIZE +
+      GRID_SIZE +
+      half;
+
+    const addBlock = (cellX: number, cellY: number) => {
+      const x = originX + cellX * GRID_SIZE;
+      const y = originY + cellY * GRID_SIZE;
+      walls.push({
+        id: `wall:room-${room}-${cellX}-${cellY}` as WallId,
+        floorId,
+        start: { x, y },
+        end: { x, y },
+        color: "concrete",
+        geometryKey: `${floorId}:${x}:${y}`,
+      });
+    };
+
+    for (let cellX = 0; cellX < roomCols; cellX += 1) {
+      addBlock(cellX, 0);
+      addBlock(cellX, roomRows - 1);
+    }
+    for (let cellY = 1; cellY < roomRows - 1; cellY += 1) {
+      addBlock(0, cellY);
+      addBlock(roomCols - 1, cellY);
+    }
+  }
+
+  return walls;
+};
+
 export interface BenchDocumentOptions {
   devices?: number;
   walls?: number;
+  /** Rooms of spread perimeter walls (≈26 blocks each) instead of `walls`. */
+  rooms?: number;
   links?: number;
   revision?: number;
 }
@@ -72,6 +124,7 @@ export interface BenchDocumentOptions {
 export const buildBenchDocument = ({
   devices = 150,
   walls = 200,
+  rooms,
   links = 30,
   revision = 1,
 }: BenchDocumentOptions = {}): MapDocumentSnapshot => ({
@@ -80,7 +133,10 @@ export const buildBenchDocument = ({
   devices: Array.from({ length: devices }, (_, index) =>
     buildBenchDevice(index),
   ),
-  walls: Array.from({ length: walls }, (_, index) => buildBenchWall(index)),
+  walls:
+    rooms !== undefined
+      ? buildBenchRoomWalls(rooms)
+      : Array.from({ length: walls }, (_, index) => buildBenchWall(index)),
   links: Array.from({ length: links }, (_, index) =>
     buildBenchLink(index, devices),
   ),
