@@ -1,5 +1,43 @@
 # Performance — re-renders, session de document et rendu des murs
 
+## État actuel (juillet 2026)
+
+Les garanties en vigueur, toutes verrouillées par des assertions dans
+`bun test` (7 scénarios, `test/perf/renderCounts.test.tsx`) :
+
+- Le shell canvas (et donc les nodes devices) ne re-rend **jamais** pendant
+  les mouvements de souris/traits — l'interaction murs vit dans
+  `WallInteractionLayer` derrière `WallPaneEventBridge`.
+- Un trait continu reste **une seule** opération en attente (coalescence) ;
+  la matérialisation est linéaire.
+- Toute la géométrie murs (fusion, gomme) est **O(cellules concernées)** via
+  rasterisation sur la grille et index spatiaux, avec cache par identité du
+  document.
+- Session découpée en 5 contextes (data/ready/syncStatus/history/actions),
+  actions à identité stable à vie, identités de collections préservées de
+  bout en bout (serveur → memos).
+- Serveur Convex : mutations scoppées à l'étage (`collectOperationScope`),
+  document servi en 4 requêtes par collection (une édition ne pousse que sa
+  collection + la révision).
+
+Reproduire les mesures :
+
+```sh
+bun run perf:render   # commits React par sous-arbre (7 scénarios S1–S7)
+bun run bench:engine  # micro-benchmarks mitata (géométrie, gomme, moteur)
+```
+
+Backlog connu, non corrigé : index spatial des devices côté serveur pour
+`planWallsAdd`/`validateDevicePlacement` (borné à 500×500 par mutation) ;
+`applyBatch`/inverse en O(sous-ops × snapshot) (atténué par la coalescence).
+
+Les volets ci-dessous sont l'**historique** des trois passes d'optimisation,
+avec leurs mesures avant/après telles que capturées à l'époque de chaque
+passe (les noms de sous-arbres du volet 1, « canvas », correspondent
+aujourd'hui à `canvas-shell` + `wall-layer`).
+
+---
+
 ## Volet 3 — audit proactif : gomme, serveur Convex, composants (juillet 2026)
 
 Audit systématique (complexités, abonnements, identités) sans symptôme
@@ -48,11 +86,6 @@ rapporté. Corrigé :
    client bonus : les identités de tableaux non touchés sont préservées de
    bout en bout (un déplacement de device ne re-déclenche plus rien côté
    murs).
-
-Backlog documenté, non corrigé : index spatial des devices côté serveur pour
-`planWallsAdd`/`validateDevicePlacement` (O(murs*op × devices*étage) par
-mutation, borné à 500×500) ; `applyBatch`/inverse en O(sous-ops × snapshot)
-(atténué par la coalescence des traits).
 
 ---
 
@@ -109,22 +142,9 @@ toute la sidebar.
 
 ---
 
-# Volet 1 — re-renders et session de document
+## Volet 1 — re-renders et session de document
 
-Audit et optimisation des re-renders (juillet 2026). Ce document décrit les
-problèmes trouvés, les correctifs, et les mesures avant/après. Les benchmarks
-sont reproductibles :
-
-```sh
-bun run perf:render   # compte les commits React par sous-arbre (5 scénarios)
-bun run bench:engine  # micro-benchmarks mitata des fonctions chaudes
-```
-
-Les scénarios de `test/perf/renderCounts.test.tsx` tournent aussi dans
-`bun test` avec des plafonds de commits en assertion : toute régression de
-re-render casse la suite.
-
-## Problèmes corrigés
+### Problèmes corrigés
 
 1. **`setState` à chaque mousemove avec un outil mur actif.**
    `moveWallPointer` retournait toujours un nouvel objet, même sans changement
@@ -172,7 +192,7 @@ re-render casse la suite.
    lecture paresseuse via `useMapStore.getState()` dans les handlers, et
    `getDocument()` (accessor impératif des actions) pour les liens.
 
-## Stats avant/après — commits React par scénario
+### Stats avant/après — commits React par scénario
 
 Harnais : provider réel + sondes miroirs des vrais consommateurs, Convex
 mocké de façon déterministe, comptage par `React.Profiler`. Document de
@@ -195,7 +215,7 @@ d'état changeaient réellement.)
 | S4 — 200 hovers de devices                            | workspace                        |                                        200 |                              **0** |
 | S5 — doc en retard sur un ack (fenêtre de 100 ms)     | tout l'arbre                     | **158 commits (boucle infinie, ~1 580/s)** |                      **2 commits** |
 
-## Micro-benchmarks (mitata, `bun run bench:engine`)
+### Micro-benchmarks (mitata, `bun run bench:engine`)
 
 | Benchmark                                     |                 Avant |                                                                    Après |
 | --------------------------------------------- | --------------------: | -----------------------------------------------------------------------: |
