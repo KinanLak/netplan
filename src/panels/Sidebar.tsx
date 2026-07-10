@@ -22,7 +22,9 @@ import { asBuildingId, asFloorId } from "@/lib/objectIds";
 import { useTemporalStore, useUndoRedo } from "@/hooks/use-undo-redo";
 import { Kbd, KbdGroup } from "@/components/ui/kbd";
 import { NetplanLogo } from "@/components/netplan-logo";
-import { ConnectedUsers } from "@/panels/ConnectedUsers";
+import { UserAvatarStack } from "@/components/user-avatar";
+import { usePresence } from "@/hooks/use-presence";
+import { sortPresences } from "@/lib/presence";
 import {
   Sidebar,
   SidebarContent,
@@ -124,6 +126,11 @@ export default function AppSidebar() {
   const buildings = useQuery(api.buildings.list) ?? [];
   const currentBuildingId = useCurrentBuildingId();
   const currentFloorId = useCurrentFloorId();
+  const presences = usePresence(currentFloorId);
+  const allFloors = useQuery(api.floors.listAll) ?? [];
+  const buildingIdByFloor = new Map(
+    allFloors.map((floor) => [floor.id, floor.buildingId]),
+  );
 
   const setCurrentBuilding = useMapStore((s) => s.setCurrentBuilding);
   const setCurrentFloor = useMapStore((s) => s.setCurrentFloor);
@@ -192,71 +199,98 @@ export default function AppSidebar() {
           </div>
           <SidebarGroupContent>
             <SidebarMenu>
-              {buildings.map((building) => (
-                <SidebarMenuItem key={building.id}>
-                  <SidebarMenuButton
-                    onClick={() =>
-                      setCurrentBuilding(asBuildingId(building.id))
-                    }
-                    className={cn(
-                      "cursor-pointer",
-                      building.id === currentBuildingId &&
-                        "font-medium text-foreground",
-                    )}
-                  >
-                    <HugeiconsIcon
-                      icon={Building05Icon}
-                      size={16}
-                      strokeWidth={1.5}
-                    />
-                    <span>{building.name}</span>
-                  </SidebarMenuButton>
+              {buildings.map((building) => {
+                const isCurrentBuilding = building.id === currentBuildingId;
+                const buildingPresences = sortPresences(
+                  presences.filter(
+                    (presence) =>
+                      buildingIdByFloor.get(presence.floorId) === building.id,
+                  ),
+                );
 
-                  {building.id === currentBuildingId ? (
-                    <SidebarMenuSub>
-                      {sortedFloors.map((floor) => {
-                        const isActive = floor.id === currentFloorId;
+                return (
+                  <SidebarMenuItem key={building.id}>
+                    <SidebarMenuButton
+                      onClick={() =>
+                        setCurrentBuilding(asBuildingId(building.id))
+                      }
+                      className={cn(
+                        "cursor-pointer",
+                        isCurrentBuilding && "font-medium text-foreground",
+                      )}
+                    >
+                      <HugeiconsIcon
+                        icon={Building05Icon}
+                        size={16}
+                        strokeWidth={1.5}
+                      />
+                      <span>{building.name}</span>
+                      {!isCurrentBuilding && buildingPresences.length > 0 ? (
+                        <UserAvatarStack
+                          users={buildingPresences}
+                          max={3}
+                          size="sm"
+                          className="ml-auto"
+                        />
+                      ) : null}
+                    </SidebarMenuButton>
 
-                        return (
-                          <SidebarMenuSubItem key={floor.id}>
-                            <SidebarMenuSubButton
-                              onClick={() =>
-                                setCurrentFloor(asFloorId(floor.id))
-                              }
-                              className={cn(
-                                "cursor-pointer justify-between",
-                                isActive &&
-                                  "bg-primary font-semibold text-primary-foreground hover:bg-primary hover:text-primary-foreground",
-                              )}
-                            >
-                              <span className="flex items-center gap-2">
-                                <HugeiconsIcon
-                                  icon={
-                                    isActive
-                                      ? SolidLine01Icon
-                                      : DashedLine01Icon
-                                  }
-                                  size={16}
-                                  strokeWidth={1}
-                                />
-                                <span>{floor.name}</span>
-                              </span>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                        );
-                      })}
-                    </SidebarMenuSub>
-                  ) : null}
-                </SidebarMenuItem>
-              ))}
+                    {isCurrentBuilding ? (
+                      <SidebarMenuSub>
+                        {sortedFloors.map((floor) => {
+                          const isActive = floor.id === currentFloorId;
+                          const floorPresences = sortPresences(
+                            presences.filter(
+                              (presence) => presence.floorId === floor.id,
+                            ),
+                          );
+
+                          return (
+                            <SidebarMenuSubItem key={floor.id}>
+                              <SidebarMenuSubButton
+                                onClick={() =>
+                                  setCurrentFloor(asFloorId(floor.id))
+                                }
+                                className={cn(
+                                  "cursor-pointer justify-between",
+                                  isActive &&
+                                    "bg-primary font-semibold text-primary-foreground hover:bg-primary hover:text-primary-foreground",
+                                )}
+                              >
+                                <span className="flex items-center gap-2">
+                                  <HugeiconsIcon
+                                    icon={
+                                      isActive
+                                        ? SolidLine01Icon
+                                        : DashedLine01Icon
+                                    }
+                                    size={16}
+                                    strokeWidth={1}
+                                  />
+                                  <span>{floor.name}</span>
+                                </span>
+                                {floorPresences.length > 0 ? (
+                                  <UserAvatarStack
+                                    users={floorPresences}
+                                    max={3}
+                                    size="sm"
+                                  />
+                                ) : null}
+                              </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                          );
+                        })}
+                      </SidebarMenuSub>
+                    ) : null}
+                  </SidebarMenuItem>
+                );
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
 
       <SidebarUndoRedo />
-
-      <ConnectedUsers floorId={currentFloorId} />
 
       <SidebarFooter className="border-t px-4 py-3">
         {showDevMapControls ? (

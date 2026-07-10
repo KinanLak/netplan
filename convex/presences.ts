@@ -89,14 +89,11 @@ export const remove = mutation({
   },
 });
 
-export const listForFloor = query({
-  args: { floorId: v.string() },
+export const list = query({
+  args: {},
   returns: v.array(onlineUserShape),
-  handler: async (ctx, { floorId }) => {
-    const presences = await ctx.db
-      .query("presences")
-      .withIndex("by_floor", (q) => q.eq("floorId", floorId))
-      .collect();
+  handler: async (ctx) => {
+    const presences = await ctx.db.query("presences").collect();
 
     return latestPresencesByClient(presences).map((presence) => ({
       sessionId: presence.sessionId,

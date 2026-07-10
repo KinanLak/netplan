@@ -36,6 +36,27 @@ describe("floors", () => {
     expect(floorsA.map((f) => f.name)).toEqual(["RDC"]);
   });
 
+  it("listAll returns floors across every building", async () => {
+    const t = convexTest(schema, modules);
+    const a = await freshBuilding(t);
+    const b = await freshBuilding(t);
+    await t.mutation(api.floors.create, {
+      objectId: "floor:all:a",
+      buildingId: a,
+      name: "RDC",
+    });
+    await t.mutation(api.floors.create, {
+      objectId: "floor:all:b",
+      buildingId: b,
+      name: "Sous-sol",
+    });
+
+    const all = await t.query(api.floors.listAll, {});
+    const byFloor = new Map(all.map((f) => [f.id, f.buildingId]));
+    expect(byFloor.get("floor:all:a")).toBe(a);
+    expect(byFloor.get("floor:all:b")).toBe(b);
+  });
+
   it("create assigns sequential order", async () => {
     const t = convexTest(schema, modules);
     const buildingId = await freshBuilding(t);

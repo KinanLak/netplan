@@ -39,7 +39,7 @@ describe("presences", () => {
       floorId,
     });
 
-    const presences = await t.query(api.presences.listForFloor, { floorId });
+    const presences = await t.query(api.presences.list, {});
     expect(presences).toHaveLength(1);
     expect(presences[0]?.clientId).toBe("client:alice");
     expect(presences[0]?.colorHue).toBe(210);
@@ -64,7 +64,7 @@ describe("presences", () => {
       floorId,
     });
 
-    const presences = await t.query(api.presences.listForFloor, { floorId });
+    const presences = await t.query(api.presences.list, {});
     expect(presences).toHaveLength(1);
     expect(presences[0]?.sessionId).toBe("alice:new");
 
@@ -72,7 +72,7 @@ describe("presences", () => {
     expect(rows).toHaveLength(1);
   });
 
-  it("returns online users from the requested floor", async () => {
+  it("lists online users across floors with their floor", async () => {
     const t = convexTest(schema, modules);
     const floorA = await freshFloor(t);
     const floorB = await freshFloor(t);
@@ -92,10 +92,11 @@ describe("presences", () => {
       floorId: floorB,
     });
 
-    const onA = await t.query(api.presences.listForFloor, { floorId: floorA });
-    const onB = await t.query(api.presences.listForFloor, { floorId: floorB });
-    expect(onA.map((p) => p.sessionId)).toEqual(["alice"]);
-    expect(onB.map((p) => p.sessionId)).toEqual(["bob"]);
+    const all = await t.query(api.presences.list, {});
+    const byClient = new Map(all.map((p) => [p.clientId, p]));
+    expect(all).toHaveLength(2);
+    expect(byClient.get("client:alice")?.floorId).toBe(floorA);
+    expect(byClient.get("client:bob")?.floorId).toBe(floorB);
   });
 
   it("remove deletes online user rows for the session", async () => {
@@ -111,7 +112,7 @@ describe("presences", () => {
     });
     await t.mutation(api.presences.remove, { sessionId: "alice" });
 
-    const presences = await t.query(api.presences.listForFloor, { floorId });
+    const presences = await t.query(api.presences.list, {});
     expect(presences).toHaveLength(0);
   });
 

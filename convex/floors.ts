@@ -29,6 +29,15 @@ export const listForBuilding = query({
   },
 });
 
+export const listAll = query({
+  args: {},
+  returns: v.array(floorValidator),
+  handler: async (ctx) => {
+    const floors = await ctx.db.query("floors").collect();
+    return floors.map(toFloor);
+  },
+});
+
 export const create = mutation({
   args: {
     objectId: v.string(),
