@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import type { WallSegment } from "@/types/map";
+import type { FloorId, WallId, WallSegment } from "@/types/map";
 import {
   addLine,
   addRoom,
@@ -8,12 +8,13 @@ import {
   previewEraseAtPointer,
 } from "@/walls/engine";
 import { getWallBlockKey } from "@/walls/gridGeometry";
+import { getWallGeometryKey } from "@/walls/gridGeometry/cells";
 
-const floorId = "floor-a";
+const floorId = "floor-a" as FloorId;
 
 const createWallIdFactory = () => {
   let index = 0;
-  return () => `wall-${++index}`;
+  return () => `wall-${++index}` as WallId;
 };
 
 const toKeys = (walls: Array<WallSegment>): Array<string> =>
@@ -37,6 +38,10 @@ describe("wall engine commands", () => {
     expect(result.reason).toBe("applied");
     expect(result.nextWalls).toHaveLength(4);
     expect(result.affectedKeys).toHaveLength(4);
+    expect(result.nextWalls.map((wall) => wall.geometryKey)).toEqual(
+      result.nextWalls.map((wall) => getWallGeometryKey(wall)),
+    );
+    expect(result.nextWalls[0]?.geometryKey).toBe("10:10:10:10");
   });
 
   it("splits vertical lines into canonical grid blocks", () => {
@@ -106,8 +111,9 @@ describe("wall engine commands", () => {
 
     const pointerInput = {
       floorId,
-      pointer: { x: 24, y: 12 },
-      snappedPoint: { x: 10, y: 10 },
+      pointer: { x: 31, y: 12 },
+      snappedPoint: { x: 30, y: 10 },
+      eraserSize: 1,
     };
 
     const preview = previewEraseAtPointer({
@@ -144,6 +150,7 @@ describe("wall engine commands", () => {
       fromSnappedPoint: { x: 10, y: 10 },
       toPointer: { x: 52, y: 11 },
       toSnappedPoint: { x: 50, y: 10 },
+      eraserSize: 1,
     });
 
     expect(result.changed).toBe(true);
@@ -198,6 +205,7 @@ describe("wall engine commands", () => {
       floorId,
       pointer: { x: 10, y: 10 },
       snappedPoint: { x: 10, y: 10 },
+      eraserSize: 1,
     });
 
     expect(result.changed).toBe(false);
@@ -217,12 +225,40 @@ describe("wall engine commands", () => {
     const result = eraseAtPointer({
       walls: setup.nextWalls,
       floorId,
-      pointer: { x: 14, y: 11 },
+      pointer: { x: 9, y: 11 },
       snappedPoint: { x: 10, y: 10 },
+      eraserSize: 1,
     });
 
     expect(result.changed).toBe(false);
     expect(result.reason).toBe("no-wall-at-pointer");
     expect(result.nextWalls).toHaveLength(2);
+  });
+
+  it("erases every wall inside the square eraser area in one command", () => {
+    const setup = addRoom({
+      walls: [],
+      floorId,
+      color: "concrete",
+      start: { x: 10, y: 10 },
+      end: { x: 50, y: 50 },
+      generateWallId: createWallIdFactory(),
+    });
+
+    const result = eraseAtPointer({
+      walls: setup.nextWalls,
+      floorId,
+      pointer: { x: 20, y: 20 },
+      snappedPoint: { x: 10, y: 10 },
+      eraserSize: 2,
+    });
+
+    expect(result.changed).toBe(true);
+    expect(result.affectedKeys).toEqual([
+      `${floorId}:10:10`,
+      `${floorId}:10:30`,
+      `${floorId}:30:10`,
+    ]);
+    expect(result.nextWalls).toHaveLength(setup.nextWalls.length - 3);
   });
 });

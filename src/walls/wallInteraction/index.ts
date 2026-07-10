@@ -7,11 +7,13 @@ export type {
 } from "./types";
 
 export {
+  areWallInteractionStatesEqual,
   cancelWallTool,
-  contextCancelWallInteraction,
   createWallInteractionState,
   releaseWallPointer,
   resetWallInteractionState,
+  stabilizeWallInteractionState,
+  suppressWallContextMenu,
 } from "./state";
 
 export { clickWallPane, moveWallPointer } from "./gestures";

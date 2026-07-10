@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { deviceToolbarActions } from "@/panels/toolbar-actions";
-import { availableDevicesCatalog } from "@/mock/availableDevices";
+import { availableDevicesCatalog } from "@/devices/deviceCatalog";
 import { shortcuts } from "@/lib/shortcuts";
 import {
   createDeviceKindRecord,
@@ -11,7 +11,7 @@ import {
   getDeviceKindLabel,
 } from "./deviceKindRegistry";
 import { deviceNodeTypes, toDeviceNode } from "./reactFlowDeviceAdapter";
-import type { Device, DeviceType } from "@/types/map";
+import type { Device, DeviceId, DeviceType, FloorId } from "@/types/map";
 import type { DeviceKind } from "./deviceKindRegistry";
 
 const sorted = (values: Array<string>): Array<string> => values.toSorted();
@@ -62,10 +62,10 @@ describe("device kind registry", () => {
 
   it("adapts a Device into the React Flow node shape", () => {
     const device: Device = {
-      id: "device-1",
+      id: "device-1" as DeviceId,
       type: "switch",
       name: "Switch 1",
-      floorId: "floor-1",
+      floorId: "floor-1" as FloorId,
       position: { x: 80, y: 120 },
       size: { width: 200, height: 60 },
       metadata: { status: "up" },

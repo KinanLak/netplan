@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useId,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -108,8 +109,10 @@ export function ShortcutIntentProvider({
     };
   }, []);
 
+  const contextValue = useMemo(() => ({ register }), [register]);
+
   return (
-    <ShortcutIntentContext.Provider value={{ register }}>
+    <ShortcutIntentContext.Provider value={contextValue}>
       {children}
     </ShortcutIntentContext.Provider>
   );

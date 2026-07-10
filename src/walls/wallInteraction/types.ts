@@ -1,5 +1,6 @@
 import type {
   DrawTool,
+  FloorId,
   Position,
   RoomDraft,
   WallColor,
@@ -17,8 +18,9 @@ export interface PointerSample {
 export interface WallInteractionContext {
   isEditMode: boolean;
   activeDrawTool: DrawTool;
-  currentFloorId: string | null;
+  currentFloorId: FloorId | null;
   selectedWallColor: WallColor;
+  wallEraserSize: number;
   trackPointerPosition: boolean;
 }
 
@@ -57,6 +59,8 @@ export interface WallInteractionViewModel {
   drawMessage: string | null;
   previewSegments: Array<WallDraft>;
   erasePreviewKeys: Array<string>;
+  erasePreviewPointer: Position | null;
+  wallEraserSize: number;
   paneCursorClass: string;
 }
 

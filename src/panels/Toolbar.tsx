@@ -5,9 +5,13 @@ import { Tick02Icon } from "@hugeicons/core-free-icons";
 import type { ComponentProps } from "react";
 import type { DeviceType, DrawTool } from "@/types/map";
 import { useDevicePlacement } from "@/devices/useDevicePlacement";
-import type { AvailableDevice } from "@/mock/availableDevices";
+import type { AvailableDevice } from "@/devices/deviceCatalog";
 import type { ToolbarAction } from "@/panels/toolbar-actions";
 import { useMapStore } from "@/store/useMapStore";
+import {
+  useMapDocumentActions,
+  useMapDocumentReady,
+} from "@/map-session/useMapDocument";
 import {
   useActiveDrawTool,
   useCurrentFloorId,
@@ -28,7 +32,7 @@ import { ShortcutHintAbsolute } from "@/components/ui/shortcut-hint";
 import { createDeviceKindRecord } from "@/devices/deviceKindRegistry";
 import { useDeviceToolShortcuts } from "@/devices/useDeviceToolShortcuts";
 import { cn } from "@/lib/utils";
-import { availableDevicesCatalog } from "@/mock/availableDevices";
+import { availableDevicesCatalog } from "@/devices/deviceCatalog";
 import {
   TOOLBAR_WALL_COLOR_SELECTION_ENABLED,
   UNDO_REDO_EVENT_NAME,
@@ -46,11 +50,12 @@ export default function Toolbar() {
   const activeDrawTool = useActiveDrawTool();
   const selectedWallColor = useSelectedWallColor();
 
-  const addDevice = useMapStore((s) => s.addDevice);
-  const checkCollision = useMapStore((s) => s.checkCollision);
   const setActiveDrawTool = useMapStore((s) => s.setActiveDrawTool);
   const setSelectedWallColor = useMapStore((s) => s.setSelectedWallColor);
   const selectDevice = useMapStore((s) => s.selectDevice);
+  const { commands } = useMapDocumentActions();
+  const isReady = useMapDocumentReady();
+  const { addDevice, checkCollision } = commands;
   const devicePlacement = useDevicePlacement(checkCollision);
   const reactFlow = useReactFlow();
   const [selectedType, setSelectedType] = useState<DeviceType | null>(null);
@@ -66,17 +71,21 @@ export default function Toolbar() {
 
   // Listen for undo/redo events and flash the toolbar background
   useEffect(() => {
+    let timeout: ReturnType<typeof setTimeout> | null = null;
     const handler = (e: Event) => {
       const type = (e as CustomEvent<{ type: "undo" | "redo" }>).detail.type;
       setFlashType(type);
-      const timeout = setTimeout(
+      if (timeout !== null) clearTimeout(timeout);
+      timeout = setTimeout(
         () => setFlashType(null),
         UNDO_REDO_FLASH_DURATION_MS,
       );
-      return () => clearTimeout(timeout);
     };
     window.addEventListener(UNDO_REDO_EVENT_NAME, handler);
-    return () => window.removeEventListener(UNDO_REDO_EVENT_NAME, handler);
+    return () => {
+      window.removeEventListener(UNDO_REDO_EVENT_NAME, handler);
+      if (timeout !== null) clearTimeout(timeout);
+    };
   }, []);
 
   // Track button elements in a ref to avoid toolbar re-renders during mount.
@@ -85,6 +94,7 @@ export default function Toolbar() {
   >(createDeviceKindRecord(() => null));
 
   const handleTypeClick = (type: DeviceType) => {
+    if (!currentFloorId || !isReady) return;
     if (suppressNextTypeToggleRef.current) {
       const suppressedType = suppressNextTypeToggleRef.current;
       suppressNextTypeToggleRef.current = null;
@@ -113,7 +123,7 @@ export default function Toolbar() {
   const handleDrawToolClick = (
     tool: Extract<DrawTool, "wall" | "wall-brush" | "wall-erase" | "room">,
   ) => {
-    if (!currentFloorId) return;
+    if (!currentFloorId || !isReady) return;
 
     const nextTool = activeDrawTool === tool ? "device" : tool;
     setActiveDrawTool(nextTool);
@@ -129,6 +139,7 @@ export default function Toolbar() {
   const handleOpenChange: NonNullable<
     ComponentProps<typeof Popover>["onOpenChange"]
   > = (newOpen, eventDetails) => {
+    if (newOpen && !isReady) return;
     const target = eventDetails.event.target;
     const isActiveButtonOutsidePress =
       !newOpen &&
@@ -156,12 +167,12 @@ export default function Toolbar() {
   );
   useShortcutIntentEffect("tool-room", () => handleDrawToolClick("room"));
   useDeviceToolShortcuts({
-    enabled: true,
+    enabled: isReady,
     onSelectDeviceType: handleTypeClick,
   });
 
   const handleAddDevice = (catalogDevice: AvailableDevice) => {
-    if (!currentFloorId) return;
+    if (!currentFloorId || !isReady) return;
 
     // Get center of viewport
     const { x, y, zoom } = reactFlow.getViewport();
@@ -192,7 +203,8 @@ export default function Toolbar() {
       position: placement.position,
     };
 
-    addDevice(newDevice);
+    const newDeviceId = addDevice(newDevice);
+    if (newDeviceId) selectDevice(newDeviceId);
     setActiveDrawTool("device");
     setSelectedType(null);
     setOpen(false);
@@ -260,7 +272,7 @@ export default function Toolbar() {
         variant={isEraseActive ? "ghost" : isActive ? "secondary" : "ghost"}
         size="sm"
         onClick={() => handleToolbarActionClick(action)}
-        disabled={!currentFloorId}
+        disabled={!currentFloorId || !isReady}
         className={cn(
           "-md flex h-auto flex-col items-center px-2 py-1.5",
           isActive && !isEraseActive && "ring-2 ring-ring",
@@ -287,7 +299,12 @@ export default function Toolbar() {
   return (
     <div className="fixed top-4 left-1/2 z-10 -translate-x-1/2">
       <Popover
-        open={open && selectedType !== null && activeDrawTool === "device"}
+        open={
+          open &&
+          isReady &&
+          selectedType !== null &&
+          activeDrawTool === "device"
+        }
         onOpenChange={handleOpenChange}
       >
         <div
@@ -323,7 +340,9 @@ export default function Toolbar() {
                     key={color}
                     type="button"
                     onClick={() => handleSelectWallColor(color)}
-                    disabled={!currentFloorId || !wallColorSelectionEnabled}
+                    disabled={
+                      !currentFloorId || !isReady || !wallColorSelectionEnabled
+                    }
                     className={cn(
                       "h-6 w-6 rounded-full ring-ring transition-all",
                       isActive &&

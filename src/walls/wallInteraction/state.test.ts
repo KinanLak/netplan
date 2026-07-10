@@ -1,11 +1,12 @@
 import { describe, expect, it, mock } from "bun:test";
 import {
   cancelWallTool,
-  contextCancelWallInteraction,
   createWallInteractionState,
   releaseWallPointer,
   resetWallInteractionState,
+  suppressWallContextMenu,
 } from "./state";
+import type { FloorId } from "@/types/map";
 import type {
   WallInteractionAdapter,
   WallInteractionContext,
@@ -17,8 +18,9 @@ const makeContext = (
 ): WallInteractionContext => ({
   isEditMode: true,
   activeDrawTool: "wall",
-  currentFloorId: "floor-1",
+  currentFloorId: "floor-1" as FloorId,
   selectedWallColor: "concrete",
+  wallEraserSize: 1,
   trackPointerPosition: true,
   ...overrides,
 });
@@ -78,16 +80,15 @@ describe("wallInteraction state", () => {
     expect(next).toEqual(createWallInteractionState());
   });
 
-  it("contextCancelWallInteraction is unhandled outside edit mode", () => {
+  it("suppressWallContextMenu is unhandled outside edit mode", () => {
     const adapter: Pick<WallInteractionAdapter, "setActiveDrawTool"> = {
       setActiveDrawTool: mock(() => {}),
     };
     const state = createWallInteractionState();
 
-    const result = contextCancelWallInteraction(
+    const result = suppressWallContextMenu(
       state,
       makeContext({ isEditMode: false }),
-      adapter,
     );
 
     expect(result.handled).toBe(false);
@@ -95,35 +96,37 @@ describe("wallInteraction state", () => {
     expect(adapter.setActiveDrawTool).toHaveBeenCalledTimes(0);
   });
 
-  it("contextCancelWallInteraction is unhandled when the device tool is active", () => {
+  it("suppressWallContextMenu is unhandled when the device tool is active", () => {
     const adapter: Pick<WallInteractionAdapter, "setActiveDrawTool"> = {
       setActiveDrawTool: mock(() => {}),
     };
     const state = createWallInteractionState();
 
-    const result = contextCancelWallInteraction(
+    const result = suppressWallContextMenu(
       state,
       makeContext({ activeDrawTool: "device" }),
-      adapter,
     );
 
     expect(result.handled).toBe(false);
     expect(adapter.setActiveDrawTool).toHaveBeenCalledTimes(0);
   });
 
-  it("contextCancelWallInteraction cancels the active wall tool when applicable", () => {
+  it("suppressWallContextMenu keeps the active wall tool", () => {
     const adapter: Pick<WallInteractionAdapter, "setActiveDrawTool"> = {
       setActiveDrawTool: mock(() => {}),
     };
-    const state = createWallInteractionState();
+    const state: WallInteractionState = {
+      ...createWallInteractionState(),
+      drawAnchor: { x: 10, y: 10 },
+    };
 
-    const result = contextCancelWallInteraction(
+    const result = suppressWallContextMenu(
       state,
       makeContext({ activeDrawTool: "wall" }),
-      adapter,
     );
 
     expect(result.handled).toBe(true);
-    expect(adapter.setActiveDrawTool).toHaveBeenCalledWith("device");
+    expect(result.state).toBe(state);
+    expect(adapter.setActiveDrawTool).toHaveBeenCalledTimes(0);
   });
 });

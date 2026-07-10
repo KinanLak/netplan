@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import type {
   DrawTool,
+  FloorId,
   WallCommandReason,
   WallCommandResult,
   RoomDraft,
@@ -10,10 +11,9 @@ import type {
 } from "@/types/map";
 import {
   clickWallPane,
-  contextCancelWallInteraction,
   createWallInteractionState,
   moveWallPointer,
-  resetWallInteractionState,
+  suppressWallContextMenu,
 } from "@/walls/wallInteraction";
 import type {
   PointerSample,
@@ -21,7 +21,7 @@ import type {
   WallInteractionContext,
 } from "@/walls/wallInteraction";
 
-const floorId = "floor-a";
+const floorId = "floor-a" as FloorId;
 
 interface AdapterCalls {
   setActiveDrawTool: Array<DrawTool>;
@@ -106,6 +106,7 @@ const context = (activeDrawTool: DrawTool): WallInteractionContext => ({
   activeDrawTool,
   currentFloorId: floorId,
   selectedWallColor: "concrete",
+  wallEraserSize: 1,
   trackPointerPosition: false,
 });
 
@@ -115,7 +116,7 @@ const sample = (x: number, y: number): PointerSample => ({
 });
 
 describe("wall interaction", () => {
-  it("anchors a wall draw and clears it on context cancel", () => {
+  it("anchors a wall draw and keeps it on context menu suppression", () => {
     const { adapter, calls } = createAdapter();
     const anchored = clickWallPane(
       createWallInteractionState(),
@@ -124,16 +125,12 @@ describe("wall interaction", () => {
       sample(10, 10),
     ).state;
 
-    const canceled = contextCancelWallInteraction(
-      anchored,
-      context("wall"),
-      adapter,
-    );
+    const suppressed = suppressWallContextMenu(anchored, context("wall"));
 
     expect(anchored.drawAnchor).toEqual({ x: 10, y: 10 });
-    expect(canceled.handled).toBe(true);
-    expect(canceled.state).toEqual(resetWallInteractionState());
-    expect(calls.setActiveDrawTool).toEqual(["device"]);
+    expect(suppressed.handled).toBe(true);
+    expect(suppressed.state).toBe(anchored);
+    expect(calls.setActiveDrawTool).toEqual([]);
   });
 
   it("clears a wall anchor when the next click is on the same snap point", () => {
@@ -482,6 +479,7 @@ describe("wall interaction", () => {
         fromSnappedPoint: { x: 10, y: 10 },
         toPointer: { x: 30, y: 10 },
         toSnappedPoint: { x: 30, y: 10 },
+        eraserSize: 1,
       },
     ]);
     expect(moved.drawMessage).toBe(null);
@@ -563,5 +561,29 @@ describe("wall interaction", () => {
     expect(clicked.state.erasePreviewKeys).toEqual(["wall-a"]);
     expect(calls.eraseWallAtPointer).toHaveLength(1);
     expect(calls.previewEraseWallAtPointer).toHaveLength(2);
+  });
+
+  it("passes the active eraser size to erase preview, stroke, and click", () => {
+    const { adapter, calls } = createAdapter({ erasePreviewKeys: ["wall-a"] });
+    const eraseContext = { ...context("wall-erase"), wallEraserSize: 3 };
+    const firstMove = moveWallPointer(
+      createWallInteractionState(),
+      eraseContext,
+      adapter,
+      sample(10, 10),
+      1,
+    );
+
+    moveWallPointer(firstMove, eraseContext, adapter, sample(30, 10), 1);
+    clickWallPane(
+      createWallInteractionState(),
+      eraseContext,
+      adapter,
+      sample(50, 10),
+    );
+
+    expect(calls.previewEraseWallAtPointer[0]?.eraserSize).toBe(3);
+    expect(calls.eraseWallStroke[0]?.eraserSize).toBe(3);
+    expect(calls.eraseWallAtPointer[0]?.eraserSize).toBe(3);
   });
 });

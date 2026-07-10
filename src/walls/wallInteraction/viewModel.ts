@@ -1,4 +1,10 @@
-import type { DrawTool, Position, WallColor, WallDraft } from "@/types/map";
+import type {
+  DrawTool,
+  FloorId,
+  Position,
+  WallColor,
+  WallDraft,
+} from "@/types/map";
 import { arePositionsEqual } from "@/walls/gridGeometry/cells";
 import {
   createOrthogonalWallDraft,
@@ -32,6 +38,11 @@ export const getWallInteractionViewModel = (
     context.selectedWallColor,
   ),
   erasePreviewKeys: state.erasePreviewKeys,
+  erasePreviewPointer:
+    context.isEditMode && context.activeDrawTool === "wall-erase"
+      ? state.pointerPosition
+      : null,
+  wallEraserSize: context.wallEraserSize,
   paneCursorClass: computePaneCursorClass(
     context.isEditMode,
     context.activeDrawTool,
@@ -43,7 +54,7 @@ export const getWallInteractionViewModel = (
 const computePreviewSegments = (
   drawAnchor: Position | null,
   pointerPreview: Position | null,
-  currentFloorId: string | null,
+  currentFloorId: FloorId | null,
   activeDrawTool: DrawTool,
   selectedWallColor: WallColor,
 ): Array<WallDraft> => {

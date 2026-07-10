@@ -1,4 +1,7 @@
-import { getWallBlockKey } from "@/walls/gridGeometry/cells";
+import {
+  getWallBlockKey,
+  getWallGeometryKey,
+} from "@/walls/gridGeometry/cells";
 import {
   createOrthogonalWallDraft,
   createRoomWallDrafts,
@@ -6,10 +9,16 @@ import {
   splitWallDraftsIntoBlocks,
 } from "@/walls/gridGeometry/drafts";
 import {
+  buildWallEraseIndex,
   buildWallSnapPath,
-  resolveWallEraseCandidate,
+  resolveWallEraseCandidatesFromIndex,
 } from "@/walls/gridGeometry/erase";
-import type { WallCommandReason, WallDraft, WallSegment } from "@/types/map";
+import type {
+  WallCommandReason,
+  WallDraft,
+  WallId,
+  WallSegment,
+} from "@/types/map";
 import type {
   AddLineCommandInput,
   AddRoomCommandInput,
@@ -17,9 +26,6 @@ import type {
   EraseAtPointerCommandInput,
   EraseStrokeCommandInput,
 } from "./types";
-
-const defaultGenerateWallId = () =>
-  `wall-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
 const asMutableWalls = (
   walls: ReadonlyArray<WallSegment>,
@@ -50,7 +56,7 @@ const addBlocks = (
   walls: ReadonlyArray<WallSegment>,
   blocks: Array<WallDraft>,
   collidesWithBlock: AddLineCommandInput["collidesWithBlock"],
-  generateWallId: () => string,
+  generateWallId: () => WallId,
   invalidReason: WallCommandReason,
 ): EngineResult => {
   if (blocks.length === 0) {
@@ -84,10 +90,13 @@ const addBlocks = (
 
   const nextWalls = [
     ...walls,
-    ...Array.from(stagedByKey.values()).map((block) => ({
-      ...block,
-      id: generateWallId(),
-    })),
+    ...Array.from(stagedByKey.values()).map(
+      (block): WallSegment => ({
+        ...block,
+        id: generateWallId(),
+        geometryKey: getWallGeometryKey(block) ?? "",
+      }),
+    ),
   ];
 
   return changedResult(nextWalls, [...stagedByKey.keys()]);
@@ -111,7 +120,7 @@ export const addLine = (input: AddLineCommandInput): EngineResult => {
     input.walls,
     blocks,
     input.collidesWithBlock,
-    input.generateWallId ?? defaultGenerateWallId,
+    input.generateWallId,
     "invalid-line",
   );
 };
@@ -134,7 +143,7 @@ export const addRoom = (input: AddRoomCommandInput): EngineResult => {
     input.walls,
     blocks,
     input.collidesWithBlock,
-    input.generateWallId ?? defaultGenerateWallId,
+    input.generateWallId,
     "invalid-room",
   );
 };
@@ -143,33 +152,38 @@ const eraseAtPointerCore = (
   input: EraseAtPointerCommandInput,
   previewOnly: boolean,
 ): EngineResult => {
-  const candidate = resolveWallEraseCandidate(
-    input.walls,
-    input.floorId,
+  const eraseIndex =
+    input.eraseIndex ?? buildWallEraseIndex(input.walls, input.floorId);
+  const candidates = resolveWallEraseCandidatesFromIndex(
+    eraseIndex,
     input.pointer,
-    input.snappedPoint,
+    input.eraserSize,
   );
 
-  if (!candidate) {
+  if (candidates.length === 0) {
     return unchangedResult(
       input.walls,
       previewOnly ? "preview-miss" : "no-wall-at-pointer",
     );
   }
 
+  const affectedKeys = candidates.map((candidate) => candidate.key);
+
   if (previewOnly) {
-    return unchangedResult(input.walls, "preview-hit", [candidate.key]);
+    return unchangedResult(input.walls, "preview-hit", affectedKeys);
   }
 
+  const affectedKeySet = new Set(affectedKeys);
+
   const nextWalls = input.walls.filter(
-    (wall) => getWallBlockKey(wall) !== candidate.key,
+    (wall) => !affectedKeySet.has(getWallBlockKey(wall) ?? ""),
   );
 
   if (nextWalls.length === input.walls.length) {
     return unchangedResult(input.walls, "no-wall-at-pointer");
   }
 
-  return changedResult(nextWalls, [candidate.key]);
+  return changedResult(nextWalls, affectedKeys);
 };
 
 export const previewEraseAtPointer = (
@@ -189,42 +203,40 @@ export const eraseStroke = (input: EraseStrokeCommandInput): EngineResult => {
     return unchangedResult(input.walls, "empty-stroke");
   }
 
-  let currentWalls = asMutableWalls(input.walls);
+  // One cell index for the whole stroke: every path step is then an O(cells
+  // under the eraser) lookup, and the walls array is filtered exactly once.
+  const eraseIndex =
+    input.eraseIndex ?? buildWallEraseIndex(input.walls, input.floorId);
   const affectedKeys = new Set<string>();
 
   const maxStep = Math.max(snapPath.length - 1, 1);
 
-  snapPath.forEach((snappedPoint, index) => {
+  snapPath.forEach((_snappedPoint, index) => {
     const t = snapPath.length === 1 ? 1 : index / maxStep;
     const pointer = {
       x: input.fromPointer.x + (input.toPointer.x - input.fromPointer.x) * t,
       y: input.fromPointer.y + (input.toPointer.y - input.fromPointer.y) * t,
     };
 
-    const stepResult = eraseAtPointerCore(
-      {
-        walls: currentWalls,
-        floorId: input.floorId,
-        pointer,
-        snappedPoint,
-      },
-      false,
+    const candidates = resolveWallEraseCandidatesFromIndex(
+      eraseIndex,
+      pointer,
+      input.eraserSize,
+      affectedKeys,
     );
 
-    if (!stepResult.changed) {
-      return;
+    for (const candidate of candidates) {
+      affectedKeys.add(candidate.key);
     }
-
-    currentWalls = stepResult.nextWalls;
-
-    stepResult.affectedKeys.forEach((key) => {
-      affectedKeys.add(key);
-    });
   });
 
   if (affectedKeys.size === 0) {
     return unchangedResult(input.walls, "no-wall-at-pointer");
   }
 
-  return changedResult(currentWalls, [...affectedKeys]);
+  const nextWalls = input.walls.filter(
+    (wall) => !affectedKeys.has(getWallBlockKey(wall) ?? ""),
+  );
+
+  return changedResult(nextWalls, [...affectedKeys]);
 };

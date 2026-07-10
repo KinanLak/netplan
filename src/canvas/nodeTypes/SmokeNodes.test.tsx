@@ -4,7 +4,8 @@ import { ReactFlowProvider } from "@xyflow/react";
 import RackNode from "./RackNode";
 import SwitchNode from "./SwitchNode";
 import WallPortNode from "./WallPortNode";
-import type { Device } from "@/types/map";
+import type { Device, DeviceId } from "@/types/map";
+import type { DeviceNodeData } from "@/devices/reactFlowDeviceAdapter";
 import { buildDevice, seedMapStore } from "../../../test/storeHarness";
 
 const renderWithFlow = (node: React.ReactElement) => {
@@ -20,7 +21,7 @@ const renderWithFlow = (node: React.ReactElement) => {
 const nodeProps = (device: Device) => ({
   id: device.id,
   type: device.type,
-  data: device,
+  data: device as DeviceNodeData,
   positionAbsoluteX: 0,
   positionAbsoluteY: 0,
   selected: false,
@@ -39,7 +40,7 @@ afterEach(() => {
 describe("device node smoke renders", () => {
   it("RackNode shows the device name", () => {
     const device = buildDevice({
-      id: "rack-1",
+      id: "rack-1" as DeviceId,
       type: "rack",
       name: "Rack-A",
       size: { width: 80, height: 160 },
@@ -51,7 +52,7 @@ describe("device node smoke renders", () => {
 
   it("SwitchNode renders the 24 default ports when no ports metadata", () => {
     const device = buildDevice({
-      id: "switch-1",
+      id: "switch-1" as DeviceId,
       type: "switch",
       name: "Switch-A",
       hostname: "sw-a",
@@ -68,7 +69,7 @@ describe("device node smoke renders", () => {
 
   it("WallPortNode renders the device name", () => {
     const device = buildDevice({
-      id: "wp-1",
+      id: "wp-1" as DeviceId,
       type: "wall-port",
       name: "WP-1",
       size: { width: 40, height: 40 },

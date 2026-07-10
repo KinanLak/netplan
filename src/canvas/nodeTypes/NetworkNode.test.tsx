@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { cleanup, render, screen } from "@testing-library/react";
 import NetworkNode from "./NetworkNode";
+import type { DeviceId } from "@/types/map";
 import { seedMapStore } from "../../../test/storeHarness";
 
 afterEach(() => {
@@ -32,7 +33,7 @@ describe("NetworkNode wrapper", () => {
   it("applies a status-specific glow when the device is selected", () => {
     seedMapStore({
       isEditMode: true,
-      selectedDeviceId: "device-1",
+      selectedDeviceId: "device-1" as DeviceId,
       highlightedDeviceIds: [],
       highlightedDeviceIdSet: new Set(),
     });

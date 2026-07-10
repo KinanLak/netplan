@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import type { FloorId } from "@/types/map";
 import { createWallInteractionState } from "./state";
 import { getWallInteractionViewModel } from "./viewModel";
 import type { WallInteractionContext, WallInteractionState } from "./types";
@@ -8,8 +9,9 @@ const makeContext = (
 ): WallInteractionContext => ({
   isEditMode: true,
   activeDrawTool: "wall",
-  currentFloorId: "floor-1",
+  currentFloorId: "floor-1" as FloorId,
   selectedWallColor: "concrete",
+  wallEraserSize: 1,
   trackPointerPosition: true,
   ...overrides,
 });
@@ -47,6 +49,22 @@ describe("wallInteraction view model", () => {
 
     expect(vm.pointerPosition).toEqual({ x: 10, y: 10 });
     expect(vm.pointerSnapPoint).toEqual({ x: 20, y: 20 });
+  });
+
+  it("exposes the eraser pointer and size only for the erase tool", () => {
+    const state = seedDrawing({
+      pointerPosition: { x: 12, y: 18 },
+    });
+
+    const eraseVm = getWallInteractionViewModel(
+      state,
+      makeContext({ activeDrawTool: "wall-erase", wallEraserSize: 4 }),
+    );
+    const wallVm = getWallInteractionViewModel(state, makeContext());
+
+    expect(eraseVm.erasePreviewPointer).toEqual({ x: 12, y: 18 });
+    expect(eraseVm.wallEraserSize).toBe(4);
+    expect(wallVm.erasePreviewPointer).toBe(null);
   });
 
   it("returns no preview segments for the device tool", () => {

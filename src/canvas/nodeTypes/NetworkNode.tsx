@@ -1,4 +1,4 @@
-import type { DeviceStatus } from "@/types/map";
+import type { DeviceId, DeviceStatus } from "@/types/map";
 import { cn } from "@/lib/utils";
 import {
   useIsDeviceHighlighted,
@@ -41,8 +41,9 @@ export default function NetworkNode({
   ref,
 }: NetworkNodeProps) {
   const isEditMode = useIsEditMode();
-  const isSelected = useIsDeviceSelected(id);
-  const isHighlighted = useIsDeviceHighlighted(id);
+  const deviceId = id as DeviceId;
+  const isSelected = useIsDeviceSelected(deviceId);
+  const isHighlighted = useIsDeviceHighlighted(deviceId);
 
   return (
     <div

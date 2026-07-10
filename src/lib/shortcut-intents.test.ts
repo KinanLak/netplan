@@ -11,6 +11,9 @@ import type {
   ShortcutIntentRuntime,
 } from "@/lib/shortcut-intents";
 import type { ShortcutAction } from "@/lib/shortcuts";
+import type { DeviceId } from "@/types/map";
+
+const did = (s: string) => s as DeviceId;
 
 const baseRuntime: ShortcutIntentRuntime = {
   activeDrawTool: "device",
@@ -150,6 +153,45 @@ describe("shortcut intents", () => {
     ).toBe(null);
   });
 
+  it("routes eraser size shortcuts only while the wall eraser is active", () => {
+    const eraseRuntime: ShortcutIntentRuntime = {
+      ...baseRuntime,
+      activeDrawTool: "wall-erase",
+    };
+
+    expect(
+      resolveAction({
+        actions: ["wall-eraser-size-increase"],
+        event: keyEvent({ code: "Equal", key: "+", shiftKey: true }),
+        runtime: eraseRuntime,
+      }),
+    ).toBe("wall-eraser-size-increase");
+
+    expect(
+      resolveAction({
+        actions: ["wall-eraser-size-decrease"],
+        event: keyEvent({ code: "Minus", key: "_", shiftKey: true }),
+        runtime: eraseRuntime,
+      }),
+    ).toBe("wall-eraser-size-decrease");
+
+    expect(
+      resolveAction({
+        actions: ["wall-eraser-size-decrease"],
+        event: keyEvent({ code: "Equal", key: "_", shiftKey: true }),
+        runtime: eraseRuntime,
+      }),
+    ).toBe("wall-eraser-size-decrease");
+
+    expect(
+      resolveAction({
+        actions: ["wall-eraser-size-increase"],
+        event: keyEvent({ code: "Equal", key: "+", shiftKey: true }),
+        runtime: { ...baseRuntime, activeDrawTool: "wall-brush" },
+      }),
+    ).toBe(null);
+  });
+
   it("matches single character shortcuts case-insensitively before physical code fallback", () => {
     expect(
       matchesShortcutBinding(keyEvent({ code: "KeyW", key: "z" }), "Z"),
@@ -173,44 +215,43 @@ describe("shortcut intents", () => {
   });
 
   it("computes connection highlights for selected and hovered devices", () => {
-    const devices = [
-      { id: "a", metadata: { connectedDeviceIds: ["b", "c"] } },
-      { id: "b", metadata: {} },
-      { id: "c", metadata: {} },
+    const links = [
+      { fromDeviceId: did("a"), toDeviceId: did("b") },
+      { fromDeviceId: did("a"), toDeviceId: did("c") },
     ];
 
     expect(
       getNextConnectionHighlightIds({
-        devices,
+        links,
         highlightedDeviceIds: [],
         hoveredDeviceId: null,
-        selectedDeviceId: "a",
+        selectedDeviceId: did("a"),
       }),
-    ).toEqual(["a", "b", "c"]);
+    ).toEqual([did("a"), did("b"), did("c")]);
 
     expect(
       getNextConnectionHighlightIds({
-        devices,
+        links,
         highlightedDeviceIds: [],
-        hoveredDeviceId: "a",
+        hoveredDeviceId: did("a"),
         selectedDeviceId: null,
       }),
-    ).toEqual(["a", "b", "c"]);
+    ).toEqual([did("a"), did("b"), did("c")]);
 
     expect(
       getNextConnectionHighlightIds({
-        devices,
-        highlightedDeviceIds: ["a", "b", "c"],
-        hoveredDeviceId: "a",
+        links,
+        highlightedDeviceIds: [did("a"), did("b"), did("c")],
+        hoveredDeviceId: did("a"),
         selectedDeviceId: null,
       }),
     ).toEqual([]);
 
     expect(
       getNextConnectionHighlightIds({
-        devices,
-        highlightedDeviceIds: ["a", "b", "c"],
-        hoveredDeviceId: "b",
+        links,
+        highlightedDeviceIds: [did("a"), did("b"), did("c")],
+        hoveredDeviceId: did("b"),
         selectedDeviceId: null,
       }),
     ).toEqual([]);

@@ -1,10 +1,13 @@
 import { useReactFlow } from "@xyflow/react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Cancel01Icon, UserIcon, WasteIcon } from "@hugeicons/core-free-icons";
-import type { DeviceStatus } from "@/types/map";
+import type { DeviceId, DeviceStatus } from "@/types/map";
 import { useMapStore } from "@/store/useMapStore";
 import {
-  useDevices,
+  useMapDocumentActions,
+  useMapDocumentData,
+} from "@/map-session/useMapDocument";
+import {
   useHighlightedDeviceIds,
   useIsEditMode,
   useSelectedDeviceId,
@@ -18,6 +21,7 @@ import { getDeviceKindLabel } from "@/devices/deviceKindRegistry";
 import { getNextConnectionHighlightIds } from "@/lib/shortcut-intents";
 import { cn } from "@/lib/utils";
 import { DrawerConnectionsSection } from "@/panels/drawer/DrawerConnectionsSection";
+import type { ConnectedDeviceSummary } from "@/panels/drawer/DrawerConnectionsSection";
 import { DrawerPortsSection } from "@/panels/drawer/DrawerPortsSection";
 
 const statusLabels: Record<DeviceStatus, string> = {
@@ -27,58 +31,77 @@ const statusLabels: Record<DeviceStatus, string> = {
 };
 
 export default function DeviceDrawer() {
-  const devices = useDevices();
   const selectedDeviceId = useSelectedDeviceId();
   const isEditMode = useIsEditMode();
   const highlightedDeviceIds = useHighlightedDeviceIds();
 
   const selectDevice = useMapStore((s) => s.selectDevice);
-  const deleteDevice = useMapStore((s) => s.deleteDevice);
   const setHighlightedDevices = useMapStore((s) => s.setHighlightedDevices);
+
+  const { document } = useMapDocumentData();
+  const { commands } = useMapDocumentActions();
+  const { devices, links } = document;
+  const { deleteDevice } = commands;
 
   const reactFlow = useReactFlow();
 
-  const device = devices.find((d) => d.id === selectedDeviceId);
+  const deviceById = new Map(devices.map((item) => [item.id, item]));
+  const device = selectedDeviceId
+    ? deviceById.get(selectedDeviceId)
+    : undefined;
 
-  // Get connected devices
-  const connectedDevices =
-    device?.metadata.connectedDeviceIds
-      ?.map((id) => devices.find((d) => d.id === id))
-      .filter((d): d is (typeof devices)[number] => d !== undefined) ?? [];
+  const connectedDevices: Array<ConnectedDeviceSummary> = (() => {
+    if (!device) return [];
+    const seen = new Set<DeviceId>();
+    const out: Array<ConnectedDeviceSummary> = [];
+    for (const link of links) {
+      const otherId =
+        link.fromDeviceId === device.id
+          ? link.toDeviceId
+          : link.toDeviceId === device.id
+            ? link.fromDeviceId
+            : null;
+      if (!otherId || seen.has(otherId)) continue;
+      seen.add(otherId);
+      const other = deviceById.get(otherId);
+      if (!other) continue;
+      out.push({
+        id: other.id,
+        name: other.name,
+        type: other.type,
+        status: other.metadata.status ?? "unknown",
+      });
+    }
+    return out;
+  })();
 
-  // Check if the currently highlighted devices belong to this device
   const isCurrentDeviceHighlighted = (() => {
-    if (
-      !device?.metadata.connectedDeviceIds ||
-      highlightedDeviceIds.length === 0
-    )
-      return false;
-    // Check if highlighted devices include this device and its connections
-    const allIds = [device.id, ...device.metadata.connectedDeviceIds];
-    return allIds.every((id) => highlightedDeviceIds.includes(id));
+    if (!device || connectedDevices.length === 0) return false;
+    if (highlightedDeviceIds.length === 0) return false;
+    const highlightedIdSet = new Set(highlightedDeviceIds);
+    const allIds = [device.id, ...connectedDevices.map((c) => c.id)];
+    return allIds.every((id) => highlightedIdSet.has(id));
   })();
 
   const handleHighlightConnections = () => {
-    const nextHighlightedDeviceIds = getNextConnectionHighlightIds({
-      devices,
+    const next = getNextConnectionHighlightIds({
+      links,
       highlightedDeviceIds,
       hoveredDeviceId: null,
       selectedDeviceId,
     });
 
-    if (nextHighlightedDeviceIds) {
-      setHighlightedDevices(nextHighlightedDeviceIds);
+    if (next) {
+      setHighlightedDevices(next);
     }
   };
 
-  const handleSelectConnected = (deviceId: string) => {
+  const handleSelectConnected = (deviceId: DeviceId) => {
     const targetDevice = devices.find((d) => d.id === deviceId);
     if (targetDevice) {
-      // Smooth camera movement to the target device
       const centerX = targetDevice.position.x + targetDevice.size.width / 2;
       const centerY = targetDevice.position.y + targetDevice.size.height / 2;
       const currentZoom = reactFlow.getZoom();
-
       reactFlow.setCenter(centerX, centerY, {
         duration: 500,
         zoom: currentZoom,
@@ -107,7 +130,6 @@ export default function DeviceDrawer() {
 
   return (
     <aside className="absolute top-0 right-0 z-20 flex h-full w-80 flex-col border-l border-border bg-card shadow-xl">
-      {/* Header */}
       <header className="space-y-3 bg-linear-to-t from-muted to-card px-4 py-4">
         <div className="flex items-start justify-between">
           <div className="min-w-0 flex-1">
@@ -134,7 +156,6 @@ export default function DeviceDrawer() {
           </Button>
         </div>
 
-        {/* Status badge */}
         <span
           className={cn(
             "inline-flex w-fit items-center gap-2 rounded-full border py-1.5 pr-3 pl-2 text-sm font-medium",
@@ -149,10 +170,8 @@ export default function DeviceDrawer() {
         </span>
       </header>
 
-      {/* Content */}
       <ScrollArea className="flex-1">
         <div className="space-y-4 px-4 py-4">
-          {/* Hostname & IP */}
           {device.hostname || device.metadata.ip ? (
             <section>
               <h3 className="mb-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
@@ -179,7 +198,6 @@ export default function DeviceDrawer() {
             </section>
           ) : null}
 
-          {/* Last user (for PCs) */}
           {device.type === "pc" && device.metadata.lastUser ? (
             <section>
               <h3 className="mb-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
@@ -206,7 +224,6 @@ export default function DeviceDrawer() {
             </section>
           ) : null}
 
-          {/* Model */}
           {device.metadata.model ? (
             <section>
               <h3 className="mb-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
@@ -218,7 +235,6 @@ export default function DeviceDrawer() {
             </section>
           ) : null}
 
-          {/* Connected devices */}
           <DrawerConnectionsSection
             connectedDevices={connectedDevices}
             isCurrentDeviceHighlighted={isCurrentDeviceHighlighted}
@@ -226,12 +242,10 @@ export default function DeviceDrawer() {
             onSelectConnected={handleSelectConnected}
           />
 
-          {/* Ports (for switches) */}
           {device.type === "switch" && device.metadata.ports ? (
             <DrawerPortsSection ports={device.metadata.ports} />
           ) : null}
 
-          {/* Position */}
           <section>
             <h3 className="mb-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
               Position
@@ -254,7 +268,6 @@ export default function DeviceDrawer() {
         </div>
       </ScrollArea>
 
-      {/* Footer actions */}
       {isEditMode ? (
         <footer className="space-y-2 border-t border-border bg-muted p-4">
           <Button

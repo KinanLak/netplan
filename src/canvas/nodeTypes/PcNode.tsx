@@ -5,10 +5,11 @@ import { ComputerIcon, UserIcon } from "@hugeicons/core-free-icons";
 import NetworkNode from "./NetworkNode";
 import { areDeviceNodePropsEqual } from "./memo";
 import type { Node, NodeProps } from "@xyflow/react";
-import type { Device, DeviceStatus } from "@/types/map";
+import type { DeviceStatus } from "@/types/map";
+import type { DeviceNodeData } from "@/devices/reactFlowDeviceAdapter";
 import { StatusDot } from "@/components/StatusDot";
 
-type PcNodeType = Node<Device>;
+type PcNodeType = Node<DeviceNodeData>;
 
 function PcNode({ data: device, id }: NodeProps<PcNodeType>) {
   const status: DeviceStatus = device.metadata.status ?? "unknown";

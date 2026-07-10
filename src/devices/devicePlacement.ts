@@ -1,6 +1,6 @@
 import { CANVAS_DEVICE_NEAREST_POSITION_MAX_RADIUS } from "@/lib/constants";
 import { GRID_SIZE } from "@/lib/grid";
-import type { Position, Size } from "@/types/map";
+import type { DeviceId, FloorId, Position, Size } from "@/types/map";
 
 type PlacementStatus = "exact" | "relocated" | "reused-last-valid";
 
@@ -17,14 +17,14 @@ type PlacementResolution = {
 export type DevicePlacementRequest =
   | {
       kind: "add";
-      floorId: string;
+      floorId: FloorId;
       requestedPosition: Position;
       size: Size;
     }
   | {
       kind: "drag";
-      deviceId: string;
-      floorId: string;
+      deviceId: DeviceId;
+      floorId: FloorId;
       requestedPosition: Position;
       size: Size;
       startPosition: Position;
@@ -43,13 +43,13 @@ export type DevicePlacementResult =
 
 export interface DevicePlacement {
   resolve: (request: DevicePlacementRequest) => DevicePlacementResult;
-  commitDrag: (deviceId: string) => Position | null;
+  commitDrag: (deviceId: DeviceId) => Position | null;
 }
 
 interface CreateDevicePlacementOptions {
   checkCollision: (
-    floorId: string,
-    deviceId: string,
+    floorId: FloorId,
+    deviceId: DeviceId,
     position: Position,
     size: Size,
   ) => boolean;
@@ -76,8 +76,8 @@ const dedupePositions = (positions: Array<Position>): Array<Position> => {
 
 const resolvePosition = (
   options: CreateDevicePlacementOptions,
-  floorId: string,
-  deviceId: string,
+  floorId: FloorId,
+  deviceId: DeviceId,
   requestedPosition: Position,
   size: Size,
 ): PlacementResolution | null => {
@@ -143,7 +143,7 @@ const resolvePosition = (
 export const createDevicePlacement = (
   options: CreateDevicePlacementOptions,
 ): DevicePlacement => {
-  const dragSessions = new Map<string, DragSession>();
+  const dragSessions = new Map<DeviceId, DragSession>();
   const gridSize = options.gridSize ?? GRID_SIZE;
 
   return {
@@ -152,7 +152,7 @@ export const createDevicePlacement = (
         const resolvedPosition = resolvePosition(
           options,
           request.floorId,
-          "",
+          "" as DeviceId,
           request.requestedPosition,
           request.size,
         );

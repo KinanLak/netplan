@@ -1,14 +1,21 @@
-import type { Device } from "@/types/map";
+import type { DeviceId, DeviceStatus, DeviceType } from "@/types/map";
 import { Button } from "@/components/ui/button";
 import { ShortcutHintInline } from "@/components/ui/shortcut-hint";
 import { StatusDot } from "@/components/StatusDot";
 import { getDeviceKindLabel } from "@/devices/deviceKindRegistry";
 
+export interface ConnectedDeviceSummary {
+  id: DeviceId;
+  name: string;
+  type: DeviceType;
+  status: DeviceStatus;
+}
+
 interface DrawerConnectionsSectionProps {
-  connectedDevices: Array<Device>;
+  connectedDevices: Array<ConnectedDeviceSummary>;
   isCurrentDeviceHighlighted: boolean;
   onHighlightConnections: () => void;
-  onSelectConnected: (deviceId: string) => void;
+  onSelectConnected: (deviceId: DeviceId) => void;
 }
 
 export function DrawerConnectionsSection({
@@ -55,7 +62,7 @@ export function DrawerConnectionsSection({
                   {getDeviceKindLabel(connDevice.type)}
                 </div>
               </div>
-              <StatusDot status={connDevice.metadata.status ?? "unknown"} />
+              <StatusDot status={connDevice.status} />
             </div>
           </button>
         ))}

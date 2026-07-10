@@ -6,6 +6,7 @@ import type {
 import { arePositionsEqual } from "@/walls/gridGeometry/cells";
 import { createBrushWallDraft } from "@/walls/gridGeometry/drafts";
 import { toLineFailureMessage, toRoomFailureMessage } from "./messages";
+import { stabilizeWallInteractionState } from "./state";
 import type {
   PointerSample,
   WallInteractionAdapter,
@@ -15,6 +16,18 @@ import type {
 } from "./types";
 
 export const moveWallPointer = (
+  state: WallInteractionState,
+  context: WallInteractionContext,
+  adapter: WallInteractionAdapter,
+  sample: PointerSample,
+  buttons: number,
+): WallInteractionState =>
+  stabilizeWallInteractionState(
+    state,
+    computeMovedWallPointer(state, context, adapter, sample, buttons),
+  );
+
+const computeMovedWallPointer = (
   state: WallInteractionState,
   context: WallInteractionContext,
   adapter: WallInteractionAdapter,
@@ -44,6 +57,19 @@ export const moveWallPointer = (
 };
 
 export const clickWallPane = (
+  state: WallInteractionState,
+  context: WallInteractionContext,
+  adapter: WallInteractionAdapter,
+  sample: PointerSample,
+): WallInteractionResult => {
+  const result = computeClickedWallPane(state, context, adapter, sample);
+  return {
+    state: stabilizeWallInteractionState(state, result.state),
+    handled: result.handled,
+  };
+};
+
+const computeClickedWallPane = (
   state: WallInteractionState,
   context: WallInteractionContext,
   adapter: WallInteractionAdapter,
@@ -83,7 +109,11 @@ const applyPointerTracking = (
   context: WallInteractionContext,
   sample: PointerSample,
 ): WallInteractionState => {
-  if (!context.trackPointerPosition) {
+  // The raw pointer is only rendered by the debug panel and the eraser
+  // preview; skipping it elsewhere lets same-cell moves keep state identity.
+  const isPointerRendered =
+    context.trackPointerPosition || context.activeDrawTool === "wall-erase";
+  if (!isPointerRendered) {
     return state;
   }
 
@@ -107,6 +137,7 @@ const previewErase = (
     floorId: context.currentFloorId,
     pointer: sample.pointer,
     snappedPoint: sample.snappedPoint,
+    eraserSize: context.wallEraserSize,
   }).affectedKeys;
 };
 
@@ -176,6 +207,7 @@ const moveErasePointer = (
     fromSnappedPoint: previous.snappedPoint,
     toPointer: sample.pointer,
     toSnappedPoint: sample.snappedPoint,
+    eraserSize: context.wallEraserSize,
   });
 
   return {
@@ -267,6 +299,7 @@ const clickErasePane = (
     floorId: context.currentFloorId,
     pointer: sample.pointer,
     snappedPoint: sample.snappedPoint,
+    eraserSize: context.wallEraserSize,
   });
 
   return {

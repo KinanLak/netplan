@@ -233,6 +233,26 @@ button:hover {
   cursor: grabbing !important;
 }
 
+.flow-canvas-background {
+  overflow: hidden;
+}
+
+.flow-canvas-background-layer {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(
+    circle at center,
+    var(--flow-canvas-background-color) 0
+      var(--flow-canvas-background-dot-radius),
+    transparent calc(var(--flow-canvas-background-dot-radius) + 0.5px)
+  );
+  background-position: var(--flow-canvas-background-position-x)
+    var(--flow-canvas-background-position-y);
+  background-size: var(--flow-canvas-background-gap)
+    var(--flow-canvas-background-gap);
+  will-change: background-position, background-size, opacity;
+}
+
 .react-flow__pane.dragging ~ .react-flow__viewport .network-node,
 .react-flow__pane.dragging ~ .react-flow__viewport .network-node * {
   cursor: grabbing !important;

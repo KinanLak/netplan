@@ -5,10 +5,11 @@ import { memo } from "react";
 import NetworkNode from "./NetworkNode";
 import { areDeviceNodePropsEqual } from "./memo";
 import type { Node, NodeProps } from "@xyflow/react";
-import type { Device, DeviceStatus } from "@/types/map";
+import type { DeviceStatus } from "@/types/map";
+import type { DeviceNodeData } from "@/devices/reactFlowDeviceAdapter";
 import { cn } from "@/lib/utils";
 
-type WallPortNodeType = Node<Device>;
+type WallPortNodeType = Node<DeviceNodeData>;
 
 function WallPortNode({ data: device, id }: NodeProps<WallPortNodeType>) {
   const status: DeviceStatus = device.metadata.status ?? "unknown";

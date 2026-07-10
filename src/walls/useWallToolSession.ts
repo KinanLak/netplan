@@ -1,24 +1,34 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { useReactFlow } from "@xyflow/react";
 import type { Position, WallDraft } from "@/types/map";
+import { useShortcutIntentEffect } from "@/hooks/use-shortcuts";
+import { clampWallEraserSize } from "@/lib/constants";
 import { useMapStore } from "@/store/useMapStore";
 import {
   useActiveDrawTool,
   useCurrentFloorId,
   useIsEditMode,
   useSelectedWallColor,
+  useWallEraserSize,
 } from "@/store/selectors";
+import { useMapDocumentActions } from "@/map-session/useMapDocument";
 import { snapPositionToWallGrid } from "@/walls/gridGeometry";
 import {
   cancelWallTool,
   clickWallPane,
-  contextCancelWallInteraction,
   createWallInteractionState,
   getWallInteractionViewModel,
   moveWallPointer,
   releaseWallPointer,
   resetWallInteractionState,
+  suppressWallContextMenu,
 } from "@/walls/wallInteraction";
 import type {
   PointerSample,
@@ -36,6 +46,8 @@ export interface WallToolSession {
   drawMessage: string | null;
   previewSegments: Array<WallDraft>;
   erasePreviewKeys: Array<string>;
+  erasePreviewPointer: Position | null;
+  wallEraserSize: number;
   paneCursorClass: string;
   isDebugPanelVisible: boolean;
   toggleDebugPanel: () => void;
@@ -52,18 +64,14 @@ export const useWallToolSession = (): WallToolSession => {
   const activeDrawTool = useActiveDrawTool();
   const currentFloorId = useCurrentFloorId();
   const selectedWallColor = useSelectedWallColor();
+  const wallEraserSize = useWallEraserSize();
   const [isDebugVisible, setIsDebugVisible] = useState(false);
   const isDebugPanelVisible =
     isEditMode && activeDrawTool !== "device" && isDebugVisible;
 
   const setActiveDrawTool = useMapStore((state) => state.setActiveDrawTool);
-  const addWallLine = useMapStore((state) => state.addWallLine);
-  const addWallRoom = useMapStore((state) => state.addWallRoom);
-  const eraseWallAtPointer = useMapStore((state) => state.eraseWallAtPointer);
-  const eraseWallStroke = useMapStore((state) => state.eraseWallStroke);
-  const previewEraseWallAtPointer = useMapStore(
-    (state) => state.previewEraseWallAtPointer,
-  );
+  const setWallEraserSize = useMapStore((state) => state.setWallEraserSize);
+  const { commands } = useMapDocumentActions();
 
   const [interactionState, setInteractionState] = useState(
     createWallInteractionState,
@@ -80,16 +88,17 @@ export const useWallToolSession = (): WallToolSession => {
     activeDrawTool,
     currentFloorId,
     selectedWallColor,
+    wallEraserSize,
     trackPointerPosition: isDebugPanelVisible,
   };
 
   const adapter: WallInteractionAdapter = {
     setActiveDrawTool,
-    addWallLine,
-    addWallRoom,
-    eraseWallAtPointer,
-    eraseWallStroke,
-    previewEraseWallAtPointer,
+    addWallLine: commands.addWallLine,
+    addWallRoom: commands.addWallRoom,
+    eraseWallAtPointer: commands.eraseWallAtPointer,
+    eraseWallStroke: commands.eraseWallStroke,
+    previewEraseWallAtPointer: commands.previewEraseWallAtPointer,
   };
 
   const commitInteractionState = (nextState: WallInteractionState) => {
@@ -97,35 +106,55 @@ export const useWallToolSession = (): WallToolSession => {
     setInteractionState(nextState);
   };
 
-  const closeHistoryGroup = () => {
-    if (!isHistoryGroupOpenRef.current) {
+  const resizeWallEraser = (nextSize: number) => {
+    const clampedSize = clampWallEraserSize(nextSize);
+    setWallEraserSize(clampedSize);
+
+    const currentState = stateRef.current;
+    if (
+      activeDrawTool !== "wall-erase" ||
+      !currentFloorId ||
+      !currentState.pointerPosition ||
+      !currentState.pointerSnapPoint
+    ) {
       return;
     }
 
-    useMapStore.temporal.getState().resume();
-    isHistoryGroupOpenRef.current = false;
+    const preview = commands.previewEraseWallAtPointer({
+      floorId: currentFloorId,
+      pointer: currentState.pointerPosition,
+      snappedPoint: currentState.pointerSnapPoint,
+      eraserSize: clampedSize,
+    });
+
+    commitInteractionState({
+      ...currentState,
+      erasePreviewKeys: preview.affectedKeys,
+    });
   };
 
-  const syncStrokeHistoryGroup = (
-    nextState: WallInteractionState,
-    previousWalls: ReturnType<typeof useMapStore.getState>["walls"],
-  ) => {
-    const isStrokeActive =
-      nextState.isBrushStrokeActive || nextState.isEraseStrokeActive;
+  useShortcutIntentEffect("wall-eraser-size-increase", () => {
+    resizeWallEraser(useMapStore.getState().wallEraserSize + 1);
+  });
 
-    if (!isStrokeActive) {
-      closeHistoryGroup();
-      return;
-    }
+  useShortcutIntentEffect("wall-eraser-size-decrease", () => {
+    resizeWallEraser(useMapStore.getState().wallEraserSize - 1);
+  });
 
-    if (isHistoryGroupOpenRef.current) {
-      return;
-    }
+  const closeHistoryGroup = useCallback(() => {
+    if (!isHistoryGroupOpenRef.current) return;
+    commands.endHistoryGroup();
+    isHistoryGroupOpenRef.current = false;
+  }, [commands]);
 
-    if (previousWalls !== useMapStore.getState().walls) {
-      useMapStore.temporal.getState().pause();
-      isHistoryGroupOpenRef.current = true;
-    }
+  const openStrokeHistoryGroup = (buttons: number) => {
+    const isStrokeTool =
+      activeDrawTool === "wall-brush" || activeDrawTool === "wall-erase";
+    const isPrimaryButtonPressed = (buttons & 1) === 1;
+    if (!isStrokeTool || !isPrimaryButtonPressed) return;
+    if (isHistoryGroupOpenRef.current) return;
+    commands.beginHistoryGroup();
+    isHistoryGroupOpenRef.current = true;
   };
 
   const getPointerSample = (event: ReactMouseEvent): PointerSample => {
@@ -148,7 +177,7 @@ export const useWallToolSession = (): WallToolSession => {
     () => () => {
       closeHistoryGroup();
     },
-    [drawContextKey],
+    [drawContextKey, closeHistoryGroup],
   );
 
   if (previousDrawContextKey !== drawContextKey) {
@@ -163,6 +192,7 @@ export const useWallToolSession = (): WallToolSession => {
       activeDrawTool,
       currentFloorId,
       selectedWallColor,
+      wallEraserSize,
       trackPointerPosition: isDebugPanelVisible,
     };
 
@@ -182,10 +212,12 @@ export const useWallToolSession = (): WallToolSession => {
     };
   }, [
     activeDrawTool,
+    closeHistoryGroup,
     currentFloorId,
     isDebugPanelVisible,
     isEditMode,
     selectedWallColor,
+    wallEraserSize,
   ]);
 
   const toggleDebugPanel = () => {
@@ -198,7 +230,7 @@ export const useWallToolSession = (): WallToolSession => {
   };
 
   const handlePaneMouseMove = (event: ReactMouseEvent) => {
-    const previousWalls = useMapStore.getState().walls;
+    openStrokeHistoryGroup(event.buttons);
     const nextState = moveWallPointer(
       stateRef.current,
       context,
@@ -207,7 +239,6 @@ export const useWallToolSession = (): WallToolSession => {
       event.buttons,
     );
 
-    syncStrokeHistoryGroup(nextState, previousWalls);
     commitInteractionState(nextState);
   };
 
@@ -224,11 +255,7 @@ export const useWallToolSession = (): WallToolSession => {
   };
 
   const handleContextMenu = (event: ReactMouseEvent | MouseEvent): boolean => {
-    const result = contextCancelWallInteraction(
-      stateRef.current,
-      context,
-      adapter,
-    );
+    const result = suppressWallContextMenu(stateRef.current, context);
 
     if (result.handled) {
       event.preventDefault();

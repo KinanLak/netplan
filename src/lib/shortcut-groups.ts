@@ -55,7 +55,14 @@ export const shortcutGroups: Array<ShortcutGroup> = [
     id: "build-tools",
     title: "Outils - Construction",
     orderPriority: 60,
-    actions: ["tool-wall", "tool-room", "tool-wall-brush", "tool-wall-erase"],
+    actions: [
+      "tool-wall",
+      "tool-room",
+      "tool-wall-brush",
+      "tool-wall-erase",
+      "wall-eraser-size-increase",
+      "wall-eraser-size-decrease",
+    ],
   },
   {
     id: "floor-navigation",

@@ -1,23 +1,26 @@
 import { describe, expect, it } from "bun:test";
-import type { WallSegment } from "@/types/map";
+import type { FloorId, WallId, WallSegment } from "@/types/map";
 import {
   computeMergedWallGroups,
   computeSingleWallPath,
+  computeWallRectUnionPath,
   getWallBlockKey,
   getWallCellRect,
   getWallCollisionRect,
+  getWallEraserRect,
   resolveWallEraseCandidate,
 } from "@/walls/gridGeometry";
 import { getWallRenderRect } from "@/walls/gridGeometry/render";
 
-const floorId = "floor-a";
+const floorId = "floor-a" as FloorId;
 
 const wall: WallSegment = {
-  id: "wall-1",
+  id: "wall-1" as WallId,
   floorId,
   start: { x: 10, y: 10 },
   end: { x: 10, y: 10 },
   color: "concrete",
+  geometryKey: `${floorId}:10:10`,
 };
 
 describe("wall grid geometry", () => {
@@ -120,5 +123,30 @@ describe("wall grid geometry", () => {
 
   it("returns no merged groups for an empty wall list", () => {
     expect(computeMergedWallGroups([])).toEqual([]);
+  });
+
+  it("snaps the square eraser rect to wall cell bounds from the pointer", () => {
+    expect(getWallEraserRect({ x: 25, y: 35 }, 3)).toEqual({
+      x: 0,
+      y: 0,
+      width: 60,
+      height: 60,
+    });
+
+    expect(getWallEraserRect({ x: 25, y: 35 }, 2)).toEqual({
+      x: 0,
+      y: 20,
+      width: 40,
+      height: 40,
+    });
+  });
+
+  it("renders arbitrary rectangles with the same rounded wall union renderer", () => {
+    const path = computeWallRectUnionPath([
+      { x: 0, y: 0, width: 40, height: 40 },
+    ]);
+
+    expect(path).toContain("Q");
+    expect(path).toContain("Z");
   });
 });
