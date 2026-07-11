@@ -1,3 +1,4 @@
+import { act } from "@testing-library/react";
 import type { Device, DeviceId, FloorId, MapStore } from "@/types/map";
 import { useMapStore } from "@/store/useMapStore";
 
@@ -18,7 +19,11 @@ export type MapStoreSeed = Partial<
 >;
 
 export const seedMapStore = (seed: MapStoreSeed) => {
-  useMapStore.setState(seed);
+  // Wrap in act() so seeding while a subscribed component is mounted flushes
+  // the resulting React update instead of tripping the act(...) warning.
+  act(() => {
+    useMapStore.setState(seed);
+  });
 };
 
 export const buildDevice = (overrides: Partial<Device> = {}): Device => ({
