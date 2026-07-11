@@ -1,12 +1,5 @@
 import { create } from "zustand";
-import type {
-  BuildingId,
-  DeviceId,
-  DrawTool,
-  FloorId,
-  MapStore,
-  WallColor,
-} from "@/types/map";
+import type { BuildingId, DeviceId, FloorId, MapStore } from "@/types/map";
 import { WALL_ERASER_DEFAULT_SIZE, clampWallEraserSize } from "@/lib/constants";
 
 const EMPTY_HIGHLIGHT_SET: ReadonlySet<DeviceId> = new Set<DeviceId>();
@@ -24,8 +17,8 @@ export const useMapStore = create<MapStore>()((set) => ({
   isEditMode: true,
   highlightedDeviceIds: [],
   highlightedDeviceIdSet: toHighlightedDeviceIdSet([]),
-  activeDrawTool: "device" as DrawTool,
-  selectedWallColor: "concrete" as WallColor,
+  activeDrawTool: "device",
+  selectedWallColor: "concrete",
   wallEraserSize: WALL_ERASER_DEFAULT_SIZE,
 
   setCurrentBuilding: (buildingId: BuildingId | null) => {

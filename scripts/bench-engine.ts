@@ -155,7 +155,7 @@ group("pending operation reconciliation (nothing to remove)", () => {
   const observations = entries.map((entry) => ({
     status: "applied" as const,
     opId: entry.operation.meta.opId,
-    floorId: BENCH_FLOOR_ID as string,
+    floorId: BENCH_FLOOR_ID,
     appliedRevision: 2,
   }));
 
@@ -177,7 +177,7 @@ const identityProbe = () => {
     {
       status: "applied",
       opId: entries[0].operation.meta.opId,
-      floorId: BENCH_FLOOR_ID as string,
+      floorId: BENCH_FLOOR_ID,
       appliedRevision: 2,
     },
   ]);

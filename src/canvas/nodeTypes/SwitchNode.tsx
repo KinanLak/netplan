@@ -21,7 +21,7 @@ function SwitchNode({ data: device, id }: NodeProps<SwitchNodeType>) {
       : Array.from({ length: 24 }, (_, i) => ({
           id: `port-${i + 1}`,
           number: i + 1,
-          status: "unknown" as DeviceStatus,
+          status: "unknown",
         }));
 
   return (

@@ -57,7 +57,7 @@ const applyBatch = (
 const withParentMeta = (
   operation: BatchSubOperation,
   meta: MapOperation["meta"],
-): MapOperation => ({ ...operation, meta }) as MapOperation;
+): MapOperation => ({ ...operation, meta });
 
 const isSafeBatchNoop = (
   operation: MapOperation,

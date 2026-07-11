@@ -11,7 +11,7 @@ const stripMeta = (operation: MapOperation): BatchSubOperation | null => {
 const withMeta = (
   operation: BatchSubOperation,
   meta: MapOperation["meta"],
-): MapOperation => ({ ...operation, meta }) as MapOperation;
+): MapOperation => ({ ...operation, meta });
 
 const invertDevicePatch = (
   snapshot: MapDocumentSnapshot,

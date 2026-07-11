@@ -117,7 +117,7 @@ export function validateOperation(
         const result = validateOperation(snapshot, {
           ...subOperation,
           meta: operation.meta,
-        } as MapOperation);
+        });
         if (!result.valid) return result;
       }
       return valid();

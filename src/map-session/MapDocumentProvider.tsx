@@ -711,8 +711,7 @@ export function MapDocumentProvider({
   type ApplyMutationArgs = Parameters<typeof applyMutation>[0];
   const toServerOperation = (
     operation: MapOperation,
-  ): ApplyMutationArgs["operation"] =>
-    operation as ApplyMutationArgs["operation"];
+  ): ApplyMutationArgs["operation"] => operation;
   const convexConnectionState = useConvexConnectionState();
   // One subscription per collection: an edit only pushes the collection it
   // touched (and the revision), so moving a device never re-sends the walls.

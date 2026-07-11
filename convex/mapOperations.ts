@@ -286,10 +286,7 @@ const collectOperationScope = (
       break;
     case "batch":
       for (const subOperation of operation.operations) {
-        collectOperationScope(
-          { ...subOperation, meta: operation.meta } as OperationInput,
-          scope,
-        );
+        collectOperationScope({ ...subOperation, meta: operation.meta }, scope);
       }
       break;
   }
@@ -827,7 +824,7 @@ const planOperation = (
         const error = planOperation(state, {
           ...subOperation,
           meta: operation.meta,
-        } as OperationInput);
+        });
         if (error) return error;
       }
       return null;
@@ -902,7 +899,7 @@ const operationFloorId = (operation: OperationInput): string | undefined => {
         ? operationFloorId({
             ...operation.operations[0],
             meta: operation.meta,
-          } as OperationInput)
+          })
         : undefined;
     case "device.patch":
     case "device.delete":
@@ -974,7 +971,7 @@ export const apply = mutation({
     const planningOperation = {
       ...operation,
       meta: { ...operation.meta, createdAt: now },
-    } as OperationInput;
+    };
     const state = await buildPlanningState(ctx, planningOperation);
     const planningError = planOperation(state, planningOperation);
     const error = planningError ?? validateSingleAffectedFloor(state);

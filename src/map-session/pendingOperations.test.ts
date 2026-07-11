@@ -73,14 +73,14 @@ describe("appendPendingOperation", () => {
     );
 
     expect(second).toHaveLength(1);
-    const operation = second[0].operation;
-    expect(operation.kind).toBe("walls.add");
-    if (operation.kind === "walls.add") {
-      expect(operation.walls).toHaveLength(2);
+    const merged = second[0].operation;
+    expect(merged.kind).toBe("walls.add");
+    if (merged.kind === "walls.add") {
+      expect(merged.walls).toHaveLength(2);
     }
     // The merged entry keeps the first operation's identity so history-group
     // replacement by source op ids still matches it.
-    expect(operation.meta.opId).toBe(wallsAddOperation(1, floorA).meta.opId);
+    expect(merged.meta.opId).toBe(wallsAddOperation(1, floorA).meta.opId);
   });
 
   it("merges consecutive deferred walls.delete operations of a stroke", () => {
@@ -98,9 +98,9 @@ describe("appendPendingOperation", () => {
     );
 
     expect(second).toHaveLength(1);
-    const operation = second[0].operation;
-    if (operation.kind === "walls.delete") {
-      expect(operation.wallIds).toHaveLength(2);
+    const merged = second[0].operation;
+    if (merged.kind === "walls.delete") {
+      expect(merged.wallIds).toHaveLength(2);
     } else {
       throw new Error("expected a walls.delete operation");
     }
