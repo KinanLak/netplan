@@ -16,7 +16,7 @@
     "desktop:build:dev": "bun run build && NETPLAN_ELECTROBUN_INCLUDE_WEB_BUILD=1 electrobun build",
     "desktop:dev:build": "bun run desktop:build:dev",
     "bench:engine": "bun run scripts/bench-engine.ts",
-    "perf:render": "bun test test/perf/renderCounts.test.tsx"
+    "perf:render": "PERF_STATS_LOG=1 bun test test/perf/renderCounts.test.tsx"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

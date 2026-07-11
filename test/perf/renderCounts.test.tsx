@@ -87,8 +87,12 @@ afterEach(() => {
 });
 
 afterAll(() => {
+  // The stats dump is for perf sessions (`bun run perf:render`), not the
+  // regular test sweep — only the assertions run there.
   const payload = JSON.stringify(collected, null, 2);
-  console.log(`PERF_RENDER_STATS ${payload}`);
+  if (process.env.PERF_STATS_LOG) {
+    console.log(`PERF_RENDER_STATS ${payload}`);
+  }
   if (process.env.PERF_STATS_PATH) {
     writeFileSync(process.env.PERF_STATS_PATH, payload);
   }
