@@ -64,16 +64,20 @@ export function UserAvatarStack({
   const sizeClass = SIZE_CLASSES[size];
 
   return (
-    <span
-      className={cn(
-        "flex flex-row-reverse items-center justify-end",
-        className,
-      )}
-    >
+    <span className={cn("flex items-center -space-x-1.5", className)}>
+      {visible.map((user, index) => (
+        <UserAvatar
+          key={user.clientId}
+          displayName={user.displayName}
+          colorHue={user.colorHue}
+          className={sizeClass}
+          style={{ zIndex: visible.length - index }}
+        />
+      ))}
       {hiddenCount > 0 ? (
         <span
           className={cn(
-            "-ml-1.5 flex items-center justify-center rounded-full border border-sidebar-border bg-muted font-semibold text-muted-foreground shadow-sm",
+            "flex items-center justify-center rounded-full border border-sidebar-border bg-muted font-semibold text-muted-foreground shadow-sm",
             sizeClass,
           )}
           title={`${hiddenCount} autre${hiddenCount > 1 ? "s" : ""}`}
@@ -81,15 +85,6 @@ export function UserAvatarStack({
           +{hiddenCount}
         </span>
       ) : null}
-      {visible.toReversed().map((user, index) => (
-        <UserAvatar
-          key={user.clientId}
-          displayName={user.displayName}
-          colorHue={user.colorHue}
-          className={cn("-ml-1.5", sizeClass)}
-          style={{ zIndex: index + 1 }}
-        />
-      ))}
     </span>
   );
 }
