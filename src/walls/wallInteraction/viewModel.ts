@@ -42,6 +42,10 @@ export const getWallInteractionViewModel = (
     context.isEditMode && context.activeDrawTool === "wall-erase"
       ? state.pointerPosition
       : null,
+  isEraseStrokeActive:
+    context.isEditMode &&
+    context.activeDrawTool === "wall-erase" &&
+    state.isEraseStrokeActive,
   wallEraserSize: context.wallEraserSize,
   paneCursorClass: computePaneCursorClass(
     context.isEditMode,

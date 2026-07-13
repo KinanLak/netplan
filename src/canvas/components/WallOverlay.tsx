@@ -160,7 +160,7 @@ function useAnimatedPosition(target: Position | null): Position | null {
   return animatedPosition;
 }
 
-function useAnimatedRect(target: Rect | null): Rect | null {
+function useAnimatedRect(target: Rect | null, immediate = false): Rect | null {
   const [animatedRect, setAnimatedRect] = useState<Rect | null>(target);
   const animatedRectRef = useRef<Rect | null>(target);
   const frameRef = useRef<number | null>(null);
@@ -198,7 +198,7 @@ function useAnimatedRect(target: Rect | null): Rect | null {
         return;
       }
 
-      if (!from || areRectsEqual(from, nextTarget)) {
+      if (immediate || !from || areRectsEqual(from, nextTarget)) {
         animatedRectRef.current = nextTarget;
         setAnimatedRect(nextTarget);
         frameRef.current = null;
@@ -233,7 +233,7 @@ function useAnimatedRect(target: Rect | null): Rect | null {
         frameRef.current = null;
       }
     };
-  }, [targetHeight, targetWidth, targetX, targetY]);
+  }, [targetHeight, targetWidth, targetX, targetY, immediate]);
 
   return animatedRect;
 }
@@ -243,6 +243,7 @@ interface WallOverlayProps {
   previewSegments: Array<WallDraft>;
   erasePreviewKeys: Array<string>;
   erasePreviewPointer: Position | null;
+  isEraseStrokeActive: boolean;
   wallEraserSize: number;
   activeDrawTool: DrawTool;
   drawAnchor: Position | null;
@@ -256,6 +257,7 @@ export function WallOverlay({
   previewSegments,
   erasePreviewKeys,
   erasePreviewPointer,
+  isEraseStrokeActive,
   wallEraserSize,
   activeDrawTool,
   drawAnchor,
@@ -382,7 +384,12 @@ export function WallOverlay({
     activeDrawTool === "wall-erase" && erasePreviewPointer
       ? getWallEraserRect(erasePreviewPointer, wallEraserSize)
       : null;
-  const animatedEraseGhostRect = useAnimatedRect(eraseGhostRect);
+  // While a stroke is being drawn the ghost must stick to the cursor; the
+  // eased glide only runs on hover, where trailing cannot read as lag.
+  const animatedEraseGhostRect = useAnimatedRect(
+    eraseGhostRect,
+    isEraseStrokeActive,
+  );
   const eraseGhostPath = useMemo(
     () =>
       animatedEraseGhostRect

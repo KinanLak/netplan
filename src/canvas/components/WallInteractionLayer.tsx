@@ -132,6 +132,7 @@ export function WallInteractionLayer({
         previewSegments={session.previewSegments}
         erasePreviewKeys={session.erasePreviewKeys}
         erasePreviewPointer={session.erasePreviewPointer}
+        isEraseStrokeActive={session.isEraseStrokeActive}
         wallEraserSize={session.wallEraserSize}
         activeDrawTool={activeDrawTool}
         drawAnchor={session.drawAnchor}

@@ -60,6 +60,7 @@ export interface WallInteractionViewModel {
   previewSegments: Array<WallDraft>;
   erasePreviewKeys: Array<string>;
   erasePreviewPointer: Position | null;
+  isEraseStrokeActive: boolean;
   wallEraserSize: number;
   paneCursorClass: string;
 }

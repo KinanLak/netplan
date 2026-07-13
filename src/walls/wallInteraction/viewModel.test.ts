@@ -67,6 +67,24 @@ describe("wallInteraction view model", () => {
     expect(wallVm.erasePreviewPointer).toBe(null);
   });
 
+  it("exposes the active erase stroke only for the erase tool", () => {
+    const state = seedDrawing({ isEraseStrokeActive: true });
+
+    const eraseVm = getWallInteractionViewModel(
+      state,
+      makeContext({ activeDrawTool: "wall-erase" }),
+    );
+    const wallVm = getWallInteractionViewModel(state, makeContext());
+    const readOnlyVm = getWallInteractionViewModel(
+      state,
+      makeContext({ activeDrawTool: "wall-erase", isEditMode: false }),
+    );
+
+    expect(eraseVm.isEraseStrokeActive).toBe(true);
+    expect(wallVm.isEraseStrokeActive).toBe(false);
+    expect(readOnlyVm.isEraseStrokeActive).toBe(false);
+  });
+
   it("returns no preview segments for the device tool", () => {
     const state = seedDrawing({
       drawAnchor: { x: 0, y: 0 },
