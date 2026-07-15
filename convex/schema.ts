@@ -14,6 +14,8 @@ const deviceStatus = v.union(
   v.literal("unknown"),
 );
 
+const integrationProvider = v.union(v.literal("netbox"), v.literal("librenms"));
+
 const wallColor = v.union(
   v.literal("sand"),
   v.literal("concrete"),
@@ -29,12 +31,26 @@ const portInfo = v.object({
   status: deviceStatus,
 });
 
+const externalDeviceSource = v.object({
+  provider: v.literal("netbox"),
+  externalId: v.string(),
+  url: v.string(),
+  site: v.string(),
+  location: v.optional(v.string()),
+  locationPath: v.array(v.string()),
+  role: v.string(),
+  lifecycleStatus: v.string(),
+  syncedAt: v.number(),
+});
+
 const deviceMetadata = v.object({
   ip: v.optional(v.string()),
   status: v.optional(deviceStatus),
   model: v.optional(v.string()),
   ports: v.optional(v.array(portInfo)),
   lastUser: v.optional(v.string()),
+  macs: v.optional(v.array(v.string())),
+  source: v.optional(externalDeviceSource),
 });
 
 export default defineSchema({
@@ -118,6 +134,78 @@ export default defineSchema({
   })
     .index("by_op_id", ["opId"])
     .index("by_client_seq", ["clientId", "clientSeq"]),
+
+  externalInventory: defineTable({
+    provider: v.literal("netbox"),
+    externalId: v.string(),
+    type: deviceType,
+    name: v.string(),
+    hostname: v.optional(v.string()),
+    model: v.optional(v.string()),
+    role: v.string(),
+    site: v.string(),
+    location: v.optional(v.string()),
+    locationPath: v.array(v.string()),
+    ip: v.optional(v.string()),
+    macs: v.array(v.string()),
+    interfaceCount: v.number(),
+    lifecycleStatus: v.string(),
+    url: v.string(),
+    sourceUpdatedAt: v.optional(v.string()),
+    syncedAt: v.number(),
+  })
+    .index("by_provider_external", ["provider", "externalId"])
+    .index("by_provider_site", ["provider", "site"])
+    .index("by_provider_site_type", ["provider", "site", "type"]),
+
+  externalConnections: defineTable({
+    provider: v.literal("netbox"),
+    site: v.string(),
+    externalId: v.string(),
+    fromExternalId: v.string(),
+    fromPort: v.optional(v.string()),
+    toExternalId: v.string(),
+    toPort: v.optional(v.string()),
+    kind: v.literal("physical"),
+    syncedAt: v.number(),
+  })
+    .index("by_provider_external", ["provider", "externalId"])
+    .index("by_from", ["provider", "fromExternalId"])
+    .index("by_to", ["provider", "toExternalId"]),
+
+  discoveredConnections: defineTable({
+    provider: v.literal("librenms"),
+    site: v.string(),
+    externalId: v.string(),
+    computerExternalId: v.string(),
+    socketExternalId: v.string(),
+    switchExternalId: v.string(),
+    switchPort: v.string(),
+    computerMac: v.optional(v.string()),
+    method: v.union(v.literal("fdb"), v.literal("lldp"), v.literal("fdb+lldp")),
+    confidence: v.union(v.literal("high"), v.literal("medium")),
+    observedAt: v.number(),
+    syncedAt: v.number(),
+  })
+    .index("by_provider_site", ["provider", "site"])
+    .index("by_computer", ["provider", "computerExternalId"])
+    .index("by_socket", ["provider", "socketExternalId"]),
+
+  integrationSyncs: defineTable({
+    provider: integrationProvider,
+    site: v.string(),
+    status: v.union(
+      v.literal("syncing"),
+      v.literal("ready"),
+      v.literal("error"),
+    ),
+    startedAt: v.number(),
+    completedAt: v.optional(v.number()),
+    error: v.optional(v.string()),
+    inventoryCount: v.number(),
+    connectionCount: v.number(),
+    sourceVersion: v.optional(v.string()),
+  }).index("by_provider_site", ["provider", "site"]),
 
   presences: defineTable({
     sessionId: v.string(),

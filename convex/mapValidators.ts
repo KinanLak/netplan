@@ -28,12 +28,26 @@ export const portInfo = v.object({
   status: deviceStatus,
 });
 
+export const externalDeviceSource = v.object({
+  provider: v.literal("netbox"),
+  externalId: v.string(),
+  url: v.string(),
+  site: v.string(),
+  location: v.optional(v.string()),
+  locationPath: v.array(v.string()),
+  role: v.string(),
+  lifecycleStatus: v.string(),
+  syncedAt: v.number(),
+});
+
 export const deviceMetadata = v.object({
   ip: v.optional(v.string()),
   status: v.optional(deviceStatus),
   model: v.optional(v.string()),
   ports: v.optional(v.array(portInfo)),
   lastUser: v.optional(v.string()),
+  macs: v.optional(v.array(v.string())),
+  source: v.optional(externalDeviceSource),
 });
 
 export const operationMeta = v.object({
