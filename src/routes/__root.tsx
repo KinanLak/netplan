@@ -25,7 +25,11 @@ export const Route = createRootRoute({
     links: [
       { rel: "stylesheet", href: appCss },
       { rel: "stylesheet", href: logoCss },
-      { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
+      {
+        rel: "icon",
+        type: "image/svg+xml",
+        href: import.meta.env.DEV ? "/favicon-dev.svg" : "/favicon.svg",
+      },
     ],
   }),
   component: RootComponent,
