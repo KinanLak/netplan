@@ -65,6 +65,22 @@ describe("react flow device adapter", () => {
     ).toBe(false);
   });
 
+  it("supports several selected devices", () => {
+    const first = createDevice({ id: did("first") });
+    const second = createDevice({ id: did("second") });
+    const selected = new Set([first.id, second.id]);
+
+    const nodes = toDeviceNodes(
+      [first, second],
+      fid("floor-a"),
+      null,
+      true,
+      selected,
+    );
+
+    expect(nodes.every((node) => node.selected)).toBe(true);
+  });
+
   it("filters devices by current floor when adapting the collection", () => {
     const onFloor = createDevice({
       id: did("device-1"),

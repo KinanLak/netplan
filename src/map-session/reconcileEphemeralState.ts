@@ -4,6 +4,8 @@ export type EphemeralStatePatch = Partial<
   Pick<
     MapStore,
     | "selectedDeviceId"
+    | "selectedDeviceIds"
+    | "selectedDeviceIdSet"
     | "hoveredDeviceId"
     | "highlightedDeviceIds"
     | "highlightedDeviceIdSet"
@@ -17,7 +19,10 @@ export function reconcileEphemeralState(
   snapshot: MapDocumentSnapshot,
   state: Pick<
     MapStore,
-    "selectedDeviceId" | "hoveredDeviceId" | "highlightedDeviceIds"
+    | "selectedDeviceId"
+    | "selectedDeviceIds"
+    | "hoveredDeviceId"
+    | "highlightedDeviceIds"
   >,
 ): EphemeralStatePatch | null {
   const deviceIds = new Set(snapshot.devices.map((device) => device.id));
@@ -25,6 +30,16 @@ export function reconcileEphemeralState(
 
   if (state.selectedDeviceId && !deviceIds.has(state.selectedDeviceId)) {
     patch.selectedDeviceId = null;
+  }
+
+  const selectedDeviceIds = state.selectedDeviceIds.filter((id) =>
+    deviceIds.has(id),
+  );
+  if (selectedDeviceIds.length !== state.selectedDeviceIds.length) {
+    patch.selectedDeviceIds = selectedDeviceIds;
+    patch.selectedDeviceIdSet = toHighlightSet(selectedDeviceIds);
+    patch.selectedDeviceId =
+      selectedDeviceIds.length === 1 ? selectedDeviceIds[0] : null;
   }
 
   if (state.hoveredDeviceId && !deviceIds.has(state.hoveredDeviceId)) {

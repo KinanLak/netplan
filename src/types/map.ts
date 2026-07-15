@@ -37,12 +37,26 @@ export interface PortInfo {
   status: DeviceStatus;
 }
 
+export interface ExternalDeviceSource {
+  provider: "netbox";
+  externalId: string;
+  url: string;
+  site: string;
+  location?: string;
+  locationPath: Array<string>;
+  role: string;
+  lifecycleStatus: string;
+  syncedAt: number;
+}
+
 export interface DeviceMetadata {
   ip?: string;
   status?: DeviceStatus;
   model?: string;
   ports?: Array<PortInfo>;
   lastUser?: string;
+  macs?: Array<string>;
+  source?: ExternalDeviceSource;
 }
 
 // ── Domain documents ─────────────────────────────────────────────────────────
@@ -177,8 +191,11 @@ export interface MapInteractionState {
   currentBuildingId: BuildingId | null;
   currentFloorId: FloorId | null;
   selectedDeviceId: DeviceId | null;
+  selectedDeviceIds: Array<DeviceId>;
+  selectedDeviceIdSet: ReadonlySet<DeviceId>;
   hoveredDeviceId: DeviceId | null;
   isEditMode: boolean;
+  isMultiSelectMode: boolean;
   highlightedDeviceIds: Array<DeviceId>;
   highlightedDeviceIdSet: ReadonlySet<DeviceId>;
   activeDrawTool: DrawTool;
@@ -190,8 +207,10 @@ export interface MapInteractionActions {
   setCurrentBuilding: (buildingId: BuildingId | null) => void;
   setCurrentFloor: (floorId: FloorId | null) => void;
   selectDevice: (deviceId: DeviceId | null) => void;
+  setSelectedDevices: (deviceIds: Array<DeviceId>) => void;
   setHoveredDevice: (deviceId: DeviceId | null) => void;
   toggleEditMode: () => void;
+  toggleMultiSelectMode: () => void;
   setActiveDrawTool: (tool: DrawTool) => void;
   setSelectedWallColor: (color: WallColor) => void;
   setWallEraserSize: (size: number) => void;
