@@ -195,20 +195,15 @@ Le refresh de localisation ne doit pas créer une prise à une coordonnée arbit
 
 Aujourd'hui, tous les utilisateurs peuvent agir et `isEditMode` n'est pas une permission.
 
-Pour cette livraison :
+Pour cette livraison, les actions qui déclenchent du réseau ou modifient la configuration du site ne sont pas exposées au navigateur anonyme. Le refresh manuel reste réservé à une identité de service autorisée et le scheduler est configuré côté serveur.
 
-- le bouton est visible aux utilisateurs actuels ;
-- faute d'authentification, les actions d'administration de site sont également accessibles aux utilisateurs actuels ;
-- le serveur impose quand même single-flight, confirmation et validation ;
-- l'origine anonyme disponible peut être journalisée sans être considérée comme une identité de sécurité.
-
-Cette ouverture temporaire doit être explicite dans l'UI et couverte côté serveur. L'arrivée du SSO remplacera cette politique centrale sans modifier les composants.
+L'interface publique affiche uniquement l'état et les agrégats. L'arrivée du SSO activera les contrôles de refresh et d'administration via une politique centrale, sans modifier les composants.
 
 Préparer une fonction centrale de permission afin que le futur SSO puisse restreindre le refresh selon les groupes, sans réécrire chaque bouton.
 
 ## Administration incluse
 
-La surface administration fait partie de cette livraison. Elle permet :
+La surface administration sera activée avec le SSO. Elle permettra :
 
 - consulter sites, sources, switches et horaires ;
 - voir dernier et prochain cycle, backoff et erreurs ;

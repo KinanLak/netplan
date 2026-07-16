@@ -22,6 +22,30 @@ const snapshot = {
       lifecycleStatus: "active",
       url: "https://netbox.example/devices/pc",
     },
+    {
+      externalId: "device:socket",
+      type: "wall-port" as const,
+      name: "Socket",
+      role: "Wall socket",
+      site: "Arles",
+      locationPath: ["Bureau"],
+      macs: [],
+      interfaceCount: 1,
+      lifecycleStatus: "active",
+      url: "https://netbox.example/devices/socket",
+    },
+    {
+      externalId: "device:switch",
+      type: "switch" as const,
+      name: "Switch",
+      role: "Access switch",
+      site: "Arles",
+      locationPath: ["Bureau"],
+      macs: [],
+      interfaceCount: 24,
+      lifecycleStatus: "active",
+      url: "https://netbox.example/devices/switch",
+    },
   ],
   physicalConnections: [
     {
@@ -58,7 +82,7 @@ describe("integration connector", () => {
     );
 
     expect(result).toEqual({
-      inventoryCount: 1,
+      inventoryCount: 3,
       physicalConnectionCount: 1,
       discoveredConnectionCount: 1,
     });
@@ -72,7 +96,7 @@ describe("integration connector", () => {
     );
     expect(completedOutcome).toEqual({
       status: "ready",
-      inventoryCount: 1,
+      inventoryCount: 3,
       physicalConnectionCount: 1,
       discoveredConnectionCount: 1,
     });
@@ -82,7 +106,7 @@ describe("integration connector", () => {
       discoveries: await ctx.db.query("discoveredConnections").collect(),
       syncs: await ctx.db.query("integrationSyncs").collect(),
     }));
-    expect(state.inventory).toHaveLength(1);
+    expect(state.inventory).toHaveLength(3);
     expect(state.physical).toHaveLength(1);
     expect(state.discoveries).toHaveLength(1);
     expect(
@@ -91,6 +115,38 @@ describe("integration connector", () => {
       { provider: "netbox", status: "ready" },
       { provider: "librenms", status: "ready" },
     ]);
+  });
+
+  it("rejects duplicate external IDs and dangling references before writing", async () => {
+    const t = convexTest(schema, modules);
+    await t.mutation(internal.connector.markArlesSyncing, {
+      syncId: snapshot.syncId,
+      startedAt: snapshot.startedAt,
+    });
+
+    await expect(
+      t.mutation(internal.connector.replaceArlesSnapshot, {
+        ...snapshot,
+        inventory: [...snapshot.inventory, snapshot.inventory[0]],
+      }),
+    ).rejects.toThrow("Identifiant externe dupliqué");
+    await expect(
+      t.mutation(internal.connector.replaceArlesSnapshot, {
+        ...snapshot,
+        physicalConnections: [
+          { ...snapshot.physicalConnections[0], toExternalId: "device:absent" },
+        ],
+      }),
+    ).rejects.toThrow("référence d'inventaire absente");
+
+    const state = await t.run(async (ctx) => ({
+      inventory: await ctx.db.query("externalInventory").collect(),
+      physical: await ctx.db.query("externalConnections").collect(),
+      discoveries: await ctx.db.query("discoveredConnections").collect(),
+    }));
+    expect(state.inventory).toEqual([]);
+    expect(state.physical).toEqual([]);
+    expect(state.discoveries).toEqual([]);
   });
 
   it("rolls back both snapshots when the combined mutation fails", async () => {
@@ -135,16 +191,18 @@ describe("integration connector", () => {
     expect(state.syncs.every((sync) => sync.status === "syncing")).toBe(true);
   });
 
-  it("prevents an older sync from replacing or failing a newer one", async () => {
+  it("prevents a delayed older sync from reclaiming a newer one", async () => {
     const t = convexTest(schema, modules);
     await t.mutation(internal.connector.markArlesSyncing, {
-      syncId: snapshot.syncId,
-      startedAt: 100,
-    });
-    await t.mutation(internal.connector.markArlesSyncing, {
       syncId: "sync:new",
-      startedAt: 100,
+      startedAt: 200,
     });
+    await expect(
+      t.mutation(internal.connector.markArlesSyncing, {
+        syncId: snapshot.syncId,
+        startedAt: snapshot.startedAt,
+      }),
+    ).resolves.toBe(false);
 
     await expect(
       t.mutation(internal.connector.replaceArlesSnapshot, snapshot),

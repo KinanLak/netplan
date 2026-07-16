@@ -29,6 +29,13 @@ export const setLibreNmsSyncing = async (
   args: { syncId: string; startedAt: number },
 ) => {
   const existing = await getSyncRow(ctx);
+  if (
+    existing &&
+    existing.syncId !== args.syncId &&
+    existing.startedAt >= args.startedAt
+  ) {
+    return false;
+  }
   const value = {
     provider: "librenms" as const,
     site: SITE,

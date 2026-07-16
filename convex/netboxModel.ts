@@ -46,6 +46,13 @@ export const setNetBoxSyncing = async (
   args: { site: string; syncId: string; startedAt: number },
 ) => {
   const existing = await getSyncRow(ctx, args.site);
+  if (
+    existing &&
+    existing.syncId !== args.syncId &&
+    existing.startedAt >= args.startedAt
+  ) {
+    return false;
+  }
   const value = {
     provider: "netbox" as const,
     site: args.site,
@@ -133,7 +140,12 @@ export const replaceNetBoxSnapshot = async (
   }
   for (const item of args.inventory) {
     const existing = previousInventoryById.get(item.externalId);
-    const value = { provider: "netbox" as const, ...item, syncedAt };
+    const value = {
+      provider: "netbox" as const,
+      ...item,
+      site: args.site,
+      syncedAt,
+    };
     if (existing) {
       await ctx.db.replace(existing._id, value);
     } else {

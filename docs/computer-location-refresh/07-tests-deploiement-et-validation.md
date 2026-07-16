@@ -28,6 +28,7 @@ Chaque phase ajoute ses tests au moment de l'implémentation. Ne pas reporter to
 - Normalisation MAC, port et switch.
 - Filtre strict par cycle.
 - Ancienne ligne FDB exclue.
+- Ligne FDB d'un discovery intervenu entre deux tentatives exclue du cycle courant.
 - Timestamp FDB absent, invalide ou futur exclu.
 - LLDP seul ne produit aucune position actuelle.
 - Une prise directe résolue.

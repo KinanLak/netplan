@@ -15,14 +15,13 @@ La règle ne doit pas être un simple `âge < N minutes`, car :
 - les horloges Convex et LibreNMS peuvent avoir un léger décalage ;
 - une ligne ancienne peut rester moins vieille que le seuil arbitraire.
 
-Le cycle mémorise l'ancien et le nouveau `last_discovered` de chaque tentative switch. Pour une entrée FDB de timestamp `updated_at`, la règle autoritaire est :
+Le cycle mémorise l'heure exacte du trigger et le nouveau `last_discovered` de chaque tentative switch. Pour une entrée FDB de timestamp `updated_at`, la règle autoritaire est :
 
 - `updated_at` doit être présent et parseable dans le fuseau renvoyé par LibreNMS ;
-- `updated_at` est strictement postérieur à l'ancien `last_discovered` ;
+- `updated_at` est supérieur ou égal à l'heure du trigger de cette tentative ;
 - `updated_at` est inférieur ou égal au nouveau `last_discovered` plus 60 secondes de tolérance ;
 - `updated_at` n'est pas futur par rapport au temps serveur LibreNMS observé ;
 - la ligne appartient au switch et à la tentative réussie ;
-- en l'absence d'ancien `last_discovered`, la borne basse est l'heure du trigger moins 60 secondes.
 
 Une ligne sans timestamp valide est rejetée comme observation actuelle. Ne jamais remplacer un `updated_at` absent par l'heure de téléchargement.
 
@@ -317,6 +316,7 @@ Résultat : non résolvable, raison de câblage incomplète
 ## Tests obligatoires
 
 - Une ligne ancienne n'est jamais actuelle.
+- Une ligne rafraîchie par un discovery intervenu entre deux tentatives est exclue du cycle courant.
 - Une MAC déplacée choisit uniquement la prise du cycle courant.
 - Une position précédente n'est conservée que parmi les candidates fraîches.
 - Deux absences successives produisent `hors ligne`.

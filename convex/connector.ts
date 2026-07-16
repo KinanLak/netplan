@@ -73,10 +73,72 @@ const getArlesSyncRows = async (ctx: MutationCtx) =>
       .unique(),
   ]);
 
+const assertUniqueExternalIds = (
+  items: ReadonlyArray<{ externalId: string }>,
+  collection: string,
+) => {
+  const externalIds = new Set<string>();
+  for (const item of items) {
+    if (externalIds.has(item.externalId)) {
+      throw new Error(`Identifiant externe dupliqué dans ${collection}`);
+    }
+    externalIds.add(item.externalId);
+  }
+};
+
+const assertSnapshotIntegrity = (args: {
+  inventory: ReadonlyArray<{ externalId: string }>;
+  physicalConnections: ReadonlyArray<{
+    externalId: string;
+    fromExternalId: string;
+    toExternalId: string;
+  }>;
+  discoveries: ReadonlyArray<{
+    externalId: string;
+    computerExternalId: string;
+    socketExternalId: string;
+    switchExternalId: string;
+  }>;
+}) => {
+  assertUniqueExternalIds(args.inventory, "l'inventaire");
+  assertUniqueExternalIds(args.physicalConnections, "les connexions physiques");
+  assertUniqueExternalIds(args.discoveries, "les découvertes");
+
+  const inventoryIds = new Set(args.inventory.map((item) => item.externalId));
+  for (const connection of args.physicalConnections) {
+    if (
+      !inventoryIds.has(connection.fromExternalId) ||
+      !inventoryIds.has(connection.toExternalId)
+    ) {
+      throw new Error("Connexion physique avec référence d'inventaire absente");
+    }
+  }
+  for (const discovery of args.discoveries) {
+    if (
+      !inventoryIds.has(discovery.computerExternalId) ||
+      !inventoryIds.has(discovery.socketExternalId) ||
+      !inventoryIds.has(discovery.switchExternalId)
+    ) {
+      throw new Error("Découverte avec référence d'inventaire absente");
+    }
+  }
+};
+
 export const markArlesSyncing = internalMutation({
   args: { syncId: v.string(), startedAt: v.number() },
   returns: v.boolean(),
   handler: async (ctx, args) => {
+    const [netboxSync, libreNmsSync] = await getArlesSyncRows(ctx);
+    if (
+      [netboxSync, libreNmsSync].some(
+        (sync) =>
+          sync &&
+          sync.syncId !== args.syncId &&
+          sync.startedAt >= args.startedAt,
+      )
+    ) {
+      return false;
+    }
     const netboxAccepted = await setNetBoxSyncing(ctx, {
       site: SITE,
       ...args,
@@ -148,6 +210,7 @@ export const replaceArlesSnapshot = internalMutation({
     discoveredConnectionCount: v.number(),
   }),
   handler: async (ctx, args) => {
+    assertSnapshotIntegrity(args);
     const netboxResult = await replaceNetBoxSnapshot(ctx, {
       site: SITE,
       syncId: args.syncId,

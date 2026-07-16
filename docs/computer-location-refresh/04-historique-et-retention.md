@@ -143,7 +143,9 @@ Le modèle et les queries doivent néanmoins être paginés. Une interface ne do
 
 ## Accès aux données
 
-Prévoir des requêtes ciblées :
+Les données publiques se limitent à la fraîcheur et aux agrégats. Les requêtes détaillées nécessitent une autorisation serveur ; elles ne sont pas exposées tant que le SSO n'est pas livré.
+
+Prévoir des requêtes ciblées et autorisées :
 
 - derniers cycles d'un site ;
 - historique d'un ordinateur ;
@@ -157,12 +159,12 @@ Toutes les requêtes sont bornées et paginées.
 
 ## Confidentialité
 
-Les MAC sont des identifiants techniques. Même sans authentification actuelle :
+Les MAC sont des identifiants techniques. Les snapshots historiques ne conservent pas la MAC en clair : ils utilisent `HMAC-SHA-256(site + MAC normalisée)`, produit avec un secret serveur et accompagné de la version de clé. La clé et les MAC brutes ne quittent jamais le serveur.
 
 - ne pas les afficher dans les toasts ;
 - éviter les logs applicatifs en clair ;
 - réserver le détail aux vues techniques ;
-- préparer l'ajout futur de permissions ;
+- réserver ces vues aux utilisateurs autorisés une fois le SSO disponible ;
 - ne jamais stocker les tokens dans l'historique ;
 - ne pas conserver les réponses HTTP brutes.
 

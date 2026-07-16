@@ -1901,14 +1901,19 @@
       }
 
       .reveal {
-        opacity: 0;
-        transform: translateY(22px);
+        opacity: 1;
+        transform: none;
         transition:
           opacity 650ms ease,
           transform 650ms ease;
       }
 
-      .reveal.visible {
+      .reveal-enabled .reveal {
+        opacity: 0;
+        transform: translateY(22px);
+      }
+
+      .reveal-enabled .reveal.visible {
         opacity: 1;
         transform: none;
       }
@@ -3179,20 +3184,23 @@
     </footer>
 
     <script>
-      const observer = new IntersectionObserver(
-        (entries) => {
-          for (const entry of entries) {
-            if (entry.isIntersecting) {
-              entry.target.classList.add("visible");
-              observer.unobserve(entry.target);
+      if ("IntersectionObserver" in window) {
+        document.documentElement.classList.add("reveal-enabled");
+        const observer = new IntersectionObserver(
+          (entries) => {
+            for (const entry of entries) {
+              if (entry.isIntersecting) {
+                entry.target.classList.add("visible");
+                observer.unobserve(entry.target);
+              }
             }
-          }
-        },
-        { threshold: 0.12 },
-      );
+          },
+          { threshold: 0.12 },
+        );
 
-      for (const element of document.querySelectorAll(".reveal")) {
-        observer.observe(element);
+        for (const element of document.querySelectorAll(".reveal")) {
+          observer.observe(element);
+        }
       }
     </script>
   </body>

@@ -68,7 +68,7 @@ Les nombres suivants servent de baseline et non de constantes métier :
 - Cycle automatique toutes les heures la nuit, les week-ends et les jours fériés.
 - Le cycle est calculé depuis la dernière tentative, pas depuis le dernier succès.
 - Un cycle déjà actif empêche le lancement du suivant.
-- Le refresh manuel reste disponible à tout moment, y compris pendant un backoff automatique.
+- Le refresh manuel peut traverser le backoff automatique, mais ne déclenche rien tant qu'un switch est `uncertain` ou `blocked`.
 
 Cette cadence vise une fraîcheur proche de cinq minutes en fonctionnement nominal. Ce n'est pas une garantie mathématique stricte inférieure à cinq minutes : le discovery lui-même prend environ une minute et les pannes peuvent prolonger le délai.
 
