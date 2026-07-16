@@ -95,4 +95,34 @@ describe("map store selectors", () => {
     ]);
     expect(useMapStore.getState().selectedDeviceIdSet.has(did("b"))).toBe(true);
   });
+
+  it("clears only a multi-selection when toggling edit mode", () => {
+    seedMapStore({
+      isEditMode: true,
+      isMultiSelectMode: true,
+      selectedDeviceId: null,
+      selectedDeviceIds: [did("a"), did("b")],
+      selectedDeviceIdSet: new Set([did("a"), did("b")]),
+    });
+
+    useMapStore.getState().toggleEditMode();
+
+    expect(useMapStore.getState()).toMatchObject({
+      isEditMode: false,
+      isMultiSelectMode: false,
+      selectedDeviceId: null,
+      selectedDeviceIds: [],
+    });
+    expect(useMapStore.getState().selectedDeviceIdSet.size).toBe(0);
+
+    seedMapStore({
+      isMultiSelectMode: false,
+      selectedDeviceId: did("a"),
+      selectedDeviceIds: [did("a")],
+      selectedDeviceIdSet: new Set([did("a")]),
+    });
+    useMapStore.getState().toggleEditMode();
+
+    expect(useMapStore.getState().selectedDeviceIds).toEqual([did("a")]);
+  });
 });

@@ -80,11 +80,21 @@ export const useMapStore = create<MapStore>()((set) => ({
     );
   },
   toggleEditMode: () => {
-    set((state) => ({
-      isEditMode: !state.isEditMode,
-      isMultiSelectMode: false,
-      activeDrawTool: state.isEditMode ? "device" : state.activeDrawTool,
-    }));
+    set((state) => {
+      const selection = state.isMultiSelectMode
+        ? {
+            selectedDeviceId: null,
+            selectedDeviceIds: [],
+            selectedDeviceIdSet: new Set<DeviceId>(),
+          }
+        : {};
+      return {
+        isEditMode: !state.isEditMode,
+        isMultiSelectMode: false,
+        activeDrawTool: state.isEditMode ? "device" : state.activeDrawTool,
+        ...selection,
+      };
+    });
   },
   toggleMultiSelectMode: () => {
     set((state) => ({

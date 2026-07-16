@@ -53,7 +53,7 @@ export const layoutInventoryGrid = (input: {
   const startY = input.center.y - (initialRows * cellHeight - gap) / 2;
   const placed: Array<InventoryPlacement> = [];
 
-  input.items.forEach((item, itemIndex) => {
+  for (const [itemIndex, item] of input.items.entries()) {
     let position: Position | null = null;
     for (let attempt = 0; attempt < 10_000; attempt += 1) {
       const column = itemIndex % columns;
@@ -77,7 +77,8 @@ export const layoutInventoryGrid = (input: {
         break;
       }
     }
-    if (position) placed.push({ ...item, position });
-  });
+    if (!position) return [];
+    placed.push({ ...item, position });
+  }
   return placed;
 };

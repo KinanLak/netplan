@@ -67,7 +67,7 @@ export function useLinkedSocketActions(deviceId: DeviceId | null) {
   const placeLinkedSocket = () => {
     if (!device || !socketItem || placedSocket || !isEditMode) return;
     const size = getDeviceKind(socketItem.type).defaultSize;
-    const [placement] = layoutInventoryGrid({
+    const placement = layoutInventoryGrid({
       items: [{ id: socketItem.externalId, size }],
       center: {
         x: device.position.x + device.size.width + size.width,
@@ -80,7 +80,8 @@ export function useLinkedSocketActions(deviceId: DeviceId | null) {
           position,
           item.size,
         ),
-    });
+    }).at(0);
+    if (!placement) return;
     const draft: DeviceDraft = {
       floorId: device.floorId,
       type: socketItem.type,

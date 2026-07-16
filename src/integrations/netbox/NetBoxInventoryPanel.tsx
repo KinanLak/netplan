@@ -201,6 +201,7 @@ export function NetBoxInventoryPanel() {
           item.size,
         ),
     });
+    if (placements.length !== selectedItems.length) return;
     const drafts: Array<DeviceDraft> = placements.flatMap((placement) => {
       const item = itemById.get(placement.id);
       if (!item) return [];
@@ -283,7 +284,8 @@ export function NetBoxInventoryPanel() {
               {syncState.error}
             </p>
           ) : null}
-          {libreNmsState?.status === "error" ? (
+          {libreNmsState?.status === "error" &&
+          libreNmsState.error !== syncState?.error ? (
             <p className="mt-2 rounded-md border border-destructive bg-background px-3 py-2 text-xs text-destructive">
               {libreNmsState.error}
             </p>
@@ -517,9 +519,11 @@ export function NetBoxInventoryPanel() {
           <p className="mt-2 text-[11px] text-muted-foreground">
             {syncState?.status === "ready"
               ? `${syncState.inventoryCount} équipements · ${discoveries.length} PC reliés · synchronisé le ${syncDate(syncState.completedAt)}`
-              : syncState?.status === "error"
-                ? "Synchronisation indisponible"
-                : "Inventaire non synchronisé"}
+              : syncState?.status === "syncing"
+                ? "Synchronisation en cours..."
+                : syncState?.status === "error"
+                  ? "Synchronisation indisponible"
+                  : "Inventaire non synchronisé"}
           </p>
         </SheetFooter>
       </SheetContent>

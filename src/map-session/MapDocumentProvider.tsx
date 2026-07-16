@@ -404,19 +404,18 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
 
   const updateDevicePositions = (updates: Array<DevicePositionUpdate>) => {
     if (!isReadyRef.current || updates.length === 0) return;
-    const changedUpdates = sortGroupPositionUpdates(
-      documentRef.current.devices,
-      updates,
-    ).filter((update) => {
-      const device = documentRef.current.devices.find(
-        (candidate) => candidate.id === update.deviceId,
-      );
-      return (
-        device &&
-        (device.position.x !== update.position.x ||
-          device.position.y !== update.position.y)
-      );
-    });
+    const devices = documentRef.current.devices;
+    const deviceById = new Map(devices.map((device) => [device.id, device]));
+    const changedUpdates = sortGroupPositionUpdates(devices, updates).filter(
+      (update) => {
+        const device = deviceById.get(update.deviceId);
+        return (
+          device &&
+          (device.position.x !== update.position.x ||
+            device.position.y !== update.position.y)
+        );
+      },
+    );
     if (changedUpdates.length === 0) return;
     const meta = freshMeta();
     if (!meta) return;

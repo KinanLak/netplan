@@ -131,7 +131,10 @@ export function useCanvasDeviceNodes({
 }: UseCanvasDeviceNodesParams): UseCanvasDeviceNodesResult {
   const [nodes, setNodes, onNodesChange] = useNodesState<DeviceNode>([]);
   const devicePlacement = useDevicePlacement((...args) =>
-    checkCollision(...args, selectedDeviceIdSet),
+    checkCollision(
+      ...args,
+      isMultiSelectMode ? selectedDeviceIdSet : undefined,
+    ),
   );
   const draggingDeviceIdsRef = useRef<Set<DeviceId>>(new Set());
 

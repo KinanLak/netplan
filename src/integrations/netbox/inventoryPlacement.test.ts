@@ -37,4 +37,14 @@ describe("NetBox bulk placement", () => {
     expect(result).toHaveLength(1);
     expect(result[0]?.position.x).toBeGreaterThanOrEqual(100);
   });
+
+  it("returns no partial layout when an item cannot be placed", () => {
+    const result = layoutInventoryGrid({
+      items: [{ id: "device:1", size: { width: 80, height: 80 } }],
+      center: { x: 0, y: 0 },
+      isBlocked: () => true,
+    });
+
+    expect(result).toEqual([]);
+  });
 });
