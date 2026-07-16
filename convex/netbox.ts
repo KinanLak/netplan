@@ -1,7 +1,6 @@
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 import type { Infer } from "convex/values";
-import { action, query } from "./_generated/server";
-import { internal } from "./_generated/api";
+import { query } from "./_generated/server";
 import type { connectionInput } from "./netboxModel";
 import { inventoryInput } from "./netboxModel";
 
@@ -12,6 +11,7 @@ declare const process: {
 const SITE = "Arles";
 const PROVIDER = "netbox" as const;
 const PAGE_SIZE = "500";
+const REQUEST_TIMEOUT_MS = 30_000;
 
 type JsonRecord = Record<string, unknown>;
 type InventoryInput = Infer<typeof inventoryInput>;
@@ -94,6 +94,7 @@ const token = (): string => {
 const requestJson = async (url: URL, apiToken: string): Promise<unknown> => {
   const response = await fetch(url, {
     method: "GET",
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     headers: {
       Authorization: `Token ${apiToken}`,
       Accept: "application/json",
@@ -225,8 +226,10 @@ export const buildNetBoxSnapshot = async () => {
       site_id: String(siteId),
       exclude: "config_context",
     }),
-    fetchAll(base, apiToken, "dcim/interfaces/"),
-    fetchAll(base, apiToken, "dcim/cables/"),
+    fetchAll(base, apiToken, "dcim/interfaces/", {
+      site_id: String(siteId),
+    }),
+    fetchAll(base, apiToken, "dcim/cables/", { site_id: String(siteId) }),
   ]);
 
   const locations = new Map<number, LocationInfo>();
@@ -446,41 +449,5 @@ export const listConnections = query({
       ({ _id, _creationTime, provider, site, kind, ...connection }) =>
         connection,
     );
-  },
-});
-
-export const syncArles = action({
-  args: {},
-  returns: v.object({
-    inventoryCount: v.number(),
-    connectionCount: v.number(),
-  }),
-  handler: async (
-    ctx,
-  ): Promise<{ inventoryCount: number; connectionCount: number }> => {
-    const startedAt = Date.now();
-    await ctx.runMutation(internal.netboxModel.markSyncing, {
-      site: SITE,
-      startedAt,
-    });
-    try {
-      const snapshot = await buildNetBoxSnapshot();
-      return await ctx.runMutation(internal.netboxModel.replaceSnapshot, {
-        site: SITE,
-        startedAt,
-        completedAt: Date.now(),
-        ...snapshot,
-      });
-    } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : "Erreur inconnue";
-      await ctx.runMutation(internal.netboxModel.markFailed, {
-        site: SITE,
-        startedAt,
-        completedAt: Date.now(),
-        error: message,
-      });
-      throw new ConvexError(message);
-    }
   },
 });

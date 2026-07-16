@@ -1,5 +1,6 @@
 import { v } from "convex/values";
-import { internalMutation, internalQuery } from "./_generated/server";
+import type { Infer } from "convex/values";
+import type { MutationCtx } from "./_generated/server";
 
 const SITE = "Arles";
 
@@ -15,167 +16,114 @@ export const discoveredConnectionInput = v.object({
   observedAt: v.number(),
 });
 
-export const getTopologyContext = internalQuery({
-  args: {},
-  returns: v.object({
-    inventory: v.array(
-      v.object({
-        externalId: v.string(),
-        type: v.union(
-          v.literal("rack"),
-          v.literal("switch"),
-          v.literal("pc"),
-          v.literal("wall-port"),
-        ),
-        name: v.string(),
-        macs: v.array(v.string()),
-      }),
-    ),
-    physicalConnections: v.array(
-      v.object({
-        fromExternalId: v.string(),
-        fromPort: v.optional(v.string()),
-        toExternalId: v.string(),
-        toPort: v.optional(v.string()),
-      }),
-    ),
-  }),
-  handler: async (ctx) => {
-    const [inventory, connections] = await Promise.all([
-      ctx.db
-        .query("externalInventory")
-        .withIndex("by_provider_site", (q) =>
-          q.eq("provider", "netbox").eq("site", SITE),
-        )
-        .collect(),
-      ctx.db
-        .query("externalConnections")
-        .withIndex("by_provider_external", (q) => q.eq("provider", "netbox"))
-        .collect(),
-    ]);
-    return {
-      inventory: inventory.map((item) => ({
-        externalId: item.externalId,
-        type: item.type,
-        name: item.name,
-        macs: item.macs,
-      })),
-      physicalConnections: connections
-        .filter((connection) => connection.site === SITE)
-        .map((connection) => ({
-          fromExternalId: connection.fromExternalId,
-          fromPort: connection.fromPort,
-          toExternalId: connection.toExternalId,
-          toPort: connection.toPort,
-        })),
-    };
-  },
-});
+const getSyncRow = async (ctx: MutationCtx) =>
+  await ctx.db
+    .query("integrationSyncs")
+    .withIndex("by_provider_site", (q) =>
+      q.eq("provider", "librenms").eq("site", SITE),
+    )
+    .unique();
 
-export const markSyncing = internalMutation({
-  args: { startedAt: v.number() },
-  returns: v.null(),
-  handler: async (ctx, { startedAt }) => {
-    const existing = await ctx.db
-      .query("integrationSyncs")
-      .withIndex("by_provider_site", (q) =>
-        q.eq("provider", "librenms").eq("site", SITE),
-      )
-      .unique();
+export const setLibreNmsSyncing = async (
+  ctx: MutationCtx,
+  args: { syncId: string; startedAt: number },
+) => {
+  const existing = await getSyncRow(ctx);
+  const value = {
+    provider: "librenms" as const,
+    site: SITE,
+    syncId: args.syncId,
+    status: "syncing" as const,
+    startedAt: args.startedAt,
+    inventoryCount: existing?.inventoryCount ?? 0,
+    connectionCount: existing?.connectionCount ?? 0,
+  };
+  if (existing) await ctx.db.replace(existing._id, value);
+  else await ctx.db.insert("integrationSyncs", value);
+  return true;
+};
+
+export const setLibreNmsFailed = async (
+  ctx: MutationCtx,
+  args: {
+    syncId: string;
+    startedAt: number;
+    completedAt: number;
+    error: string;
+  },
+) => {
+  const existing = await getSyncRow(ctx);
+  if (existing && existing.syncId !== args.syncId) return false;
+  const value = {
+    provider: "librenms" as const,
+    site: SITE,
+    syncId: args.syncId,
+    status: "error" as const,
+    startedAt: args.startedAt,
+    completedAt: args.completedAt,
+    error: args.error,
+    inventoryCount: existing?.inventoryCount ?? 0,
+    connectionCount: existing?.connectionCount ?? 0,
+  };
+  if (existing) await ctx.db.replace(existing._id, value);
+  else await ctx.db.insert("integrationSyncs", value);
+  return true;
+};
+
+interface ReplaceLibreNmsDiscoveriesArgs {
+  syncId: string;
+  startedAt: number;
+  completedAt: number;
+  discoveries: Array<Infer<typeof discoveredConnectionInput>>;
+}
+
+export const replaceLibreNmsDiscoveries = async (
+  ctx: MutationCtx,
+  args: ReplaceLibreNmsDiscoveriesArgs,
+) => {
+  const activeSync = await getSyncRow(ctx);
+  if (
+    !activeSync ||
+    activeSync.status !== "syncing" ||
+    activeSync.syncId !== args.syncId
+  ) {
+    throw new Error("La synchronisation LibreNMS a été remplacée");
+  }
+  const existing = await ctx.db
+    .query("discoveredConnections")
+    .withIndex("by_provider_site", (q) =>
+      q.eq("provider", "librenms").eq("site", SITE),
+    )
+    .collect();
+  const existingById = new Map(existing.map((item) => [item.externalId, item]));
+  const nextIds = new Set(args.discoveries.map((item) => item.externalId));
+  for (const item of existing) {
+    if (!nextIds.has(item.externalId)) await ctx.db.delete(item._id);
+  }
+  for (const discovery of args.discoveries) {
+    const previous = existingById.get(discovery.externalId);
     const value = {
       provider: "librenms" as const,
       site: SITE,
-      status: "syncing" as const,
-      startedAt,
-      inventoryCount: existing?.inventoryCount ?? 0,
-      connectionCount: existing?.connectionCount ?? 0,
+      ...discovery,
+      syncedAt: args.completedAt,
     };
-    if (existing) await ctx.db.replace(existing._id, value);
-    else await ctx.db.insert("integrationSyncs", value);
-    return null;
-  },
-});
+    if (previous) await ctx.db.replace(previous._id, value);
+    else await ctx.db.insert("discoveredConnections", value);
+  }
 
-export const markFailed = internalMutation({
-  args: {
-    startedAt: v.number(),
-    completedAt: v.number(),
-    error: v.string(),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const existing = await ctx.db
-      .query("integrationSyncs")
-      .withIndex("by_provider_site", (q) =>
-        q.eq("provider", "librenms").eq("site", SITE),
-      )
-      .unique();
-    const value = {
-      provider: "librenms" as const,
-      site: SITE,
-      status: "error" as const,
-      startedAt: args.startedAt,
-      completedAt: args.completedAt,
-      error: args.error,
-      inventoryCount: existing?.inventoryCount ?? 0,
-      connectionCount: existing?.connectionCount ?? 0,
-    };
-    if (existing) await ctx.db.replace(existing._id, value);
-    else await ctx.db.insert("integrationSyncs", value);
-    return null;
-  },
-});
-
-export const replaceDiscoveries = internalMutation({
-  args: {
-    startedAt: v.number(),
-    completedAt: v.number(),
-    discoveries: v.array(discoveredConnectionInput),
-  },
-  returns: v.object({ connectionCount: v.number() }),
-  handler: async (ctx, args) => {
-    const existing = await ctx.db
-      .query("discoveredConnections")
-      .withIndex("by_provider_site", (q) =>
-        q.eq("provider", "librenms").eq("site", SITE),
-      )
-      .collect();
-    const existingById = new Map(
-      existing.map((item) => [item.externalId, item]),
-    );
-    const nextIds = new Set(args.discoveries.map((item) => item.externalId));
-    for (const item of existing) {
-      if (!nextIds.has(item.externalId)) await ctx.db.delete(item._id);
-    }
-    for (const discovery of args.discoveries) {
-      const previous = existingById.get(discovery.externalId);
-      const value = {
-        provider: "librenms" as const,
-        site: SITE,
-        ...discovery,
-        syncedAt: args.completedAt,
-      };
-      if (previous) await ctx.db.replace(previous._id, value);
-      else await ctx.db.insert("discoveredConnections", value);
-    }
-
-    const syncRow = await ctx.db
-      .query("integrationSyncs")
-      .withIndex("by_provider_site", (q) =>
-        q.eq("provider", "librenms").eq("site", SITE),
-      )
-      .unique();
-    const syncValue = {
-      provider: "librenms" as const,
-      site: SITE,
-      status: "ready" as const,
-      startedAt: args.startedAt,
-      completedAt: args.completedAt,
-      inventoryCount: 0,
-      connectionCount: args.discoveries.length,
-    };
-    if (syncRow) await ctx.db.replace(syncRow._id, syncValue);
-    else await ctx.db.insert("integrationSyncs", syncValue);
-    return { connectionCount: args.discoveries.length };
-  },
-});
+  const syncRow = await getSyncRow(ctx);
+  const syncValue = {
+    provider: "librenms" as const,
+    site: SITE,
+    syncId: args.syncId,
+    status: "ready" as const,
+    startedAt: args.startedAt,
+    completedAt: args.completedAt,
+    inventoryCount: 0,
+    connectionCount: args.discoveries.length,
+  };
+  if (syncRow) await ctx.db.replace(syncRow._id, syncValue);
+  else await ctx.db.insert("integrationSyncs", syncValue);
+  return { connectionCount: args.discoveries.length };
+};

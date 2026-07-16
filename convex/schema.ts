@@ -170,6 +170,7 @@ export default defineSchema({
     syncedAt: v.number(),
   })
     .index("by_provider_external", ["provider", "externalId"])
+    .index("by_provider_site", ["provider", "site"])
     .index("by_from", ["provider", "fromExternalId"])
     .index("by_to", ["provider", "toExternalId"]),
 
@@ -194,6 +195,7 @@ export default defineSchema({
   integrationSyncs: defineTable({
     provider: integrationProvider,
     site: v.string(),
+    syncId: v.optional(v.string()),
     status: v.union(
       v.literal("syncing"),
       v.literal("ready"),

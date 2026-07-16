@@ -1,6 +1,5 @@
-import { ConvexError, v } from "convex/values";
-import { action, query } from "./_generated/server";
-import { internal } from "./_generated/api";
+import { v } from "convex/values";
+import { query } from "./_generated/server";
 import { resolveLibreNmsTopology } from "./topology";
 import type {
   LibreNmsDevice,
@@ -15,6 +14,7 @@ declare const process: { env: Record<string, string | undefined> };
 
 const SITE = "Arles";
 const PROVIDER = "librenms" as const;
+const REQUEST_TIMEOUT_MS = 30_000;
 
 type JsonRecord = Record<string, unknown>;
 
@@ -71,6 +71,7 @@ const requestJson = async (
   if (url.origin !== base.origin) throw new Error("Endpoint LibreNMS invalide");
   const response = await fetch(url, {
     method: "GET",
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     headers: {
       "X-Auth-Token": apiToken,
       Accept: "application/json",
@@ -143,7 +144,6 @@ const parseLldp = (payload: unknown): Array<LibreNmsLldpLink> =>
 export const buildLibreNmsDiscoveries = async (input: {
   inventory: Array<TopologyInventoryItem>;
   physicalConnections: Array<PhysicalTopologyConnection>;
-  syncedAt: number;
 }) => {
   const { base, apiToken } = config();
   const [devicesPayload, portsPayload, fdbPayload, linksPayload] =
@@ -155,6 +155,7 @@ export const buildLibreNmsDiscoveries = async (input: {
     ]);
   return resolveLibreNmsTopology({
     ...input,
+    syncedAt: Date.now(),
     devices: parseDevices(devicesPayload),
     ports: parsePorts(portsPayload),
     fdb: parseFdb(fdbPayload),
@@ -259,42 +260,5 @@ export const listDiscoveredConnections = query({
         },
       ];
     });
-  },
-});
-
-export const syncArles = action({
-  args: {},
-  returns: v.object({ connectionCount: v.number() }),
-  handler: async (ctx): Promise<{ connectionCount: number }> => {
-    const startedAt = Date.now();
-    await ctx.runMutation(internal.librenmsModel.markSyncing, { startedAt });
-    try {
-      const context = await ctx.runQuery(
-        internal.librenmsModel.getTopologyContext,
-        {},
-      );
-      if (context.inventory.length === 0) {
-        throw new Error("Synchronisez NetBox avant LibreNMS");
-      }
-      const completedAt = Date.now();
-      const discoveries = await buildLibreNmsDiscoveries({
-        ...context,
-        syncedAt: completedAt,
-      });
-      return await ctx.runMutation(internal.librenmsModel.replaceDiscoveries, {
-        startedAt,
-        completedAt,
-        discoveries,
-      });
-    } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : "Erreur inconnue";
-      await ctx.runMutation(internal.librenmsModel.markFailed, {
-        startedAt,
-        completedAt: Date.now(),
-        error: message,
-      });
-      throw new ConvexError(message);
-    }
   },
 });
