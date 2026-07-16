@@ -13,8 +13,11 @@ export const useMapStore = create<MapStore>()((set) => ({
   currentBuildingId: null,
   currentFloorId: null,
   selectedDeviceId: null,
+  selectedDeviceIds: [],
+  selectedDeviceIdSet: new Set(),
   hoveredDeviceId: null,
   isEditMode: true,
+  isMultiSelectMode: false,
   highlightedDeviceIds: [],
   highlightedDeviceIdSet: toHighlightedDeviceIdSet([]),
   activeDrawTool: "device",
@@ -26,6 +29,8 @@ export const useMapStore = create<MapStore>()((set) => ({
       currentBuildingId: buildingId,
       currentFloorId: null,
       selectedDeviceId: null,
+      selectedDeviceIds: [],
+      selectedDeviceIdSet: new Set(),
       hoveredDeviceId: null,
       highlightedDeviceIds: [],
       highlightedDeviceIdSet: toHighlightedDeviceIdSet([]),
@@ -35,6 +40,8 @@ export const useMapStore = create<MapStore>()((set) => ({
     set({
       currentFloorId: floorId,
       selectedDeviceId: null,
+      selectedDeviceIds: [],
+      selectedDeviceIdSet: new Set(),
       hoveredDeviceId: null,
       highlightedDeviceIds: [],
       highlightedDeviceIdSet: toHighlightedDeviceIdSet([]),
@@ -44,8 +51,26 @@ export const useMapStore = create<MapStore>()((set) => ({
     set((state) =>
       state.selectedDeviceId === deviceId
         ? state
-        : { selectedDeviceId: deviceId },
+        : {
+            selectedDeviceId: deviceId,
+            selectedDeviceIds: deviceId ? [deviceId] : [],
+            selectedDeviceIdSet: deviceId ? new Set([deviceId]) : new Set(),
+          },
     );
+  },
+  setSelectedDevices: (deviceIds) => {
+    const uniqueIds = [...new Set(deviceIds)];
+    set((state) => {
+      const isSameSelection =
+        state.selectedDeviceIds.length === uniqueIds.length &&
+        state.selectedDeviceIds.every((id, index) => id === uniqueIds[index]);
+      if (isSameSelection) return state;
+      return {
+        selectedDeviceId: uniqueIds.length === 1 ? uniqueIds[0] : null,
+        selectedDeviceIds: uniqueIds,
+        selectedDeviceIdSet: new Set(uniqueIds),
+      };
+    });
   },
   setHoveredDevice: (deviceId) => {
     set((state) =>
@@ -55,9 +80,29 @@ export const useMapStore = create<MapStore>()((set) => ({
     );
   },
   toggleEditMode: () => {
+    set((state) => {
+      const selection = state.isMultiSelectMode
+        ? {
+            selectedDeviceId: null,
+            selectedDeviceIds: [],
+            selectedDeviceIdSet: new Set<DeviceId>(),
+          }
+        : {};
+      return {
+        isEditMode: !state.isEditMode,
+        isMultiSelectMode: false,
+        activeDrawTool: state.isEditMode ? "device" : state.activeDrawTool,
+        ...selection,
+      };
+    });
+  },
+  toggleMultiSelectMode: () => {
     set((state) => ({
-      isEditMode: !state.isEditMode,
-      activeDrawTool: state.isEditMode ? "device" : state.activeDrawTool,
+      isMultiSelectMode: !state.isMultiSelectMode,
+      activeDrawTool: "device",
+      selectedDeviceId: null,
+      selectedDeviceIds: [],
+      selectedDeviceIdSet: new Set(),
     }));
   },
   setActiveDrawTool: (tool) => {

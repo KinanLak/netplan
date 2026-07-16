@@ -19,6 +19,8 @@ interface UseCanvasDeviceNodesParams {
   devices: Array<Device>;
   currentFloorId: FloorId | null;
   selectedDeviceId: DeviceId | null;
+  selectedDeviceIdSet: ReadonlySet<DeviceId>;
+  isMultiSelectMode: boolean;
   activeDrawTool: DrawTool;
   canEditDevices: boolean;
   checkCollision: (
@@ -26,8 +28,12 @@ interface UseCanvasDeviceNodesParams {
     deviceId: DeviceId,
     position: Position,
     size: Size,
+    ignoredDeviceIds?: ReadonlySet<DeviceId>,
   ) => boolean;
   updateDevicePosition: (deviceId: DeviceId, position: Position) => void;
+  updateDevicePositions: (
+    updates: Array<{ deviceId: DeviceId; position: Position }>,
+  ) => void;
   selectDevice: (deviceId: DeviceId | null) => void;
   setHoveredDevice: (deviceId: DeviceId | null) => void;
 }
@@ -113,15 +119,23 @@ export function useCanvasDeviceNodes({
   devices,
   currentFloorId,
   selectedDeviceId,
+  selectedDeviceIdSet,
+  isMultiSelectMode,
   activeDrawTool,
   canEditDevices,
   checkCollision,
   updateDevicePosition,
+  updateDevicePositions,
   selectDevice,
   setHoveredDevice,
 }: UseCanvasDeviceNodesParams): UseCanvasDeviceNodesResult {
   const [nodes, setNodes, onNodesChange] = useNodesState<DeviceNode>([]);
-  const devicePlacement = useDevicePlacement(checkCollision);
+  const devicePlacement = useDevicePlacement((...args) =>
+    checkCollision(
+      ...args,
+      isMultiSelectMode ? selectedDeviceIdSet : undefined,
+    ),
+  );
   const draggingDeviceIdsRef = useRef<Set<DeviceId>>(new Set());
 
   useEffect(() => {
@@ -130,6 +144,7 @@ export function useCanvasDeviceNodes({
       currentFloorId,
       selectedDeviceId,
       canEditDevices,
+      selectedDeviceIdSet,
     );
 
     setNodes((currentNodes) => {
@@ -160,7 +175,14 @@ export function useCanvasDeviceNodes({
         ? currentNodes
         : syncedNodes;
     });
-  }, [devices, currentFloorId, selectedDeviceId, canEditDevices, setNodes]);
+  }, [
+    devices,
+    currentFloorId,
+    selectedDeviceId,
+    selectedDeviceIdSet,
+    canEditDevices,
+    setNodes,
+  ]);
 
   const handleNodesChange: OnNodesChange<DeviceNode> = useCallback(
     (changes) => {
@@ -210,9 +232,18 @@ export function useCanvasDeviceNodes({
       onNodesChange(processedChanges);
 
       if (canEditDevices) {
-        committedPositions.forEach((position, deviceId) => {
-          updateDevicePosition(deviceId, position);
-        });
+        if (committedPositions.size > 1) {
+          updateDevicePositions(
+            [...committedPositions].map(([deviceId, position]) => ({
+              deviceId,
+              position,
+            })),
+          );
+        } else {
+          committedPositions.forEach((position, deviceId) => {
+            updateDevicePosition(deviceId, position);
+          });
+        }
       }
     },
     [
@@ -221,6 +252,7 @@ export function useCanvasDeviceNodes({
       devices,
       onNodesChange,
       updateDevicePosition,
+      updateDevicePositions,
     ],
   );
 
@@ -230,9 +262,11 @@ export function useCanvasDeviceNodes({
         return;
       }
 
+      if (isMultiSelectMode) return;
+
       selectDevice(node.id as DeviceId);
     },
-    [activeDrawTool, selectDevice],
+    [activeDrawTool, isMultiSelectMode, selectDevice],
   );
 
   const handleNodeMouseEnter = useCallback(

@@ -9,7 +9,9 @@ import {
   useIsDeviceHighlighted,
   useIsDeviceSelected,
   useIsEditMode,
+  useIsMultiSelectMode,
   useSelectedDeviceId,
+  useSelectedDeviceIds,
   useSelectedWallColor,
   useWallEraserSize,
 } from "./selectors";
@@ -27,6 +29,8 @@ describe("map store selectors", () => {
     seedMapStore({
       currentFloorId: fid("floor-1"),
       selectedDeviceId: did("device-a"),
+      selectedDeviceIds: [did("device-a")],
+      selectedDeviceIdSet: new Set([did("device-a")]),
       isEditMode: false,
       activeDrawTool: "wall",
       selectedWallColor: "slate",
@@ -41,6 +45,10 @@ describe("map store selectors", () => {
     expect(renderHook(() => useSelectedDeviceId()).result.current).toBe(
       did("device-a"),
     );
+    expect(renderHook(() => useSelectedDeviceIds()).result.current).toEqual([
+      did("device-a"),
+    ]);
+    expect(renderHook(() => useIsMultiSelectMode()).result.current).toBe(false);
     expect(renderHook(() => useIsEditMode()).result.current).toBe(false);
     expect(renderHook(() => useActiveDrawTool()).result.current).toBe("wall");
     expect(renderHook(() => useSelectedWallColor()).result.current).toBe(
@@ -72,5 +80,49 @@ describe("map store selectors", () => {
 
     setWallEraserSize(0);
     expect(useMapStore.getState().wallEraserSize).toBe(1);
+  });
+
+  it("keeps a multi-selection in one coherent store update", () => {
+    const { setSelectedDevices, toggleMultiSelectMode } =
+      useMapStore.getState();
+    toggleMultiSelectMode();
+    setSelectedDevices([did("a"), did("b")]);
+
+    expect(useMapStore.getState().selectedDeviceId).toBeNull();
+    expect(useMapStore.getState().selectedDeviceIds).toEqual([
+      did("a"),
+      did("b"),
+    ]);
+    expect(useMapStore.getState().selectedDeviceIdSet.has(did("b"))).toBe(true);
+  });
+
+  it("clears only a multi-selection when toggling edit mode", () => {
+    seedMapStore({
+      isEditMode: true,
+      isMultiSelectMode: true,
+      selectedDeviceId: null,
+      selectedDeviceIds: [did("a"), did("b")],
+      selectedDeviceIdSet: new Set([did("a"), did("b")]),
+    });
+
+    useMapStore.getState().toggleEditMode();
+
+    expect(useMapStore.getState()).toMatchObject({
+      isEditMode: false,
+      isMultiSelectMode: false,
+      selectedDeviceId: null,
+      selectedDeviceIds: [],
+    });
+    expect(useMapStore.getState().selectedDeviceIdSet.size).toBe(0);
+
+    seedMapStore({
+      isMultiSelectMode: false,
+      selectedDeviceId: did("a"),
+      selectedDeviceIds: [did("a")],
+      selectedDeviceIdSet: new Set([did("a")]),
+    });
+    useMapStore.getState().toggleEditMode();
+
+    expect(useMapStore.getState().selectedDeviceIds).toEqual([did("a")]);
   });
 });

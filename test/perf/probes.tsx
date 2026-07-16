@@ -111,10 +111,13 @@ function CanvasShellProbe({
     devices: document.devices,
     currentFloorId,
     selectedDeviceId,
+    selectedDeviceIdSet: useMapStore.getState().selectedDeviceIdSet,
+    isMultiSelectMode: false,
     activeDrawTool,
     canEditDevices,
     checkCollision: commands.checkCollision,
     updateDevicePosition: commands.updateDevicePosition,
+    updateDevicePositions: commands.updateDevicePositions,
     selectDevice,
     setHoveredDevice,
   });

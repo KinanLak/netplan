@@ -4,11 +4,13 @@ import { ReactFlow, useOnViewportChange, useReactFlow } from "@xyflow/react";
 import type { Viewport } from "@xyflow/react";
 import { nodeTypes } from "./nodeTypes";
 import type { DeviceNode } from "@/devices/reactFlowDeviceAdapter";
+import type { DeviceId } from "@/types/map";
 import { useMapStore } from "@/store/useMapStore";
 import {
   useActiveDrawTool,
   useCurrentFloorId,
   useIsEditMode,
+  useIsMultiSelectMode,
   useSelectedDeviceId,
 } from "@/store/selectors";
 import {
@@ -19,6 +21,8 @@ import {
 import { GRID_SIZE } from "@/lib/grid";
 import { cn } from "@/lib/utils";
 import { CanvasZoomControls } from "@/canvas/components/CanvasZoomControls";
+import { ContextMenu, ContextMenuTrigger } from "@/components/ui/context-menu";
+import { DeviceContextMenu } from "@/integrations/netbox/DeviceContextMenu";
 import {
   WallInteractionLayer,
   createWallPaneEventBridge,
@@ -207,17 +211,24 @@ export default function FlowCanvas() {
   const currentFloorId = useCurrentFloorId();
   const selectedDeviceId = useSelectedDeviceId();
   const isEditMode = useIsEditMode();
+  const isMultiSelectMode = useIsMultiSelectMode();
   const activeDrawTool = useActiveDrawTool();
 
   const selectDevice = useMapStore((s) => s.selectDevice);
   const setHoveredDevice = useMapStore((s) => s.setHoveredDevice);
+  const setSelectedDevices = useMapStore((s) => s.setSelectedDevices);
+  const selectedDeviceIdSet = useMapStore((s) => s.selectedDeviceIdSet);
   const reactFlow = useReactFlow();
+  const contextTargetRef = useRef<DeviceId | null>(null);
+  const [contextTargetId, setContextTargetId] = useState<DeviceId | null>(null);
+  const [isContextMenuOpen, setIsContextMenuOpen] = useState(false);
 
   const { document } = useMapDocumentData();
   const isReady = useMapDocumentReady();
   const { commands } = useMapDocumentActions();
   const { devices, walls } = document;
-  const { updateDevicePosition, checkCollision } = commands;
+  const { updateDevicePosition, updateDevicePositions, checkCollision } =
+    commands;
 
   const canEditDevices = isEditMode && activeDrawTool === "device" && isReady;
   const floorWalls = useMemo(
@@ -235,10 +246,13 @@ export default function FlowCanvas() {
     devices,
     currentFloorId,
     selectedDeviceId,
+    selectedDeviceIdSet,
+    isMultiSelectMode,
     activeDrawTool,
     canEditDevices,
     checkCollision,
     updateDevicePosition,
+    updateDevicePositions,
     selectDevice,
     setHoveredDevice,
   });
@@ -271,6 +285,19 @@ export default function FlowCanvas() {
     });
   };
 
+  const handleNodeContextMenu = (_: React.MouseEvent, node: DeviceNode) => {
+    const deviceId = node.id as DeviceId;
+    contextTargetRef.current = deviceId;
+    setContextTargetId(deviceId);
+    selectDevice(deviceId);
+  };
+
+  const handlePaneContextMenu = (event: React.MouseEvent | MouseEvent) => {
+    contextTargetRef.current = null;
+    setContextTargetId(null);
+    paneBridge.onContextMenu(event);
+  };
+
   const isWallDeleteTool = activeDrawTool === "wall-erase";
   const isWallBrushTool = activeDrawTool === "wall-brush";
   const panOnDrag =
@@ -300,39 +327,61 @@ export default function FlowCanvas() {
 
   return (
     <div className="relative h-full w-full">
-      <ReactFlow<DeviceNode>
-        nodes={nodes}
-        edges={EMPTY_EDGES}
-        onNodesChange={handleNodesChange}
-        onNodeClick={handleNodeClick}
-        onNodeMouseEnter={handleNodeMouseEnter}
-        onNodeMouseLeave={handleNodeMouseLeave}
-        onNodeDragStart={handleNodeDragStart}
-        onNodeDragStop={handleNodeDragStop}
-        onNodeContextMenu={paneBridge.onContextMenu}
-        onPaneClick={paneBridge.onPaneClick}
-        onPaneMouseMove={paneBridge.onPaneMouseMove}
-        onPaneContextMenu={paneBridge.onContextMenu}
-        onMoveStart={handleMoveStart}
-        onMoveEnd={handleMoveEnd}
-        nodeTypes={nodeTypes}
-        snapToGrid={true}
-        snapGrid={SNAP_GRID}
-        fitView
-        fitViewOptions={FIT_VIEW_OPTIONS}
-        minZoom={FLOW_CANVAS_MIN_ZOOM}
-        maxZoom={FLOW_CANVAS_MAX_ZOOM}
-        panOnDrag={panOnDrag}
-        panOnScroll={true}
-        deleteKeyCode={null}
-        nodesDraggable={canEditDevices}
-        className={cn(isCursorDragging && "canvas-cursor-grabbing")}
-        proOptions={PRO_OPTIONS}
+      <ContextMenu
+        open={isContextMenuOpen}
+        onOpenChange={(nextOpen) =>
+          setIsContextMenuOpen(nextOpen && contextTargetRef.current !== null)
+        }
       >
-        <FlowCanvasBackground />
+        <ContextMenuTrigger
+          render={<div className="h-full w-full" />}
+          className="h-full w-full"
+        >
+          <ReactFlow<DeviceNode>
+            nodes={nodes}
+            edges={EMPTY_EDGES}
+            onNodesChange={handleNodesChange}
+            onNodeClick={handleNodeClick}
+            onNodeMouseEnter={handleNodeMouseEnter}
+            onNodeMouseLeave={handleNodeMouseLeave}
+            onNodeDragStart={handleNodeDragStart}
+            onNodeDragStop={handleNodeDragStop}
+            onNodeContextMenu={handleNodeContextMenu}
+            onSelectionChange={({ nodes: selectedNodes }) => {
+              if (!isMultiSelectMode) return;
+              setSelectedDevices(
+                selectedNodes.map((node) => node.id as DeviceId),
+              );
+            }}
+            onPaneClick={paneBridge.onPaneClick}
+            onPaneMouseMove={paneBridge.onPaneMouseMove}
+            onPaneContextMenu={handlePaneContextMenu}
+            onMoveStart={handleMoveStart}
+            onMoveEnd={handleMoveEnd}
+            nodeTypes={nodeTypes}
+            snapToGrid={true}
+            snapGrid={SNAP_GRID}
+            fitView
+            fitViewOptions={FIT_VIEW_OPTIONS}
+            minZoom={FLOW_CANVAS_MIN_ZOOM}
+            maxZoom={FLOW_CANVAS_MAX_ZOOM}
+            panOnDrag={isMultiSelectMode ? RIGHT_MOUSE_PAN_BUTTON : panOnDrag}
+            panOnScroll={true}
+            selectionOnDrag={isMultiSelectMode}
+            deleteKeyCode={null}
+            nodesDraggable={canEditDevices}
+            className={cn(isCursorDragging && "canvas-cursor-grabbing")}
+            proOptions={PRO_OPTIONS}
+          >
+            <FlowCanvasBackground />
 
-        <WallInteractionLayer bridge={paneBridge} floorWalls={floorWalls} />
-      </ReactFlow>
+            <WallInteractionLayer bridge={paneBridge} floorWalls={floorWalls} />
+          </ReactFlow>
+        </ContextMenuTrigger>
+        {contextTargetId ? (
+          <DeviceContextMenu deviceId={contextTargetId} />
+        ) : null}
+      </ContextMenu>
 
       <CanvasZoomControls
         onZoomIn={handleZoomInClick}

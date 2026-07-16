@@ -25,12 +25,14 @@ describe("reconcileEphemeralState", () => {
       },
       {
         selectedDeviceId: "device:missing" as DeviceId,
+        selectedDeviceIds: ["device:a", "device:missing"] as Array<DeviceId>,
         hoveredDeviceId: "device:hover" as DeviceId,
         highlightedDeviceIds: ["device:a", "device:missing"] as Array<DeviceId>,
       },
     );
 
-    expect(patch?.selectedDeviceId).toBe(null);
+    expect(patch?.selectedDeviceId).toBe("device:a");
+    expect(patch?.selectedDeviceIds).toEqual(["device:a"]);
     expect(patch?.hoveredDeviceId).toBe(null);
     expect(patch?.highlightedDeviceIds).toEqual(["device:a"]);
   });
@@ -47,6 +49,7 @@ describe("reconcileEphemeralState", () => {
         },
         {
           selectedDeviceId: "device:a" as DeviceId,
+          selectedDeviceIds: ["device:a"] as Array<DeviceId>,
           hoveredDeviceId: null,
           highlightedDeviceIds: ["device:a"] as Array<DeviceId>,
         },

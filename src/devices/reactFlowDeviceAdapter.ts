@@ -11,6 +11,7 @@ export type DeviceNode = Node<DeviceNodeData>;
 interface DeviceNodeInput {
   device: Device;
   selectedDeviceId: DeviceId | null;
+  selectedDeviceIdSet?: ReadonlySet<DeviceId>;
   canEditDevices: boolean;
 }
 
@@ -21,6 +22,7 @@ export const deviceNodeTypes: NodeTypes = createDeviceKindRecord(
 export const toDeviceNode = ({
   device,
   selectedDeviceId,
+  selectedDeviceIdSet,
   canEditDevices,
 }: DeviceNodeInput): DeviceNode => {
   return {
@@ -28,7 +30,9 @@ export const toDeviceNode = ({
     type: device.type,
     position: device.position,
     data: device as DeviceNodeData,
-    selected: device.id === selectedDeviceId,
+    selected:
+      device.id === selectedDeviceId ||
+      Boolean(selectedDeviceIdSet?.has(device.id)),
     draggable: canEditDevices,
   };
 };
@@ -38,6 +42,7 @@ export const toDeviceNodes = (
   currentFloorId: FloorId | null,
   selectedDeviceId: DeviceId | null,
   canEditDevices: boolean,
+  selectedDeviceIdSet?: ReadonlySet<DeviceId>,
 ): Array<DeviceNode> => {
   return devices.reduce<Array<DeviceNode>>((acc, device) => {
     if (device.floorId !== currentFloorId) {
@@ -48,6 +53,7 @@ export const toDeviceNodes = (
       toDeviceNode({
         device,
         selectedDeviceId,
+        selectedDeviceIdSet,
         canEditDevices,
       }),
     );

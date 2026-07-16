@@ -75,10 +75,14 @@ import type {
   PendingOperationObservation,
 } from "./pendingOperations";
 import { reconcileEphemeralState } from "./reconcileEphemeralState";
+import { sortGroupPositionUpdates } from "@/canvas/groupMovement";
+import type { DevicePositionUpdate } from "@/canvas/groupMovement";
 
 export interface MapDocumentCommands {
   addDevice: (draft: DeviceDraft) => DeviceId | null;
+  addDevices: (drafts: Array<DeviceDraft>) => Array<DeviceId>;
   updateDevicePosition: (deviceId: DeviceId, position: Position) => void;
+  updateDevicePositions: (updates: Array<DevicePositionUpdate>) => void;
   deleteDevice: (deviceId: DeviceId) => void;
   createLink: (link: Omit<LinkDoc, "id">) => LinkId | null;
   deleteLink: (linkId: LinkId) => void;
@@ -87,6 +91,7 @@ export interface MapDocumentCommands {
     deviceId: DeviceId,
     position: Position,
     size: Size,
+    ignoredDeviceIds?: ReadonlySet<DeviceId>,
   ) => boolean;
   addWallLine: (line: WallDraft) => WallCommandResult;
   addWallRoom: (room: RoomDraft) => WallCommandResult;
@@ -357,6 +362,28 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
     return id;
   };
 
+  const addDevices = (drafts: Array<DeviceDraft>): Array<DeviceId> => {
+    const identity = identityRef.current;
+    if (!isReadyRef.current || !identity || drafts.length === 0) return [];
+    const meta = freshMeta();
+    if (!meta) return [];
+    const devices = drafts.map(
+      (draft): Device => ({
+        id: createObjectId("device", identity) as DeviceId,
+        ...draft,
+      }),
+    );
+    dispatchOperation({
+      kind: "batch",
+      meta,
+      operations: devices.map((device) => ({
+        kind: "device.create" as const,
+        device,
+      })),
+    });
+    return devices.map((device) => device.id);
+  };
+
   const updateDevicePosition = (deviceId: DeviceId, position: Position) => {
     if (!isReadyRef.current) return;
     const device = documentRef.current.devices.find(
@@ -372,6 +399,34 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
       meta,
       deviceId,
       patch: { position },
+    });
+  };
+
+  const updateDevicePositions = (updates: Array<DevicePositionUpdate>) => {
+    if (!isReadyRef.current || updates.length === 0) return;
+    const devices = documentRef.current.devices;
+    const deviceById = new Map(devices.map((device) => [device.id, device]));
+    const changedUpdates = sortGroupPositionUpdates(devices, updates).filter(
+      (update) => {
+        const device = deviceById.get(update.deviceId);
+        return (
+          device &&
+          (device.position.x !== update.position.x ||
+            device.position.y !== update.position.y)
+        );
+      },
+    );
+    if (changedUpdates.length === 0) return;
+    const meta = freshMeta();
+    if (!meta) return;
+    dispatchOperation({
+      kind: "batch",
+      meta,
+      operations: changedUpdates.map((update) => ({
+        kind: "device.patch" as const,
+        deviceId: update.deviceId,
+        patch: { position: update.position },
+      })),
     });
   };
 
@@ -410,12 +465,14 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
     deviceId: DeviceId,
     position: Position,
     size: Size,
+    ignoredDeviceIds?: ReadonlySet<DeviceId>,
   ): boolean => {
     if (!isReadyRef.current) return true;
 
     for (const other of documentRef.current.devices) {
       if (other.floorId !== targetFloorId) continue;
       if (other.id === deviceId) continue;
+      if (ignoredDeviceIds?.has(other.id)) continue;
       if (rectanglesOverlap(position, size, other.position, other.size)) {
         return true;
       }
@@ -682,7 +739,9 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
     dispatch: (operation) => dispatchOperation(operation),
     commands: {
       addDevice,
+      addDevices,
       updateDevicePosition,
+      updateDevicePositions,
       deleteDevice,
       createLink,
       deleteLink,

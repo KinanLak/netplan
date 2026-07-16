@@ -1,0 +1,3207 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Plan visuel de la localisation automatique des ordinateurs dans Netplan."
+    />
+    <title>Netplan · Plan de localisation automatique</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --ink: #f4f1e8;
+        --ink-dim: #a9b3b0;
+        --night: #091312;
+        --night-soft: #0f1d1b;
+        --panel: #132321;
+        --panel-strong: #192c29;
+        --line: #29413d;
+        --mint: #8cf3c7;
+        --cyan: #65d9ea;
+        --amber: #f6b95c;
+        --coral: #ff7868;
+        --paper: #e9e2d1;
+        --shadow: 0 30px 80px rgb(0 0 0 / 30%);
+        --radius: 24px;
+        --max: 1240px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        overflow-x: hidden;
+        background:
+          radial-gradient(
+            circle at 85% 8%,
+            rgb(101 217 234 / 9%),
+            transparent 27rem
+          ),
+          radial-gradient(
+            circle at 8% 38%,
+            rgb(140 243 199 / 7%),
+            transparent 32rem
+          ),
+          var(--night);
+        color: var(--ink);
+        font-family:
+          Inter, Aptos, "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+        line-height: 1.5;
+      }
+
+      body::before {
+        position: fixed;
+        z-index: -1;
+        inset: 0;
+        background-image:
+          linear-gradient(rgb(255 255 255 / 2.2%) 1px, transparent 1px),
+          linear-gradient(90deg, rgb(255 255 255 / 2.2%) 1px, transparent 1px);
+        background-size: 48px 48px;
+        content: "";
+        mask-image: linear-gradient(to bottom, black, transparent 85%);
+      }
+
+      a {
+        color: inherit;
+      }
+
+      button,
+      a {
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      .skip-link {
+        position: fixed;
+        z-index: 100;
+        top: 12px;
+        left: 12px;
+        padding: 10px 14px;
+        transform: translateY(-150%);
+        border-radius: 10px;
+        background: var(--paper);
+        color: var(--night);
+      }
+
+      .skip-link:focus {
+        transform: none;
+      }
+
+      .shell {
+        width: min(calc(100% - 40px), var(--max));
+        margin-inline: auto;
+      }
+
+      .topbar {
+        position: sticky;
+        z-index: 50;
+        top: 0;
+        border-bottom: 1px solid rgb(255 255 255 / 8%);
+        background: rgb(9 19 18 / 82%);
+        backdrop-filter: blur(18px);
+      }
+
+      .topbar-inner {
+        display: flex;
+        min-height: 64px;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+      }
+
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 11px;
+        color: var(--ink);
+        font-size: 0.76rem;
+        font-weight: 800;
+        letter-spacing: 0.16em;
+        text-decoration: none;
+        text-transform: uppercase;
+        white-space: nowrap;
+      }
+
+      .brand-mark {
+        display: grid;
+        width: 30px;
+        height: 30px;
+        place-items: center;
+        border: 1px solid var(--mint);
+        border-radius: 50%;
+        color: var(--mint);
+        box-shadow: 0 0 24px rgb(140 243 199 / 18%);
+      }
+
+      .brand-mark::before {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: currentColor;
+        box-shadow:
+          -8px 6px 0 -2px currentColor,
+          8px 6px 0 -2px currentColor;
+        content: "";
+      }
+
+      .nav {
+        display: flex;
+        overflow-x: auto;
+        align-items: center;
+        gap: 7px;
+        scrollbar-width: none;
+      }
+
+      .nav::-webkit-scrollbar {
+        display: none;
+      }
+
+      .nav a {
+        padding: 8px 11px;
+        border-radius: 999px;
+        color: var(--ink-dim);
+        font-size: 0.75rem;
+        font-weight: 650;
+        text-decoration: none;
+        white-space: nowrap;
+      }
+
+      .nav a:hover,
+      .nav a:focus-visible {
+        background: var(--panel);
+        color: var(--ink);
+        outline: none;
+      }
+
+      .hero {
+        position: relative;
+        display: grid;
+        min-height: 720px;
+        align-items: center;
+        padding-block: 86px 64px;
+      }
+
+      .hero-grid {
+        display: grid;
+        align-items: center;
+        gap: 64px;
+        grid-template-columns: minmax(0, 1.05fr) minmax(380px, 0.95fr);
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        margin-bottom: 19px;
+        color: var(--mint);
+        font-size: 0.76rem;
+        font-weight: 800;
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+      }
+
+      .eyebrow::before {
+        width: 23px;
+        height: 1px;
+        background: currentColor;
+        content: "";
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin-top: 0;
+      }
+
+      h1 {
+        max-width: 750px;
+        margin-bottom: 26px;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: clamp(3.2rem, 7vw, 6.9rem);
+        font-weight: 400;
+        letter-spacing: -0.06em;
+        line-height: 0.91;
+      }
+
+      h1 .accent {
+        color: var(--mint);
+        font-style: italic;
+      }
+
+      .hero-copy {
+        max-width: 640px;
+        margin-bottom: 34px;
+        color: var(--ink-dim);
+        font-size: clamp(1rem, 1.7vw, 1.25rem);
+      }
+
+      .hero-copy strong {
+        color: var(--ink);
+        font-weight: 650;
+      }
+
+      .hero-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+
+      .button {
+        display: inline-flex;
+        min-height: 45px;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        padding: 10px 17px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--panel);
+        font-size: 0.82rem;
+        font-weight: 750;
+        text-decoration: none;
+      }
+
+      .button.primary {
+        border-color: var(--mint);
+        background: var(--mint);
+        color: #07110f;
+      }
+
+      .button:hover,
+      .button:focus-visible {
+        transform: translateY(-2px);
+        box-shadow: 0 12px 30px rgb(0 0 0 / 24%);
+        outline: none;
+      }
+
+      .radar-card {
+        position: relative;
+        width: min(100%, 520px);
+        aspect-ratio: 1;
+        margin-left: auto;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 50%;
+        background:
+          radial-gradient(
+            circle,
+            transparent 19%,
+            rgb(140 243 199 / 9%) 19.5%,
+            transparent 20%,
+            transparent 39%,
+            rgb(140 243 199 / 8%) 39.5%,
+            transparent 40%,
+            transparent 59%,
+            rgb(140 243 199 / 7%) 59.5%,
+            transparent 60%
+          ),
+          conic-gradient(
+            from 20deg,
+            transparent 0 84%,
+            rgb(140 243 199 / 18%) 91%,
+            transparent 98%
+          ),
+          #0b1917;
+        box-shadow:
+          var(--shadow),
+          inset 0 0 80px rgb(0 0 0 / 25%);
+      }
+
+      .radar-card::before,
+      .radar-card::after {
+        position: absolute;
+        background: rgb(140 243 199 / 15%);
+        content: "";
+      }
+
+      .radar-card::before {
+        top: 50%;
+        left: 0;
+        width: 100%;
+        height: 1px;
+      }
+
+      .radar-card::after {
+        top: 0;
+        left: 50%;
+        width: 1px;
+        height: 100%;
+      }
+
+      .radar-sweep {
+        position: absolute;
+        z-index: 1;
+        inset: 0;
+        border-radius: 50%;
+        background: conic-gradient(
+          from 0deg,
+          transparent 0 82%,
+          rgb(140 243 199 / 24%) 98%,
+          transparent
+        );
+        animation: sweep 7s linear infinite;
+      }
+
+      .radar-center {
+        position: absolute;
+        z-index: 3;
+        top: 50%;
+        left: 50%;
+        display: grid;
+        width: 86px;
+        height: 86px;
+        place-items: center;
+        transform: translate(-50%, -50%);
+        border: 1px solid var(--mint);
+        border-radius: 50%;
+        background: #10231f;
+        color: var(--mint);
+        font-size: 0.65rem;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        text-align: center;
+        text-transform: uppercase;
+        box-shadow: 0 0 50px rgb(140 243 199 / 22%);
+      }
+
+      .radar-node {
+        position: absolute;
+        z-index: 4;
+        display: grid;
+        min-width: 70px;
+        min-height: 70px;
+        place-items: center;
+        padding: 10px;
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: rgb(19 35 33 / 93%);
+        box-shadow: 0 16px 35px rgb(0 0 0 / 25%);
+        font-size: 0.66rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-align: center;
+        text-transform: uppercase;
+      }
+
+      .radar-node::before {
+        width: 9px;
+        height: 9px;
+        margin-bottom: 5px;
+        border-radius: 50%;
+        background: var(--node-color, var(--mint));
+        box-shadow: 0 0 16px var(--node-color, var(--mint));
+        content: "";
+      }
+
+      .radar-node.mac {
+        top: 15%;
+        left: 17%;
+        --node-color: var(--cyan);
+      }
+
+      .radar-node.switch {
+        top: 13%;
+        right: 14%;
+        --node-color: var(--amber);
+      }
+
+      .radar-node.socket {
+        right: 10%;
+        bottom: 20%;
+        --node-color: var(--coral);
+      }
+
+      .radar-node.map {
+        bottom: 12%;
+        left: 18%;
+        --node-color: var(--mint);
+      }
+
+      .hero-stats {
+        display: grid;
+        margin-top: 66px;
+        border-top: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
+        grid-template-columns: repeat(4, 1fr);
+      }
+
+      .hero-stat {
+        padding: 25px 22px;
+        border-right: 1px solid var(--line);
+      }
+
+      .hero-stat:last-child {
+        border-right: 0;
+      }
+
+      .hero-stat strong {
+        display: block;
+        margin-bottom: 3px;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: clamp(1.75rem, 3vw, 2.6rem);
+        font-weight: 400;
+        line-height: 1;
+      }
+
+      .hero-stat span {
+        color: var(--ink-dim);
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      section {
+        padding-block: 105px;
+        scroll-margin-top: 60px;
+      }
+
+      .section-head {
+        display: grid;
+        align-items: end;
+        gap: 32px;
+        margin-bottom: 50px;
+        grid-template-columns: 1fr minmax(280px, 0.55fr);
+      }
+
+      .section-kicker {
+        display: block;
+        margin-bottom: 12px;
+        color: var(--mint);
+        font-size: 0.7rem;
+        font-weight: 850;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+
+      h2 {
+        max-width: 780px;
+        margin-bottom: 0;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: clamp(2.45rem, 5.5vw, 5.3rem);
+        font-weight: 400;
+        letter-spacing: -0.045em;
+        line-height: 0.98;
+      }
+
+      .section-intro {
+        margin: 0;
+        color: var(--ink-dim);
+        font-size: 0.98rem;
+      }
+
+      .section-intro strong {
+        color: var(--ink);
+      }
+
+      .paper-section {
+        position: relative;
+        background: var(--paper);
+        color: #10201d;
+      }
+
+      .paper-section::before,
+      .paper-section::after {
+        position: absolute;
+        right: 0;
+        left: 0;
+        height: 22px;
+        background-image:
+          linear-gradient(135deg, var(--night) 25%, transparent 25%),
+          linear-gradient(225deg, var(--night) 25%, transparent 25%);
+        background-position: 0 0;
+        background-size: 22px 22px;
+        content: "";
+      }
+
+      .paper-section::before {
+        top: 0;
+      }
+
+      .paper-section::after {
+        bottom: 0;
+        transform: rotate(180deg);
+      }
+
+      .paper-section .section-kicker {
+        color: #1c745f;
+      }
+
+      .paper-section .section-intro {
+        color: #52625e;
+      }
+
+      .paper-section .section-intro strong {
+        color: #10201d;
+      }
+
+      .chain {
+        position: relative;
+        display: grid;
+        gap: 12px;
+        grid-template-columns: repeat(6, 1fr);
+      }
+
+      .chain::before {
+        position: absolute;
+        top: 59px;
+        right: 8%;
+        left: 8%;
+        height: 2px;
+        background: #9ba9a3;
+        content: "";
+      }
+
+      .chain-step {
+        position: relative;
+        z-index: 1;
+        padding: 22px 12px;
+        text-align: center;
+      }
+
+      .chain-icon {
+        display: grid;
+        width: 76px;
+        height: 76px;
+        margin: 0 auto 18px;
+        place-items: center;
+        border: 2px solid #163b33;
+        border-radius: 50%;
+        background: var(--paper);
+        color: #163b33;
+        font-family: Georgia, serif;
+        font-size: 1.35rem;
+        font-style: italic;
+        box-shadow: 0 0 0 8px var(--paper);
+      }
+
+      .chain-step:nth-child(2) .chain-icon,
+      .chain-step:nth-child(3) .chain-icon {
+        border-color: #a66614;
+        color: #a66614;
+      }
+
+      .chain-step:nth-child(4) .chain-icon,
+      .chain-step:nth-child(5) .chain-icon {
+        border-color: #a63f35;
+        color: #a63f35;
+      }
+
+      .chain-step strong {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 0.86rem;
+      }
+
+      .chain-step span {
+        display: block;
+        color: #60706c;
+        font-size: 0.72rem;
+      }
+
+      .truth-levels {
+        display: grid;
+        gap: 18px;
+        margin-top: 48px;
+        grid-template-columns: repeat(3, 1fr);
+      }
+
+      .truth-card {
+        position: relative;
+        min-height: 270px;
+        padding: 27px;
+        overflow: hidden;
+        border: 1px solid #b9c1b9;
+        border-radius: 22px;
+        background: rgb(255 255 255 / 36%);
+      }
+
+      .truth-card::after {
+        position: absolute;
+        right: -22px;
+        bottom: -55px;
+        color: rgb(16 32 29 / 6%);
+        font-family: Georgia, serif;
+        font-size: 10rem;
+        line-height: 1;
+        content: attr(data-number);
+      }
+
+      .truth-card .tag {
+        display: inline-block;
+        margin-bottom: 38px;
+        padding: 6px 9px;
+        border: 1px solid currentColor;
+        border-radius: 999px;
+        color: #196550;
+        font-size: 0.64rem;
+        font-weight: 850;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .truth-card:nth-child(2) .tag {
+        color: #95600e;
+      }
+
+      .truth-card:nth-child(3) .tag {
+        color: #a63f35;
+      }
+
+      .truth-card h3 {
+        margin-bottom: 9px;
+        font-family: Georgia, serif;
+        font-size: 1.8rem;
+        font-weight: 400;
+      }
+
+      .truth-card p {
+        position: relative;
+        z-index: 1;
+        margin-bottom: 18px;
+        color: #53635f;
+        font-size: 0.85rem;
+      }
+
+      .truth-card .proof {
+        color: #10201d;
+        font-size: 0.73rem;
+        font-weight: 750;
+      }
+
+      .no-invention {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        margin-top: 24px;
+        padding: 22px 26px;
+        border: 1px solid #bd8b84;
+        border-radius: 18px;
+        background: #f3d9d2;
+      }
+
+      .no-invention strong {
+        min-width: max-content;
+        color: #8f2f28;
+        font-size: 0.75rem;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .no-invention p {
+        margin: 0;
+        color: #603e39;
+        font-size: 0.86rem;
+      }
+
+      .baseline-grid {
+        display: grid;
+        gap: 18px;
+        grid-template-columns: 1.25fr 0.75fr 0.75fr;
+      }
+
+      .metric-card {
+        position: relative;
+        min-height: 220px;
+        padding: 28px;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--panel);
+      }
+
+      .metric-card.wide {
+        grid-row: span 2;
+      }
+
+      .metric-card.accent {
+        background: var(--mint);
+        color: #0b1b18;
+      }
+
+      .metric-label {
+        display: block;
+        margin-bottom: 34px;
+        color: var(--ink-dim);
+        font-size: 0.66rem;
+        font-weight: 850;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .accent .metric-label {
+        color: #326859;
+      }
+
+      .metric-number {
+        display: block;
+        margin-bottom: 9px;
+        font-family: Georgia, serif;
+        font-size: clamp(3rem, 6vw, 5.8rem);
+        font-weight: 400;
+        letter-spacing: -0.06em;
+        line-height: 0.85;
+      }
+
+      .metric-card:not(.wide) .metric-number {
+        font-size: clamp(2.4rem, 4vw, 4rem);
+      }
+
+      .metric-note {
+        max-width: 310px;
+        margin: 0;
+        color: var(--ink-dim);
+        font-size: 0.8rem;
+      }
+
+      .accent .metric-note {
+        color: #28564a;
+      }
+
+      .coverage {
+        margin-top: 42px;
+      }
+
+      .coverage-row {
+        display: grid;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 18px;
+        grid-template-columns: 180px minmax(100px, 1fr) 58px;
+      }
+
+      .coverage-row span,
+      .coverage-row strong {
+        font-size: 0.77rem;
+      }
+
+      .coverage-row span {
+        color: var(--ink-dim);
+      }
+
+      .coverage-row strong {
+        text-align: right;
+      }
+
+      .bar {
+        height: 8px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: var(--panel-strong);
+      }
+
+      .bar > i {
+        display: block;
+        width: var(--value);
+        height: 100%;
+        border-radius: inherit;
+        background: var(--color, var(--mint));
+        box-shadow: 0 0 18px var(--color, var(--mint));
+      }
+
+      .cadence-board {
+        display: grid;
+        gap: 18px;
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .cadence-card {
+        padding: 29px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--panel);
+      }
+
+      .cadence-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        margin-bottom: 28px;
+      }
+
+      .cadence-title h3 {
+        margin: 0;
+        font-size: 1rem;
+      }
+
+      .cadence-title span {
+        padding: 5px 9px;
+        border-radius: 999px;
+        background: rgb(140 243 199 / 10%);
+        color: var(--mint);
+        font-size: 0.65rem;
+        font-weight: 850;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .time-track {
+        position: relative;
+        height: 64px;
+        margin-bottom: 22px;
+      }
+
+      .time-track::before {
+        position: absolute;
+        top: 25px;
+        right: 0;
+        left: 0;
+        height: 4px;
+        border-radius: 4px;
+        background: var(--line);
+        content: "";
+      }
+
+      .track-active {
+        position: absolute;
+        top: 25px;
+        left: var(--start, 0%);
+        width: var(--length, 100%);
+        height: 4px;
+        border-radius: 4px;
+        background: var(--track, var(--mint));
+        box-shadow: 0 0 20px var(--track, var(--mint));
+      }
+
+      .track-dot {
+        position: absolute;
+        top: 18px;
+        left: var(--x);
+        width: 18px;
+        height: 18px;
+        transform: translateX(-50%);
+        border: 4px solid var(--panel);
+        border-radius: 50%;
+        background: var(--track, var(--mint));
+        box-shadow: 0 0 0 1px var(--track, var(--mint));
+      }
+
+      .track-dot::after {
+        position: absolute;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        color: var(--ink-dim);
+        font-size: 0.62rem;
+        font-weight: 750;
+        content: attr(data-time);
+      }
+
+      .cadence-card p {
+        margin: 0;
+        color: var(--ink-dim);
+        font-size: 0.78rem;
+      }
+
+      .split-rule {
+        display: grid;
+        gap: 12px;
+        margin-top: 18px;
+        grid-template-columns: repeat(3, 1fr);
+      }
+
+      .mini-rule {
+        padding: 17px;
+        border: 1px solid var(--line);
+        border-radius: 15px;
+        background: #0c1816;
+      }
+
+      .mini-rule strong {
+        display: block;
+        margin-bottom: 4px;
+        color: var(--amber);
+        font-size: 0.76rem;
+      }
+
+      .mini-rule span {
+        color: var(--ink-dim);
+        font-size: 0.69rem;
+      }
+
+      .roadmap {
+        position: relative;
+      }
+
+      .roadmap::before {
+        position: absolute;
+        top: 52px;
+        bottom: 52px;
+        left: 50%;
+        width: 1px;
+        background: linear-gradient(
+          var(--mint),
+          var(--cyan),
+          var(--amber),
+          var(--coral)
+        );
+        content: "";
+      }
+
+      .phase {
+        position: relative;
+        display: grid;
+        align-items: center;
+        gap: 82px;
+        min-height: 210px;
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .phase::before {
+        position: absolute;
+        z-index: 2;
+        top: 50%;
+        left: 50%;
+        width: 13px;
+        height: 13px;
+        transform: translate(-50%, -50%);
+        border: 4px solid var(--night);
+        border-radius: 50%;
+        background: var(--phase, var(--mint));
+        box-shadow:
+          0 0 0 1px var(--phase, var(--mint)),
+          0 0 20px var(--phase, var(--mint));
+        content: "";
+      }
+
+      .phase:nth-child(even) .phase-card {
+        grid-column: 2;
+      }
+
+      .phase:nth-child(even) .phase-index {
+        grid-column: 1;
+        grid-row: 1;
+        text-align: right;
+      }
+
+      .phase-card {
+        padding: 27px;
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        background: linear-gradient(145deg, var(--panel), #0e1b19);
+      }
+
+      .phase-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        margin-bottom: 18px;
+      }
+
+      .phase-pill {
+        color: var(--phase, var(--mint));
+        font-size: 0.64rem;
+        font-weight: 850;
+        letter-spacing: 0.13em;
+        text-transform: uppercase;
+      }
+
+      .phase-link {
+        color: var(--ink-dim);
+        font-size: 0.7rem;
+        text-decoration: none;
+      }
+
+      .phase-link:hover {
+        color: var(--ink);
+      }
+
+      .phase-card h3 {
+        margin-bottom: 10px;
+        font-family: Georgia, serif;
+        font-size: 1.55rem;
+        font-weight: 400;
+      }
+
+      .phase-card p {
+        margin-bottom: 18px;
+        color: var(--ink-dim);
+        font-size: 0.8rem;
+      }
+
+      .phase-output {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding-top: 15px;
+        border-top: 1px solid var(--line);
+        color: var(--ink);
+        font-size: 0.71rem;
+        font-weight: 720;
+      }
+
+      .phase-output::before {
+        width: 7px;
+        height: 7px;
+        flex: 0 0 auto;
+        border-radius: 50%;
+        background: var(--phase, var(--mint));
+        content: "";
+      }
+
+      .phase-index strong {
+        display: block;
+        color: var(--phase, var(--mint));
+        font-family: Georgia, serif;
+        font-size: 2.7rem;
+        font-weight: 400;
+        line-height: 1;
+      }
+
+      .phase-index span {
+        color: var(--ink-dim);
+        font-size: 0.67rem;
+        font-weight: 780;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      .cycle-canvas {
+        display: grid;
+        gap: 18px;
+        grid-template-columns: 0.85fr 1.25fr 0.85fr;
+      }
+
+      .cycle-column {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 14px;
+      }
+
+      .flow-box {
+        position: relative;
+        padding: 21px;
+        border: 1px solid var(--line);
+        border-radius: 17px;
+        background: var(--panel);
+      }
+
+      .flow-box small {
+        display: block;
+        margin-bottom: 6px;
+        color: var(--mint);
+        font-size: 0.61rem;
+        font-weight: 850;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .flow-box strong {
+        display: block;
+        font-size: 0.86rem;
+      }
+
+      .flow-box span {
+        display: block;
+        margin-top: 4px;
+        color: var(--ink-dim);
+        font-size: 0.7rem;
+      }
+
+      .flow-arrow {
+        color: var(--ink-dim);
+        font-size: 1.2rem;
+        text-align: center;
+      }
+
+      .switch-stage {
+        padding: 27px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: #0d1b19;
+      }
+
+      .switch-stage-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 22px;
+      }
+
+      .switch-stage-header strong {
+        font-size: 0.76rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      .live-dot {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        color: var(--mint);
+        font-size: 0.62rem;
+        font-weight: 800;
+      }
+
+      .live-dot::before {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: currentColor;
+        box-shadow: 0 0 14px currentColor;
+        content: "";
+        animation: pulse 1.8s ease-in-out infinite;
+      }
+
+      .switch-lanes {
+        display: grid;
+        gap: 13px;
+      }
+
+      .switch-lane {
+        display: grid;
+        align-items: center;
+        gap: 14px;
+        padding: 15px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: var(--panel);
+        grid-template-columns: 48px 1fr auto;
+      }
+
+      .switch-name {
+        display: grid;
+        width: 42px;
+        height: 42px;
+        place-items: center;
+        border-radius: 11px;
+        background: rgb(101 217 234 / 11%);
+        color: var(--cyan);
+        font-size: 0.69rem;
+        font-weight: 850;
+      }
+
+      .lane-progress strong {
+        display: block;
+        margin-bottom: 7px;
+        font-size: 0.72rem;
+      }
+
+      .lane-bar {
+        height: 5px;
+        overflow: hidden;
+        border-radius: 5px;
+        background: var(--line);
+      }
+
+      .lane-bar i {
+        display: block;
+        width: 88%;
+        height: 100%;
+        border-radius: inherit;
+        background: var(--cyan);
+      }
+
+      .lane-status {
+        color: var(--mint);
+        font-size: 0.65rem;
+        font-weight: 800;
+      }
+
+      .atomic-gate {
+        margin-top: 17px;
+        padding: 17px;
+        border: 1px dashed var(--amber);
+        border-radius: 14px;
+        background: rgb(246 185 92 / 6%);
+        color: var(--amber);
+        font-size: 0.72rem;
+        font-weight: 780;
+        text-align: center;
+      }
+
+      .backoff-strip {
+        display: grid;
+        gap: 10px;
+        margin-top: 20px;
+        grid-template-columns: repeat(4, 1fr);
+      }
+
+      .backoff-step {
+        position: relative;
+        padding: 18px 10px;
+        border: 1px solid var(--line);
+        border-radius: 13px;
+        background: var(--panel);
+        text-align: center;
+      }
+
+      .backoff-step:not(:last-child)::after {
+        position: absolute;
+        top: 50%;
+        right: -9px;
+        width: 8px;
+        height: 1px;
+        background: var(--coral);
+        content: "";
+      }
+
+      .backoff-step strong {
+        display: block;
+        color: var(--coral);
+        font-family: Georgia, serif;
+        font-size: 1.45rem;
+        font-weight: 400;
+      }
+
+      .backoff-step span {
+        color: var(--ink-dim);
+        font-size: 0.62rem;
+      }
+
+      .state-journey {
+        display: grid;
+        gap: 15px;
+        grid-template-columns: repeat(4, 1fr);
+      }
+
+      .state-card {
+        position: relative;
+        min-height: 250px;
+        padding: 25px;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 21px;
+        background: var(--panel);
+      }
+
+      .state-card:not(:last-child)::after {
+        position: absolute;
+        z-index: 2;
+        top: 49px;
+        right: -15px;
+        width: 28px;
+        height: 28px;
+        border: 1px solid var(--line);
+        border-width: 1px 1px 0 0;
+        background: var(--panel);
+        content: "";
+        transform: rotate(45deg);
+      }
+
+      .state-time {
+        display: block;
+        margin-bottom: 20px;
+        color: var(--state, var(--mint));
+        font-size: 0.64rem;
+        font-weight: 850;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .state-symbol {
+        display: grid;
+        width: 48px;
+        height: 48px;
+        margin-bottom: 26px;
+        place-items: center;
+        border: 1px solid var(--state, var(--mint));
+        border-radius: 50%;
+        color: var(--state, var(--mint));
+        font-family: Georgia, serif;
+        font-size: 1.2rem;
+      }
+
+      .state-card h3 {
+        margin-bottom: 8px;
+        font-family: Georgia, serif;
+        font-size: 1.45rem;
+        font-weight: 400;
+      }
+
+      .state-card p {
+        margin: 0;
+        color: var(--ink-dim);
+        font-size: 0.76rem;
+      }
+
+      .state-note {
+        display: grid;
+        gap: 14px;
+        margin-top: 20px;
+        grid-template-columns: repeat(3, 1fr);
+      }
+
+      .state-note div {
+        padding: 19px;
+        border-left: 2px solid var(--note, var(--cyan));
+        background: rgb(255 255 255 / 2.5%);
+      }
+
+      .state-note strong {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 0.73rem;
+      }
+
+      .state-note span {
+        color: var(--ink-dim);
+        font-size: 0.68rem;
+      }
+
+      .ux-demo {
+        display: grid;
+        align-items: center;
+        gap: 70px;
+        grid-template-columns: 0.9fr 1.1fr;
+      }
+
+      .mock-window {
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 27px;
+        background: #101c1a;
+        box-shadow: var(--shadow);
+      }
+
+      .mock-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 15px 18px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .mock-dots {
+        display: flex;
+        gap: 6px;
+      }
+
+      .mock-dots i {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--line);
+      }
+
+      .refresh-button {
+        position: relative;
+        min-width: 190px;
+        overflow: hidden;
+        padding: 10px 14px;
+        border: 1px solid #3d625a;
+        border-radius: 10px;
+        color: var(--ink);
+        font-size: 0.68rem;
+        font-weight: 750;
+        text-align: center;
+      }
+
+      .refresh-button::before {
+        position: absolute;
+        z-index: 0;
+        inset: 0 32% 0 0;
+        background: rgb(140 243 199 / 18%);
+        content: "";
+      }
+
+      .refresh-button span {
+        position: relative;
+      }
+
+      .mock-map {
+        position: relative;
+        min-height: 420px;
+        background:
+          linear-gradient(
+            90deg,
+            transparent 49.7%,
+            rgb(255 255 255 / 5%) 50%,
+            transparent 50.3%
+          ),
+          linear-gradient(
+            transparent 49.7%,
+            rgb(255 255 255 / 5%) 50%,
+            transparent 50.3%
+          ),
+          #0b1715;
+        background-size: 60px 60px;
+      }
+
+      .floor-shape {
+        position: absolute;
+        inset: 60px 48px 62px;
+        border: 2px solid #34514b;
+        border-radius: 8px 70px 8px 8px;
+      }
+
+      .floor-shape::before,
+      .floor-shape::after {
+        position: absolute;
+        background: #34514b;
+        content: "";
+      }
+
+      .floor-shape::before {
+        top: 42%;
+        left: 0;
+        width: 70%;
+        height: 2px;
+      }
+
+      .floor-shape::after {
+        top: 0;
+        left: 48%;
+        width: 2px;
+        height: 42%;
+      }
+
+      .socket-pin,
+      .computer-pin {
+        position: absolute;
+        z-index: 2;
+        display: grid;
+        place-items: center;
+        border-radius: 50%;
+        font-size: 0.57rem;
+        font-weight: 850;
+      }
+
+      .socket-pin {
+        top: 40%;
+        left: 46%;
+        width: 34px;
+        height: 34px;
+        border: 1px solid var(--coral);
+        background: #2d1c1a;
+        color: var(--coral);
+      }
+
+      .computer-pin {
+        top: 48%;
+        left: 54%;
+        width: 66px;
+        height: 66px;
+        border: 1px solid var(--mint);
+        background: #122a24;
+        color: var(--mint);
+        box-shadow: 0 0 35px rgb(140 243 199 / 13%);
+      }
+
+      .pin-link {
+        position: absolute;
+        z-index: 1;
+        top: 48%;
+        left: 49%;
+        width: 56px;
+        height: 1px;
+        transform: rotate(23deg);
+        transform-origin: left;
+        background: var(--mint);
+      }
+
+      .fresh-card {
+        position: absolute;
+        right: 23px;
+        bottom: 22px;
+        width: 210px;
+        padding: 16px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: rgb(19 35 33 / 94%);
+        box-shadow: 0 14px 30px rgb(0 0 0 / 24%);
+      }
+
+      .fresh-card strong {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 0.72rem;
+      }
+
+      .fresh-card span {
+        color: var(--ink-dim);
+        font-size: 0.63rem;
+      }
+
+      .ux-points {
+        display: grid;
+        gap: 22px;
+      }
+
+      .ux-point {
+        display: grid;
+        gap: 16px;
+        grid-template-columns: 42px 1fr;
+      }
+
+      .ux-point b {
+        display: grid;
+        width: 38px;
+        height: 38px;
+        place-items: center;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        color: var(--mint);
+        font-family: Georgia, serif;
+        font-size: 0.9rem;
+        font-weight: 400;
+      }
+
+      .ux-point strong {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 0.82rem;
+      }
+
+      .ux-point span {
+        display: block;
+        color: var(--ink-dim);
+        font-size: 0.75rem;
+      }
+
+      .history-layout {
+        display: grid;
+        gap: 32px;
+        grid-template-columns: 1.2fr 0.8fr;
+      }
+
+      .history-clock {
+        padding: 32px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--panel);
+      }
+
+      .clock-title {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 18px;
+        margin-bottom: 35px;
+      }
+
+      .clock-title strong {
+        font-family: Georgia, serif;
+        font-size: 1.55rem;
+        font-weight: 400;
+      }
+
+      .clock-title span {
+        color: var(--ink-dim);
+        font-size: 0.68rem;
+      }
+
+      .snapshot-line {
+        position: relative;
+        display: flex;
+        justify-content: space-between;
+        margin: 0 12px 42px;
+      }
+
+      .snapshot-line::before {
+        position: absolute;
+        top: 10px;
+        right: 0;
+        left: 0;
+        height: 2px;
+        background: var(--line);
+        content: "";
+      }
+
+      .snapshot {
+        position: relative;
+        z-index: 1;
+        text-align: center;
+      }
+
+      .snapshot i {
+        display: block;
+        width: 20px;
+        height: 20px;
+        margin: 0 auto 11px;
+        border: 5px solid var(--panel);
+        border-radius: 50%;
+        background: var(--amber);
+        box-shadow: 0 0 0 1px var(--amber);
+      }
+
+      .snapshot strong {
+        display: block;
+        font-size: 0.68rem;
+      }
+
+      .snapshot span {
+        color: var(--ink-dim);
+        font-size: 0.58rem;
+      }
+
+      .volume-compare {
+        display: grid;
+        gap: 12px;
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .volume-card {
+        padding: 20px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: #0d1917;
+      }
+
+      .volume-card strong {
+        display: block;
+        margin-bottom: 5px;
+        color: var(--mint);
+        font-family: Georgia, serif;
+        font-size: 1.8rem;
+        font-weight: 400;
+      }
+
+      .volume-card.bad strong {
+        color: var(--coral);
+      }
+
+      .volume-card span {
+        color: var(--ink-dim);
+        font-size: 0.67rem;
+      }
+
+      .retention-card {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        padding: 32px;
+        border: 1px solid var(--mint);
+        border-radius: var(--radius);
+        background: rgb(140 243 199 / 7%);
+      }
+
+      .retention-ring {
+        display: grid;
+        width: 185px;
+        height: 185px;
+        margin: 10px auto 28px;
+        place-items: center;
+        border: 19px solid var(--line);
+        border-top-color: var(--mint);
+        border-right-color: var(--mint);
+        border-bottom-color: var(--mint);
+        border-radius: 50%;
+        transform: rotate(12deg);
+      }
+
+      .retention-ring div {
+        transform: rotate(-12deg);
+        text-align: center;
+      }
+
+      .retention-ring strong {
+        display: block;
+        font-family: Georgia, serif;
+        font-size: 2.7rem;
+        font-weight: 400;
+        line-height: 1;
+      }
+
+      .retention-ring span {
+        color: var(--ink-dim);
+        font-size: 0.64rem;
+        text-transform: uppercase;
+      }
+
+      .retention-card p {
+        margin: 0;
+        color: var(--ink-dim);
+        font-size: 0.74rem;
+        text-align: center;
+      }
+
+      .guardrails {
+        display: grid;
+        gap: 15px;
+        grid-template-columns: repeat(3, 1fr);
+      }
+
+      .guardrail {
+        padding: 25px;
+        border: 1px solid var(--line);
+        border-radius: 19px;
+        background: var(--panel);
+      }
+
+      .guardrail .x {
+        display: grid;
+        width: 34px;
+        height: 34px;
+        margin-bottom: 28px;
+        place-items: center;
+        border: 1px solid var(--coral);
+        border-radius: 50%;
+        color: var(--coral);
+        font-family: Georgia, serif;
+      }
+
+      .guardrail strong {
+        display: block;
+        margin-bottom: 7px;
+        font-size: 0.82rem;
+      }
+
+      .guardrail p {
+        margin: 0;
+        color: var(--ink-dim);
+        font-size: 0.72rem;
+      }
+
+      .rollout {
+        display: grid;
+        align-items: start;
+        gap: 50px;
+        grid-template-columns: 0.8fr 1.2fr;
+      }
+
+      .rollout-summary {
+        position: sticky;
+        top: 100px;
+      }
+
+      .rollout-summary h2 {
+        margin-bottom: 22px;
+      }
+
+      .rollout-summary p {
+        color: var(--ink-dim);
+        font-size: 0.87rem;
+      }
+
+      .definition-done {
+        margin-top: 28px;
+        padding: 21px;
+        border: 1px solid var(--mint);
+        border-radius: 17px;
+        background: rgb(140 243 199 / 7%);
+      }
+
+      .definition-done strong {
+        display: block;
+        margin-bottom: 6px;
+        color: var(--mint);
+        font-size: 0.69rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      .definition-done span {
+        font-family: Georgia, serif;
+        font-size: 1.15rem;
+      }
+
+      .rollout-steps {
+        counter-reset: rollout;
+      }
+
+      .rollout-step {
+        position: relative;
+        padding: 0 0 34px 74px;
+        counter-increment: rollout;
+      }
+
+      .rollout-step::before {
+        position: absolute;
+        z-index: 2;
+        top: 0;
+        left: 0;
+        display: grid;
+        width: 44px;
+        height: 44px;
+        place-items: center;
+        border: 1px solid var(--line);
+        border-radius: 50%;
+        background: var(--panel);
+        color: var(--mint);
+        font-family: Georgia, serif;
+        content: counter(rollout, decimal-leading-zero);
+      }
+
+      .rollout-step::after {
+        position: absolute;
+        top: 44px;
+        bottom: 0;
+        left: 22px;
+        width: 1px;
+        background: var(--line);
+        content: "";
+      }
+
+      .rollout-step:last-child::after {
+        display: none;
+      }
+
+      .rollout-step h3 {
+        margin-bottom: 6px;
+        font-size: 0.9rem;
+      }
+
+      .rollout-step p {
+        margin: 0;
+        color: var(--ink-dim);
+        font-size: 0.75rem;
+      }
+
+      .final-check {
+        display: grid;
+        gap: 12px;
+        margin-top: 32px;
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .check {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 14px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--panel);
+        font-size: 0.69rem;
+        font-weight: 730;
+      }
+
+      .check::before {
+        display: grid;
+        width: 18px;
+        height: 18px;
+        flex: 0 0 auto;
+        place-items: center;
+        border: 1px solid var(--mint);
+        border-radius: 50%;
+        color: var(--mint);
+        font-size: 0.6rem;
+        content: "✓";
+      }
+
+      footer {
+        padding-block: 55px;
+        border-top: 1px solid var(--line);
+      }
+
+      .footer-inner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+        color: var(--ink-dim);
+        font-size: 0.69rem;
+      }
+
+      .footer-inner a {
+        color: var(--mint);
+        text-underline-offset: 4px;
+      }
+
+      .reveal {
+        opacity: 1;
+        transform: none;
+        transition:
+          opacity 650ms ease,
+          transform 650ms ease;
+      }
+
+      .reveal-enabled .reveal {
+        opacity: 0;
+        transform: translateY(22px);
+      }
+
+      .reveal-enabled .reveal.visible {
+        opacity: 1;
+        transform: none;
+      }
+
+      @keyframes sweep {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      @keyframes pulse {
+        50% {
+          opacity: 0.4;
+          transform: scale(0.8);
+        }
+      }
+
+      @media (max-width: 980px) {
+        .hero-grid,
+        .ux-demo,
+        .history-layout,
+        .rollout {
+          grid-template-columns: 1fr;
+        }
+
+        .hero {
+          padding-top: 60px;
+        }
+
+        .radar-card {
+          width: min(100%, 480px);
+          margin: 0 auto;
+        }
+
+        .section-head {
+          grid-template-columns: 1fr;
+        }
+
+        .chain {
+          grid-template-columns: repeat(3, 1fr);
+        }
+
+        .chain::before {
+          display: none;
+        }
+
+        .baseline-grid {
+          grid-template-columns: 1fr 1fr;
+        }
+
+        .metric-card.wide {
+          grid-row: span 1;
+          grid-column: span 2;
+        }
+
+        .cycle-canvas {
+          grid-template-columns: 1fr;
+        }
+
+        .flow-arrow {
+          transform: rotate(90deg);
+        }
+
+        .state-journey {
+          grid-template-columns: 1fr 1fr;
+        }
+
+        .state-card::after {
+          display: none;
+        }
+
+        .rollout-summary {
+          position: static;
+        }
+      }
+
+      @media (max-width: 720px) {
+        .shell {
+          width: min(calc(100% - 28px), var(--max));
+        }
+
+        .topbar-inner {
+          min-height: 58px;
+        }
+
+        .brand span:last-child {
+          display: none;
+        }
+
+        .nav a {
+          padding-inline: 8px;
+          font-size: 0.69rem;
+        }
+
+        .hero {
+          min-height: auto;
+          padding-block: 54px 40px;
+        }
+
+        .hero-grid {
+          gap: 45px;
+        }
+
+        .hero-copy {
+          font-size: 0.98rem;
+        }
+
+        .radar-node {
+          min-width: 55px;
+          min-height: 55px;
+          border-radius: 13px;
+          font-size: 0.53rem;
+        }
+
+        .radar-center {
+          width: 68px;
+          height: 68px;
+          font-size: 0.53rem;
+        }
+
+        .hero-stats {
+          grid-template-columns: 1fr 1fr;
+        }
+
+        .hero-stat:nth-child(2) {
+          border-right: 0;
+        }
+
+        .hero-stat:nth-child(-n + 2) {
+          border-bottom: 1px solid var(--line);
+        }
+
+        section {
+          padding-block: 78px;
+        }
+
+        .chain {
+          grid-template-columns: 1fr 1fr;
+        }
+
+        .chain-step {
+          padding-inline: 5px;
+        }
+
+        .truth-levels,
+        .cadence-board,
+        .state-journey,
+        .state-note,
+        .guardrails {
+          grid-template-columns: 1fr;
+        }
+
+        .no-invention {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        .baseline-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .metric-card.wide {
+          grid-column: auto;
+        }
+
+        .coverage-row {
+          gap: 10px;
+          grid-template-columns: 115px 1fr 40px;
+        }
+
+        .split-rule,
+        .volume-compare,
+        .final-check {
+          grid-template-columns: 1fr;
+        }
+
+        .roadmap::before {
+          right: auto;
+          left: 15px;
+        }
+
+        .phase {
+          display: block;
+          min-height: auto;
+          padding: 0 0 28px 46px;
+        }
+
+        .phase::before {
+          top: 31px;
+          left: 15px;
+        }
+
+        .phase-index {
+          display: none;
+        }
+
+        .phase-card {
+          padding: 22px;
+        }
+
+        .backoff-strip {
+          grid-template-columns: 1fr 1fr;
+        }
+
+        .backoff-step:nth-child(2)::after {
+          display: none;
+        }
+
+        .mock-map {
+          min-height: 340px;
+        }
+
+        .floor-shape {
+          inset: 45px 27px 80px;
+        }
+
+        .fresh-card {
+          right: 12px;
+          bottom: 12px;
+        }
+
+        .footer-inner {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        html {
+          scroll-behavior: auto;
+        }
+
+        *,
+        *::before,
+        *::after {
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.01ms !important;
+        }
+
+        .reveal {
+          opacity: 1;
+          transform: none;
+        }
+      }
+
+      @media print {
+        :root {
+          color-scheme: light;
+        }
+
+        body {
+          background: white;
+          color: #111;
+        }
+
+        .topbar,
+        .hero-actions,
+        .radar-sweep {
+          display: none;
+        }
+
+        section {
+          break-inside: avoid;
+          padding-block: 36px;
+        }
+
+        .reveal {
+          opacity: 1;
+          transform: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <a class="skip-link" href="#contenu">Aller au contenu</a>
+
+    <header class="topbar">
+      <div class="shell topbar-inner">
+        <a class="brand" href="#top" aria-label="Retour en haut">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <span>Netplan · Plan de vol</span>
+        </a>
+        <nav class="nav" aria-label="Navigation principale">
+          <a href="#preuve">La preuve</a>
+          <a href="#baseline">Point de départ</a>
+          <a href="#phases">8 phases</a>
+          <a href="#cycle">Le cycle</a>
+          <a href="#experience">Expérience</a>
+          <a href="#deploiement">Déploiement</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="contenu">
+      <div class="shell hero" id="top">
+        <div>
+          <div class="hero-grid">
+            <div>
+              <span class="eyebrow">Localisation automatique · Arles</span>
+              <h1>
+                Du signal réseau au
+                <span class="accent">point sur la carte.</span>
+              </h1>
+              <p class="hero-copy">
+                Faire répondre Netplan à une question simple :
+                <strong>« Où est cet ordinateur, maintenant ? »</strong> Une
+                réponse rapide, explicable et jamais inventée.
+              </p>
+              <div class="hero-actions">
+                <a class="button primary" href="#phases"
+                  >Explorer les 8 phases ↓</a
+                >
+                <a class="button" href="./README.md"
+                  >Lire le plan de référence ↗</a
+                >
+              </div>
+            </div>
+
+            <div
+              class="radar-card"
+              aria-label="Illustration du trajet de localisation"
+            >
+              <div class="radar-sweep" aria-hidden="true"></div>
+              <div class="radar-center">Position<br />fiable</div>
+              <div class="radar-node mac">MAC<br />observée</div>
+              <div class="radar-node switch">Port<br />switch</div>
+              <div class="radar-node socket">Prise<br />murale</div>
+              <div class="radar-node map">Point<br />carte</div>
+            </div>
+          </div>
+
+          <div class="hero-stats" aria-label="Décisions clés du projet">
+            <div class="hero-stat">
+              <strong>5 min</strong>
+              <span>Cadence de jour</span>
+            </div>
+            <div class="hero-stat">
+              <strong>2</strong>
+              <span>Switches en parallèle</span>
+            </div>
+            <div class="hero-stat">
+              <strong>30 j</strong>
+              <span>Historique auditable</span>
+            </div>
+            <div class="hero-stat">
+              <strong>0</strong>
+              <span>Position inventée</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <section class="paper-section" id="preuve">
+        <div class="shell">
+          <div class="section-head reveal">
+            <div>
+              <span class="section-kicker">01 · La chaîne de preuve</span>
+              <h2>Chaque position doit pouvoir raconter son chemin.</h2>
+            </div>
+            <p class="section-intro">
+              Une position n’est pas une intuition. C’est une chaîne vérifiable
+              entre
+              <strong>deux sources réseau</strong> et une ancre placée dans
+              Netplan.
+            </p>
+          </div>
+
+          <div class="chain reveal" aria-label="Chaîne de localisation">
+            <div class="chain-step">
+              <div class="chain-icon">01</div>
+              <strong>MAC</strong>
+              <span>Identité de l’ordinateur</span>
+            </div>
+            <div class="chain-step">
+              <div class="chain-icon">02</div>
+              <strong>FDB fraîche</strong>
+              <span>Observation LibreNMS</span>
+            </div>
+            <div class="chain-step">
+              <div class="chain-icon">03</div>
+              <strong>Port switch</strong>
+              <span>Interface confirmée</span>
+            </div>
+            <div class="chain-step">
+              <div class="chain-icon">04</div>
+              <strong>Câble</strong>
+              <span>Chemin documenté NetBox</span>
+            </div>
+            <div class="chain-step">
+              <div class="chain-icon">05</div>
+              <strong>Prise</strong>
+              <span>Ancre physique</span>
+            </div>
+            <div class="chain-step">
+              <div class="chain-icon">06</div>
+              <strong>Carte</strong>
+              <span>Coordonnées Netplan</span>
+            </div>
+          </div>
+
+          <div class="truth-levels reveal">
+            <article class="truth-card" data-number="1">
+              <span class="tag">Niveau réseau</span>
+              <h3>Observé</h3>
+              <p>
+                LibreNMS a vu une MAC sur un port pendant le discovery du cycle
+                courant.
+              </p>
+              <span class="proof">Preuve : FDB + bornes du discovery</span>
+            </article>
+            <article class="truth-card" data-number="2">
+              <span class="tag">Niveau physique</span>
+              <h3>Résolu</h3>
+              <p>
+                Le port mène à une prise par un chemin NetBox complet et
+                explicitement câblé.
+              </p>
+              <span class="proof">Preuve : génération NetBox épinglée</span>
+            </article>
+            <article class="truth-card" data-number="3">
+              <span class="tag">Niveau carte</span>
+              <h3>Positionné</h3>
+              <p>
+                La prise existe sur un étage Netplan et fournit une ancre
+                cartographique fiable.
+              </p>
+              <span class="proof">Preuve : prise placée + MapOperation</span>
+            </article>
+          </div>
+
+          <div class="no-invention reveal">
+            <strong>Principe non négociable</strong>
+            <p>
+              Si un maillon manque, Netplan s’arrête au dernier niveau prouvé et
+              explique pourquoi. Il ne devine ni câble, ni prise, ni
+              coordonnées.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section id="baseline">
+        <div class="shell">
+          <div class="section-head reveal">
+            <div>
+              <span class="section-kicker">02 · Point de départ</span>
+              <h2>Un réseau riche. Une carte encore à équiper.</h2>
+            </div>
+            <p class="section-intro">
+              L’audit montre que la donnée existe déjà, mais que la couverture
+              est inégale. Le projet transforme cette réalité en
+              <strong>progression mesurable</strong>.
+            </p>
+          </div>
+
+          <div class="baseline-grid reveal">
+            <article class="metric-card wide accent">
+              <span class="metric-label">Ordinateurs ciblés</span>
+              <strong class="metric-number">184</strong>
+              <p class="metric-note">
+                177 sont identifiables sans conflit par leur MAC. Les postes
+                render possèdent plusieurs interfaces, mais restent un seul
+                équipement.
+              </p>
+            </article>
+            <article class="metric-card">
+              <span class="metric-label">Prises murales</span>
+              <strong class="metric-number">238</strong>
+              <p class="metric-note">Le socle physique connu dans NetBox.</p>
+            </article>
+            <article class="metric-card">
+              <span class="metric-label">Chemins directs</span>
+              <strong class="metric-number">134</strong>
+              <p class="metric-note">
+                Switch access ↔ prise, utilisables immédiatement.
+              </p>
+            </article>
+            <article class="metric-card">
+              <span class="metric-label">Patch panels incomplets</span>
+              <strong class="metric-number">78</strong>
+              <p class="metric-note">
+                Visibles, mais sans suite documentée vers le switch.
+              </p>
+            </article>
+            <article class="metric-card">
+              <span class="metric-label">Prises placées</span>
+              <strong class="metric-number">0</strong>
+              <p class="metric-note">
+                La localisation réseau peut précéder le placement carte.
+              </p>
+            </article>
+          </div>
+
+          <div class="coverage reveal" aria-label="Couverture de l'audit">
+            <div class="coverage-row">
+              <span>Prises câblées</span>
+              <div class="bar">
+                <i style="--value: 89%; --color: var(--mint)"></i>
+              </div>
+              <strong>212</strong>
+            </div>
+            <div class="coverage-row">
+              <span>Chemins directs</span>
+              <div class="bar">
+                <i style="--value: 56%; --color: var(--cyan)"></i>
+              </div>
+              <strong>134</strong>
+            </div>
+            <div class="coverage-row">
+              <span>Patch panel incomplet</span>
+              <div class="bar">
+                <i style="--value: 33%; --color: var(--amber)"></i>
+              </div>
+              <strong>78</strong>
+            </div>
+            <div class="coverage-row">
+              <span>Sans câble</span>
+              <div class="bar">
+                <i style="--value: 11%; --color: var(--coral)"></i>
+              </div>
+              <strong>26</strong>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="shell">
+          <div class="section-head reveal">
+            <div>
+              <span class="section-kicker">03 · Deux horloges</span>
+              <h2>Le câblage évolue lentement. La présence, vite.</h2>
+            </div>
+            <p class="section-intro">
+              Le gros cycle unique disparaît. NetBox et LibreNMS deviennent deux
+              workflows
+              <strong>indépendants mais cohérents</strong>.
+            </p>
+          </div>
+
+          <div class="cadence-board reveal">
+            <article class="cadence-card">
+              <div class="cadence-title">
+                <h3>LibreNMS · présence réseau</h3>
+                <span>Toutes les 5 min</span>
+              </div>
+              <div class="time-track" style="--track: var(--cyan)">
+                <div
+                  class="track-active"
+                  style="--start: 29%; --length: 54%"
+                ></div>
+                <i class="track-dot" style="--x: 29%" data-time="07h"></i>
+                <i class="track-dot" style="--x: 83%" data-time="20h"></i>
+              </div>
+              <p>Cadence horaire la nuit, les week-ends et les jours fériés.</p>
+            </article>
+            <article class="cadence-card">
+              <div class="cadence-title">
+                <h3>NetBox · inventaire physique</h3>
+                <span>Toutes les 15 min</span>
+              </div>
+              <div class="time-track" style="--track: var(--amber)">
+                <div class="track-active"></div>
+                <i class="track-dot" style="--x: 8%" data-time=":00"></i>
+                <i class="track-dot" style="--x: 36%" data-time=":15"></i>
+                <i class="track-dot" style="--x: 64%" data-time=":30"></i>
+                <i class="track-dot" style="--x: 92%" data-time=":45"></i>
+              </div>
+              <p>
+                Chaque publication crée une génération immuable que les cycles
+                épinglent.
+              </p>
+            </article>
+          </div>
+
+          <div class="split-rule reveal">
+            <div class="mini-rule">
+              <strong>1 job par site</strong>
+              <span>Tous les utilisateurs rejoignent le même cycle.</span>
+            </div>
+            <div class="mini-rule">
+              <strong>2 sites en parallèle</strong>
+              <span>Aucun verrou global entre les implantations.</span>
+            </div>
+            <div class="mini-rule">
+              <strong>24 h de tolérance</strong>
+              <span>Dernier câblage valide conservé, puis averti.</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="phases">
+        <div class="shell">
+          <div class="section-head reveal">
+            <div>
+              <span class="section-kicker">04 · Feuille de route</span>
+              <h2>Huit phases. Chaque marche sécurise la suivante.</h2>
+            </div>
+            <p class="section-intro">
+              L’ordre est volontaire : aucun bouton utilisateur ne repose sur un
+              invariant qui n’existe pas encore.
+            </p>
+          </div>
+
+          <div class="roadmap">
+            <article class="phase reveal" style="--phase: var(--mint)">
+              <div class="phase-card">
+                <div class="phase-top">
+                  <span class="phase-pill">Phase 0</span>
+                  <a class="phase-link" href="./00-cadrage-et-etat-actuel.md"
+                    >Document ↗</a
+                  >
+                </div>
+                <h3>Cadrer la vérité actuelle</h3>
+                <p>
+                  Aligner vocabulaire, baseline, périmètre et limites des
+                  sources.
+                </p>
+                <div class="phase-output">
+                  Sortie : critères mesurables et identité de site confirmée
+                </div>
+              </div>
+              <div class="phase-index">
+                <strong>00</strong><span>Comprendre</span>
+              </div>
+            </article>
+
+            <article class="phase reveal" style="--phase: var(--mint)">
+              <div class="phase-card">
+                <div class="phase-top">
+                  <span class="phase-pill">Phase 1</span>
+                  <a
+                    class="phase-link"
+                    href="./01-fondations-sites-et-donnees.md"
+                    >Document ↗</a
+                  >
+                </div>
+                <h3>Construire les fondations</h3>
+                <p>
+                  Sites, générations NetBox, états courants et identités
+                  externes composites.
+                </p>
+                <div class="phase-output">
+                  Sortie : modèle durable isolé par site
+                </div>
+              </div>
+              <div class="phase-index">
+                <strong>01</strong><span>Modéliser</span>
+              </div>
+            </article>
+
+            <article class="phase reveal" style="--phase: var(--cyan)">
+              <div class="phase-card">
+                <div class="phase-top">
+                  <span class="phase-pill">Phase 2</span>
+                  <a
+                    class="phase-link"
+                    href="./02-orchestration-des-refreshs.md"
+                    >Document ↗</a
+                  >
+                </div>
+                <h3>Orchestrer les refreshs</h3>
+                <p>
+                  Scheduler, trigger serveur, single-flight, retries ciblés et
+                  backoff.
+                </p>
+                <div class="phase-output">
+                  Sortie : cycle partagé, borné et atomique
+                </div>
+              </div>
+              <div class="phase-index">
+                <strong>02</strong><span>Orchestrer</span>
+              </div>
+            </article>
+
+            <article class="phase reveal" style="--phase: var(--cyan)">
+              <div class="phase-card">
+                <div class="phase-top">
+                  <span class="phase-pill">Phase 3</span>
+                  <a
+                    class="phase-link"
+                    href="./03-resolution-et-projection-carte.md"
+                    >Document ↗</a
+                  >
+                </div>
+                <h3>Résoudre puis projeter</h3>
+                <p>
+                  Filtrer la FDB fraîche, décider un état et déplacer via
+                  MapOperation.
+                </p>
+                <div class="phase-output">
+                  Sortie : ordinateurs explicables sur la carte
+                </div>
+              </div>
+              <div class="phase-index">
+                <strong>03</strong><span>Localiser</span>
+              </div>
+            </article>
+
+            <article class="phase reveal" style="--phase: var(--amber)">
+              <div class="phase-card">
+                <div class="phase-top">
+                  <span class="phase-pill">Phase 4</span>
+                  <a class="phase-link" href="./04-historique-et-retention.md"
+                    >Document ↗</a
+                  >
+                </div>
+                <h3>Rendre le passé lisible</h3>
+                <p>
+                  Cycles sur 30 jours, cinq snapshots quotidiens et événements
+                  compacts.
+                </p>
+                <div class="phase-output">
+                  Sortie : audit utile et stockage borné
+                </div>
+              </div>
+              <div class="phase-index">
+                <strong>04</strong><span>Expliquer</span>
+              </div>
+            </article>
+
+            <article class="phase reveal" style="--phase: var(--amber)">
+              <div class="phase-card">
+                <div class="phase-top">
+                  <span class="phase-pill">Phase 5</span>
+                  <a class="phase-link" href="./05-experience-utilisateur.md"
+                    >Document ↗</a
+                  >
+                </div>
+                <h3>Donner confiance à l’utilisateur</h3>
+                <p>
+                  Refresh partagé, fraîcheur lisible, détails progressifs et
+                  couverture des prises.
+                </p>
+                <div class="phase-output">
+                  Sortie : une UX calme, précise et accessible
+                </div>
+              </div>
+              <div class="phase-index">
+                <strong>05</strong><span>Rendre visible</span>
+              </div>
+            </article>
+
+            <article class="phase reveal" style="--phase: var(--coral)">
+              <div class="phase-card">
+                <div class="phase-top">
+                  <span class="phase-pill">Phase 6</span>
+                  <a class="phase-link" href="./06-exploitation-et-securite.md"
+                    >Document ↗</a
+                  >
+                </div>
+                <h3>Préparer l’exploitation</h3>
+                <p>
+                  Secrets serveur, observabilité, procédures d’incident et
+                  rollback.
+                </p>
+                <div class="phase-output">
+                  Sortie : un système surveillable et réversible
+                </div>
+              </div>
+              <div class="phase-index">
+                <strong>06</strong><span>Protéger</span>
+              </div>
+            </article>
+
+            <article class="phase reveal" style="--phase: var(--coral)">
+              <div class="phase-card">
+                <div class="phase-top">
+                  <span class="phase-pill">Phase 7</span>
+                  <a
+                    class="phase-link"
+                    href="./07-tests-deploiement-et-validation.md"
+                    >Document ↗</a
+                  >
+                </div>
+                <h3>Prouver avant d’activer</h3>
+                <p>
+                  Tests purs, Convex, réseau, frontend, smoke tests et rollout
+                  progressif.
+                </p>
+                <div class="phase-output">
+                  Sortie : une preuve de fonctionnement réel
+                </div>
+              </div>
+              <div class="phase-index">
+                <strong>07</strong><span>Valider</span>
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="cycle">
+        <div class="shell">
+          <div class="section-head reveal">
+            <div>
+              <span class="section-kicker">05 · Anatomie d’un cycle</span>
+              <h2>Parallèle à l’intérieur. Atomique à la sortie.</h2>
+            </div>
+            <p class="section-intro">
+              Les deux switches travaillent en même temps. Mais rien ne devient
+              « actuel » tant que le résultat complet n’a pas franchi
+              <strong>la porte de validation</strong>.
+            </p>
+          </div>
+
+          <div class="cycle-canvas reveal">
+            <div class="cycle-column">
+              <div class="flow-box">
+                <small>Entrée</small>
+                <strong>Scheduler ou clic</strong>
+                <span>Une demande pour tout le site</span>
+              </div>
+              <div class="flow-arrow" aria-hidden="true">↓</div>
+              <div class="flow-box">
+                <small>Garde</small>
+                <strong>Single-flight</strong>
+                <span>Rejoint le cycle actif ou réserve le suivant</span>
+              </div>
+              <div class="flow-arrow" aria-hidden="true">↓</div>
+              <div class="flow-box">
+                <small>Référence</small>
+                <strong>Génération NetBox</strong>
+                <span>Épinglée jusqu’au succès ou à l’échec</span>
+              </div>
+            </div>
+
+            <div class="switch-stage">
+              <div class="switch-stage-header">
+                <strong>Discovery parallèle</strong>
+                <span class="live-dot">Actualisation en cours</span>
+              </div>
+              <div class="switch-lanes">
+                <div class="switch-lane">
+                  <div class="switch-name">SW-A</div>
+                  <div class="lane-progress">
+                    <strong>Trigger → suivi → capture FDB</strong>
+                    <div class="lane-bar"><i></i></div>
+                  </div>
+                  <span class="lane-status">staged</span>
+                </div>
+                <div class="switch-lane">
+                  <div class="switch-name">SW-B</div>
+                  <div class="lane-progress">
+                    <strong>Trigger → suivi → capture FDB</strong>
+                    <div class="lane-bar"><i style="width: 74%"></i></div>
+                  </div>
+                  <span class="lane-status">74 %</span>
+                </div>
+              </div>
+              <div class="atomic-gate">
+                2 résultats cohérents + FDB fraîche = publication autorisée
+              </div>
+            </div>
+
+            <div class="cycle-column">
+              <div class="flow-box">
+                <small>Décision</small>
+                <strong>Résoudre les prises</strong>
+                <span>Avec le câblage NetBox épinglé</span>
+              </div>
+              <div class="flow-arrow" aria-hidden="true">↓</div>
+              <div class="flow-box">
+                <small>Transaction</small>
+                <strong>Publier tout ou rien</strong>
+                <span>Jamais un demi-site actuel</span>
+              </div>
+              <div class="flow-arrow" aria-hidden="true">↓</div>
+              <div class="flow-box">
+                <small>Sortie</small>
+                <strong>Carte + historique</strong>
+                <span>Projection réconciliée séparément</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="backoff-strip reveal" aria-label="Progression du backoff">
+            <div class="backoff-step">
+              <strong>4 min</strong><span>Après l’échec 1</span>
+            </div>
+            <div class="backoff-step">
+              <strong>8 min</strong><span>Après l’échec 2</span>
+            </div>
+            <div class="backoff-step">
+              <strong>16 min</strong><span>Après l’échec 3</span>
+            </div>
+            <div class="backoff-step">
+              <strong>30 min</strong><span>À partir de l’échec 4</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="shell">
+          <div class="section-head reveal">
+            <div>
+              <span class="section-kicker">06 · États dans le temps</span>
+              <h2>L’absence devient un signal, pas un verdict immédiat.</h2>
+            </div>
+            <p class="section-intro">
+              Seul un cycle complet et frais fait évoluer l’état. Une panne de
+              source ne met
+              <strong>jamais artificiellement tout le parc hors ligne</strong>.
+            </p>
+          </div>
+
+          <div class="state-journey reveal">
+            <article class="state-card" style="--state: var(--mint)">
+              <span class="state-time">08:00 · Cycle N</span>
+              <div class="state-symbol">●</div>
+              <h3>En ligne</h3>
+              <p>MAC fraîche, prise résolue, position actuelle confirmée.</p>
+            </article>
+            <article class="state-card" style="--state: var(--amber)">
+              <span class="state-time">08:05 · Cycle N+1</span>
+              <div class="state-symbol">◐</div>
+              <h3>Manquant</h3>
+              <p>
+                Première absence. La position reste visible sans conclure trop
+                vite.
+              </p>
+            </article>
+            <article class="state-card" style="--state: var(--coral)">
+              <span class="state-time">08:10 · Cycle N+2</span>
+              <div class="state-symbol">○</div>
+              <h3>Hors ligne</h3>
+              <p>Deux absences fraîches. La dernière position est atténuée.</p>
+            </article>
+            <article class="state-card" style="--state: var(--ink-dim)">
+              <span class="state-time">J+15</span>
+              <div class="state-symbol">×</div>
+              <h3>Hors carte</h3>
+              <p>
+                Retiré de la vue active, toujours retrouvable dans la section
+                Hors ligne.
+              </p>
+            </article>
+          </div>
+
+          <div class="state-note reveal">
+            <div style="--note: var(--cyan)">
+              <strong>Ambigu</strong>
+              <span>Plusieurs prises fraîches, aucune victoire fiable.</span>
+            </div>
+            <div style="--note: var(--amber)">
+              <strong>Résolu, non placé</strong>
+              <span
+                >La prise est connue mais n’a pas encore de coordonnées.</span
+              >
+            </div>
+            <div style="--note: var(--coral)">
+              <strong>Non résolvable</strong>
+              <span
+                >Le chemin physique est incomplet et la raison est
+                affichée.</span
+              >
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="experience">
+        <div class="shell">
+          <div class="section-head reveal">
+            <div>
+              <span class="section-kicker">07 · Expérience utilisateur</span>
+              <h2>La carte reste utile, même pendant l’incertitude.</h2>
+            </div>
+            <p class="section-intro">
+              L’ancienne position ne disparaît pas pendant le refresh.
+              L’interface révèle les détails
+              <strong>seulement quand ils deviennent utiles</strong>.
+            </p>
+          </div>
+
+          <div class="ux-demo">
+            <div
+              class="mock-window reveal"
+              aria-label="Maquette de la carte pendant un refresh"
+            >
+              <div class="mock-top">
+                <div class="mock-dots" aria-hidden="true">
+                  <i></i><i></i><i></i>
+                </div>
+                <div class="refresh-button">
+                  <span>↻ Actualisation en cours · 1/2</span>
+                </div>
+              </div>
+              <div class="mock-map">
+                <div class="floor-shape"></div>
+                <div class="socket-pin">WS</div>
+                <div class="pin-link"></div>
+                <div class="computer-pin">PC-042</div>
+                <div class="fresh-card">
+                  <strong>Dernière position conservée</strong>
+                  <span>Le nouveau snapshot n’est pas encore publié.</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="ux-points reveal">
+              <div class="ux-point">
+                <b>01</b>
+                <div>
+                  <strong>Un état partagé partout</strong>
+                  <span
+                    >Barre de carte, inventaire, ordinateur et administration
+                    observent le même cycle Convex.</span
+                  >
+                </div>
+              </div>
+              <div class="ux-point">
+                <b>02</b>
+                <div>
+                  <strong>Une progression honnête</strong>
+                  <span
+                    >Interpolée sur 60 secondes, elle n’atteint jamais 100 %
+                    avant la réussite réelle.</span
+                  >
+                </div>
+              </div>
+              <div class="ux-point">
+                <b>03</b>
+                <div>
+                  <strong>Le calme par défaut</strong>
+                  <span
+                    >Succès automatiques silencieux. Indicateur discret, puis
+                    bannière si l’erreur persiste.</span
+                  >
+                </div>
+              </div>
+              <div class="ux-point">
+                <b>04</b>
+                <div>
+                  <strong>La raison exacte</strong>
+                  <span
+                    >Prise non placée, patch panel incomplet, ambiguïté et
+                    conflit restent des états distincts.</span
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="shell">
+          <div class="section-head reveal">
+            <div>
+              <span class="section-kicker">08 · Mémoire utile</span>
+              <h2>Voir assez du passé. Pas tout stocker.</h2>
+            </div>
+            <p class="section-intro">
+              Les cycles sont auditables pendant 30 jours. Les observations
+              détaillées sont échantillonnées à cinq moments utiles,
+              <strong>sans discovery supplémentaire</strong>.
+            </p>
+          </div>
+
+          <div class="history-layout">
+            <div class="history-clock reveal">
+              <div class="clock-title">
+                <strong>Une journée d’observation</strong>
+                <span>Europe/Paris</span>
+              </div>
+              <div class="snapshot-line">
+                <div class="snapshot">
+                  <i></i><strong>08h</strong><span>matin</span>
+                </div>
+                <div class="snapshot">
+                  <i></i><strong>12h</strong><span>midi</span>
+                </div>
+                <div class="snapshot">
+                  <i></i><strong>14h</strong><span>reprise</span>
+                </div>
+                <div class="snapshot">
+                  <i></i><strong>16h</strong><span>après-midi</span>
+                </div>
+                <div class="snapshot">
+                  <i></i><strong>19h</strong><span>soir</span>
+                </div>
+              </div>
+              <div class="volume-compare">
+                <div class="volume-card">
+                  <strong>≈ 90 000</strong>
+                  <span
+                    >observations détaillées sur 30 jours avec cinq snapshots
+                    quotidiens</span
+                  >
+                </div>
+                <div class="volume-card bad">
+                  <strong>&gt; 5 M</strong>
+                  <span
+                    >si chaque cycle de cinq minutes était conservé
+                    intégralement</span
+                  >
+                </div>
+              </div>
+            </div>
+
+            <div class="retention-card reveal">
+              <div class="retention-ring">
+                <div><strong>30</strong><span>jours</span></div>
+              </div>
+              <p>
+                Nettoyage par petits lots, pagination obligatoire et
+                préservation permanente de l’état courant.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="shell">
+          <div class="section-head reveal">
+            <div>
+              <span class="section-kicker">09 · Garde-fous</span>
+              <h2>Ce que le système refusera toujours de faire.</h2>
+            </div>
+            <p class="section-intro">
+              La fiabilité vient autant des capacités ajoutées que des
+              raccourcis explicitement interdits.
+            </p>
+          </div>
+
+          <div class="guardrails reveal">
+            <article class="guardrail">
+              <span class="x">×</span>
+              <strong>Publier un demi-résultat</strong>
+              <p>
+                Un seul switch réussi ne remplace jamais le snapshot global du
+                site.
+              </p>
+            </article>
+            <article class="guardrail">
+              <span class="x">×</span>
+              <strong>Rafraîchir depuis le navigateur</strong>
+              <p>
+                Les tokens et le trigger LibreNMS restent exclusivement côté
+                serveur.
+              </p>
+            </article>
+            <article class="guardrail">
+              <span class="x">×</span>
+              <strong>Réutiliser une vieille FDB</strong>
+              <p>
+                Une ligne non confirmée par le cycle courant ne redevient jamais
+                actuelle.
+              </p>
+            </article>
+            <article class="guardrail">
+              <span class="x">×</span>
+              <strong>Déduire un câble absent</strong>
+              <p>
+                Les conventions de nommage ne remplacent pas un chemin NetBox
+                documenté.
+              </p>
+            </article>
+            <article class="guardrail">
+              <span class="x">×</span>
+              <strong>Effacer sur réponse anormale</strong>
+              <p>
+                Une collection vide ou incohérente ne détruit pas un snapshot
+                sain.
+              </p>
+            </article>
+            <article class="guardrail">
+              <span class="x">×</span>
+              <strong>Casser les liens de carte</strong>
+              <p>
+                Une relocation inter-étages liée est bloquée, jamais réparée en
+                silence.
+              </p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="deploiement">
+        <div class="shell rollout">
+          <div class="rollout-summary reveal">
+            <span class="section-kicker">10 · Mise en service</span>
+            <h2>Activer par preuves successives.</h2>
+            <p>
+              Les deux switches font partie de la cible finale dès le départ,
+              mais la cadence s’accélère uniquement après observation réelle de
+              la charge et des erreurs.
+            </p>
+            <div class="definition-done">
+              <strong>Définition de terminé</strong>
+              <span
+                >La localisation est fraîche, explicable, observable et
+                réversible.</span
+              >
+            </div>
+          </div>
+
+          <div class="reveal">
+            <div class="rollout-steps">
+              <article class="rollout-step">
+                <h3>Déployer le modèle, scheduler éteint</h3>
+                <p>
+                  Créer les sites, états, générations et historiques sans
+                  déclencher les switches.
+                </p>
+              </article>
+              <article class="rollout-step">
+                <h3>Reconstruire le snapshot actuel</h3>
+                <p>
+                  Valider les volumes, les clés composites et la séparation des
+                  sources.
+                </p>
+              </article>
+              <article class="rollout-step">
+                <h3>Tester le refresh manuel réel</h3>
+                <p>
+                  Déclencher les deux switches, filtrer la FDB et vérifier la
+                  publication atomique.
+                </p>
+              </article>
+              <article class="rollout-step">
+                <h3>Observer en cadence horaire</h3>
+                <p>
+                  Mesurer durée, timeout, charge SNMP et comportement du poller.
+                </p>
+              </article>
+              <article class="rollout-step">
+                <h3>Passer à cinq minutes sous surveillance</h3>
+                <p>
+                  Activer une plage contrôlée puis les règles jour, nuit,
+                  week-end et jours fériés.
+                </p>
+              </article>
+              <article class="rollout-step">
+                <h3>Ouvrir toutes les surfaces UX</h3>
+                <p>
+                  Carte, inventaire, détails et administration partagent alors
+                  le même cycle.
+                </p>
+              </article>
+            </div>
+
+            <div class="final-check" aria-label="Contrôles finaux">
+              <div class="check">bun run check vert</div>
+              <div class="check">Build vert</div>
+              <div class="check">Smoke test 2 switches</div>
+              <div class="check">Charge réseau acceptée</div>
+              <div class="check">Rollback vérifié</div>
+              <div class="check">Secrets côté serveur</div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="shell footer-inner">
+        <span
+          >Plan visuel dérivé des documents de référence · Juillet 2026</span
+        >
+        <a href="./README.md">Ouvrir le plan complet en Markdown ↗</a>
+      </div>
+    </footer>
+
+    <script>
+      if ("IntersectionObserver" in window) {
+        document.documentElement.classList.add("reveal-enabled");
+        const observer = new IntersectionObserver(
+          (entries) => {
+            for (const entry of entries) {
+              if (entry.isIntersecting) {
+                entry.target.classList.add("visible");
+                observer.unobserve(entry.target);
+              }
+            }
+          },
+          { threshold: 0.12 },
+        );
+
+        for (const element of document.querySelectorAll(".reveal")) {
+          observer.observe(element);
+        }
+      }
+    </script>
+  </body>
+</html>

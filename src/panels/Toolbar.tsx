@@ -1,79 +1,53 @@
-import { useEffect, useRef, useState } from "react";
-import { useReactFlow } from "@xyflow/react";
-import { HugeiconsIcon } from "@hugeicons/react";
-import { Tick02Icon } from "@hugeicons/core-free-icons";
-import type { ComponentProps } from "react";
-import type { DeviceType, DrawTool } from "@/types/map";
-import { useDevicePlacement } from "@/devices/useDevicePlacement";
-import type { AvailableDevice } from "@/devices/deviceCatalog";
-import type { ToolbarAction } from "@/panels/toolbar-actions";
-import { useMapStore } from "@/store/useMapStore";
-import {
-  useMapDocumentActions,
-  useMapDocumentReady,
-} from "@/map-session/useMapDocument";
-import {
-  useActiveDrawTool,
-  useCurrentFloorId,
-  useIsEditMode,
-  useSelectedWallColor,
-} from "@/store/selectors";
-import { useShortcutIntentEffect } from "@/hooks/use-shortcuts";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent } from "@/components/ui/popover";
-import {
-  Command,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
 import { ShortcutHintAbsolute } from "@/components/ui/shortcut-hint";
-import { createDeviceKindRecord } from "@/devices/deviceKindRegistry";
-import { useDeviceToolShortcuts } from "@/devices/useDeviceToolShortcuts";
-import { cn } from "@/lib/utils";
-import { availableDevicesCatalog } from "@/devices/deviceCatalog";
+import { NetBoxInventoryPanel } from "@/integrations/netbox/NetBoxInventoryPanel";
 import {
   TOOLBAR_WALL_COLOR_SELECTION_ENABLED,
   UNDO_REDO_EVENT_NAME,
   UNDO_REDO_FLASH_DURATION_MS,
 } from "@/lib/constants";
+import { useShortcutIntentEffect } from "@/hooks/use-shortcuts";
+import { cn } from "@/lib/utils";
 import { WALL_COLOR_ORDER, WALL_COLOR_TONES } from "@/lib/walls";
 import {
-  deviceToolbarActions,
-  drawToolbarActions,
-} from "@/panels/toolbar-actions";
+  useActiveDrawTool,
+  useCurrentFloorId,
+  useIsEditMode,
+  useIsMultiSelectMode,
+  useSelectedDeviceIds,
+  useSelectedWallColor,
+} from "@/store/selectors";
+import { useMapStore } from "@/store/useMapStore";
+import { useMapDocumentReady } from "@/map-session/useMapDocument";
+import { drawToolbarActions } from "@/panels/toolbar-actions";
+import type { DrawToolbarAction } from "@/panels/toolbar-actions";
+import type { DrawTool } from "@/types/map";
 
 export default function Toolbar() {
   const currentFloorId = useCurrentFloorId();
   const isEditMode = useIsEditMode();
   const activeDrawTool = useActiveDrawTool();
   const selectedWallColor = useSelectedWallColor();
-
-  const setActiveDrawTool = useMapStore((s) => s.setActiveDrawTool);
-  const setSelectedWallColor = useMapStore((s) => s.setSelectedWallColor);
-  const selectDevice = useMapStore((s) => s.selectDevice);
-  const { commands } = useMapDocumentActions();
   const isReady = useMapDocumentReady();
-  const { addDevice, checkCollision } = commands;
-  const devicePlacement = useDevicePlacement(checkCollision);
-  const reactFlow = useReactFlow();
-  const [selectedType, setSelectedType] = useState<DeviceType | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [open, setOpen] = useState(false);
-  const [lastSelectedType, setLastSelectedType] = useState<DeviceType | null>(
-    null,
-  );
-  const [activeAnchorElement, setActiveAnchorElement] =
-    useState<HTMLButtonElement | null>(null);
-  const [flashType, setFlashType] = useState<"undo" | "redo" | null>(null);
-  const suppressNextTypeToggleRef = useRef<DeviceType | null>(null);
+  const isMultiSelectMode = useIsMultiSelectMode();
+  const selectedDeviceIds = useSelectedDeviceIds();
 
-  // Listen for undo/redo events and flash the toolbar background
+  const setActiveDrawTool = useMapStore((state) => state.setActiveDrawTool);
+  const setSelectedWallColor = useMapStore(
+    (state) => state.setSelectedWallColor,
+  );
+  const selectDevice = useMapStore((state) => state.selectDevice);
+  const toggleMultiSelectMode = useMapStore(
+    (state) => state.toggleMultiSelectMode,
+  );
+  const [flashType, setFlashType] = useState<"undo" | "redo" | null>(null);
+
   useEffect(() => {
     let timeout: ReturnType<typeof setTimeout> | null = null;
-    const handler = (e: Event) => {
-      const type = (e as CustomEvent<{ type: "undo" | "redo" }>).detail.type;
+    const handler = (event: Event) => {
+      const type = (event as CustomEvent<{ type: "undo" | "redo" }>).detail
+        .type;
       setFlashType(type);
       if (timeout !== null) clearTimeout(timeout);
       timeout = setTimeout(
@@ -88,76 +62,15 @@ export default function Toolbar() {
     };
   }, []);
 
-  // Track button elements in a ref to avoid toolbar re-renders during mount.
-  const buttonElementsRef = useRef<
-    Record<DeviceType, HTMLButtonElement | null>
-  >(createDeviceKindRecord(() => null));
-
-  const handleTypeClick = (type: DeviceType) => {
-    if (!currentFloorId || !isReady) return;
-    if (suppressNextTypeToggleRef.current) {
-      const suppressedType = suppressNextTypeToggleRef.current;
-      suppressNextTypeToggleRef.current = null;
-
-      if (suppressedType === type) {
-        return;
-      }
-    }
-
-    const nextType = selectedType === type ? null : type;
-    const nextAnchorElement = nextType
-      ? buttonElementsRef.current[nextType]
-      : activeAnchorElement;
-
-    setActiveDrawTool("device");
-    selectDevice(null);
-    setSelectedType(nextType);
-    if (nextType) {
-      setLastSelectedType(nextType);
-      setSearchQuery("");
-    }
-    setActiveAnchorElement(nextAnchorElement);
-    setOpen(nextType !== null);
-  };
-
   const handleDrawToolClick = (
     tool: Extract<DrawTool, "wall" | "wall-brush" | "wall-erase" | "room">,
   ) => {
     if (!currentFloorId || !isReady) return;
-
-    const nextTool = activeDrawTool === tool ? "device" : tool;
-    setActiveDrawTool(nextTool);
+    if (isMultiSelectMode) toggleMultiSelectMode();
+    setActiveDrawTool(activeDrawTool === tool ? "device" : tool);
     selectDevice(null);
-    setSelectedType(null);
-    setOpen(false);
   };
 
-  const handleSelectWallColor = (color: typeof selectedWallColor) => {
-    setSelectedWallColor(color);
-  };
-
-  const handleOpenChange: NonNullable<
-    ComponentProps<typeof Popover>["onOpenChange"]
-  > = (newOpen, eventDetails) => {
-    if (newOpen && !isReady) return;
-    const target = eventDetails.event.target;
-    const isActiveButtonOutsidePress =
-      !newOpen &&
-      eventDetails.reason === "outside-press" &&
-      target instanceof Node &&
-      activeAnchorElement?.contains(target);
-
-    if (isActiveButtonOutsidePress) {
-      suppressNextTypeToggleRef.current = selectedType;
-    }
-
-    setOpen(newOpen);
-    if (!newOpen) {
-      setSelectedType(null);
-    }
-  };
-
-  // Register keyboard shortcut handlers
   useShortcutIntentEffect("tool-wall", () => handleDrawToolClick("wall"));
   useShortcutIntentEffect("tool-wall-erase", () =>
     handleDrawToolClick("wall-erase"),
@@ -166,118 +79,29 @@ export default function Toolbar() {
     handleDrawToolClick("wall-brush"),
   );
   useShortcutIntentEffect("tool-room", () => handleDrawToolClick("room"));
-  useDeviceToolShortcuts({
-    enabled: isReady,
-    onSelectDeviceType: handleTypeClick,
-  });
 
-  const handleAddDevice = (catalogDevice: AvailableDevice) => {
-    if (!currentFloorId || !isReady) return;
-
-    // Get center of viewport
-    const { x, y, zoom } = reactFlow.getViewport();
-    const centerX = (-x + window.innerWidth / 2) / zoom;
-    const centerY = (-y + window.innerHeight / 2) / zoom;
-
-    const placement = devicePlacement.resolve({
-      kind: "add",
-      floorId: currentFloorId,
-      requestedPosition: { x: centerX, y: centerY },
-      size: catalogDevice.size,
-    });
-
-    if (!placement.ok) {
-      return;
-    }
-
-    const newDevice = {
-      type: catalogDevice.type,
-      name: catalogDevice.name,
-      hostname: catalogDevice.hostname,
-      floorId: currentFloorId,
-      size: catalogDevice.size,
-      metadata: {
-        ...catalogDevice.metadata,
-        ip: catalogDevice.ip,
-      },
-      position: placement.position,
-    };
-
-    const newDeviceId = addDevice(newDevice);
-    if (newDeviceId) selectDevice(newDeviceId);
-    setActiveDrawTool("device");
-    setSelectedType(null);
-    setOpen(false);
-  };
-
-  // Filter devices based on search query
-  const visibleDeviceType = selectedType ?? lastSelectedType;
-  const availableDevices =
-    activeDrawTool === "device" && visibleDeviceType
-      ? availableDevicesCatalog[visibleDeviceType]
-      : [];
-  const filteredDevices = !searchQuery.trim()
-    ? availableDevices
-    : availableDevices.filter((device) => {
-        const query = searchQuery.toLowerCase();
-        return (
-          device.name.toLowerCase().includes(query) ||
-          device.model?.toLowerCase().includes(query) ||
-          device.hostname?.toLowerCase().includes(query)
-        );
-      });
-
-  if (!isEditMode) {
-    return null;
-  }
+  if (!isEditMode) return null;
 
   const showWallColors =
     activeDrawTool === "wall" ||
     activeDrawTool === "wall-brush" ||
     activeDrawTool === "wall-erase" ||
     activeDrawTool === "room";
-  const wallColorSelectionEnabled = TOOLBAR_WALL_COLOR_SELECTION_ENABLED;
-  const isActionActive = (action: ToolbarAction) => {
-    if (action.group === "draw") {
-      return activeDrawTool === action.tool;
-    }
 
-    return selectedType === action.type && activeDrawTool === "device";
-  };
-
-  const handleToolbarActionClick = (action: ToolbarAction) => {
-    if (action.group === "draw") {
-      handleDrawToolClick(action.tool);
-      return;
-    }
-
-    handleTypeClick(action.type);
-  };
-
-  const renderToolbarAction = (action: ToolbarAction) => {
-    const isActive = isActionActive(action);
-    const isEraseAction =
-      action.group === "draw" && action.tool === "wall-erase";
-    const isEraseActive = isEraseAction && isActive;
-
+  const renderToolbarAction = (action: DrawToolbarAction) => {
+    const isActive = activeDrawTool === action.tool;
+    const isEraseAction = action.tool === "wall-erase";
     const button = (
       <Button
-        ref={
-          action.group === "device"
-            ? (el: HTMLButtonElement | null) => {
-                buttonElementsRef.current[action.type] = el;
-              }
-            : undefined
-        }
-        variant={isEraseActive ? "ghost" : isActive ? "secondary" : "ghost"}
+        variant={isEraseAction ? "ghost" : isActive ? "secondary" : "ghost"}
         size="sm"
-        onClick={() => handleToolbarActionClick(action)}
+        onClick={() => handleDrawToolClick(action.tool)}
         disabled={!currentFloorId || !isReady}
         className={cn(
-          "-md flex h-auto flex-col items-center px-2 py-1.5",
-          isActive && !isEraseActive && "ring-2 ring-ring",
-          isEraseActive && "text-destructive",
-          isEraseAction && !isEraseActive && "hover:text-destructive",
+          "flex h-auto flex-col items-center px-2 py-1.5",
+          isActive && !isEraseAction && "ring-2 ring-ring",
+          isEraseAction && isActive && "text-destructive",
+          isEraseAction && !isActive && "hover:text-destructive",
         )}
         title={action.title}
       >
@@ -297,130 +121,81 @@ export default function Toolbar() {
   };
 
   return (
-    <div className="fixed top-4 left-1/2 z-10 -translate-x-1/2">
-      <Popover
-        open={
-          open &&
-          isReady &&
-          selectedType !== null &&
-          activeDrawTool === "device"
-        }
-        onOpenChange={handleOpenChange}
+    <div className="fixed top-4 left-1/2 z-10 max-w-[calc(100vw-22rem)] -translate-x-1/2">
+      <div
+        className={cn(
+          "flex items-center gap-2 rounded-lg p-1 shadow-lg transition-colors duration-500",
+          flashType === "undo"
+            ? "bg-red-100 dark:bg-red-950"
+            : flashType === "redo"
+              ? "bg-blue-100 dark:bg-blue-950"
+              : "bg-card",
+        )}
       >
-        <div
-          className={cn(
-            "flex items-center gap-2 rounded-lg p-1 shadow-lg transition-colors duration-500",
-            flashType === "undo"
-              ? "bg-red-100 dark:bg-red-950"
-              : flashType === "redo"
-                ? "bg-blue-100 dark:bg-blue-950"
-                : "bg-card",
-          )}
+        <Button
+          type="button"
+          variant={isMultiSelectMode ? "secondary" : "ghost"}
+          size="sm"
+          onClick={toggleMultiSelectMode}
+          disabled={!currentFloorId || !isReady}
+          className={cn("gap-2", isMultiSelectMode && "ring-2 ring-ring")}
+          title="Sélectionner et déplacer plusieurs équipements"
         >
-          <div className="flex items-center gap-1">
-            {drawToolbarActions.map((action) => renderToolbarAction(action))}
-          </div>
-
-          {showWallColors ? (
-            <div
-              className={cn(
-                "flex items-center gap-1",
-                // eslint-disable-next-line
-                wallColorSelectionEnabled ? "" : "hidden",
-              )}
-              aria-hidden={!wallColorSelectionEnabled}
-            >
-              <div className="h-6 w-px bg-border" aria-hidden />
-              {WALL_COLOR_ORDER.map((color) => {
-                const tone = WALL_COLOR_TONES[color];
-                const isActive = selectedWallColor === color;
-
-                return (
-                  <button
-                    key={color}
-                    type="button"
-                    onClick={() => handleSelectWallColor(color)}
-                    disabled={
-                      !currentFloorId || !isReady || !wallColorSelectionEnabled
-                    }
-                    className={cn(
-                      "h-6 w-6 rounded-full ring-ring transition-all",
-                      isActive &&
-                        "ring-offset-0.5 ring-2 ring-muted-foreground",
-                    )}
-                    style={{
-                      backgroundColor: tone.fill,
-                      borderColor: tone.stroke,
-                    }}
-                    title={`Couleur mur: ${tone.label}`}
-                  />
-                );
-              })}
-            </div>
+          <span className="size-4 rounded border border-dashed border-current" />
+          Sélection
+          {selectedDeviceIds.length > 1 ? (
+            <span className="rounded-full bg-primary px-1.5 text-[10px] text-primary-foreground">
+              {selectedDeviceIds.length}
+            </span>
           ) : null}
+        </Button>
 
-          <div className="h-6 w-px bg-border" aria-hidden />
-
-          <div className="flex items-center gap-1">
-            {deviceToolbarActions.map((action) => renderToolbarAction(action))}
-          </div>
+        <div className="h-6 w-px bg-border" aria-hidden />
+        <div className="flex items-center gap-1">
+          {drawToolbarActions.map((action) => renderToolbarAction(action))}
         </div>
 
-        <PopoverContent
-          side="bottom"
-          align="center"
-          className="w-72 p-0"
-          sideOffset={8}
-          anchor={activeAnchorElement ?? undefined}
-        >
-          <Command shouldFilter={false}>
-            <CommandInput
-              placeholder="Rechercher un équipement..."
-              className="h-9"
-              value={searchQuery}
-              onValueChange={setSearchQuery}
-            />
-            <CommandList>
-              {filteredDevices.length === 0 ? (
-                <div className="py-6 text-center text-sm text-muted-foreground">
-                  Aucun équipement trouvé
-                </div>
-              ) : null}
-              {filteredDevices.length > 0 ? (
-                <CommandGroup>
-                  {filteredDevices.map((device) => (
-                    <CommandItem
-                      key={device.id}
-                      value={device.id}
-                      onSelect={() => handleAddDevice(device)}
-                      className="cursor-pointer"
-                    >
-                      <div className="flex w-full items-center justify-between">
-                        <div className="flex-1">
-                          <p className="font-medium">{device.name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {device.model}
-                            {device.hostname ? (
-                              <span className="ml-2 font-mono">
-                                {device.hostname}
-                              </span>
-                            ) : null}
-                          </p>
-                        </div>
-                        <HugeiconsIcon
-                          icon={Tick02Icon}
-                          className="ml-2 h-4 w-4 shrink-0 opacity-0"
-                          strokeWidth={2}
-                        />
-                      </div>
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              ) : null}
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      </Popover>
+        {showWallColors ? (
+          <div
+            className={cn(
+              "flex items-center gap-1",
+              // eslint-disable-next-line
+              TOOLBAR_WALL_COLOR_SELECTION_ENABLED ? "" : "hidden",
+            )}
+            aria-hidden={!TOOLBAR_WALL_COLOR_SELECTION_ENABLED}
+          >
+            <div className="h-6 w-px bg-border" aria-hidden />
+            {WALL_COLOR_ORDER.map((color) => {
+              const tone = WALL_COLOR_TONES[color];
+              const isActive = selectedWallColor === color;
+              return (
+                <button
+                  key={color}
+                  type="button"
+                  onClick={() => setSelectedWallColor(color)}
+                  disabled={
+                    !currentFloorId ||
+                    !isReady ||
+                    !TOOLBAR_WALL_COLOR_SELECTION_ENABLED
+                  }
+                  className={cn(
+                    "h-6 w-6 rounded-full ring-ring transition-all",
+                    isActive && "ring-offset-0.5 ring-2 ring-muted-foreground",
+                  )}
+                  style={{
+                    backgroundColor: tone.fill,
+                    borderColor: tone.stroke,
+                  }}
+                  title={`Couleur mur: ${tone.label}`}
+                />
+              );
+            })}
+          </div>
+        ) : null}
+
+        <div className="h-6 w-px bg-border" aria-hidden />
+        <NetBoxInventoryPanel />
+      </div>
     </div>
   );
 }
