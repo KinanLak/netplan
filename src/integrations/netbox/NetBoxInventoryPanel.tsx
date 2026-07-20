@@ -33,6 +33,7 @@ import {
 import type { NetBoxTypeFilter } from "@/integrations/netbox/inventory";
 import { layoutInventoryGrid } from "@/integrations/netbox/inventoryPlacement";
 import { cn } from "@/lib/utils";
+import { asSiteId } from "@/lib/objectIds";
 import {
   useMapDocumentActions,
   useMapDocumentReady,
@@ -40,6 +41,7 @@ import {
 import { useCurrentFloorId, useIsEditMode } from "@/store/selectors";
 import { useMapStore } from "@/store/useMapStore";
 import type { DeviceDraft, DeviceId, DeviceType } from "@/types/map";
+import { useCurrentSiteId } from "@/sites/useCurrentSite";
 
 const typeFilters: Array<{ value: NetBoxTypeFilter; label: string }> = [
   { value: "all", label: "Tout" },
@@ -77,17 +79,25 @@ export function NetBoxInventoryPanel() {
   );
   const listRef = useRef<HTMLDivElement>(null);
   const deferredQuery = useDeferredValue(query);
+  const siteId = useCurrentSiteId();
+  const site = useQuery(api.sites.get, siteId ? { siteId } : "skip");
 
   const inventoryResult = useQuery(
     api.netbox.listInventory,
-    open ? {} : "skip",
+    open && siteId ? { siteId } : "skip",
   );
   const inventory = useMemo(() => inventoryResult ?? [], [inventoryResult]);
-  const syncState = useQuery(api.netbox.getSyncState);
-  const libreNmsState = useQuery(api.librenms.getSyncState, open ? {} : "skip");
+  const syncState = useQuery(
+    api.netbox.getSyncState,
+    siteId ? { siteId } : "skip",
+  );
+  const libreNmsState = useQuery(
+    api.librenms.getSyncState,
+    open && siteId ? { siteId } : "skip",
+  );
   const discoveriesResult = useQuery(
     api.librenms.listDiscoveredConnections,
-    open ? {} : "skip",
+    open && siteId ? { siteId } : "skip",
   );
   const discoveries = useMemo(
     () => discoveriesResult ?? [],
@@ -217,12 +227,12 @@ export function NetBoxInventoryPanel() {
             ip: item.ip,
             model: item.model,
             status: "unknown" as const,
-            macs: item.macs,
             source: {
               provider: "netbox" as const,
+              siteId: asSiteId(item.siteId),
+              instanceKey: item.instanceKey,
               externalId: item.externalId,
               url: item.url,
-              site: item.site,
               location: item.location,
               locationPath: item.locationPath,
               role: item.role,
@@ -271,7 +281,8 @@ export function NetBoxInventoryPanel() {
                   size={20}
                   strokeWidth={1.5}
                 />
-                Inventaire NetBox · Arles
+                Inventaire NetBox
+                {site ? ` · ${site.displayName}` : ""}
               </SheetTitle>
               <SheetDescription className="mt-1">
                 Filtrez, sélectionnez un groupe, puis placez-le en une fois sur
@@ -462,7 +473,7 @@ export function NetBoxInventoryPanel() {
                           ) : null}
                           <div className="mt-3 flex items-center justify-between gap-3">
                             <span className="truncate font-mono text-xs text-muted-foreground">
-                              {item.ip ?? item.macs.at(0) ?? "Aucune adresse"}
+                              {item.ip ?? "Aucune adresse IP"}
                             </span>
                             {placementLabel ? (
                               <Badge variant="outline">{placementLabel}</Badge>
@@ -517,9 +528,9 @@ export function NetBoxInventoryPanel() {
             </Button>
           </div>
           <p className="mt-2 text-[11px] text-muted-foreground">
-            {syncState?.status === "ready"
-              ? `${syncState.inventoryCount} équipements · ${discoveries.length} PC reliés · synchronisé le ${syncDate(syncState.completedAt)}`
-              : syncState?.status === "syncing"
+            {syncState?.status === "success"
+              ? `${syncState.inventoryCount} équipements · ${discoveries.length} PC reliés · synchronisé le ${syncDate(syncState.lastSuccessAt)}`
+              : syncState?.status === "running"
                 ? "Synchronisation en cours..."
                 : syncState?.status === "error"
                   ? "Synchronisation indisponible"

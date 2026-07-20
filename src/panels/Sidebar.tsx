@@ -136,6 +136,7 @@ export default function AppSidebar() {
   const setCurrentFloor = useMapStore((s) => s.setCurrentFloor);
   const createDefaultMap = useMutation(api.buildings.createDefaultMap);
   const clearMap = useMutation(api.buildings.clearMap);
+  const ensureDefaultSite = useMutation(api.sites.ensureDefault);
   const [devMapAction, setDevMapAction] = useState<"clear" | "create" | null>(
     null,
   );
@@ -154,7 +155,8 @@ export default function AppSidebar() {
   const handleCreateDefaultMap = async () => {
     setDevMapAction("create");
     try {
-      const result = await createDefaultMap();
+      const siteId = await ensureDefaultSite();
+      const result = await createDefaultMap({ siteId });
       setCurrentBuilding(asBuildingId(result.buildingId));
       const firstFloorId = result.floorIds[0];
       if (firstFloorId) setCurrentFloor(asFloorId(firstFloorId));
@@ -171,7 +173,8 @@ export default function AppSidebar() {
 
     setDevMapAction("clear");
     try {
-      await clearMap();
+      if (!currentBuilding) return;
+      await clearMap({ siteId: currentBuilding.siteId });
       setCurrentBuilding(null);
     } finally {
       setDevMapAction(null);

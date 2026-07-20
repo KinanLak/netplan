@@ -1,0 +1,13 @@
+[Unit]
+Description=Netplan integration agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/kinanl/repos/netplan
+Environment=TERM=dumb
+ExecStart=/usr/bin/zsh -lc 'source "$HOME/.zshrc"; export NETPLAN_CONNECTOR_SECRET="$(<"/home/kinanl/repos/netplan/.netplan-connector-secret.local")"; exec /home/kinanl/.bun/bin/bun run scripts/sync-integrations.ts --agent'
+
+[Install]
+WantedBy=default.target

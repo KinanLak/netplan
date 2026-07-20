@@ -10,12 +10,18 @@ import {
 import { useIsEditMode } from "@/store/selectors";
 import { useMapStore } from "@/store/useMapStore";
 import type { DeviceDraft, DeviceId } from "@/types/map";
+import { useCurrentSiteId } from "@/sites/useCurrentSite";
+import { asSiteId } from "@/lib/objectIds";
 
 export function useLinkedSocketActions(deviceId: DeviceId | null) {
-  const inventory = useQuery(api.netbox.listInventory, deviceId ? {} : "skip");
+  const siteId = useCurrentSiteId();
+  const inventory = useQuery(
+    api.netbox.listInventory,
+    deviceId && siteId ? { siteId } : "skip",
+  );
   const discoveries = useQuery(
     api.librenms.listDiscoveredConnections,
-    deviceId ? {} : "skip",
+    deviceId && siteId ? { siteId } : "skip",
   );
   const isEditMode = useIsEditMode();
   const { document } = useMapDocumentData();
@@ -93,12 +99,12 @@ export function useLinkedSocketActions(deviceId: DeviceId | null) {
         ip: socketItem.ip,
         model: socketItem.model,
         status: "unknown",
-        macs: socketItem.macs,
         source: {
           provider: "netbox",
+          siteId: asSiteId(socketItem.siteId),
+          instanceKey: socketItem.instanceKey,
           externalId: socketItem.externalId,
           url: socketItem.url,
-          site: socketItem.site,
           location: socketItem.location,
           locationPath: socketItem.locationPath,
           role: socketItem.role,

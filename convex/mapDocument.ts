@@ -1,18 +1,12 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
-import type { Doc } from "./_generated/dataModel";
+import {
+  getComputerPresentationsForFloor,
+  getExpiredDeviceIdsForFloor,
+  toPublicDevice,
+} from "./computerPresentation";
 import { device, link, wallSegment } from "./mapValidators";
-
-const toDevice = (row: Doc<"devices">) => ({
-  id: row.objectId,
-  floorId: row.floorId,
-  type: row.type,
-  name: row.name,
-  hostname: row.hostname,
-  position: row.position,
-  size: row.size,
-  metadata: row.metadata,
-});
+import type { Doc } from "./_generated/dataModel";
 
 const toWall = (row: Doc<"walls">) => ({
   id: row.objectId,
@@ -42,11 +36,17 @@ export const getFloorDevices = query({
   args: { floorId: v.string() },
   returns: v.array(device),
   handler: async (ctx, { floorId }) => {
-    const rows = await ctx.db
-      .query("devices")
-      .withIndex("by_floor", (q) => q.eq("floorId", floorId))
-      .collect();
-    return rows.map(toDevice);
+    const [rows, expiredDeviceIds, locations] = await Promise.all([
+      ctx.db
+        .query("devices")
+        .withIndex("by_floor", (q) => q.eq("floorId", floorId))
+        .collect(),
+      getExpiredDeviceIdsForFloor(ctx, floorId),
+      getComputerPresentationsForFloor(ctx, floorId),
+    ]);
+    return rows
+      .filter((row) => !expiredDeviceIds.has(row.objectId))
+      .map((row) => toPublicDevice(row, locations.get(row.objectId)));
   },
 });
 
@@ -66,11 +66,20 @@ export const getFloorLinks = query({
   args: { floorId: v.string() },
   returns: v.array(link),
   handler: async (ctx, { floorId }) => {
-    const rows = await ctx.db
-      .query("links")
-      .withIndex("by_floor", (q) => q.eq("floorId", floorId))
-      .collect();
-    return rows.map(toLink);
+    const [rows, expiredDeviceIds] = await Promise.all([
+      ctx.db
+        .query("links")
+        .withIndex("by_floor", (q) => q.eq("floorId", floorId))
+        .collect(),
+      getExpiredDeviceIdsForFloor(ctx, floorId),
+    ]);
+    return rows
+      .filter(
+        (row) =>
+          !expiredDeviceIds.has(row.fromDeviceId) &&
+          !expiredDeviceIds.has(row.toDeviceId),
+      )
+      .map(toLink);
   },
 });
 

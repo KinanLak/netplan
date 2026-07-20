@@ -1,5 +1,12 @@
 import { describe, expect, it } from "bun:test";
-import type { Device, DeviceId, FloorId, LinkId, WallId } from "@/types/map";
+import type {
+  Device,
+  DeviceId,
+  FloorId,
+  LinkId,
+  SiteId,
+  WallId,
+} from "@/types/map";
 import { applyOperation } from "./applyOperation";
 import type { MapOperation } from "./types";
 
@@ -7,6 +14,7 @@ const floorId = "floor:a" as FloorId;
 const deviceId = (value: string) => value as DeviceId;
 const linkId = (value: string) => value as LinkId;
 const wallId = (value: string) => value as WallId;
+const siteId = "site:a" as SiteId;
 
 const meta = (seq: number): MapOperation["meta"] => ({
   opId: `op:test:${seq}` as MapOperation["meta"]["opId"],
@@ -23,6 +31,23 @@ const device = (id: DeviceId, x = 0): Device => ({
   position: { x, y: 0 },
   size: { width: 80, height: 80 },
   metadata: {},
+});
+
+const externalDevice = (id: DeviceId, externalId: string, x = 0): Device => ({
+  ...device(id, x),
+  metadata: {
+    source: {
+      provider: "netbox",
+      siteId,
+      instanceKey: "netbox-main",
+      externalId,
+      url: "https://netbox.example/device",
+      locationPath: [],
+      role: "Workstation",
+      lifecycleStatus: "active",
+      syncedAt: 1,
+    },
+  },
 });
 
 const emptySnapshot = {
@@ -211,5 +236,40 @@ describe("applyOperation", () => {
 
     expect(result.applied).toBe(true);
     expect(result.snapshot.devices).toEqual([created]);
+  });
+
+  it("rejects duplicate external bindings in optimistic state", () => {
+    const first = externalDevice(deviceId("device:external:a"), "42");
+    const second = externalDevice(deviceId("device:external:b"), "42", 200);
+
+    const result = applyOperation(
+      { ...emptySnapshot, devices: [first] },
+      { kind: "device.create", meta: meta(20), device: second },
+    );
+
+    expect(result.applied).toBe(false);
+    expect(result.reason).toBe("external-binding-conflict");
+    expect(result.snapshot.devices).toEqual([first]);
+  });
+
+  it("rolls back a batch containing duplicate external bindings", () => {
+    const first = externalDevice(deviceId("device:external:batch-a"), "42");
+    const second = externalDevice(
+      deviceId("device:external:batch-b"),
+      "42",
+      200,
+    );
+    const result = applyOperation(emptySnapshot, {
+      kind: "batch",
+      meta: meta(21),
+      operations: [
+        { kind: "device.create", device: first },
+        { kind: "device.create", device: second },
+      ],
+    });
+
+    expect(result.applied).toBe(false);
+    expect(result.reason).toBe("external-binding-conflict");
+    expect(result.snapshot).toBe(emptySnapshot);
   });
 });

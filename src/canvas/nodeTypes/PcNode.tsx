@@ -13,6 +13,8 @@ type PcNodeType = Node<DeviceNodeData>;
 
 function PcNode({ data: device, id }: NodeProps<PcNodeType>) {
   const status: DeviceStatus = device.metadata.status ?? "unknown";
+  const historicalPosition =
+    device.metadata.localization?.positionState === "historical";
 
   return (
     <NetworkNode
@@ -20,7 +22,7 @@ function PcNode({ data: device, id }: NodeProps<PcNodeType>) {
       status={status}
       width={device.size.width}
       height={device.size.height}
-      className="bg-card"
+      className={historicalPosition ? "bg-muted opacity-50" : "bg-card"}
     >
       {/* Content - hostname and lastUser inside */}
       <div className="absolute inset-1.5 flex flex-col justify-between overflow-hidden">

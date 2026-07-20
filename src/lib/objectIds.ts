@@ -4,10 +4,12 @@ import type {
   FloorId,
   LinkId,
   ObjectId,
+  SiteId,
   WallId,
 } from "@/types/map";
 
 export const asObjectId = (value: string): ObjectId => value as ObjectId;
+export const asSiteId = (value: string): SiteId => value as SiteId;
 export const asBuildingId = (value: string): BuildingId => value as BuildingId;
 export const asFloorId = (value: string): FloorId => value as FloorId;
 export const asDeviceId = (value: string): DeviceId => value as DeviceId;

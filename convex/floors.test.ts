@@ -8,7 +8,9 @@ let counter = 0;
 
 async function freshBuilding(t: ReturnType<typeof convexTest>) {
   counter += 1;
+  const siteId = await t.mutation(api.sites.ensureDefault, {});
   return await t.mutation(api.buildings.create, {
+    siteId,
     objectId: `building:${counter}`,
     name: `Building ${counter}`,
   });
@@ -110,6 +112,16 @@ describe("floors", () => {
         updatedAt: 0,
         updatedBy: "test",
       });
+      await ctx.db.insert("externalObjectBindings", {
+        siteId: "site:arles",
+        provider: "netbox",
+        instanceKey: "netbox-main",
+        externalId: "device:a",
+        deviceId: "device:a",
+        floorId,
+        createdAt: 0,
+        updatedAt: 0,
+      });
       await ctx.db.insert("walls", {
         objectId: "wall:a",
         floorId,
@@ -146,6 +158,9 @@ describe("floors", () => {
       expect(await ctx.db.query("walls").collect()).toHaveLength(0);
       expect(await ctx.db.query("links").collect()).toHaveLength(0);
       expect(await ctx.db.query("presences").collect()).toHaveLength(0);
+      expect(
+        await ctx.db.query("externalObjectBindings").collect(),
+      ).toHaveLength(0);
       expect(await ctx.db.query("buildings").collect()).toHaveLength(1);
     });
   });
