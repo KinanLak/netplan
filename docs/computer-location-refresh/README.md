@@ -58,7 +58,7 @@ Les nombres suivants servent de baseline et non de constantes métier :
 - Un trigger API validé en production sur un switch.
 - 202 lignes FDB réellement rafraîchies lors du test, alors que 106 anciennes lignes sont restées présentes.
 - 16 workers de discovery, aucun job en attente pendant l'audit.
-- Aucune prise et aucun ordinateur d'inventaire actuellement placé dans la base Convex inspectée.
+- Lors de l'audit initial, aucune prise et aucun ordinateur d'inventaire n'était placé. La validation du 17 juillet 2026 observe désormais sept ordinateurs placés, mais toujours aucune prise.
 
 ## Décisions produit confirmées
 
@@ -166,6 +166,14 @@ Le produit doit afficher la raison exacte du dernier niveau atteint.
 | 7     | [07-tests-deploiement-et-validation.md](./07-tests-deploiement-et-validation.md) | Couverture, rollout et preuve de bon fonctionnement            |
 
 Les phases sont ordonnées. Une phase peut préparer la suivante, mais elle ne doit pas exposer une fonctionnalité utilisateur reposant sur des invariants non encore implémentés.
+
+La sortie datée de la phase 0 est consignée dans [phase-0-validation.md](./phase-0-validation.md), avec la [preuve opérationnelle du trigger LibreNMS](./preuve-trigger-librenms.md).
+
+La sortie de la phase 1 et sa procédure de reconstruction sont consignées dans [phase-1-validation.md](./phase-1-validation.md).
+
+La sortie technique de la phase 2, ses kill switches et le smoke restant sont consignés dans [phase-2-validation.md](./phase-2-validation.md).
+
+La validation automatisée et les deux cycles réels de la phase 3 sont consignés dans [phase-3-validation.md](./phase-3-validation.md).
 
 ## Définition globale de terminé
 

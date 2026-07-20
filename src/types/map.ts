@@ -10,8 +10,15 @@ export type WallId = Brand<string, "WallId">;
 export type FloorId = Brand<string, "FloorId">;
 export type BuildingId = Brand<string, "BuildingId">;
 export type LinkId = Brand<string, "LinkId">;
+export type SiteId = Brand<string, "SiteId">;
 
-export type ObjectId = DeviceId | WallId | FloorId | BuildingId | LinkId;
+export type ObjectId =
+  | DeviceId
+  | WallId
+  | FloorId
+  | BuildingId
+  | LinkId
+  | SiteId;
 export type ObjectKind = "building" | "floor" | "device" | "wall" | "link";
 
 // ── Domain enums ─────────────────────────────────────────────────────────────
@@ -39,9 +46,10 @@ export interface PortInfo {
 
 export interface ExternalDeviceSource {
   provider: "netbox";
+  siteId: SiteId;
+  instanceKey: string;
   externalId: string;
   url: string;
-  site: string;
   location?: string;
   locationPath: Array<string>;
   role: string;
@@ -57,14 +65,46 @@ export interface DeviceMetadata {
   lastUser?: string;
   macs?: Array<string>;
   source?: ExternalDeviceSource;
+  localization?: {
+    state:
+      | "online"
+      | "resolved_unplaced"
+      | "missing"
+      | "offline"
+      | "ambiguous"
+      | "unresolvable"
+      | "socket_conflict";
+    reason?: string;
+    positionState: "current" | "historical";
+    projectionStatus:
+      | "idle"
+      | "pending"
+      | "running"
+      | "success"
+      | "blocked"
+      | "error";
+    targetFloorId?: FloorId;
+    targetPosition?: Position;
+    errorCode?: string;
+    nextAttemptAt?: number;
+  };
 }
 
 // ── Domain documents ─────────────────────────────────────────────────────────
 
 export interface Building {
   id: BuildingId;
+  siteId: SiteId;
   name: string;
   order: number;
+}
+
+export interface Site {
+  id: SiteId;
+  configKey: string;
+  displayName: string;
+  timezone: string;
+  enabled: boolean;
 }
 
 export interface Floor {

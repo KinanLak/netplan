@@ -65,4 +65,38 @@ describe("PcNode", () => {
     renderPcNode({ metadata: { status: "down" } });
     expect(screen.queryByText("alice")).toBe(null);
   });
+
+  it("attenuates a retained historical localization", () => {
+    const view = renderPcNode({
+      metadata: {
+        status: "unknown",
+        localization: {
+          state: "offline",
+          positionState: "historical",
+          projectionStatus: "idle",
+        },
+      },
+    });
+
+    expect(view.container.querySelector(".network-node")?.className).toContain(
+      "opacity-50",
+    );
+  });
+
+  it("does not attenuate a current successful localization", () => {
+    const view = renderPcNode({
+      metadata: {
+        status: "up",
+        localization: {
+          state: "online",
+          positionState: "current",
+          projectionStatus: "success",
+        },
+      },
+    });
+
+    expect(
+      view.container.querySelector(".network-node")?.className,
+    ).not.toContain("opacity-50");
+  });
 });

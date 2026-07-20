@@ -41,6 +41,7 @@ import {
 } from "@/integrations/netbox/inventory";
 import { api } from "../../convex/_generated/api";
 import { useLinkedSocketActions } from "@/integrations/netbox/useLinkedSocketActions";
+import { useCurrentSiteId } from "@/sites/useCurrentSite";
 
 const statusLabels: Record<DeviceStatus, string> = {
   up: "En ligne",
@@ -48,18 +49,44 @@ const statusLabels: Record<DeviceStatus, string> = {
   unknown: "Inconnu",
 };
 
+const localizationStateLabels = {
+  online: "En ligne",
+  resolved_unplaced: "Résolu, prise non placée",
+  missing: "Absent du dernier relevé",
+  offline: "Hors ligne",
+  ambiguous: "Localisation ambiguë",
+  unresolvable: "Localisation impossible",
+  socket_conflict: "Conflit de prise",
+} as const;
+
+const projectionStatusLabels = {
+  idle: "En attente de localisation",
+  pending: "Projection planifiée",
+  running: "Projection en cours",
+  success: "Position à jour",
+  blocked: "Projection bloquée",
+  error: "Échec de projection",
+} as const;
+
+const readableCode = (value: string): string =>
+  value.replaceAll("_", " ").replaceAll("-", " ");
+
 export default function DeviceDrawer() {
   const selectedDeviceId = useSelectedDeviceId();
   const isEditMode = useIsEditMode();
   const highlightedDeviceIds = useHighlightedDeviceIds();
   const menuActions = useLinkedSocketActions(selectedDeviceId);
+  const siteId = useCurrentSiteId();
 
   const selectDevice = useMapStore((s) => s.selectDevice);
   const setHighlightedDevices = useMapStore((s) => s.setHighlightedDevices);
 
   const { document } = useMapDocumentData();
   const discoveredConnections =
-    useQuery(api.librenms.listDiscoveredConnections) ?? [];
+    useQuery(
+      api.librenms.listDiscoveredConnections,
+      siteId ? { siteId } : "skip",
+    ) ?? [];
   const { commands } = useMapDocumentActions();
   const { devices, links } = document;
   const { deleteDevice } = commands;
@@ -312,6 +339,83 @@ export default function DeviceDrawer() {
                 >
                   Ouvrir dans NetBox
                 </a>
+              </div>
+            </section>
+          ) : null}
+
+          {device.metadata.localization ? (
+            <section>
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <h3 className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+                  Localisation
+                </h3>
+                <Badge variant="outline">
+                  {device.metadata.localization.positionState === "current"
+                    ? "Actuelle"
+                    : "Historique"}
+                </Badge>
+              </div>
+              <div className="space-y-2 rounded-md border border-border bg-muted p-3 text-xs">
+                <div className="flex justify-between gap-3">
+                  <span className="text-muted-foreground">État</span>
+                  <span className="text-right font-medium text-foreground">
+                    {
+                      localizationStateLabels[
+                        device.metadata.localization.state
+                      ]
+                    }
+                  </span>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <span className="text-muted-foreground">Projection</span>
+                  <span className="text-right text-foreground">
+                    {
+                      projectionStatusLabels[
+                        device.metadata.localization.projectionStatus
+                      ]
+                    }
+                  </span>
+                </div>
+                {device.metadata.localization.reason ? (
+                  <div className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">Raison</span>
+                    <span className="text-right text-foreground">
+                      {readableCode(device.metadata.localization.reason)}
+                    </span>
+                  </div>
+                ) : null}
+                {device.metadata.localization.targetFloorId &&
+                device.metadata.localization.targetPosition ? (
+                  <div className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">Cible</span>
+                    <span className="text-right font-mono text-foreground">
+                      {device.metadata.localization.targetFloorId} ·{" "}
+                      {device.metadata.localization.targetPosition.x},
+                      {device.metadata.localization.targetPosition.y}
+                    </span>
+                  </div>
+                ) : null}
+                {device.metadata.localization.errorCode ? (
+                  <div className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">Erreur</span>
+                    <span className="text-right text-destructive">
+                      {readableCode(device.metadata.localization.errorCode)}
+                    </span>
+                  </div>
+                ) : null}
+                {device.metadata.localization.nextAttemptAt ? (
+                  <div className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">
+                      Prochaine tentative
+                    </span>
+                    <span className="text-right text-foreground">
+                      {new Intl.DateTimeFormat("fr-FR", {
+                        dateStyle: "short",
+                        timeStyle: "short",
+                      }).format(device.metadata.localization.nextAttemptAt)}
+                    </span>
+                  </div>
+                ) : null}
               </div>
             </section>
           ) : null}

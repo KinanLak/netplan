@@ -15,7 +15,9 @@ const meta = () => ({
 
 async function setupFloorWithDevices(t: ReturnType<typeof convexTest>) {
   counter += 1;
+  const siteId = await t.mutation(api.sites.ensureDefault, {});
   const buildingId = await t.mutation(api.buildings.create, {
+    siteId,
     objectId: `building:links:${counter}`,
     name: "Test",
   });

@@ -1,44 +1,19 @@
 import { ConvexError, v } from "convex/values";
-import { action, internalMutation } from "./_generated/server";
-import type { MutationCtx } from "./_generated/server";
+import type { Infer } from "convex/values";
+import { action, internalQuery } from "./_generated/server";
+import type { ActionCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
-import {
-  connectionInput,
-  inventoryInput,
-  replaceNetBoxSnapshot,
-  setNetBoxFailed,
-  setNetBoxSyncing,
-} from "./netboxModel";
+import { connectionInput, inventoryInput } from "./netboxModel";
 import {
   discoveredConnectionInput,
-  replaceLibreNmsDiscoveries,
-  setLibreNmsFailed,
-  setLibreNmsSyncing,
+  observationInput,
+  resolutionDiagnosticInput,
+  switchResultInput,
 } from "./librenmsModel";
 
 declare const process: { env: Record<string, string | undefined> };
 
-const SITE = "Arles";
-const SYNC_FAILED_MESSAGE = "La synchronisation des intégrations a échoué";
-type SyncFailureOutcome =
-  | { status: "failed" }
-  | { status: "ignored" }
-  | {
-      status: "ready";
-      inventoryCount: number;
-      physicalConnectionCount: number;
-      discoveredConnectionCount: number;
-    };
-const syncFailureOutcome = v.union(
-  v.object({ status: v.literal("failed") }),
-  v.object({ status: v.literal("ignored") }),
-  v.object({
-    status: v.literal("ready"),
-    inventoryCount: v.number(),
-    physicalConnectionCount: v.number(),
-    discoveredConnectionCount: v.number(),
-  }),
-);
+const PUBLIC_IMPORT_ERROR = "La synchronisation de l'intégration a échoué";
 
 const safeEqual = (left: string, right: string): boolean => {
   let difference = left.length ^ right.length;
@@ -57,211 +32,379 @@ const requireConnectorSecret = (secret: string) => {
   }
 };
 
-const getArlesSyncRows = async (ctx: MutationCtx) =>
-  await Promise.all([
-    ctx.db
-      .query("integrationSyncs")
-      .withIndex("by_provider_site", (q) =>
-        q.eq("provider", "netbox").eq("site", SITE),
-      )
-      .unique(),
-    ctx.db
-      .query("integrationSyncs")
-      .withIndex("by_provider_site", (q) =>
-        q.eq("provider", "librenms").eq("site", SITE),
-      )
-      .unique(),
-  ]);
-
-export const markArlesSyncing = internalMutation({
-  args: { syncId: v.string(), startedAt: v.number() },
-  returns: v.boolean(),
-  handler: async (ctx, args) => {
-    const netboxAccepted = await setNetBoxSyncing(ctx, {
-      site: SITE,
-      ...args,
-    });
-    const libreNmsAccepted = await setLibreNmsSyncing(ctx, args);
-    if (!netboxAccepted || !libreNmsAccepted) {
-      throw new Error("États de synchronisation incohérents");
-    }
-    return true;
-  },
-});
-
-export const markArlesFailed = internalMutation({
-  args: {
-    syncId: v.string(),
-    startedAt: v.number(),
-    completedAt: v.number(),
-  },
-  returns: syncFailureOutcome,
-  handler: async (ctx, args): Promise<SyncFailureOutcome> => {
-    const [netboxSync, libreNmsSync] = await getArlesSyncRows(ctx);
-    if (
-      netboxSync?.syncId === args.syncId &&
-      libreNmsSync?.syncId === args.syncId &&
-      netboxSync.status === "ready" &&
-      libreNmsSync.status === "ready"
-    ) {
-      return {
-        status: "ready" as const,
-        inventoryCount: netboxSync.inventoryCount,
-        physicalConnectionCount: netboxSync.connectionCount,
-        discoveredConnectionCount: libreNmsSync.connectionCount,
-      };
-    }
-    if (
-      [netboxSync, libreNmsSync].some(
-        (sync) =>
-          !sync || sync.status !== "syncing" || sync.syncId !== args.syncId,
-      )
-    ) {
-      return { status: "ignored" as const };
-    }
-    const failure = { ...args, error: SYNC_FAILED_MESSAGE };
-    const netboxAccepted = await setNetBoxFailed(ctx, {
-      site: SITE,
-      ...failure,
-    });
-    const libreNmsAccepted = await setLibreNmsFailed(ctx, failure);
-    if (!netboxAccepted || !libreNmsAccepted) {
-      throw new Error("États de synchronisation incohérents");
-    }
-    return { status: "failed" as const };
-  },
-});
-
-export const replaceArlesSnapshot = internalMutation({
-  args: {
-    syncId: v.string(),
-    startedAt: v.number(),
-    capturedAt: v.number(),
-    sourceVersion: v.optional(v.string()),
-    inventory: v.array(inventoryInput),
-    physicalConnections: v.array(connectionInput),
-    discoveries: v.array(discoveredConnectionInput),
-  },
-  returns: v.object({
-    inventoryCount: v.number(),
-    physicalConnectionCount: v.number(),
-    discoveredConnectionCount: v.number(),
+const importResult = v.object({
+  joined: v.boolean(),
+  siteId: v.string(),
+  attemptId: v.string(),
+  leaseId: v.string(),
+  fence: v.number(),
+  status: v.union(
+    v.literal("running"),
+    v.literal("success"),
+    v.literal("error"),
+    v.literal("abandoned"),
+  ),
+  leaseExpiresAt: v.number(),
+  pinnedNetBoxGenerationId: v.optional(v.string()),
+  publishedId: v.optional(v.string()),
+  config: v.object({
+    netboxInstanceKey: v.string(),
+    netboxExternalSiteId: v.string(),
+    netboxExternalSiteSlug: v.string(),
+    libreNmsInstanceKey: v.string(),
+    localizationTargetDeviceIds: v.array(v.string()),
+    libreNmsSwitches: v.array(
+      v.object({ externalId: v.string(), networkName: v.string() }),
+    ),
   }),
-  handler: async (ctx, args) => {
-    const netboxResult = await replaceNetBoxSnapshot(ctx, {
-      site: SITE,
-      syncId: args.syncId,
-      startedAt: args.startedAt,
-      completedAt: args.capturedAt,
-      sourceVersion: args.sourceVersion,
-      inventory: args.inventory,
-      connections: args.physicalConnections,
-    });
-    const libreNmsResult = await replaceLibreNmsDiscoveries(ctx, {
-      syncId: args.syncId,
-      startedAt: args.startedAt,
-      completedAt: args.capturedAt,
-      discoveries: args.discoveries,
-    });
-    return {
-      inventoryCount: netboxResult.inventoryCount,
-      physicalConnectionCount: netboxResult.connectionCount,
-      discoveredConnectionCount: libreNmsResult.connectionCount,
-    };
+});
+
+type InventoryInput = Infer<typeof inventoryInput>;
+type ConnectionInput = Infer<typeof connectionInput>;
+type BeginMutationResult = {
+  joined: boolean;
+  attemptId: string;
+  leaseId: string;
+  fence: number;
+  status: "running" | "success" | "error" | "abandoned";
+  leaseExpiresAt: number;
+  pinnedNetBoxGenerationId?: string;
+  publishedId?: string;
+};
+type SiteConnectorConfig = {
+  siteId: string;
+  netboxInstanceKey: string;
+  netboxExternalSiteId: string;
+  netboxExternalSiteSlug: string;
+  libreNmsInstanceKey: string;
+  localizationTargetDeviceIds: Array<string>;
+  libreNmsSwitches: Array<{ externalId: string; networkName: string }>;
+};
+type BeginImportResult = BeginMutationResult & {
+  siteId: string;
+  config: Omit<SiteConnectorConfig, "siteId">;
+};
+type NetBoxPublishResult = {
+  generationId: string;
+  inventoryCount: number;
+  connectionCount: number;
+};
+type LocalizationPublishResult = {
+  snapshotId: string;
+  observationCount: number;
+  linkCount: number;
+};
+
+export const getSiteByKey = internalQuery({
+  args: { siteKey: v.string() },
+  returns: v.union(
+    v.null(),
+    v.object({
+      siteId: v.string(),
+      netboxInstanceKey: v.string(),
+      netboxExternalSiteId: v.string(),
+      netboxExternalSiteSlug: v.string(),
+      libreNmsInstanceKey: v.string(),
+      localizationTargetDeviceIds: v.array(v.string()),
+      libreNmsSwitches: v.array(
+        v.object({ externalId: v.string(), networkName: v.string() }),
+      ),
+    }),
+  ),
+  handler: async (ctx, { siteKey }) => {
+    const site = await ctx.db
+      .query("sites")
+      .withIndex("by_config_key", (q) => q.eq("configKey", siteKey))
+      .unique();
+    return site
+      ? {
+          siteId: site.objectId,
+          netboxInstanceKey: site.netboxInstanceKey,
+          netboxExternalSiteId: site.netboxExternalSiteId,
+          netboxExternalSiteSlug: site.netboxExternalSiteSlug,
+          libreNmsInstanceKey: site.libreNmsInstanceKey,
+          localizationTargetDeviceIds: site.libreNmsDevices
+            .filter((device) => device.localizationTarget)
+            .map((device) => device.externalId),
+          libreNmsSwitches: site.libreNmsDevices.map((device) => ({
+            externalId: device.externalId,
+            networkName: device.networkName,
+          })),
+        }
+      : null;
   },
 });
 
-export const beginArlesSync = action({
-  args: { secret: v.string(), syncId: v.string(), startedAt: v.number() },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    requireConnectorSecret(args.secret);
-    const accepted = await ctx.runMutation(
-      internal.connector.markArlesSyncing,
-      { syncId: args.syncId, startedAt: args.startedAt },
+export const getLocalizationBaseline = internalQuery({
+  args: { siteId: v.string() },
+  returns: v.array(
+    v.object({ externalId: v.string(), freshFdbCount: v.number() }),
+  ),
+  handler: async (ctx, { siteId }) => {
+    const state = await ctx.db
+      .query("integrationWorkflowStates")
+      .withIndex("by_site_workflow", (q) =>
+        q.eq("siteId", siteId).eq("workflow", "localization"),
+      )
+      .unique();
+    if (!state?.lastPublishedId) return [];
+    const snapshot = await ctx.db
+      .query("localizationSnapshots")
+      .withIndex("by_site_snapshot", (q) =>
+        q
+          .eq("siteId", siteId)
+          .eq("snapshotId", state.lastPublishedId as string),
+      )
+      .unique();
+    return (
+      snapshot?.switchResults.flatMap((result) =>
+        result.freshFdbCount === undefined
+          ? []
+          : [
+              {
+                externalId: result.externalId,
+                freshFdbCount: result.freshFdbCount,
+              },
+            ],
+      ) ?? []
     );
-    if (!accepted) {
-      throw new ConvexError("Une synchronisation plus récente est en cours");
-    }
-    return null;
   },
 });
 
-export const failArlesSync = action({
+const beginImport = async (
+  ctx: ActionCtx,
+  args: {
+    siteKey: string;
+    attemptId: string;
+    leaseId: string;
+    workflow: "netbox" | "localization";
+    origin: "manual" | "scheduled";
+  },
+): Promise<BeginImportResult> => {
+  const config: SiteConnectorConfig | null = await ctx.runQuery(
+    internal.connector.getSiteByKey,
+    {
+      siteKey: args.siteKey,
+    },
+  );
+  if (!config) throw new ConvexError("Site inconnu");
+  const result: BeginMutationResult = await ctx.runMutation(
+    internal.integrations.begin,
+    {
+      siteId: config.siteId,
+      workflow: args.workflow,
+      attemptId: args.attemptId,
+      leaseId: args.leaseId,
+      origin: args.origin,
+    },
+  );
+  const { siteId, ...publicConfig } = config;
+  return { ...result, siteId, config: publicConfig };
+};
+
+export const beginNetBoxImport = action({
   args: {
     secret: v.string(),
-    syncId: v.string(),
-    startedAt: v.number(),
-    completedAt: v.number(),
+    siteKey: v.string(),
+    attemptId: v.string(),
+    leaseId: v.string(),
+    origin: v.optional(v.union(v.literal("manual"), v.literal("scheduled"))),
   },
-  returns: syncFailureOutcome,
-  handler: async (ctx, args): Promise<SyncFailureOutcome> => {
+  returns: importResult,
+  handler: async (ctx, args): Promise<BeginImportResult> => {
     requireConnectorSecret(args.secret);
-    return await ctx.runMutation(internal.connector.markArlesFailed, {
-      syncId: args.syncId,
-      startedAt: args.startedAt,
-      completedAt: args.completedAt,
+    return await beginImport(ctx, {
+      ...args,
+      workflow: "netbox",
+      origin: args.origin ?? "manual",
     });
   },
 });
 
-export const pushArlesSnapshot = action({
+export const beginLocalizationImport = action({
   args: {
     secret: v.string(),
-    syncId: v.string(),
-    startedAt: v.number(),
+    siteKey: v.string(),
+    attemptId: v.string(),
+    leaseId: v.string(),
+    origin: v.optional(v.union(v.literal("manual"), v.literal("scheduled"))),
+  },
+  returns: importResult,
+  handler: async (ctx, args): Promise<BeginImportResult> => {
+    requireConnectorSecret(args.secret);
+    return await beginImport(ctx, {
+      ...args,
+      workflow: "localization",
+      origin: args.origin ?? "manual",
+    });
+  },
+});
+
+export const publishNetBoxGeneration = action({
+  args: {
+    secret: v.string(),
+    siteId: v.string(),
+    attemptId: v.string(),
+    leaseId: v.string(),
+    fence: v.number(),
+    generationId: v.string(),
+    instanceKey: v.string(),
+    externalSiteId: v.string(),
+    externalSiteSlug: v.string(),
     capturedAt: v.number(),
     sourceVersion: v.optional(v.string()),
     inventory: v.array(inventoryInput),
-    physicalConnections: v.array(connectionInput),
-    discoveries: v.array(discoveredConnectionInput),
+    connections: v.array(connectionInput),
   },
   returns: v.object({
+    generationId: v.string(),
     inventoryCount: v.number(),
-    physicalConnectionCount: v.number(),
-    discoveredConnectionCount: v.number(),
+    connectionCount: v.number(),
+  }),
+  handler: async (ctx, args): Promise<NetBoxPublishResult> => {
+    requireConnectorSecret(args.secret);
+    const { secret: _secret, ...payload } = args;
+    return await ctx.runMutation(
+      internal.netboxModel.publishGeneration,
+      payload,
+    );
+  },
+});
+
+export const readNetBoxGeneration = action({
+  args: {
+    secret: v.string(),
+    siteId: v.string(),
+    generationId: v.string(),
+  },
+  returns: v.object({
+    inventory: v.array(inventoryInput),
+    connections: v.array(connectionInput),
   }),
   handler: async (
     ctx,
     args,
   ): Promise<{
-    inventoryCount: number;
-    physicalConnectionCount: number;
-    discoveredConnectionCount: number;
+    inventory: Array<InventoryInput>;
+    connections: Array<ConnectionInput>;
   }> => {
     requireConnectorSecret(args.secret);
-    try {
-      return await ctx.runMutation(internal.connector.replaceArlesSnapshot, {
-        syncId: args.syncId,
-        startedAt: args.startedAt,
-        capturedAt: args.capturedAt,
-        sourceVersion: args.sourceVersion,
-        inventory: args.inventory,
-        physicalConnections: args.physicalConnections,
-        discoveries: args.discoveries,
-      });
-    } catch (error: unknown) {
-      console.error("Échec de la synchronisation des intégrations", error);
-      try {
-        const outcome = await ctx.runMutation(
-          internal.connector.markArlesFailed,
-          {
-            syncId: args.syncId,
-            startedAt: args.startedAt,
-            completedAt: Date.now(),
-          },
-        );
-        if (outcome.status === "ready") {
-          return {
-            inventoryCount: outcome.inventoryCount,
-            physicalConnectionCount: outcome.physicalConnectionCount,
-            discoveredConnectionCount: outcome.discoveredConnectionCount,
-          };
-        }
-      } catch (statusError: unknown) {
-        console.error("Impossible d'enregistrer l'échec", statusError);
-      }
-      throw new ConvexError(SYNC_FAILED_MESSAGE);
-    }
+    return await ctx.runQuery(internal.netboxModel.readGeneration, {
+      siteId: args.siteId,
+      generationId: args.generationId,
+    });
+  },
+});
+
+export const readLocalizationBaseline = action({
+  args: { secret: v.string(), siteId: v.string() },
+  returns: v.array(
+    v.object({ externalId: v.string(), freshFdbCount: v.number() }),
+  ),
+  handler: async (
+    ctx,
+    args,
+  ): Promise<Array<{ externalId: string; freshFdbCount: number }>> => {
+    requireConnectorSecret(args.secret);
+    return await ctx.runQuery(internal.connector.getLocalizationBaseline, {
+      siteId: args.siteId,
+    });
+  },
+});
+
+export const heartbeatImport = action({
+  args: {
+    secret: v.string(),
+    siteId: v.string(),
+    workflow: v.union(v.literal("netbox"), v.literal("localization")),
+    attemptId: v.string(),
+    leaseId: v.string(),
+    fence: v.number(),
+  },
+  returns: v.number(),
+  handler: async (ctx, args): Promise<number> => {
+    requireConnectorSecret(args.secret);
+    const { secret: _secret, ...payload } = args;
+    return await ctx.runMutation(internal.integrations.heartbeat, payload);
+  },
+});
+
+export const publishLocalizationSnapshot = action({
+  args: {
+    secret: v.string(),
+    siteId: v.string(),
+    attemptId: v.string(),
+    leaseId: v.string(),
+    fence: v.number(),
+    snapshotId: v.string(),
+    netboxGenerationId: v.string(),
+    libreNmsInstanceKey: v.string(),
+    capturedAt: v.number(),
+    switchResults: v.array(switchResultInput),
+    observations: v.array(observationInput),
+    discoveries: v.array(discoveredConnectionInput),
+    diagnostics: v.array(resolutionDiagnosticInput),
+  },
+  returns: v.object({
+    snapshotId: v.string(),
+    observationCount: v.number(),
+    linkCount: v.number(),
+  }),
+  handler: async (ctx, args): Promise<LocalizationPublishResult> => {
+    requireConnectorSecret(args.secret);
+    const { secret: _secret, ...payload } = args;
+    return await ctx.runMutation(
+      internal.librenmsModel.publishSnapshot,
+      payload,
+    );
+  },
+});
+
+const failImport = async (
+  ctx: ActionCtx,
+  args: {
+    siteId: string;
+    workflow: "netbox" | "localization";
+    attemptId: string;
+    leaseId: string;
+    fence: number;
+  },
+): Promise<null> => {
+  await ctx.runMutation(internal.integrations.fail, {
+    ...args,
+    publicError: PUBLIC_IMPORT_ERROR,
+  });
+  return null;
+};
+
+export const failNetBoxImport = action({
+  args: {
+    secret: v.string(),
+    siteId: v.string(),
+    attemptId: v.string(),
+    leaseId: v.string(),
+    fence: v.number(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args): Promise<null> => {
+    requireConnectorSecret(args.secret);
+    const { secret: _secret, ...payload } = args;
+    return await failImport(ctx, { ...payload, workflow: "netbox" });
+  },
+});
+
+export const failLocalizationImport = action({
+  args: {
+    secret: v.string(),
+    siteId: v.string(),
+    attemptId: v.string(),
+    leaseId: v.string(),
+    fence: v.number(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args): Promise<null> => {
+    requireConnectorSecret(args.secret);
+    const { secret: _secret, ...payload } = args;
+    return await failImport(ctx, { ...payload, workflow: "localization" });
   },
 });

@@ -4,6 +4,16 @@ import { mutation, query } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { mapOperation, mapOperationResult } from "./mapValidators";
+import { getExpiredDeviceIdsForFloor } from "./computerPresentation";
+import { applySystemDeviceRelocation } from "../src/map-engine/systemDeviceRelocation";
+import type {
+  Device,
+  DeviceId,
+  FloorId,
+  LinkId,
+  MapDocumentSnapshot,
+  WallId,
+} from "../src/types/map";
 
 type OperationInput = Infer<typeof mapOperation>;
 type DeviceCreateOperation = Extract<OperationInput, { kind: "device.create" }>;
@@ -21,6 +31,10 @@ type LinkInput = LinkCreateOperation["link"];
 type DeviceInsert = Omit<Doc<"devices">, "_id" | "_creationTime">;
 type WallInsert = Omit<Doc<"walls">, "_id" | "_creationTime">;
 type LinkInsert = Omit<Doc<"links">, "_id" | "_creationTime">;
+type BindingInsert = Omit<
+  Doc<"externalObjectBindings">,
+  "_id" | "_creationTime"
+>;
 
 type DevicePatch = Pick<
   Doc<"devices">,
@@ -35,6 +49,9 @@ type DevicePatch = Pick<
 type PlannedDevice = DeviceInsert & { rowId?: Id<"devices"> };
 type PlannedWall = WallInsert & { rowId?: Id<"walls"> };
 type PlannedLink = LinkInsert & { rowId?: Id<"links"> };
+type PlannedBinding = BindingInsert & {
+  rowId?: Id<"externalObjectBindings">;
+};
 
 type WritePlan = Array<
   | { kind: "insertDevice"; value: DeviceInsert }
@@ -44,6 +61,8 @@ type WritePlan = Array<
   | { kind: "deleteWall"; rowId: Id<"walls"> }
   | { kind: "insertLink"; value: LinkInsert }
   | { kind: "deleteLink"; rowId: Id<"links"> }
+  | { kind: "insertBinding"; value: BindingInsert }
+  | { kind: "deleteBinding"; rowId: Id<"externalObjectBindings"> }
 >;
 
 interface PlanningState {
@@ -51,7 +70,13 @@ interface PlanningState {
   devices: Map<string, PlannedDevice>;
   walls: Map<string, PlannedWall>;
   links: Map<string, PlannedLink>;
+  siteIdByFloor: Map<string, string>;
+  netboxInstanceKeyBySite: Map<string, string>;
+  validExternalKeys: Set<string>;
+  bindingsByKey: Map<string, PlannedBinding>;
+  bindingKeyByDevice: Map<string, string>;
   wallGeometry: Map<string, string>;
+  collisionExcludedDeviceIds: Set<string>;
   affectedFloorIds: Set<string>;
   plan: WritePlan;
 }
@@ -242,7 +267,30 @@ interface OperationScope {
   deviceIds: Set<string>;
   wallIds: Set<string>;
   linkIds: Set<string>;
+  externalIdentities: Map<
+    string,
+    { siteId: string; instanceKey: string; externalId: string }
+  >;
 }
+
+const externalBindingKey = (identity: {
+  siteId: string;
+  instanceKey: string;
+  externalId: string;
+}): string =>
+  `${identity.siteId}\0netbox\0${identity.instanceKey}\0${identity.externalId}`;
+
+const collectExternalIdentity = (
+  scope: OperationScope,
+  source: DeviceInput["metadata"]["source"],
+) => {
+  if (!source) return;
+  scope.externalIdentities.set(externalBindingKey(source), {
+    siteId: source.siteId,
+    instanceKey: source.instanceKey,
+    externalId: source.externalId,
+  });
+};
 
 /**
  * Object ids and floors an operation can touch, collected before planning so
@@ -256,14 +304,19 @@ const collectOperationScope = (
     deviceIds: new Set(),
     wallIds: new Set(),
     linkIds: new Set(),
+    externalIdentities: new Map(),
   },
 ): OperationScope => {
   switch (operation.kind) {
     case "device.create":
       scope.floorIds.add(operation.device.floorId);
       scope.deviceIds.add(operation.device.id);
+      collectExternalIdentity(scope, operation.device.metadata.source);
       break;
     case "device.patch":
+      collectExternalIdentity(scope, operation.patch.metadata?.source);
+      scope.deviceIds.add(operation.deviceId);
+      break;
     case "device.delete":
       scope.deviceIds.add(operation.deviceId);
       break;
@@ -334,38 +387,116 @@ const buildPlanningState = async (
   }
 
   const floorIdList = [...floorIds];
-  const [floors, devicesByFloor, wallsByFloor, linksByFloor] =
-    await Promise.all([
-      ctx.db.query("floors").collect(),
-      Promise.all(
-        floorIdList.map((floorId) =>
-          ctx.db
-            .query("devices")
-            .withIndex("by_floor", (q) => q.eq("floorId", floorId))
-            .collect(),
-        ),
+  const [
+    floors,
+    buildings,
+    sites,
+    devicesByFloor,
+    wallsByFloor,
+    linksByFloor,
+    bindingsByDevice,
+    bindingsByExternal,
+    expiredDeviceIdsByFloor,
+  ] = await Promise.all([
+    ctx.db.query("floors").collect(),
+    ctx.db.query("buildings").collect(),
+    ctx.db.query("sites").collect(),
+    Promise.all(
+      floorIdList.map((floorId) =>
+        ctx.db
+          .query("devices")
+          .withIndex("by_floor", (q) => q.eq("floorId", floorId))
+          .collect(),
       ),
-      Promise.all(
-        floorIdList.map((floorId) =>
-          ctx.db
-            .query("walls")
-            .withIndex("by_floor", (q) => q.eq("floorId", floorId))
-            .collect(),
-        ),
+    ),
+    Promise.all(
+      floorIdList.map((floorId) =>
+        ctx.db
+          .query("walls")
+          .withIndex("by_floor", (q) => q.eq("floorId", floorId))
+          .collect(),
       ),
-      Promise.all(
-        floorIdList.map((floorId) =>
-          ctx.db
-            .query("links")
-            .withIndex("by_floor", (q) => q.eq("floorId", floorId))
-            .collect(),
-        ),
+    ),
+    Promise.all(
+      floorIdList.map((floorId) =>
+        ctx.db
+          .query("links")
+          .withIndex("by_floor", (q) => q.eq("floorId", floorId))
+          .collect(),
       ),
-    ]);
+    ),
+    Promise.all(
+      [...scope.deviceIds].map((deviceId) =>
+        ctx.db
+          .query("externalObjectBindings")
+          .withIndex("by_device", (q) => q.eq("deviceId", deviceId))
+          .unique(),
+      ),
+    ),
+    Promise.all(
+      [...scope.externalIdentities.values()].map((identity) =>
+        ctx.db
+          .query("externalObjectBindings")
+          .withIndex("by_external", (q) =>
+            q
+              .eq("siteId", identity.siteId)
+              .eq("provider", "netbox")
+              .eq("instanceKey", identity.instanceKey)
+              .eq("externalId", identity.externalId),
+          )
+          .unique(),
+      ),
+    ),
+    Promise.all(
+      floorIdList.map((floorId) => getExpiredDeviceIdsForFloor(ctx, floorId)),
+    ),
+  ]);
 
   const devices = devicesByFloor.flat();
   const walls = wallsByFloor.flat();
   const links = linksByFloor.flat();
+  const buildingSiteById = new Map(
+    buildings.map((building) => [building.objectId, building.siteId]),
+  );
+  const siteById = new Map(sites.map((site) => [site.objectId, site]));
+  const activeExternalRows = await Promise.all(
+    [...scope.externalIdentities.values()].map(async (identity) => {
+      const site = siteById.get(identity.siteId);
+      if (!site || site.netboxInstanceKey !== identity.instanceKey) return null;
+      const workflowState = await ctx.db
+        .query("integrationWorkflowStates")
+        .withIndex("by_site_workflow", (q) =>
+          q.eq("siteId", identity.siteId).eq("workflow", "netbox"),
+        )
+        .unique();
+      if (!workflowState?.lastPublishedId) return null;
+      return await ctx.db
+        .query("netboxInventory")
+        .withIndex("by_generation_external", (q) =>
+          q
+            .eq("siteId", identity.siteId)
+            .eq("generationId", workflowState.lastPublishedId as string)
+            .eq("externalId", identity.externalId),
+        )
+        .unique();
+    }),
+  );
+  const bindingRows = new Map<Id<"externalObjectBindings">, PlannedBinding>();
+  for (const binding of [...bindingsByDevice, ...bindingsByExternal].flatMap(
+    (item) => (item ? [item] : []),
+  )) {
+    bindingRows.set(binding._id, {
+      rowId: binding._id,
+      siteId: binding.siteId,
+      provider: binding.provider,
+      instanceKey: binding.instanceKey,
+      externalId: binding.externalId,
+      deviceId: binding.deviceId,
+      floorId: binding.floorId,
+      createdAt: binding.createdAt,
+      updatedAt: binding.updatedAt,
+    });
+  }
 
   return {
     floors: new Set(floors.map((floor) => floor.objectId)),
@@ -420,11 +551,48 @@ const buildPlanningState = async (
         },
       ]),
     ),
+    siteIdByFloor: new Map(
+      floors.flatMap((floor) => {
+        const siteId = buildingSiteById.get(floor.buildingId);
+        return siteId ? [[floor.objectId, siteId] as const] : [];
+      }),
+    ),
+    netboxInstanceKeyBySite: new Map(
+      sites.map((site) => [site.objectId, site.netboxInstanceKey]),
+    ),
+    validExternalKeys: new Set(
+      activeExternalRows.flatMap((row) =>
+        row
+          ? [
+              externalBindingKey({
+                siteId: row.siteId,
+                instanceKey: row.instanceKey,
+                externalId: row.externalId,
+              }),
+            ]
+          : [],
+      ),
+    ),
+    bindingsByKey: new Map(
+      [...bindingRows.values()].map((binding) => [
+        externalBindingKey(binding),
+        binding,
+      ]),
+    ),
+    bindingKeyByDevice: new Map(
+      [...bindingRows.values()].map((binding) => [
+        binding.deviceId,
+        externalBindingKey(binding),
+      ]),
+    ),
     wallGeometry: new Map(
       walls.map((wall) => [
         wallGeometryKey(wall.floorId, wall.geometryKey),
         wall.objectId,
       ]),
+    ),
+    collisionExcludedDeviceIds: new Set(
+      expiredDeviceIdsByFloor.flatMap((deviceIds) => [...deviceIds]),
     ),
     affectedFloorIds: new Set(),
     plan: [],
@@ -447,6 +615,90 @@ const removePlannedInsert = (
     if (write.kind !== kind) return true;
     return write.value.objectId !== objectId;
   });
+};
+
+const removePlannedBindingInsert = (state: PlanningState, key: string) => {
+  state.plan = state.plan.filter(
+    (write) =>
+      write.kind !== "insertBinding" || externalBindingKey(write.value) !== key,
+  );
+};
+
+const reserveExternalBinding = (
+  state: PlanningState,
+  device: PlannedDevice,
+): string | null => {
+  const source = device.metadata.source;
+  if (!source) return null;
+  const siteId = state.siteIdByFloor.get(device.floorId);
+  if (!siteId || siteId !== source.siteId) {
+    return "External object site does not match destination floor";
+  }
+  if (state.netboxInstanceKeyBySite.get(siteId) !== source.instanceKey) {
+    return "External object instance does not match site configuration";
+  }
+  const key = externalBindingKey(source);
+  if (!state.validExternalKeys.has(key)) {
+    return "External object is absent from the active NetBox generation";
+  }
+  const existing = state.bindingsByKey.get(key);
+  if (existing && existing.deviceId !== device.objectId) {
+    return "External object is already placed";
+  }
+  const deviceKey = state.bindingKeyByDevice.get(device.objectId);
+  if (deviceKey && deviceKey !== key) {
+    return "Device already owns another external binding";
+  }
+  if (existing) return null;
+  const now = device.updatedAt;
+  const binding: PlannedBinding = {
+    siteId,
+    provider: "netbox",
+    instanceKey: source.instanceKey,
+    externalId: source.externalId,
+    deviceId: device.objectId,
+    floorId: device.floorId,
+    createdAt: now,
+    updatedAt: now,
+  };
+  state.bindingsByKey.set(key, binding);
+  state.bindingKeyByDevice.set(device.objectId, key);
+  state.plan.push({ kind: "insertBinding", value: binding });
+  return null;
+};
+
+const releaseExternalBinding = (state: PlanningState, deviceId: string) => {
+  const key = state.bindingKeyByDevice.get(deviceId);
+  if (!key) return;
+  const binding = state.bindingsByKey.get(key);
+  state.bindingKeyByDevice.delete(deviceId);
+  state.bindingsByKey.delete(key);
+  if (!binding) return;
+  if (binding.rowId) {
+    state.plan.push({ kind: "deleteBinding", rowId: binding.rowId });
+  } else {
+    removePlannedBindingInsert(state, key);
+  }
+};
+
+const replaceExternalBinding = (
+  state: PlanningState,
+  existing: PlannedDevice,
+  patched: PlannedDevice,
+): string | null => {
+  const oldSource = existing.metadata.source;
+  const newSource = patched.metadata.source;
+  const oldKey = oldSource ? externalBindingKey(oldSource) : undefined;
+  const newKey = newSource ? externalBindingKey(newSource) : undefined;
+  if (oldKey === newKey) return null;
+  if (newSource) {
+    const conflict = state.bindingsByKey.get(newKey as string);
+    if (conflict && conflict.deviceId !== patched.objectId) {
+      return "External object is already placed";
+    }
+  }
+  releaseExternalBinding(state, existing.objectId);
+  return reserveExternalBinding(state, patched);
 };
 
 const updatePlannedDeviceInsert = (
@@ -479,6 +731,7 @@ const validateDevicePlacement = (
 
   for (const other of state.devices.values()) {
     if (other.objectId === device.objectId) continue;
+    if (state.collisionExcludedDeviceIds.has(other.objectId)) continue;
     if (other.floorId !== device.floorId) continue;
     if (
       rectanglesOverlap(
@@ -516,6 +769,7 @@ const wallCollidesWithDevice = (
 ): boolean => {
   const rect = getWallCollisionRect(wall);
   for (const device of state.devices.values()) {
+    if (state.collisionExcludedDeviceIds.has(device.objectId)) continue;
     if (device.floorId !== wall.floorId) continue;
     if (
       rectanglesOverlap(
@@ -544,12 +798,13 @@ const planDeviceCreate = (
   const existing = state.devices.get(operation.device.id);
   if (existing) {
     markAffectedFloor(state, existing.floorId);
-    return sameJson(
+    const duplicateError = sameJson(
       plannedDevicePayload(existing),
       devicePayload(operation.device),
     )
       ? null
       : "Device object id already exists with different payload";
+    return duplicateError ?? reserveExternalBinding(state, existing);
   }
 
   const placementError = validateDevicePlacement(state, {
@@ -573,6 +828,8 @@ const planDeviceCreate = (
     updatedBy: operation.meta.clientId,
   };
   state.devices.set(operation.device.id, value);
+  const bindingError = reserveExternalBinding(state, value);
+  if (bindingError) return bindingError;
   markAffectedFloor(state, operation.device.floorId);
   state.plan.push({ kind: "insertDevice", value });
   return null;
@@ -601,6 +858,9 @@ const planDevicePatch = (
 
   const placementError = validateDevicePlacement(state, patched);
   if (placementError) return placementError;
+
+  const bindingError = replaceExternalBinding(state, existing, patched);
+  if (bindingError) return bindingError;
 
   state.devices.set(operation.deviceId, patched);
   markAffectedFloor(state, patched.floorId);
@@ -655,6 +915,7 @@ const planDeviceDelete = (
   }
 
   state.devices.delete(operation.deviceId);
+  releaseExternalBinding(state, operation.deviceId);
   markAffectedFloor(state, existing.floorId);
   if (existing.rowId) {
     state.plan.push({ kind: "deleteDevice", rowId: existing.rowId });
@@ -882,8 +1143,416 @@ const executePlan = async (ctx: MutationCtx, plan: WritePlan) => {
       case "deleteLink":
         await ctx.db.delete(write.rowId);
         break;
+      case "insertBinding":
+        await ctx.db.insert("externalObjectBindings", write.value);
+        break;
+      case "deleteBinding":
+        await ctx.db.delete(write.rowId);
+        break;
     }
   }
+};
+
+export interface IntegrationDeviceRelocationOperation {
+  kind: "system.device.relocate";
+  origin: "integration";
+  operationId: string;
+  expectedCycleId: string;
+  expectedFence: number;
+  siteId: string;
+  computerExternalId: string;
+  device: {
+    id: string;
+    name: string;
+    hostname?: string;
+    size: { width: number; height: number };
+    metadata: Doc<"devices">["metadata"];
+  };
+  source: {
+    floorId: string;
+    position: { x: number; y: number };
+  } | null;
+  target: {
+    floorId: string;
+    position: { x: number; y: number };
+  };
+  occurredAt: number;
+}
+
+export type IntegrationDeviceRelocationReason =
+  | "already-applied"
+  | "stale-cycle"
+  | "source-mismatch"
+  | "missing-source-floor"
+  | "missing-target-floor"
+  | "blocked-by-links"
+  | "device-id-conflict"
+  | "duplicate-external-binding"
+  | "device-collision"
+  | "wall-collision"
+  | "invalid-device";
+
+export interface IntegrationDeviceRelocationFloorResult {
+  floorId: string;
+  effect: "device-created" | "device-moved" | "device-removed" | "device-added";
+  revision: number;
+}
+
+export interface IntegrationDeviceRelocationResult {
+  status: "applied" | "already_applied" | "rejected";
+  deviceId: string;
+  floors: Array<IntegrationDeviceRelocationFloorResult>;
+  reason?: IntegrationDeviceRelocationReason;
+}
+
+const integrationSnapshot = (
+  floorId: string,
+  devices: Array<Doc<"devices">>,
+  walls: Array<Doc<"walls">>,
+  links: Array<Doc<"links">>,
+): MapDocumentSnapshot => ({
+  floorId: floorId as FloorId,
+  revision: 0,
+  devices: devices.map((device) => ({
+    id: device.objectId as DeviceId,
+    floorId: device.floorId as FloorId,
+    type: device.type,
+    name: device.name,
+    hostname: device.hostname,
+    position: device.position,
+    size: device.size,
+    metadata: device.metadata as Device["metadata"],
+  })),
+  walls: walls.map((wall) => ({
+    id: wall.objectId as WallId,
+    floorId: wall.floorId as FloorId,
+    start: wall.start,
+    end: wall.end,
+    color: wall.color,
+    geometryKey: wall.geometryKey,
+  })),
+  links: links.map((link) => ({
+    id: link.objectId as LinkId,
+    floorId: link.floorId as FloorId,
+    fromDeviceId: link.fromDeviceId as DeviceId,
+    fromPort: link.fromPort,
+    toDeviceId: link.toDeviceId as DeviceId,
+    toPort: link.toPort,
+    label: link.label,
+  })),
+});
+
+const integrationHistoryResult = (
+  row: Doc<"integrationMapOperations">,
+): IntegrationDeviceRelocationResult => ({
+  status: row.status,
+  deviceId: row.deviceId,
+  floors: row.floors,
+  reason: row.reason as IntegrationDeviceRelocationReason | undefined,
+});
+
+const recordIntegrationRelocation = async (
+  ctx: MutationCtx,
+  operation: IntegrationDeviceRelocationOperation,
+  result: IntegrationDeviceRelocationResult,
+) => {
+  await ctx.db.insert("integrationMapOperations", {
+    opId: operation.operationId,
+    idempotencyKey: `${operation.siteId}\0${operation.computerExternalId}\0${operation.expectedCycleId}\0${operation.device.id}`,
+    origin: operation.origin,
+    expectedCycleId: operation.expectedCycleId,
+    deviceId: operation.device.id,
+    status: result.status,
+    reason: result.reason,
+    floors: result.floors,
+    createdAt: operation.occurredAt,
+    appliedAt: Date.now(),
+  });
+  return result;
+};
+
+const rejectedRelocation = async (
+  ctx: MutationCtx,
+  operation: IntegrationDeviceRelocationOperation,
+  reason: Exclude<IntegrationDeviceRelocationReason, "already-applied">,
+) =>
+  await recordIntegrationRelocation(ctx, operation, {
+    status: "rejected",
+    deviceId: operation.device.id,
+    floors: [],
+    reason,
+  });
+
+/**
+ * Internal map-domain operation used by integration workers. It is deliberately
+ * a typed helper rather than a registered Convex function, so browsers cannot
+ * invoke it and browser undo/history never treats it as a user operation.
+ */
+export const applyIntegrationDeviceRelocation = async (
+  ctx: MutationCtx,
+  operation: IntegrationDeviceRelocationOperation,
+): Promise<IntegrationDeviceRelocationResult> => {
+  const priorAttempt = await ctx.db
+    .query("integrationMapOperations")
+    .withIndex("by_op_id", (q) => q.eq("opId", operation.operationId))
+    .unique();
+  if (priorAttempt) return integrationHistoryResult(priorAttempt);
+
+  const idempotencyKey = `${operation.siteId}\0${operation.computerExternalId}\0${operation.expectedCycleId}\0${operation.device.id}`;
+  const priorApplied = await ctx.db
+    .query("integrationMapOperations")
+    .withIndex("by_idempotency_status", (q) =>
+      q.eq("idempotencyKey", idempotencyKey).eq("status", "applied"),
+    )
+    .first();
+  if (priorApplied) {
+    return await recordIntegrationRelocation(ctx, operation, {
+      status: "already_applied",
+      deviceId: operation.device.id,
+      floors: priorApplied.floors,
+      reason: "already-applied",
+    });
+  }
+
+  const [projection, location] = await Promise.all([
+    ctx.db
+      .query("computerProjections")
+      .withIndex("by_site_computer", (q) =>
+        q
+          .eq("siteId", operation.siteId)
+          .eq("computerExternalId", operation.computerExternalId),
+      )
+      .unique(),
+    ctx.db
+      .query("computerLocations")
+      .withIndex("by_site_computer", (q) =>
+        q
+          .eq("siteId", operation.siteId)
+          .eq("computerExternalId", operation.computerExternalId),
+      )
+      .unique(),
+  ]);
+  if (
+    projection?.cycleId !== operation.expectedCycleId ||
+    projection.fence !== operation.expectedFence ||
+    projection.state !== "running" ||
+    location?.projectionCycleId !== operation.expectedCycleId ||
+    location.state !== "online"
+  ) {
+    return await rejectedRelocation(ctx, operation, "stale-cycle");
+  }
+  if (
+    validatePosition(operation.target.position) ||
+    validateSize(operation.device.size)
+  ) {
+    return await rejectedRelocation(ctx, operation, "invalid-device");
+  }
+
+  const [targetFloor, sourceFloor, bindings] = await Promise.all([
+    ctx.db
+      .query("floors")
+      .withIndex("by_object_id", (q) =>
+        q.eq("objectId", operation.target.floorId),
+      )
+      .unique(),
+    operation.source
+      ? ctx.db
+          .query("floors")
+          .withIndex("by_object_id", (q) =>
+            q.eq("objectId", operation.source?.floorId as string),
+          )
+          .unique()
+      : null,
+    ctx.db
+      .query("externalObjectBindings")
+      .withIndex("by_external", (q) =>
+        q
+          .eq("siteId", operation.siteId)
+          .eq("provider", "netbox")
+          .eq("instanceKey", projection.computer.instanceKey)
+          .eq("externalId", operation.computerExternalId),
+      )
+      .collect(),
+  ]);
+  if (!targetFloor) {
+    return await rejectedRelocation(ctx, operation, "missing-target-floor");
+  }
+  if (operation.source && !sourceFloor) {
+    return await rejectedRelocation(ctx, operation, "missing-source-floor");
+  }
+  if (bindings.length > 1) {
+    return await rejectedRelocation(
+      ctx,
+      operation,
+      "duplicate-external-binding",
+    );
+  }
+
+  const binding = bindings.at(0);
+  const existing = binding
+    ? await ctx.db
+        .query("devices")
+        .withIndex("by_object_id", (q) => q.eq("objectId", binding.deviceId))
+        .unique()
+    : null;
+  if (
+    (operation.source === null && binding !== undefined) ||
+    (operation.source !== null &&
+      (!binding ||
+        !existing ||
+        existing.type !== "pc" ||
+        existing.objectId !== operation.device.id ||
+        existing.floorId !== operation.source.floorId ||
+        !arePositionsEqual(existing.position, operation.source.position)))
+  ) {
+    return await rejectedRelocation(ctx, operation, "source-mismatch");
+  }
+  if (!binding) {
+    const conflictingId = await ctx.db
+      .query("devices")
+      .withIndex("by_object_id", (q) => q.eq("objectId", operation.device.id))
+      .unique();
+    if (conflictingId) {
+      return await rejectedRelocation(ctx, operation, "device-id-conflict");
+    }
+  }
+
+  const expiredDeviceIds = await getExpiredDeviceIdsForFloor(
+    ctx,
+    operation.target.floorId,
+  );
+  const floorIds = [
+    ...(operation.source ? [operation.source.floorId] : []),
+    operation.target.floorId,
+  ].filter((floorId, index, values) => values.indexOf(floorId) === index);
+  const snapshots = await Promise.all(
+    floorIds.map(async (floorId) => {
+      const [devices, walls, links] = await Promise.all([
+        ctx.db
+          .query("devices")
+          .withIndex("by_floor", (q) => q.eq("floorId", floorId))
+          .collect(),
+        ctx.db
+          .query("walls")
+          .withIndex("by_floor", (q) => q.eq("floorId", floorId))
+          .collect(),
+        ctx.db
+          .query("links")
+          .withIndex("by_floor", (q) => q.eq("floorId", floorId))
+          .collect(),
+      ]);
+      return integrationSnapshot(
+        floorId,
+        floorId === operation.target.floorId
+          ? devices.filter(
+              (device) =>
+                device.objectId === existing?.objectId ||
+                !expiredDeviceIds.has(device.objectId),
+            )
+          : devices,
+        walls,
+        links,
+      );
+    }),
+  );
+  const planned = applySystemDeviceRelocation(snapshots, {
+    kind: operation.kind,
+    origin: operation.origin,
+    expectedCycleId: operation.expectedCycleId,
+    device: {
+      id: operation.device.id as DeviceId,
+      floorId: operation.target.floorId as FloorId,
+      type: "pc",
+      name: operation.device.name,
+      hostname: operation.device.hostname,
+      position: operation.target.position,
+      size: operation.device.size,
+      metadata: operation.device.metadata as Device["metadata"],
+    },
+    source: operation.source
+      ? {
+          floorId: operation.source.floorId as FloorId,
+          position: operation.source.position,
+        }
+      : null,
+    target: {
+      floorId: operation.target.floorId as FloorId,
+      position: operation.target.position,
+    },
+  });
+  if (!planned.applied) {
+    if (planned.reason === "already-applied") {
+      return await recordIntegrationRelocation(ctx, operation, {
+        status: "already_applied",
+        deviceId: operation.device.id,
+        floors: [],
+        reason: planned.reason,
+      });
+    }
+    return await rejectedRelocation(
+      ctx,
+      operation,
+      planned.reason ?? "source-mismatch",
+    );
+  }
+
+  const plannedDevice = planned.snapshots
+    .flatMap((snapshot) => snapshot.devices)
+    .find((device) => device.id === operation.device.id);
+  if (!plannedDevice) {
+    throw new Error("Applied relocation did not produce the target device");
+  }
+  if (existing) {
+    await ctx.db.patch(existing._id, {
+      floorId: plannedDevice.floorId,
+      position: plannedDevice.position,
+      updatedAt: operation.occurredAt,
+      updatedBy: "system:computer-projection",
+    });
+    await ctx.db.patch((binding as Doc<"externalObjectBindings">)._id, {
+      floorId: plannedDevice.floorId,
+      updatedAt: operation.occurredAt,
+    });
+  } else {
+    await ctx.db.insert("devices", {
+      objectId: plannedDevice.id,
+      floorId: plannedDevice.floorId,
+      type: plannedDevice.type,
+      name: plannedDevice.name,
+      hostname: plannedDevice.hostname,
+      position: plannedDevice.position,
+      size: plannedDevice.size,
+      metadata: plannedDevice.metadata,
+      updatedAt: operation.occurredAt,
+      updatedBy: "system:computer-projection",
+    });
+    await ctx.db.insert("externalObjectBindings", {
+      siteId: operation.siteId,
+      provider: "netbox",
+      instanceKey: projection.computer.instanceKey,
+      externalId: operation.computerExternalId,
+      deviceId: operation.device.id,
+      floorId: plannedDevice.floorId,
+      createdAt: operation.occurredAt,
+      updatedAt: operation.occurredAt,
+    });
+  }
+
+  const revisions = await bumpDocumentRevisions(
+    ctx,
+    new Set(planned.affectedFloors.map(({ floorId }) => floorId)),
+    operation.occurredAt,
+  );
+  const floors = planned.affectedFloors.map(({ floorId, effect }) => ({
+    floorId,
+    effect,
+    revision: revisions.get(floorId) as number,
+  }));
+  return await recordIntegrationRelocation(ctx, operation, {
+    status: "applied",
+    deviceId: operation.device.id,
+    floors,
+  });
 };
 
 const operationFloorId = (operation: OperationInput): string | undefined => {

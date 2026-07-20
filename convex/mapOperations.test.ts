@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { convexTest } from "convex-test";
 import schema from "./schema";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import { modules } from "./_test/modules";
 import { addLine } from "../src/walls/engine";
 import type { FloorId, WallId } from "../src/types/map";
@@ -30,7 +30,9 @@ async function getFloorDocument(
 
 async function freshFloor(t: ReturnType<typeof convexTest>) {
   counter += 1;
+  const siteId = await t.mutation(api.sites.ensureDefault, {});
   const buildingId = await t.mutation(api.buildings.create, {
+    siteId,
     objectId: `building:ops:${counter}`,
     name: "Ops",
   });
@@ -50,6 +52,116 @@ const device = (id: string, floorId: string, x: number, y = 0) => ({
   size: { width: 80, height: 80 },
   metadata: {},
 });
+
+const externalDevice = (
+  id: string,
+  floorId: string,
+  siteId: string,
+  externalId: string,
+  x: number,
+) => ({
+  ...device(id, floorId, x),
+  metadata: {
+    source: {
+      provider: "netbox" as const,
+      siteId,
+      instanceKey: "netbox-main",
+      externalId,
+      url: `https://netbox.example/${externalId}`,
+      locationPath: [],
+      role: "Workstation",
+      lifecycleStatus: "active",
+      syncedAt: 1,
+    },
+  },
+});
+
+const siteConfig = (key: string) => ({
+  objectId: `site:${key}`,
+  configKey: key,
+  displayName: key,
+  timezone: "Europe/Paris",
+  enabled: true,
+  dayStartMinute: 420,
+  dayEndMinute: 1200,
+  netboxInstanceKey: "netbox-main",
+  netboxExternalSiteId: key,
+  netboxExternalSiteSlug: key,
+  libreNmsInstanceKey: "librenms-main",
+  libreNmsDevices: [],
+});
+
+async function siteFloor(t: ReturnType<typeof convexTest>, key: string) {
+  const siteId = await t.mutation(internal.sites.create, {
+    site: siteConfig(key),
+  });
+  const buildingId = await t.mutation(api.buildings.create, {
+    siteId,
+    objectId: `building:${key}`,
+    name: key,
+  });
+  const floorId = await t.mutation(api.floors.create, {
+    buildingId,
+    objectId: `floor:${key}`,
+    name: key,
+  });
+  const generationId = `generation:${key}`;
+  await t.run(async (ctx) => {
+    await ctx.db.insert("netboxGenerations", {
+      siteId,
+      generationId,
+      attemptId: `attempt:${key}`,
+      instanceKey: "netbox-main",
+      externalSiteId: key,
+      externalSiteSlug: key,
+      configVersion: 1,
+      capturedAt: 1,
+      publishedAt: 1,
+      inventoryCount: 1,
+      connectionCount: 0,
+      rackCount: 0,
+      switchCount: 0,
+      computerCount: 1,
+      socketCount: 0,
+    });
+    await ctx.db.insert("netboxInventory", {
+      siteId,
+      generationId,
+      instanceKey: "netbox-main",
+      provider: "netbox",
+      externalId: "42",
+      type: "pc",
+      name: "42",
+      role: "Workstation",
+      locationPath: [],
+      macs: [],
+      interfaceCount: 1,
+      cabledTerminationCount: 0,
+      lifecycleStatus: "active",
+      url: "https://netbox.example/42",
+      capturedAt: 1,
+    });
+    const state = (
+      await ctx.db.query("integrationWorkflowStates").collect()
+    ).find(
+      (candidate) =>
+        candidate.siteId === siteId && candidate.workflow === "netbox",
+    );
+    if (!state) throw new Error("Missing NetBox workflow state");
+    await ctx.db.patch(state._id, {
+      status: "success",
+      fenceCounter: 1,
+      lastAttemptAt: 1,
+      lastSuccessAt: 1,
+      lastSuccessAttemptId: `attempt:${key}`,
+      lastPublishedId: generationId,
+      lastPrimaryCount: 1,
+      lastSecondaryCount: 0,
+      lastPublishedAt: 1,
+    });
+  });
+  return { siteId, buildingId, floorId };
+}
 
 const wall = (id: string, floorId: string, x: number, y: number) => ({
   id,
@@ -886,5 +998,233 @@ describe("mapOperations.apply", () => {
     expect(atCap.status).toBe("applied");
     expect(overCap.status).toBe("rejected");
     expect(overCap.error).toContain("Too many walls");
+  });
+
+  it("enforces one external placement across all floors of a site", async () => {
+    const t = convexTest(schema, modules);
+    const {
+      siteId,
+      buildingId,
+      floorId: floorA,
+    } = await siteFloor(t, "binding");
+    const floorB = await t.mutation(api.floors.create, {
+      buildingId,
+      objectId: "floor:binding:b",
+      name: "B",
+    });
+    const first = await t.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "device.create",
+        meta: meta(110),
+        device: externalDevice("device:binding:a", floorA, siteId, "42", 0),
+      },
+    });
+    const duplicate = await t.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "device.create",
+        meta: meta(111),
+        device: externalDevice("device:binding:b", floorB, siteId, "42", 0),
+      },
+    });
+
+    expect(first.status).toBe("applied");
+    expect(duplicate).toMatchObject({
+      status: "rejected",
+      error: "External object is already placed",
+    });
+    await t.run(async (ctx) => {
+      expect(
+        await ctx.db.query("externalObjectBindings").collect(),
+      ).toHaveLength(1);
+      expect(await ctx.db.query("devices").collect()).toHaveLength(1);
+    });
+  });
+
+  it("allows the same external ID in different sites", async () => {
+    const t = convexTest(schema, modules);
+    const a = await siteFloor(t, "binding-a");
+    const b = await siteFloor(t, "binding-b");
+    const first = await t.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "device.create",
+        meta: meta(112),
+        device: externalDevice("device:site:a", a.floorId, a.siteId, "42", 0),
+      },
+    });
+    const second = await t.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "device.create",
+        meta: meta(113),
+        device: externalDevice("device:site:b", b.floorId, b.siteId, "42", 0),
+      },
+    });
+
+    expect(first.status).toBe("applied");
+    expect(second.status).toBe("applied");
+    await t.run(async (ctx) => {
+      expect(
+        await ctx.db.query("externalObjectBindings").collect(),
+      ).toHaveLength(2);
+    });
+  });
+
+  it("rejects fabricated instances and objects absent from active inventory", async () => {
+    const t = convexTest(schema, modules);
+    const { siteId, floorId } = await siteFloor(t, "binding-authority");
+    const valid = externalDevice(
+      "device:invalid-instance",
+      floorId,
+      siteId,
+      "42",
+      0,
+    );
+    const fakeInstance = await t.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "device.create",
+        meta: meta(1131),
+        device: {
+          ...valid,
+          metadata: {
+            source: {
+              ...valid.metadata.source,
+              instanceKey: "forged",
+            },
+          },
+        },
+      },
+    });
+    const missingObject = await t.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "device.create",
+        meta: meta(1132),
+        device: externalDevice(
+          "device:missing-object",
+          floorId,
+          siteId,
+          "404",
+          200,
+        ),
+      },
+    });
+
+    expect(fakeInstance.error).toContain("instance");
+    expect(missingObject.error).toContain("active NetBox generation");
+    await t.run(async (ctx) => {
+      expect(await ctx.db.query("devices").collect()).toHaveLength(0);
+      expect(
+        await ctx.db.query("externalObjectBindings").collect(),
+      ).toHaveLength(0);
+    });
+  });
+
+  it("rejects duplicate bindings inside a batch without partial writes", async () => {
+    const t = convexTest(schema, modules);
+    const { siteId, floorId } = await siteFloor(t, "binding-batch");
+    const result = await t.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "batch",
+        meta: meta(114),
+        operations: [
+          {
+            kind: "device.create",
+            device: externalDevice(
+              "device:batch:one",
+              floorId,
+              siteId,
+              "42",
+              0,
+            ),
+          },
+          {
+            kind: "device.create",
+            device: externalDevice(
+              "device:batch:two",
+              floorId,
+              siteId,
+              "42",
+              200,
+            ),
+          },
+        ],
+      },
+    });
+
+    expect(result.status).toBe("rejected");
+    await t.run(async (ctx) => {
+      expect(await ctx.db.query("devices").collect()).toHaveLength(0);
+      expect(
+        await ctx.db.query("externalObjectBindings").collect(),
+      ).toHaveLength(0);
+    });
+  });
+
+  it("releases an external binding when its device is deleted", async () => {
+    const t = convexTest(schema, modules);
+    const { siteId, floorId } = await siteFloor(t, "binding-delete");
+    await t.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "device.create",
+        meta: meta(115),
+        device: externalDevice("device:old", floorId, siteId, "42", 0),
+      },
+    });
+    await t.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "device.delete",
+        meta: meta(116),
+        deviceId: "device:old",
+      },
+    });
+    const replacement = await t.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "device.create",
+        meta: meta(117),
+        device: externalDevice("device:new", floorId, siteId, "42", 0),
+      },
+    });
+
+    expect(replacement.status).toBe("applied");
+    await t.run(async (ctx) => {
+      const bindings = await ctx.db.query("externalObjectBindings").collect();
+      expect(bindings).toHaveLength(1);
+      expect(bindings[0]?.deviceId).toBe("device:new");
+    });
+  });
+
+  it("serializes concurrent claims for the same external identity", async () => {
+    const t = convexTest(schema, modules);
+    const {
+      siteId,
+      buildingId,
+      floorId: floorA,
+    } = await siteFloor(t, "binding-race");
+    const floorB = await t.mutation(api.floors.create, {
+      buildingId,
+      objectId: "floor:binding-race:b",
+      name: "B",
+    });
+    const [a, b] = await Promise.all([
+      t.mutation(api.mapOperations.apply, {
+        operation: {
+          kind: "device.create",
+          meta: meta(118),
+          device: externalDevice("device:race:a", floorA, siteId, "42", 0),
+        },
+      }),
+      t.mutation(api.mapOperations.apply, {
+        operation: {
+          kind: "device.create",
+          meta: meta(119),
+          device: externalDevice("device:race:b", floorB, siteId, "42", 0),
+        },
+      }),
+    ]);
+
+    expect([a.status, b.status].sort()).toEqual(["applied", "rejected"]);
+    await t.run(async (ctx) => {
+      expect(
+        await ctx.db.query("externalObjectBindings").collect(),
+      ).toHaveLength(1);
+    });
   });
 });

@@ -1,0 +1,10 @@
+[Unit]
+Description=Run the Netplan integration agent every minute
+
+[Timer]
+OnCalendar=*-*-* *:*:15
+Persistent=true
+Unit=netplan-integration-agent.service
+
+[Install]
+WantedBy=timers.target

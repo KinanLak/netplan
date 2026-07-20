@@ -148,12 +148,14 @@ De plus, la base inspectée contient actuellement zéro prise placée. Le systè
 
 ## Préconditions avant la phase 1
 
-- Confirmer les identifiants LibreNMS des deux switches d'accès dans une configuration serveur.
-- Créer l'identité durable du site Arles et associer les bâtiments existants à ce site.
+- Confirmer les identifiants LibreNMS de tous les switches du site et distinguer les switches ciblés par la localisation.
+- Confirmer le contrat d'identité du site Arles et décider le mapping des bâtiments existants. La création des documents durables et l'association `building -> site` appartiennent à la phase 1.
 - Confirmer le site NetBox externe associé au site Netplan.
 - Documenter les variables d'environnement nécessaires sans leurs valeurs.
 - Capturer la baseline de volumes dans un document ou un test de fixture.
 - Conserver le test réel de trigger comme preuve opérationnelle, sans l'automatiser dans la suite locale.
+
+Ces préconditions sont validées dans [phase-0-validation.md](./phase-0-validation.md). La preuve du test réel est conservée dans [preuve-trigger-librenms.md](./preuve-trigger-librenms.md).
 
 ## Critères d'acceptation
 
