@@ -4,31 +4,46 @@ import schema from "./schema";
 import { api, internal } from "./_generated/api";
 import { modules } from "./_test/modules";
 
+const SITE_ID = "site:arles";
+
+const ensureSite = async (t: ReturnType<typeof convexTest>) =>
+  await t.mutation(api.sites.ensureDefault, {});
+
 describe("buildings", () => {
   it("list returns buildings sorted by order with application ids", async () => {
     const t = convexTest(schema, modules);
+    await ensureSite(t);
     await t.run(async (ctx) => {
       await ctx.db.insert("buildings", {
         objectId: "building:annexe",
+        siteId: SITE_ID,
         name: "Annexe",
         order: 1,
       });
       await ctx.db.insert("buildings", {
         objectId: "building:principal",
+        siteId: SITE_ID,
         name: "Principal",
         order: 0,
       });
     });
     const buildings = await t.query(api.buildings.list);
     expect(buildings).toEqual([
-      { id: "building:principal", name: "Principal", order: 0 },
-      { id: "building:annexe", name: "Annexe", order: 1 },
+      {
+        id: "building:principal",
+        siteId: SITE_ID,
+        name: "Principal",
+        order: 0,
+      },
+      { id: "building:annexe", siteId: SITE_ID, name: "Annexe", order: 1 },
     ]);
   });
 
   it("create inserts a building by stable object id", async () => {
     const t = convexTest(schema, modules);
+    await ensureSite(t);
     const id = await t.mutation(api.buildings.create, {
+      siteId: SITE_ID,
       objectId: "building:atelier",
       name: "Atelier",
     });
@@ -39,15 +54,20 @@ describe("buildings", () => {
 
   it("createDefaultMap idempotently creates the temporary dev map", async () => {
     const t = convexTest(schema, modules);
+    await ensureSite(t);
 
-    const first = await t.mutation(api.buildings.createDefaultMap);
-    const second = await t.mutation(api.buildings.createDefaultMap);
+    const first = await t.mutation(api.buildings.createDefaultMap, {
+      siteId: SITE_ID,
+    });
+    const second = await t.mutation(api.buildings.createDefaultMap, {
+      siteId: SITE_ID,
+    });
 
     expect(second).toEqual(first);
-    expect(first.buildingId).toBe("building:default");
+    expect(first.buildingId).toBe("building:site:arles:default");
     expect(first.floorIds).toEqual([
-      "floor:default:rdc",
-      "floor:default:etage-1",
+      "floor:site:arles:default:rdc",
+      "floor:site:arles:default:etage-1",
     ]);
 
     const buildings = await t.query(api.buildings.list);
@@ -55,18 +75,23 @@ describe("buildings", () => {
       buildingId: first.buildingId,
     });
     expect(buildings).toEqual([
-      { id: "building:default", name: "Bâtiment Principal", order: 0 },
+      {
+        id: "building:site:arles:default",
+        siteId: SITE_ID,
+        name: "Bâtiment Principal",
+        order: 0,
+      },
     ]);
     expect(floors).toEqual([
       {
-        id: "floor:default:rdc",
-        buildingId: "building:default",
+        id: "floor:site:arles:default:rdc",
+        buildingId: "building:site:arles:default",
         name: "RDC",
         order: 0,
       },
       {
-        id: "floor:default:etage-1",
-        buildingId: "building:default",
+        id: "floor:site:arles:default:etage-1",
+        buildingId: "building:site:arles:default",
         name: "Étage 1",
         order: 1,
       },
@@ -75,7 +100,9 @@ describe("buildings", () => {
 
   it("clearMap removes all temporary map data", async () => {
     const t = convexTest(schema, modules);
+    await ensureSite(t);
     const buildingId = await t.mutation(api.buildings.create, {
+      siteId: SITE_ID,
       objectId: "building:clear",
       name: "Clear",
     });
@@ -146,7 +173,7 @@ describe("buildings", () => {
       });
     });
 
-    await t.mutation(api.buildings.clearMap);
+    await t.mutation(api.buildings.clearMap, { siteId: SITE_ID });
 
     await t.run(async (ctx) => {
       expect(await ctx.db.query("buildings").collect()).toHaveLength(0);
@@ -161,7 +188,9 @@ describe("buildings", () => {
 
   it("rename updates the building name", async () => {
     const t = convexTest(schema, modules);
+    await ensureSite(t);
     const id = await t.mutation(api.buildings.create, {
+      siteId: SITE_ID,
       objectId: "building:old",
       name: "Old",
     });
@@ -172,7 +201,9 @@ describe("buildings", () => {
 
   it("remove cascades floors, devices, walls, links", async () => {
     const t = convexTest(schema, modules);
+    await ensureSite(t);
     const buildingId = await t.mutation(api.buildings.create, {
+      siteId: SITE_ID,
       objectId: "building:cascade",
       name: "Cascade",
     });

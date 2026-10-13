@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
+import { getExpiredDeviceIdsForFloor } from "./computerPresentation";
 import { link } from "./mapValidators";
 
 const toLink = (row: Doc<"links">) => ({
@@ -17,11 +18,20 @@ export const listForFloor = query({
   args: { floorId: v.string() },
   returns: v.array(link),
   handler: async (ctx, { floorId }) => {
-    const links = await ctx.db
-      .query("links")
-      .withIndex("by_floor", (q) => q.eq("floorId", floorId))
-      .collect();
-    return links.map(toLink);
+    const [links, expiredDeviceIds] = await Promise.all([
+      ctx.db
+        .query("links")
+        .withIndex("by_floor", (q) => q.eq("floorId", floorId))
+        .collect(),
+      getExpiredDeviceIdsForFloor(ctx, floorId),
+    ]);
+    return links
+      .filter(
+        (item) =>
+          !expiredDeviceIds.has(item.fromDeviceId) &&
+          !expiredDeviceIds.has(item.toDeviceId),
+      )
+      .map(toLink);
   },
 });
 

@@ -8,7 +8,6 @@ declare const process: {
   env: Record<string, string | undefined>;
 };
 
-const SITE = "Arles";
 const PROVIDER = "netbox" as const;
 const PAGE_SIZE = "500";
 const REQUEST_TIMEOUT_MS = 30_000;
@@ -17,8 +16,11 @@ type JsonRecord = Record<string, unknown>;
 type InventoryInput = Infer<typeof inventoryInput>;
 type ConnectionInput = Infer<typeof connectionInput>;
 
+const { macs: _privateMacs, ...publicInventoryFields } = inventoryInput.fields;
 const inventoryItem = v.object({
-  ...inventoryInput.fields,
+  ...publicInventoryFields,
+  siteId: v.string(),
+  instanceKey: v.string(),
   syncedAt: v.number(),
   placement: v.optional(
     v.object({ deviceId: v.string(), floorId: v.string() }),
@@ -27,10 +29,18 @@ const inventoryItem = v.object({
 
 const syncState = v.object({
   provider: v.literal("netbox"),
-  site: v.string(),
-  status: v.union(v.literal("syncing"), v.literal("ready"), v.literal("error")),
-  startedAt: v.number(),
-  completedAt: v.optional(v.number()),
+  siteId: v.string(),
+  status: v.union(
+    v.literal("idle"),
+    v.literal("running"),
+    v.literal("success"),
+    v.literal("error"),
+    v.literal("backoff"),
+    v.literal("blocked"),
+    v.literal("disabled"),
+  ),
+  lastAttemptAt: v.optional(v.number()),
+  lastSuccessAt: v.optional(v.number()),
   error: v.optional(v.string()),
   inventoryCount: v.number(),
   connectionCount: v.number(),
@@ -91,10 +101,16 @@ const token = (): string => {
   return value;
 };
 
-const requestJson = async (url: URL, apiToken: string): Promise<unknown> => {
+const requestJson = async (
+  url: URL,
+  apiToken: string,
+  parentSignal?: AbortSignal,
+): Promise<unknown> => {
   const response = await fetch(url, {
     method: "GET",
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    signal: parentSignal
+      ? AbortSignal.any([parentSignal, AbortSignal.timeout(REQUEST_TIMEOUT_MS)])
+      : AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     headers: {
       Authorization: `Token ${apiToken}`,
       Accept: "application/json",
@@ -119,6 +135,7 @@ const fetchAll = async (
   apiToken: string,
   path: string,
   params: Record<string, string> = {},
+  parentSignal?: AbortSignal,
 ): Promise<Array<JsonRecord>> => {
   const first = new URL(path, base);
   first.searchParams.set("limit", PAGE_SIZE);
@@ -132,11 +149,15 @@ const fetchAll = async (
     if (next.origin !== base.origin) {
       throw new Error("NetBox a renvoyé une pagination vers un autre hôte");
     }
-    const payload = asRecord(await requestJson(next, apiToken));
+    const payload = asRecord(await requestJson(next, apiToken, parentSignal));
     if (!payload) throw new Error("Réponse NetBox invalide");
+    if (!Array.isArray(payload.results)) {
+      throw new Error("Collection NetBox absente ou incomplète");
+    }
     for (const row of asArray(payload.results)) {
       const record = asRecord(row);
-      if (record) rows.push(record);
+      if (!record) throw new Error("Ligne NetBox invalide");
+      rows.push(record);
     }
     const nextUrl = typeof payload.next === "string" ? payload.next : null;
     next = nextUrl ? new URL(nextUrl, base) : null;
@@ -190,53 +211,172 @@ const stripPrefix = (address: string | undefined): string | undefined =>
   address?.split("/")[0];
 
 interface Termination {
-  externalId: string;
+  deviceExternalId: string;
+  terminationExternalId: string;
+  kind: ConnectionInput["fromTerminationKind"];
   port?: string;
+  peerTerminationExternalIds: Array<string>;
 }
 
-const termination = (value: unknown): Termination | null => {
+const terminationKind = (
+  objectType: string,
+): ConnectionInput["fromTerminationKind"] => {
+  if (objectType === "dcim.interface") return "interface";
+  if (objectType === "dcim.frontport") return "front-port";
+  if (objectType === "dcim.rearport") return "rear-port";
+  return "other";
+};
+
+const termination = (
+  value: unknown,
+  peerIdsByTermination: ReadonlyMap<string, Array<string>>,
+): Termination | null => {
   const item = asRecord(asArray(value)[0]);
   const object = recordAt(item, "object");
+  const objectType = stringAt(item, "object_type");
+  const objectId = numberAt(object, "id");
+  if (!objectType || objectId === undefined) return null;
+  const terminationExternalId = `${objectType}:${objectId}`;
   const device = recordAt(object, "device");
   const deviceId = numberAt(device, "id");
-  if (deviceId === undefined) return null;
   return {
-    externalId: `device:${deviceId}`,
+    deviceExternalId:
+      deviceId === undefined ? terminationExternalId : `device:${deviceId}`,
+    terminationExternalId,
+    kind: terminationKind(objectType),
     port: stringAt(object, "name") ?? stringAt(object, "display"),
+    peerTerminationExternalIds:
+      peerIdsByTermination.get(terminationExternalId) ?? [],
   };
 };
 
-export const buildNetBoxSnapshot = async () => {
+export const parsePhysicalConnections = (
+  cables: Array<JsonRecord>,
+  frontPorts: Array<JsonRecord>,
+): Array<ConnectionInput> => {
+  const frontIdsByRearId = new Map<string, Array<string>>();
+  const rearIdByFrontId = new Map<string, string>();
+  for (const frontPort of frontPorts) {
+    const frontId = numberAt(frontPort, "id");
+    const rearId = numberAt(recordAt(frontPort, "rear_port"), "id");
+    if (frontId === undefined || rearId === undefined) continue;
+    const frontExternalId = `dcim.frontport:${frontId}`;
+    const rearExternalId = `dcim.rearport:${rearId}`;
+    rearIdByFrontId.set(frontExternalId, rearExternalId);
+    const frontIds = frontIdsByRearId.get(rearExternalId) ?? [];
+    frontIds.push(frontExternalId);
+    frontIdsByRearId.set(rearExternalId, frontIds);
+  }
+  const peerIdsByTermination = new Map<string, Array<string>>();
+  for (const [frontId, rearId] of rearIdByFrontId) {
+    peerIdsByTermination.set(frontId, [rearId]);
+  }
+  for (const [rearId, frontIds] of frontIdsByRearId) {
+    peerIdsByTermination.set(rearId, frontIds);
+  }
+
+  const connections: Array<ConnectionInput> = [];
+  for (const cable of cables) {
+    const id = numberAt(cable, "id");
+    const from = termination(cable.a_terminations, peerIdsByTermination);
+    const to = termination(cable.b_terminations, peerIdsByTermination);
+    if (id === undefined || !from || !to) continue;
+    connections.push({
+      externalId: `cable:${id}`,
+      fromExternalId: from.deviceExternalId,
+      fromPort: from.port,
+      fromTerminationExternalId: from.terminationExternalId,
+      fromTerminationKind: from.kind,
+      fromPeerTerminationExternalIds: from.peerTerminationExternalIds,
+      toExternalId: to.deviceExternalId,
+      toPort: to.port,
+      toTerminationExternalId: to.terminationExternalId,
+      toTerminationKind: to.kind,
+      toPeerTerminationExternalIds: to.peerTerminationExternalIds,
+    });
+  }
+  return connections;
+};
+
+export const buildNetBoxSnapshot = async (
+  config: {
+    externalSiteId: string;
+    externalSiteSlug: string;
+  },
+  parentSignal?: AbortSignal,
+) => {
   const base = apiBaseUrl();
   const apiToken = token();
   const [statusPayload, sites] = await Promise.all([
-    requestJson(new URL("status/", base), apiToken),
-    fetchAll(base, apiToken, "dcim/sites/"),
+    requestJson(new URL("status/", base), apiToken, parentSignal),
+    fetchAll(base, apiToken, "dcim/sites/", {}, parentSignal),
   ]);
-  const site = sites.find((candidate) => stringAt(candidate, "name") === SITE);
+  const site = sites.find(
+    (candidate) =>
+      String(numberAt(candidate, "id")) === config.externalSiteId &&
+      stringAt(candidate, "slug") === config.externalSiteSlug,
+  );
   const siteId = numberAt(site, "id");
-  if (siteId === undefined) throw new Error(`Le site ${SITE} est introuvable`);
+  if (siteId === undefined) {
+    throw new Error("Le site NetBox configuré est introuvable");
+  }
 
-  const [locationsRaw, racks, devices, interfaces, cables] = await Promise.all([
-    fetchAll(base, apiToken, "dcim/locations/", {
-      site_id: String(siteId),
-    }),
-    fetchAll(base, apiToken, "dcim/racks/", { site_id: String(siteId) }),
-    fetchAll(base, apiToken, "dcim/devices/", {
-      site_id: String(siteId),
-      exclude: "config_context",
-    }),
-    fetchAll(base, apiToken, "dcim/interfaces/", {
-      site_id: String(siteId),
-    }),
-    fetchAll(base, apiToken, "dcim/cables/", { site_id: String(siteId) }),
-  ]);
+  const [locationsRaw, racks, devices, interfaces, cables, frontPorts] =
+    await Promise.all([
+      fetchAll(
+        base,
+        apiToken,
+        "dcim/locations/",
+        { site_id: String(siteId) },
+        parentSignal,
+      ),
+      fetchAll(
+        base,
+        apiToken,
+        "dcim/racks/",
+        { site_id: String(siteId) },
+        parentSignal,
+      ),
+      fetchAll(
+        base,
+        apiToken,
+        "dcim/devices/",
+        {
+          site_id: String(siteId),
+          exclude: "config_context",
+        },
+        parentSignal,
+      ),
+      fetchAll(
+        base,
+        apiToken,
+        "dcim/interfaces/",
+        { site_id: String(siteId) },
+        parentSignal,
+      ),
+      fetchAll(
+        base,
+        apiToken,
+        "dcim/cables/",
+        { site_id: String(siteId) },
+        parentSignal,
+      ),
+      fetchAll(
+        base,
+        apiToken,
+        "dcim/front-ports/",
+        { site_id: String(siteId) },
+        parentSignal,
+      ),
+    ]);
 
   const locations = new Map<number, LocationInfo>();
   for (const row of locationsRaw) {
     const id = numberAt(row, "id");
     const name = stringAt(row, "name");
-    if (id === undefined || !name) continue;
+    if (id === undefined || !name) {
+      throw new Error("Emplacement NetBox mal formé");
+    }
     locations.set(id, {
       id,
       name,
@@ -244,7 +384,7 @@ export const buildNetBoxSnapshot = async () => {
     });
   }
 
-  const arlesDeviceIds = new Set(
+  const siteDeviceIds = new Set(
     devices.flatMap((device) => {
       const id = numberAt(device, "id");
       return id === undefined ? [] : [id];
@@ -252,13 +392,23 @@ export const buildNetBoxSnapshot = async () => {
   );
   const macsByDevice = new Map<number, Array<string>>();
   const interfaceCountByDevice = new Map<number, number>();
+  const cabledTerminationCountByDevice = new Map<number, number>();
   for (const row of interfaces) {
     const deviceId = numberAt(recordAt(row, "device"), "id");
-    if (deviceId === undefined || !arlesDeviceIds.has(deviceId)) continue;
+    if (deviceId === undefined) {
+      throw new Error("Interface NetBox sans device");
+    }
+    if (!siteDeviceIds.has(deviceId)) continue;
     interfaceCountByDevice.set(
       deviceId,
       (interfaceCountByDevice.get(deviceId) ?? 0) + 1,
     );
+    if (recordAt(row, "cable")) {
+      cabledTerminationCountByDevice.set(
+        deviceId,
+        (cabledTerminationCountByDevice.get(deviceId) ?? 0) + 1,
+      );
+    }
     const mac = stringAt(row, "mac_address");
     if (!mac) continue;
     const values = macsByDevice.get(deviceId) ?? [];
@@ -270,7 +420,9 @@ export const buildNetBoxSnapshot = async () => {
   for (const device of devices) {
     const id = numberAt(device, "id");
     const name = stringAt(device, "name") ?? stringAt(device, "display");
-    if (id === undefined || !name) continue;
+    if (id === undefined || !name) {
+      throw new Error("Device NetBox mal formé");
+    }
     const role = relatedName(device, "role") ?? "Sans rôle";
     const type = mappedDeviceType(role, name);
     if (!type) continue;
@@ -285,12 +437,12 @@ export const buildNetBoxSnapshot = async () => {
       hostname: name,
       model: relatedName(device, "device_type"),
       role,
-      site: SITE,
       location: path.at(-1),
       locationPath: path,
       ip: stripPrefix(stringAt(primaryIp, "address")),
       macs: macsByDevice.get(id) ?? [],
       interfaceCount: interfaceCountByDevice.get(id) ?? 0,
+      cabledTerminationCount: cabledTerminationCountByDevice.get(id) ?? 0,
       lifecycleStatus: choiceValue(device, "status"),
       url: stringAt(device, "display_url") ?? stringAt(device, "url") ?? "",
       sourceUpdatedAt: stringAt(device, "last_updated"),
@@ -300,7 +452,7 @@ export const buildNetBoxSnapshot = async () => {
   for (const rack of racks) {
     const id = numberAt(rack, "id");
     const name = stringAt(rack, "name");
-    if (id === undefined || !name) continue;
+    if (id === undefined || !name) throw new Error("Rack NetBox mal formé");
     const locationId = numberAt(recordAt(rack, "location"), "id");
     const path = locationPath(locationId, locations);
     inventory.push({
@@ -308,40 +460,18 @@ export const buildNetBoxSnapshot = async () => {
       type: "rack",
       name,
       role: "Rack",
-      site: SITE,
       location: path.at(-1),
       locationPath: path,
       macs: [],
       interfaceCount: 0,
+      cabledTerminationCount: 0,
       lifecycleStatus: choiceValue(rack, "status"),
       url: stringAt(rack, "display_url") ?? stringAt(rack, "url") ?? "",
       sourceUpdatedAt: stringAt(rack, "last_updated"),
     });
   }
 
-  const inventoryIds = new Set(inventory.map((item) => item.externalId));
-  const connections: Array<ConnectionInput> = [];
-  for (const cable of cables) {
-    const id = numberAt(cable, "id");
-    const from = termination(cable.a_terminations);
-    const to = termination(cable.b_terminations);
-    if (
-      id === undefined ||
-      !from ||
-      !to ||
-      !inventoryIds.has(from.externalId) ||
-      !inventoryIds.has(to.externalId)
-    ) {
-      continue;
-    }
-    connections.push({
-      externalId: `cable:${id}`,
-      fromExternalId: from.externalId,
-      fromPort: from.port,
-      toExternalId: to.externalId,
-      toPort: to.port,
-    });
-  }
+  const connections = parsePhysicalConnections(cables, frontPorts);
 
   const status = asRecord(statusPayload);
   return {
@@ -352,62 +482,100 @@ export const buildNetBoxSnapshot = async () => {
 };
 
 export const getSyncState = query({
-  args: {},
+  args: { siteId: v.string() },
   returns: v.union(v.null(), syncState),
-  handler: async (ctx) => {
-    const row = await ctx.db
-      .query("integrationSyncs")
-      .withIndex("by_provider_site", (q) =>
-        q.eq("provider", PROVIDER).eq("site", SITE),
+  handler: async (ctx, { siteId }) => {
+    const state = await ctx.db
+      .query("integrationWorkflowStates")
+      .withIndex("by_site_workflow", (q) =>
+        q.eq("siteId", siteId).eq("workflow", "netbox"),
       )
       .unique();
-    if (!row) return null;
-    if (row.provider !== PROVIDER) return null;
+    if (!state) return null;
+    const generation = state.lastPublishedId
+      ? await ctx.db
+          .query("netboxGenerations")
+          .withIndex("by_site_generation", (q) =>
+            q
+              .eq("siteId", siteId)
+              .eq("generationId", state.lastPublishedId as string),
+          )
+          .unique()
+      : null;
     return {
       provider: PROVIDER,
-      site: row.site,
-      status: row.status,
-      startedAt: row.startedAt,
-      completedAt: row.completedAt,
-      error: row.error,
-      inventoryCount: row.inventoryCount,
-      connectionCount: row.connectionCount,
-      sourceVersion: row.sourceVersion,
+      siteId,
+      status: state.status,
+      lastAttemptAt: state.lastAttemptAt,
+      lastSuccessAt: state.lastSuccessAt,
+      error: state.publicError,
+      inventoryCount: state.lastPrimaryCount ?? 0,
+      connectionCount: state.lastSecondaryCount ?? 0,
+      sourceVersion: generation?.sourceVersion,
     };
   },
 });
 
 export const listInventory = query({
-  args: {},
+  args: { siteId: v.string() },
   returns: v.array(inventoryItem),
-  handler: async (ctx) => {
-    const [inventory, placedDevices] = await Promise.all([
+  handler: async (ctx, { siteId }) => {
+    const state = await ctx.db
+      .query("integrationWorkflowStates")
+      .withIndex("by_site_workflow", (q) =>
+        q.eq("siteId", siteId).eq("workflow", "netbox"),
+      )
+      .unique();
+    if (!state?.lastPublishedId) return [];
+    const generation = await ctx.db
+      .query("netboxGenerations")
+      .withIndex("by_site_generation", (q) =>
+        q
+          .eq("siteId", siteId)
+          .eq("generationId", state.lastPublishedId as string),
+      )
+      .unique();
+    if (!generation) return [];
+    const [inventory, bindings] = await Promise.all([
       ctx.db
-        .query("externalInventory")
-        .withIndex("by_provider_site", (q) =>
-          q.eq("provider", PROVIDER).eq("site", SITE),
+        .query("netboxInventory")
+        .withIndex("by_generation", (q) =>
+          q.eq("siteId", siteId).eq("generationId", generation.generationId),
         )
         .collect(),
-      ctx.db.query("devices").collect(),
+      ctx.db
+        .query("externalObjectBindings")
+        .withIndex("by_external", (q) =>
+          q
+            .eq("siteId", siteId)
+            .eq("provider", PROVIDER)
+            .eq("instanceKey", generation.instanceKey),
+        )
+        .collect(),
     ]);
     const placementByExternalId = new Map(
-      placedDevices.flatMap((device) => {
-        const source = device.metadata.source;
-        return source?.provider === PROVIDER
-          ? [
-              [
-                source.externalId,
-                { deviceId: device.objectId, floorId: device.floorId },
-              ] as const,
-            ]
-          : [];
-      }),
+      bindings.map((binding) => [
+        binding.externalId,
+        { deviceId: binding.deviceId, floorId: binding.floorId },
+      ]),
     );
     return inventory
-      .map(({ _id, _creationTime, provider, ...item }) => ({
-        ...item,
-        placement: placementByExternalId.get(item.externalId),
-      }))
+      .map(
+        ({
+          _id,
+          _creationTime,
+          provider,
+          generationId,
+          capturedAt,
+          macs: _macs,
+          ...item
+        }) => ({
+          ...item,
+          cabledTerminationCount: item.cabledTerminationCount ?? 0,
+          syncedAt: capturedAt,
+          placement: placementByExternalId.get(item.externalId),
+        }),
+      )
       .sort((a, b) =>
         `${a.locationPath.join("/")}\0${a.name}`.localeCompare(
           `${b.locationPath.join("/")}\0${b.name}`,
@@ -419,35 +587,89 @@ export const listInventory = query({
 });
 
 export const listConnections = query({
-  args: { externalId: v.string() },
+  args: { siteId: v.string(), externalId: v.string() },
   returns: v.array(
     v.object({
       externalId: v.string(),
       fromExternalId: v.string(),
       fromPort: v.optional(v.string()),
+      fromTerminationExternalId: v.string(),
+      fromTerminationKind: v.union(
+        v.literal("interface"),
+        v.literal("front-port"),
+        v.literal("rear-port"),
+        v.literal("other"),
+      ),
+      fromPeerTerminationExternalIds: v.array(v.string()),
       toExternalId: v.string(),
       toPort: v.optional(v.string()),
-      syncedAt: v.number(),
+      toTerminationExternalId: v.string(),
+      toTerminationKind: v.union(
+        v.literal("interface"),
+        v.literal("front-port"),
+        v.literal("rear-port"),
+        v.literal("other"),
+      ),
+      toPeerTerminationExternalIds: v.array(v.string()),
+      capturedAt: v.number(),
     }),
   ),
-  handler: async (ctx, { externalId }) => {
+  handler: async (ctx, { siteId, externalId }) => {
+    const state = await ctx.db
+      .query("integrationWorkflowStates")
+      .withIndex("by_site_workflow", (q) =>
+        q.eq("siteId", siteId).eq("workflow", "netbox"),
+      )
+      .unique();
+    if (!state?.lastPublishedId) return [];
+    const generationId = state.lastPublishedId;
     const [from, to] = await Promise.all([
       ctx.db
-        .query("externalConnections")
-        .withIndex("by_from", (q) =>
-          q.eq("provider", PROVIDER).eq("fromExternalId", externalId),
+        .query("netboxConnections")
+        .withIndex("by_generation_from", (q) =>
+          q
+            .eq("siteId", siteId)
+            .eq("generationId", generationId)
+            .eq("fromExternalId", externalId),
         )
         .collect(),
       ctx.db
-        .query("externalConnections")
-        .withIndex("by_to", (q) =>
-          q.eq("provider", PROVIDER).eq("toExternalId", externalId),
+        .query("netboxConnections")
+        .withIndex("by_generation_to", (q) =>
+          q
+            .eq("siteId", siteId)
+            .eq("generationId", generationId)
+            .eq("toExternalId", externalId),
         )
         .collect(),
     ]);
     return [...from, ...to].map(
-      ({ _id, _creationTime, provider, site, kind, ...connection }) =>
-        connection,
+      ({
+        _id,
+        _creationTime,
+        provider,
+        siteId: _siteId,
+        generationId: _generationId,
+        instanceKey,
+        kind,
+        ...connection
+      }) => ({
+        ...connection,
+        fromTerminationExternalId:
+          connection.fromTerminationExternalId ??
+          `legacy:${connection.externalId}:from`,
+        fromTerminationKind:
+          connection.fromTerminationKind ?? ("interface" as const),
+        fromPeerTerminationExternalIds:
+          connection.fromPeerTerminationExternalIds ?? [],
+        toTerminationExternalId:
+          connection.toTerminationExternalId ??
+          `legacy:${connection.externalId}:to`,
+        toTerminationKind:
+          connection.toTerminationKind ?? ("interface" as const),
+        toPeerTerminationExternalIds:
+          connection.toPeerTerminationExternalIds ?? [],
+      }),
     );
   },
 });

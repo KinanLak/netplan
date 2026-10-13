@@ -30,14 +30,41 @@ export const portInfo = v.object({
 
 export const externalDeviceSource = v.object({
   provider: v.literal("netbox"),
+  siteId: v.string(),
+  instanceKey: v.string(),
   externalId: v.string(),
   url: v.string(),
-  site: v.string(),
   location: v.optional(v.string()),
   locationPath: v.array(v.string()),
   role: v.string(),
   lifecycleStatus: v.string(),
   syncedAt: v.number(),
+});
+
+export const localizationPresentation = v.object({
+  state: v.union(
+    v.literal("online"),
+    v.literal("resolved_unplaced"),
+    v.literal("missing"),
+    v.literal("offline"),
+    v.literal("ambiguous"),
+    v.literal("unresolvable"),
+    v.literal("socket_conflict"),
+  ),
+  reason: v.optional(v.string()),
+  positionState: v.union(v.literal("current"), v.literal("historical")),
+  projectionStatus: v.union(
+    v.literal("idle"),
+    v.literal("pending"),
+    v.literal("running"),
+    v.literal("success"),
+    v.literal("blocked"),
+    v.literal("error"),
+  ),
+  targetFloorId: v.optional(v.string()),
+  targetPosition: v.optional(position),
+  errorCode: v.optional(v.string()),
+  nextAttemptAt: v.optional(v.number()),
 });
 
 export const deviceMetadata = v.object({
@@ -48,6 +75,7 @@ export const deviceMetadata = v.object({
   lastUser: v.optional(v.string()),
   macs: v.optional(v.array(v.string())),
   source: v.optional(externalDeviceSource),
+  localization: v.optional(localizationPresentation),
 });
 
 export const operationMeta = v.object({
