@@ -32,3 +32,5 @@ record's Source section points to its questions in the
 - **[0019 — Agents ship through stacked pull requests, a CI gate and zipzoup review, and merge their own work](0019-delivery-workflow.md)**
 - **[0020 — One runtime-configured app image, deployed with Docker Compose behind a host-routing edge](0020-deployment.md)**
 - **[0021 — Accounts are enforced by Convex function wrappers, with roles mapped at Keycloak login and invitations through password reset](0021-accounts-implementation.md)**
+- **[0022 — Devices are a site inventory with ports and cables, optionally placed on a floor](0022-site-inventory-ports-cables.md)**
+- **[0023 — Sites and their integrations are configured in the admin, and one Convex cycle per site collects from them](0023-sites-integrations-collection.md)**
