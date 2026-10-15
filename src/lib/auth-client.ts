@@ -1,11 +1,11 @@
 import type { AuthClient } from "@convex-dev/better-auth/react";
 import { convexClient } from "@convex-dev/better-auth/client/plugins";
-import { usernameClient } from "better-auth/client/plugins";
+import { genericOAuthClient, usernameClient } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
 
 // Same origin: the app server proxies `/api/auth/*` to Convex.
 export const authClient = createAuthClient({
-  plugins: [usernameClient(), convexClient()],
+  plugins: [usernameClient(), genericOAuthClient(), convexClient()],
 });
 
 // @convex-dev/better-auth 0.12 types this prop against the better-auth it was

@@ -90,6 +90,7 @@ function UsersPage() {
         </ul>
       )}
 
+      <KeycloakSettings />
       <TestMail />
       <InviteDialog open={inviting} onOpenChange={setInviting} />
     </div>
@@ -245,6 +246,107 @@ function UserItem({ user, isMe }: { user: UserRow; isMe: boolean }) {
         </AlertDialogContent>
       </AlertDialog>
     </li>
+  );
+}
+
+function KeycloakSettings() {
+  const settings = useQuery(api.authSettings.keycloak);
+  return (
+    <section className="space-y-2 border-t pt-6">
+      <h2 className="font-medium">Keycloak</h2>
+      {settings === undefined ? null : settings.issuer === null ? (
+        <p className="text-sm text-muted-foreground">
+          La connexion avec Keycloak est désactivée. Pour l'activer, définissez
+          KEYCLOAK_ISSUER, KEYCLOAK_CLIENT_ID et KEYCLOAK_CLIENT_SECRET sur le
+          serveur.
+        </p>
+      ) : (
+        <>
+          <p className="text-sm text-muted-foreground">
+            La page de connexion propose Keycloak ({settings.issuer}, client{" "}
+            {settings.clientId}). Adresse de redirection à déclarer sur le
+            client : <code className="break-all">{settings.redirectUri}</code>
+          </p>
+          <RoleMappingForm settings={settings} />
+        </>
+      )}
+    </section>
+  );
+}
+
+function RoleMappingForm({
+  settings,
+}: {
+  settings: FunctionReturnType<typeof api.authSettings.keycloak>;
+}) {
+  const save = useMutation(api.authSettings.setKeycloakRoleMapping);
+  const [editorRole, setEditorRole] = useState(settings.editorRole ?? "");
+  const [adminRole, setAdminRole] = useState(settings.adminRole ?? "");
+  const [pending, setPending] = useState(false);
+  const [notice, setNotice] = useState<{ error: boolean; text: string }>();
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setPending(true);
+    setNotice(undefined);
+    try {
+      await save({ editorRole, adminRole });
+      setNotice({
+        error: false,
+        text: "Correspondance enregistrée. Elle s'applique à la prochaine connexion de chaque compte Keycloak.",
+      });
+    } catch (failure) {
+      setNotice({ error: true, text: adminErrorMessage(failure) });
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return (
+    <form onSubmit={(event) => void submit(event)} className="max-w-md">
+      <FieldGroup>
+        <FieldDescription>
+          Un compte Keycloak devient Lecteur, ou Éditeur et Admin s'il porte le
+          rôle ou le groupe indiqué. Son rôle est relu à chaque connexion.
+        </FieldDescription>
+        <Field>
+          <FieldLabel htmlFor="keycloak-editor-role">
+            Rôle Keycloak des Éditeurs
+          </FieldLabel>
+          <Input
+            id="keycloak-editor-role"
+            placeholder="Aucun"
+            value={editorRole}
+            onChange={(event) => setEditorRole(event.target.value)}
+          />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="keycloak-admin-role">
+            Rôle Keycloak des Admins
+          </FieldLabel>
+          <Input
+            id="keycloak-admin-role"
+            placeholder="Aucun"
+            value={adminRole}
+            onChange={(event) => setAdminRole(event.target.value)}
+          />
+        </Field>
+        {notice ? (
+          notice.error ? (
+            <FieldError>{notice.text}</FieldError>
+          ) : (
+            <p role="status" className="text-sm text-muted-foreground">
+              {notice.text}
+            </p>
+          )
+        ) : null}
+        <div>
+          <Button type="submit" variant="outline" disabled={pending}>
+            {pending ? "Enregistrement…" : "Enregistrer"}
+          </Button>
+        </div>
+      </FieldGroup>
+    </form>
   );
 }
 

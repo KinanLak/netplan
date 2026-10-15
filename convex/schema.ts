@@ -180,4 +180,12 @@ export default defineSchema({
     .index("by_client", ["clientId"])
     .index("by_user", ["userId"])
     .index("by_floor", ["floorId"]),
+
+  // A single row: the Keycloak role names that grant Éditeur and Admin
+  // (ADR 0004). Absent until an admin first saves them.
+  authSettings: defineTable({
+    keycloakEditorRole: v.union(v.string(), v.null()),
+    keycloakAdminRole: v.union(v.string(), v.null()),
+    updatedAt: v.number(),
+  }),
 });

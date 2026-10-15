@@ -1,4 +1,5 @@
 import { Link, createFileRoute, redirect } from "@tanstack/react-router";
+import { createServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { AuthCard } from "@/components/auth-card";
@@ -9,33 +10,66 @@ import {
   FieldError,
   FieldGroup,
   FieldLabel,
+  FieldSeparator,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
+import { getSignInOptions } from "@/lib/auth-server";
 import {
   isEmail,
+  keycloakErrorMessage,
   loginErrorMessage,
   requestFailure,
   safeRedirect,
 } from "@/lib/login";
 
+const signInOptions = createServerFn({ method: "GET" }).handler(
+  getSignInOptions,
+);
+
 export const Route = createFileRoute("/login")({
-  validateSearch: (search: Record<string, unknown>): { redirect?: string } => ({
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { redirect?: string; error?: string } => ({
     redirect: safeRedirect(search.redirect),
+    // Set by a failed Keycloak sign-in on its way back.
+    error: typeof search.error === "string" ? search.error : undefined,
   }),
   beforeLoad: ({ context, search }) => {
     if (context.token) throw redirect({ href: search.redirect ?? "/" });
   },
+  loader: () => signInOptions(),
   head: () => ({ meta: [{ title: "Connexion · Netplan" }] }),
   component: LoginPage,
 });
 
 function LoginPage() {
-  const { redirect: target } = Route.useSearch();
+  const { redirect: target, error: keycloakError } = Route.useSearch();
+  const { keycloak } = Route.useLoaderData();
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(
+    keycloakError ? keycloakErrorMessage(keycloakError) : null,
+  );
   const [pending, setPending] = useState(false);
+
+  const signInWithKeycloak = async () => {
+    setPending(true);
+    setError(null);
+    const back = target ? `?redirect=${encodeURIComponent(target)}` : "";
+    // On success the client follows the redirect to Keycloak.
+    const failure = await requestFailure(
+      authClient.signIn.oauth2({
+        providerId: "keycloak",
+        callbackURL: target ?? "/",
+        errorCallbackURL: `/login${back}`,
+      }),
+    );
+    if (failure) {
+      setError(loginErrorMessage(failure));
+      setPending(false);
+    }
+  };
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -94,6 +128,19 @@ function LoginPage() {
           <Button type="submit" disabled={pending}>
             {pending ? "Connexion…" : "Se connecter"}
           </Button>
+          {keycloak ? (
+            <>
+              <FieldSeparator>ou</FieldSeparator>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={pending}
+                onClick={() => void signInWithKeycloak()}
+              >
+                Se connecter avec Keycloak
+              </Button>
+            </>
+          ) : null}
         </FieldGroup>
       </form>
     </AuthCard>

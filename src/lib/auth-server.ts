@@ -12,3 +12,21 @@ const auth = () =>
 
 export const handler = (request: Request) => auth().handler(request);
 export const getToken = () => auth().getToken();
+
+/**
+ * The sign-in methods the login page offers. Asked server-side, where
+ * CONVEX_SITE_URL is reachable; an unreachable backend offers the password
+ * form alone, which then shows the failure.
+ */
+export async function getSignInOptions(): Promise<{ keycloak: boolean }> {
+  try {
+    const { convexSiteUrl } = readRuntimeConfig(process.env);
+    const response = await fetch(`${convexSiteUrl}/api/auth/sign-in-options`, {
+      signal: AbortSignal.timeout(3000),
+    });
+    const options = (await response.json()) as { keycloak?: unknown };
+    return { keycloak: response.ok && options.keycloak === true };
+  } catch {
+    return { keycloak: false };
+  }
+}

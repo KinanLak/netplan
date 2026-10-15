@@ -11,6 +11,7 @@
 import type * as _test_fetch from "../_test/fetch.js";
 import type * as _test_modules from "../_test/modules.js";
 import type * as auth from "../auth.js";
+import type * as authSettings from "../authSettings.js";
 import type * as bootstrap from "../bootstrap.js";
 import type * as buildings from "../buildings.js";
 import type * as crons from "../crons.js";
@@ -26,6 +27,7 @@ import type * as lib_functions from "../lib/functions.js";
 import type * as lib_httpRetry from "../lib/httpRetry.js";
 import type * as lib_imageHeader from "../lib/imageHeader.js";
 import type * as lib_integrationProbe from "../lib/integrationProbe.js";
+import type * as lib_keycloak from "../lib/keycloak.js";
 import type * as lib_mailTemplates from "../lib/mailTemplates.js";
 import type * as lib_overlayFiles from "../lib/overlayFiles.js";
 import type * as lib_presence from "../lib/presence.js";
@@ -54,6 +56,7 @@ declare const fullApi: ApiFromModules<{
   "_test/fetch": typeof _test_fetch;
   "_test/modules": typeof _test_modules;
   auth: typeof auth;
+  authSettings: typeof authSettings;
   bootstrap: typeof bootstrap;
   buildings: typeof buildings;
   crons: typeof crons;
@@ -69,6 +72,7 @@ declare const fullApi: ApiFromModules<{
   "lib/httpRetry": typeof lib_httpRetry;
   "lib/imageHeader": typeof lib_imageHeader;
   "lib/integrationProbe": typeof lib_integrationProbe;
+  "lib/keycloak": typeof lib_keycloak;
   "lib/mailTemplates": typeof lib_mailTemplates;
   "lib/overlayFiles": typeof lib_overlayFiles;
   "lib/presence": typeof lib_presence;

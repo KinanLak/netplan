@@ -10,6 +10,10 @@ AUTH_JWKS_URL
 BOOTSTRAP_ADMIN_EMAIL
 BOOTSTRAP_ADMIN_PASSWORD
 BOOTSTRAP_ADMIN_NAME
+# Keycloak sign-in; off unless all three are set.
+KEYCLOAK_ISSUER
+KEYCLOAK_CLIENT_ID
+KEYCLOAK_CLIENT_SECRET
 # Outgoing mail: invitations, password resets, the admin's test mail.
 SMTP_HOST
 SMTP_PORT

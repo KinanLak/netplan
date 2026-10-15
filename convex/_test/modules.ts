@@ -8,6 +8,7 @@
 export const modules: Record<string, () => Promise<Record<string, any>>> = {
   "./_generated/api.ts": () => import("../_generated/api.js"),
   "./auth.ts": () => import("../auth"),
+  "./authSettings.ts": () => import("../authSettings"),
   "./bootstrap.ts": () => import("../bootstrap"),
   "./buildings.ts": () => import("../buildings"),
   "./dev.ts": () => import("../dev"),
