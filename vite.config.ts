@@ -12,7 +12,11 @@ const config = defineConfig({
   },
   plugins: [
     devtools(),
-    nitro(),
+    nitro({
+      // The server bundle has no RSC boundary, so dependency `"use client"`
+      // directives are meaningless there.
+      rolldownConfig: { checks: { moduleLevelDirective: false } },
+    }),
     tailwindcss(),
     tanstackStart(),
     viteReact(),
