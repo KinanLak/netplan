@@ -16,6 +16,7 @@ const POLICY: Record<string, Role> = {
   "buildings:listForSite": "reader",
   "buildings:rename": "editor",
   "devices:listForFloor": "reader",
+  "devices:updateIdentity": "editor",
   "floorOverlays:imageUrl": "reader",
   "floorOverlays:upload": "editor",
   "floors:create": "editor",

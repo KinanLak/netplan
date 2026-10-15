@@ -28,7 +28,12 @@ export const shortcutGroups: Array<ShortcutGroup> = [
     id: "device-drawer",
     title: "Panneau de détails",
     orderPriority: 80,
-    actions: ["close-drawer", "delete-device", "highlight-connections"],
+    actions: [
+      "close-drawer",
+      "delete-device",
+      "edit-device-identity",
+      "highlight-connections",
+    ],
   },
   {
     id: "navigation",

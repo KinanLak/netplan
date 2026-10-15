@@ -12,7 +12,11 @@ import {
 } from "../src/map-engine/overlay";
 import { deleteDeviceMacs } from "./lib/deviceMacs";
 import { syncOverlayFileReleases } from "./lib/overlayFiles";
-import { isCanonicalMac } from "../src/devices/mac";
+import {
+  identityEditError,
+  macListProblem,
+  MAX_MACS_PER_DEVICE,
+} from "../src/devices/identity";
 
 export type OperationInput = Infer<typeof mapOperation>;
 type DeviceCreateOperation = Extract<OperationInput, { kind: "device.create" }>;
@@ -84,7 +88,6 @@ const MAX_BATCH_OPERATIONS = 100;
 const MAX_WALLS_PER_OPERATION = 500;
 const MAX_WALL_DELETES_PER_OPERATION = 500;
 const MAX_OBSERVED_PENDING_OP_IDS = 100;
-const MAX_MACS_PER_DEVICE = 32;
 
 const macKey = (siteId: string, mac: string): string => `${siteId}:${mac}`;
 
@@ -683,14 +686,11 @@ const deviceMacsError = (
   siteId: string,
   device: DeviceInput,
 ): string | null => {
-  if (device.macs.length > MAX_MACS_PER_DEVICE) {
-    return "Too many MAC addresses";
-  }
-  if (new Set(device.macs).size !== device.macs.length) {
-    return "Duplicate MAC address";
-  }
+  const problem = macListProblem(device.macs);
+  if (problem === "too-many") return "Too many MAC addresses";
+  if (problem === "duplicate") return "Duplicate MAC address";
+  if (problem === "invalid") return "Invalid MAC address";
   for (const mac of device.macs) {
-    if (!isCanonicalMac(mac)) return "Invalid MAC address";
     const owner = state.macOwners.get(macKey(siteId, mac));
     if (owner && owner !== device.id) {
       return "MAC address belongs to another device of the site";
@@ -724,6 +724,7 @@ const planDeviceCreate = (
 
   const macsError = deviceMacsError(state, siteId, operation.device);
   if (macsError) return macsError;
+  if (identityEditError(operation.device)) return "Invalid device identity";
 
   const placementError = validateDevicePlacement(state, {
     objectId: operation.device.id,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { isCanonicalMac, normalizeMac } from "./mac";
+import { isCanonicalMac, normalizeMac, parseMacList } from "./mac";
 
 describe("normalizeMac", () => {
   it("reads the notations tools print", () => {
@@ -30,5 +30,20 @@ describe("isCanonicalMac", () => {
     expect(isCanonicalMac("aa:bb:cc:dd:ee:ff")).toBe(true);
     expect(isCanonicalMac("AA:BB:CC:DD:EE:FF")).toBe(false);
     expect(isCanonicalMac("aabbccddeeff")).toBe(false);
+  });
+});
+
+describe("parseMacList", () => {
+  it("reads one address per line or comma, once each", () => {
+    expect(
+      parseMacList("AA-BB-CC-DD-EE-FF\n\n aabb.ccdd.ee00, aa:bb:cc:dd:ee:ff"),
+    ).toEqual({ macs: ["aa:bb:cc:dd:ee:ff", "aa:bb:cc:dd:ee:00"] });
+    expect(parseMacList("  ")).toEqual({ macs: [] });
+  });
+
+  it("names the first entry it cannot read", () => {
+    expect(parseMacList("aa:bb:cc:dd:ee:ff\n12:34")).toEqual({
+      unreadable: "12:34",
+    });
   });
 });
