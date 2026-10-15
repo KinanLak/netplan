@@ -122,13 +122,10 @@ jobs:
       # High and critical fail. Accepted advisories, each with its reason:
       # - GHSA-vfj7-8cjw-p6xm (braces): no fixed version is published; only
       #   reached through dev tooling (shadcn CLI, react-scan) on trusted input.
-      # - GHSA-c475-qrg2-pj4r (basic-ftp): only reached through electrobun,
-      #   which the infrastructure lot removes (ADR 0002); drop it then.
       - name: No high or critical advisory
         run: >-
           bun audit --audit-level=high
           --ignore=GHSA-vfj7-8cjw-p6xm
-          --ignore=GHSA-c475-qrg2-pj4r
 
   e2e:
     name: End-to-end
