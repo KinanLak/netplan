@@ -112,8 +112,9 @@ function OverlayGizmoFrame({ overlay }: { overlay: FloorOverlay }) {
 
   return (
     <ViewportPortal>
+      {/* React Flow's viewport takes no pointer events; the portal inherits it. */}
       <div
-        className="nopan nodrag absolute top-0 left-0 cursor-move border-primary"
+        className="nopan nodrag pointer-events-auto absolute top-0 left-0 cursor-move border-primary"
         data-testid="floor-overlay-gizmo"
         title="Déplacer le calque"
         style={{
