@@ -37,8 +37,8 @@ type IdentityPatch = Partial<Pick<Doc<"devices">, EditedField>>;
 
 /**
  * Changes a device's identity, outside the map's history (ADR 0022). Fields
- * its source owns are refused only when the edit would change them, so the
- * drawer can send its whole form.
+ * its source owns are refused only when the edit would change them, so a
+ * value read from the device can be sent back as it is.
  */
 export const updateIdentity = editorMutation({
   args: { deviceId: v.string(), edit: identityEdit },

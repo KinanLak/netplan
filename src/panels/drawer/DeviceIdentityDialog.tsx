@@ -63,7 +63,7 @@ export function DeviceIdentityDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Identité de {device.name}</DialogTitle>
           <DialogDescription>
@@ -90,15 +90,22 @@ function IdentityForm({
 }) {
   const updateIdentity = useMutation(api.devices.updateIdentity);
   const id = useId();
-  const [text, setText] = useState<Record<TextField, string>>({
-    name: device.name,
-    hostname: device.hostname ?? "",
-    ip: device.ip ?? "",
-    model: device.model ?? "",
-    serial: device.serial ?? "",
-  });
-  const [macs, setMacs] = useState(device.macs.join("\n"));
-  const [notes, setNotes] = useState(device.notes ?? "");
+  // The device as the form opened on it: only fields edited since are sent,
+  // so a save never reverts what another user changed meanwhile.
+  const [initial] = useState(() => ({
+    text: {
+      name: device.name,
+      hostname: device.hostname ?? "",
+      ip: device.ip ?? "",
+      model: device.model ?? "",
+      serial: device.serial ?? "",
+    } satisfies Record<TextField, string>,
+    macs: device.macs.join("\n"),
+    notes: device.notes ?? "",
+  }));
+  const [text, setText] = useState(initial.text);
+  const [macs, setMacs] = useState(initial.macs);
+  const [notes, setNotes] = useState(initial.notes);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -111,16 +118,23 @@ function IdentityForm({
     event.preventDefault();
     const edit: IdentityEdit = {};
     for (const { field } of TEXT_FIELDS) {
-      if (!owned(field)) edit[field] = text[field];
+      if (!owned(field) && text[field] !== initial.text[field]) {
+        edit[field] = text[field];
+      }
     }
-    if (!owned("notes")) edit.notes = notes;
-    if (!owned("macs")) {
+    if (!owned("notes") && notes !== initial.notes) edit.notes = notes;
+    if (!owned("macs") && macs !== initial.macs) {
       const parsed = parseMacList(macs);
       if ("unreadable" in parsed) {
         setError(`« ${parsed.unreadable} » n'est pas une adresse MAC.`);
         return;
       }
       edit.macs = parsed.macs;
+    }
+
+    if (Object.keys(edit).length === 0) {
+      onDone();
+      return;
     }
 
     const normalized = normalizeIdentityEdit(edit);
