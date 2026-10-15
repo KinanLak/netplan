@@ -68,7 +68,7 @@ function RootComponent() {
   const { token } = Route.useRouteContext();
   return (
     <ConvexBetterAuthProvider
-      client={getConvexClient(convexUrl)}
+      client={getConvexClient(convexUrl, { signedIn: Boolean(token) })}
       authClient={providerAuthClient}
       initialToken={token}
     >
