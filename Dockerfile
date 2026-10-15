@@ -6,7 +6,7 @@
 #
 # Keep BUN_VERSION equal to `packageManager` in package.json and
 # CONVEX_BACKEND_IMAGE equal to scripts/lib/convexBackend.ts
-# (scripts/lib/dockerfile.test.ts checks both).
+# (scripts/lib/deploy.test.ts checks both).
 ARG BUN_VERSION=1.4.2
 ARG CONVEX_BACKEND_IMAGE=ghcr.io/get-convex/convex-backend:72ce13c379fe6dbdfc305bc8ad699c5663c68c2a
 

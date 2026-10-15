@@ -1,0 +1,27 @@
+{
+	admin off
+}
+
+{$NETPLAN_SCHEME}://{$NETPLAN_DOMAIN}:{$NETPLAN_PORT} {
+	reverse_proxy 127.0.0.1:3000
+}
+
+{$NETPLAN_SCHEME}://convex.{$NETPLAN_DOMAIN}:{$NETPLAN_PORT} {
+	reverse_proxy convex-backend:3210
+}
+
+{$NETPLAN_SCHEME}://convex-site.{$NETPLAN_DOMAIN}:{$NETPLAN_PORT} {
+	reverse_proxy convex-backend:3211
+}
+
+{$NETPLAN_SCHEME}://convex-dashboard.{$NETPLAN_DOMAIN}:{$NETPLAN_PORT} {
+	reverse_proxy convex-dashboard:6791
+}
+
+{$NETPLAN_SCHEME}://keycloak.{$NETPLAN_DOMAIN}:{$NETPLAN_PORT} {
+	reverse_proxy keycloak:8080
+}
+
+{$NETPLAN_SCHEME}://mail.{$NETPLAN_DOMAIN}:{$NETPLAN_PORT} {
+	reverse_proxy mailpit:8025
+}

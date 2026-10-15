@@ -65,3 +65,48 @@ test("convex-env.txt lists every variable the Convex functions read", async () =
   );
   expect(missing).toEqual([]);
 });
+
+const field = (value: unknown, key: string): unknown =>
+  typeof value === "object" && value !== null && key in value
+    ? (value as Record<string, unknown>)[key]
+    : undefined;
+
+const composeServices = async (): Promise<Record<string, unknown>> => {
+  const compose: unknown = Bun.YAML.parse(
+    await readFile(join(root, "deploy/compose.yaml"), "utf8"),
+  );
+  const services = field(compose, "services");
+  if (typeof services !== "object" || services === null) {
+    throw new Error("deploy/compose.yaml has no services");
+  }
+  return services as Record<string, unknown>;
+};
+
+test("compose hands convex-deploy every variable in convex-env.txt", async () => {
+  const services = await composeServices();
+  const environment = field(services["convex-deploy"], "environment");
+  for (const name of await convexEnvNames()) {
+    expect(field(environment, name)).toBe(`\${${name}:-}`);
+  }
+});
+
+test("compose runs the backend and dashboard dev:agent runs", async () => {
+  const services = await composeServices();
+  const tag = CONVEX_BACKEND_IMAGE.split(":").at(-1);
+  expect(field(services["convex-backend"], "image")).toBe(CONVEX_BACKEND_IMAGE);
+  expect(field(services["convex-dashboard"], "image")).toBe(
+    `ghcr.io/get-convex/convex-dashboard:${tag}`,
+  );
+});
+
+test("every compose service carries a netplan.role label", async () => {
+  for (const [name, service] of Object.entries(await composeServices())) {
+    expect({
+      name,
+      role: field(field(service, "labels"), "netplan.role"),
+    }).toEqual({
+      name,
+      role: expect.any(String),
+    });
+  }
+});
