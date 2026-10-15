@@ -140,10 +140,9 @@ describe("floors", () => {
         updatedBy: "test",
       });
       await ctx.db.insert("presences", {
-        sessionId: "alice",
         clientId: "client:alice",
+        userId: "user:a",
         displayName: "A",
-        colorHue: 100,
         floorId,
         updatedAt: Date.now(),
       });

@@ -1,24 +1,24 @@
 import type { FloorId } from "@/types/map";
 
-/** A presence row as returned by `api.presences.list`. */
+/** A presence row as returned by `api.presences.list`, one per user. */
 export interface RawPresence {
-  sessionId: string;
   clientId: string;
+  userId: string;
   displayName: string;
   colorHue: number;
   floorId: string;
   updatedAt: number;
 }
 
-/** A live presence, deduped by client and flagged when it is the local user. */
+/** A live presence, flagged when it is the signed-in user. */
 export interface ActivePresence extends RawPresence {
   isSelf: boolean;
 }
 
-/** The local user, used to inject a fresh self entry into the live list. */
+/** The signed-in user on this page, used to inject a fresh self entry. */
 export interface SelfPresence {
-  sessionId: string;
   clientId: string;
+  userId: string;
   displayName: string;
   colorHue: number;
   floorId: FloorId | null;
@@ -27,10 +27,10 @@ export interface SelfPresence {
 export const PRESENCE_STALE_AFTER_MS = 5_000;
 
 /**
- * Collapse raw presences to one live entry per client, dropping rows older than
- * `now - staleAfterMs`. When `self` is on a floor we override its row with fresh
- * data so the local user always reflects its current floor without waiting for
- * the next heartbeat round-trip.
+ * Collapse raw presences to one live entry per user, dropping rows older than
+ * `now - staleAfterMs`. When this page is on a floor, the user's entry is
+ * replaced with this page's, so it follows the current floor without waiting
+ * for a heartbeat round-trip, even if another of their tabs spoke last.
  */
 export function activePresences(
   presences: ReadonlyArray<RawPresence>,
@@ -39,22 +39,22 @@ export function activePresences(
   staleAfterMs: number = PRESENCE_STALE_AFTER_MS,
 ): Array<ActivePresence> {
   const cutoff = now - staleAfterMs;
-  const byClient = new Map<string, ActivePresence>();
+  const byUser = new Map<string, ActivePresence>();
 
   for (const presence of presences) {
     if (presence.updatedAt < cutoff) continue;
-    const current = byClient.get(presence.clientId);
+    const current = byUser.get(presence.userId);
     if (current && current.updatedAt >= presence.updatedAt) continue;
-    byClient.set(presence.clientId, {
+    byUser.set(presence.userId, {
       ...presence,
-      isSelf: self?.clientId === presence.clientId,
+      isSelf: self?.userId === presence.userId,
     });
   }
 
   if (self && self.floorId) {
-    byClient.set(self.clientId, {
-      sessionId: self.sessionId,
+    byUser.set(self.userId, {
       clientId: self.clientId,
+      userId: self.userId,
       displayName: self.displayName,
       colorHue: self.colorHue,
       floorId: self.floorId,
@@ -63,7 +63,7 @@ export function activePresences(
     });
   }
 
-  return Array.from(byClient.values());
+  return Array.from(byUser.values());
 }
 
 /** Self first, then alphabetically by display name. */

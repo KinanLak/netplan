@@ -17,7 +17,7 @@ import {
   createOperationMeta,
   useIdentity,
 } from "@/lib/identity";
-import type { Identity } from "@/lib/identity";
+import type { LocalIdentity } from "@/lib/identity";
 import { rectanglesOverlap } from "@/lib/geometry";
 import type {
   Device,
@@ -271,7 +271,7 @@ const replaceGroupedPendingOperations = (
 };
 
 interface SessionActionDeps {
-  identityRef: RefObject<Identity | null>;
+  identityRef: RefObject<LocalIdentity | null>;
   isReadyRef: RefObject<boolean>;
   activeFloorIdRef: RefObject<FloorId>;
   documentRef: RefObject<MapDocumentSnapshot>;
@@ -875,7 +875,7 @@ export function MapDocumentProvider({
   const documentRef = useRef(document);
   const undoStackRef = useRef<ReadonlyArray<SessionHistoryEntry>>(undoStack);
   const redoStackRef = useRef<ReadonlyArray<SessionHistoryEntry>>(redoStack);
-  const identityRef = useRef<Identity | null>(identity);
+  const identityRef = useRef<LocalIdentity | null>(identity);
   const isReadyRef = useRef(isReady);
   const activeFloorIdRef = useRef(activeFloorId);
   const serverRevisionRef = useRef(serverDocument.revision);

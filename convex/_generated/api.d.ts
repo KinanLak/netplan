@@ -29,6 +29,7 @@ import type * as lib_authRoles from "../lib/authRoles.js";
 import type * as lib_functions from "../lib/functions.js";
 import type * as lib_imageHeader from "../lib/imageHeader.js";
 import type * as lib_overlayFiles from "../lib/overlayFiles.js";
+import type * as lib_presence from "../lib/presence.js";
 import type * as lib_roles from "../lib/roles.js";
 import type * as librenms from "../librenms.js";
 import type * as librenmsFreshness from "../librenmsFreshness.js";
@@ -78,6 +79,7 @@ declare const fullApi: ApiFromModules<{
   "lib/functions": typeof lib_functions;
   "lib/imageHeader": typeof lib_imageHeader;
   "lib/overlayFiles": typeof lib_overlayFiles;
+  "lib/presence": typeof lib_presence;
   "lib/roles": typeof lib_roles;
   librenms: typeof librenms;
   librenmsFreshness: typeof librenmsFreshness;

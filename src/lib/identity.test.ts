@@ -1,102 +1,50 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import type { LocalIdentity } from "./identity";
+import { describe, expect, it } from "bun:test";
 import {
   colorForHue,
+  createLocalIdentity,
   createObjectId,
   createOperationMeta,
-  loadOrCreateIdentity,
 } from "./identity";
 
-const STORAGE_KEY = "netplan-identity";
-
-beforeEach(() => {
-  window.localStorage.clear();
-});
-
-afterEach(() => {
-  window.localStorage.clear();
-});
-
 describe("identity", () => {
-  it("creates and persists only stable display identity", () => {
-    const identity = loadOrCreateIdentity();
+  it("starts each page load with a fresh random id and zeroed counters", () => {
+    const first = createLocalIdentity();
+    const second = createLocalIdentity();
 
-    expect(identity.clientId.startsWith("client:")).toBe(true);
-    expect(identity.sessionId.startsWith("session:")).toBe(true);
-    expect(identity.nextObjectCounter).toBe(0);
-    expect(identity.nextOperationCounter).toBe(0);
-    expect(identity.displayName.includes(" ")).toBe(true);
-    expect(identity.colorHue).toBeGreaterThanOrEqual(0);
-    expect(identity.colorHue).toBeLessThan(360);
-
-    const stored = window.localStorage.getItem(STORAGE_KEY);
-    expect(stored).not.toBe(null);
-    expect(JSON.parse(stored as string)).toEqual({
-      clientId: identity.clientId,
-      displayName: identity.displayName,
-      colorHue: identity.colorHue,
-    });
+    expect(first.clientId.startsWith("client:")).toBe(true);
+    expect(first.clientId).not.toBe(second.clientId);
+    expect(first.nextObjectCounter).toBe(0);
+    expect(first.nextOperationCounter).toBe(0);
   });
 
-  it("keeps display identity stable while creating a tab session per load", () => {
-    const first = loadOrCreateIdentity();
-    const second = loadOrCreateIdentity();
-    expect(second.clientId).toBe(first.clientId);
-    expect(second.displayName).toBe(first.displayName);
-    expect(second.colorHue).toBe(first.colorHue);
-    expect(second.sessionId).not.toBe(first.sessionId);
+  it("stores nothing in local storage", () => {
+    window.localStorage.clear();
+    createLocalIdentity();
+    expect(window.localStorage.length).toBe(0);
   });
 
-  it("recovers from a corrupted storage entry", () => {
-    window.localStorage.setItem(STORAGE_KEY, "{not-json");
-    const identity = loadOrCreateIdentity();
-    expect(identity.clientId.startsWith("client:")).toBe(true);
-  });
+  it("names objects and operations after the page and a counter", () => {
+    const identity = createLocalIdentity();
 
-  it("recovers from an old identity without durable counters", () => {
-    window.localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({
-        sessionId: "old-session",
-        displayName: "Old Fox",
-        colorHue: 10,
-      }),
+    expect(createObjectId("device", identity)).toBe(
+      `device:${identity.clientId}:0`,
     );
-
-    const identity = loadOrCreateIdentity();
-    expect(identity.clientId.startsWith("client:")).toBe(true);
-    expect(identity.sessionId.startsWith("session:")).toBe(true);
-  });
-
-  it("generates object ids namespaced by the tab session", () => {
-    const identity = loadOrCreateIdentity();
-
-    const first = createObjectId("device", identity);
-    const second = createObjectId("device", identity);
-
-    expect(first).toBe(`device:${identity.clientId}:${identity.sessionId}:0`);
-    expect(second).toBe(`device:${identity.clientId}:${identity.sessionId}:1`);
-    expect(first).not.toBe(second);
-  });
-
-  it("generates operation ids that include the tab session", () => {
-    const identity = loadOrCreateIdentity();
+    expect(createObjectId("device", identity)).toBe(
+      `device:${identity.clientId}:1`,
+    );
 
     const first = createOperationMeta(identity);
     const second = createOperationMeta(identity);
-
-    expect(first.opId).toBe(`op:${identity.clientId}:${identity.sessionId}:0`);
-    expect(second.opId).toBe(`op:${identity.clientId}:${identity.sessionId}:1`);
-    expect(first.clientId).toBe(identity.clientId);
+    expect(first.opId).toBe(`op:${identity.clientId}:0`);
+    expect(second.opId).toBe(`op:${identity.clientId}:1`);
+    expect(second.clientId).toBe(identity.clientId);
     expect(second.clientSeq).toBe(1);
   });
 
-  it("generates different operation and object ids for two tabs", () => {
-    const firstTab = loadOrCreateIdentity();
-    const secondTab = loadOrCreateIdentity();
+  it("gives two pages different object and operation ids", () => {
+    const firstTab = createLocalIdentity();
+    const secondTab = createLocalIdentity();
 
-    expect(firstTab.clientId).toBe(secondTab.clientId);
-    expect(firstTab.sessionId).not.toBe(secondTab.sessionId);
     expect(createOperationMeta(firstTab).opId).not.toBe(
       createOperationMeta(secondTab).opId,
     );
@@ -104,32 +52,9 @@ describe("identity", () => {
       createObjectId("device", secondTab),
     );
   });
+});
 
-  it("migrates a legacy fully persisted identity to display-only storage", () => {
-    const persisted: LocalIdentity = {
-      clientId: "client:test" as LocalIdentity["clientId"],
-      sessionId: "session:test" as LocalIdentity["sessionId"],
-      nextObjectCounter: 4,
-      nextOperationCounter: 7,
-      displayName: "Testeur Agile",
-      colorHue: 120,
-    };
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
-
-    const identity = loadOrCreateIdentity();
-    expect(identity.clientId).toBe(persisted.clientId);
-    expect(identity.displayName).toBe(persisted.displayName);
-    expect(identity.colorHue).toBe(persisted.colorHue);
-    expect(identity.sessionId).not.toBe(persisted.sessionId);
-    expect(
-      JSON.parse(window.localStorage.getItem(STORAGE_KEY) as string),
-    ).toEqual({
-      clientId: persisted.clientId,
-      displayName: persisted.displayName,
-      colorHue: persisted.colorHue,
-    });
-  });
-
+describe("colorForHue", () => {
   it("derives stable color roles from a hue", () => {
     expect(colorForHue(180, "fill")).toContain("hsl(180");
     expect(colorForHue(180, "stroke")).toContain("hsl(180");

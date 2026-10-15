@@ -4,8 +4,8 @@ import { activePresences, sortPresences } from "./presence";
 import type { RawPresence, SelfPresence } from "./presence";
 
 const raw = (over: Partial<RawPresence>): RawPresence => ({
-  sessionId: "s",
   clientId: "c",
+  userId: "u",
   displayName: "Name",
   colorHue: 100,
   floorId: "floor:a",
@@ -14,8 +14,8 @@ const raw = (over: Partial<RawPresence>): RawPresence => ({
 });
 
 const self: SelfPresence = {
-  sessionId: "self-session",
   clientId: "client:self",
+  userId: "user:self",
   displayName: "Moi",
   colorHue: 42,
   floorId: "floor:a" as FloorId,
@@ -25,61 +25,71 @@ describe("activePresences", () => {
   it("drops rows older than the stale cutoff", () => {
     const result = activePresences(
       [
-        raw({ clientId: "fresh", updatedAt: 9_000 }),
-        raw({ clientId: "stale", updatedAt: 3_000 }),
+        raw({ userId: "fresh", updatedAt: 9_000 }),
+        raw({ userId: "stale", updatedAt: 3_000 }),
       ],
       null,
       10_000,
       5_000,
     );
-    expect(result.map((p) => p.clientId)).toEqual(["fresh"]);
+    expect(result.map((p) => p.userId)).toEqual(["fresh"]);
   });
 
-  it("keeps the latest row per client", () => {
+  it("keeps the latest row per user, whichever tab it came from", () => {
     const result = activePresences(
       [
-        raw({ clientId: "bob", colorHue: 2, updatedAt: 9_500 }),
-        raw({ clientId: "bob", colorHue: 1, updatedAt: 9_000 }),
+        raw({
+          userId: "bob",
+          clientId: "tab-1",
+          floorId: "floor:b",
+          updatedAt: 9_500,
+        }),
+        raw({ userId: "bob", clientId: "tab-2", updatedAt: 9_000 }),
       ],
       null,
       10_000,
       5_000,
     );
     expect(result).toHaveLength(1);
-    expect(result[0]?.colorHue).toBe(2);
+    expect(result[0]?.floorId).toBe("floor:b");
   });
 
   it("injects self with fresh data on its current floor", () => {
     const result = activePresences([], self, 10_000, 5_000);
-    const me = result.find((p) => p.clientId === "client:self");
+    const me = result.find((p) => p.userId === "user:self");
     expect(me).toBeDefined();
     expect(me?.isSelf).toBe(true);
     expect(me?.floorId).toBe("floor:a");
     expect(me?.updatedAt).toBe(10_000);
   });
 
-  it("overrides a stale self row from the server with the current floor", () => {
+  it("shows the user on this page's floor even when another of their tabs spoke last", () => {
     const result = activePresences(
-      [raw({ clientId: "client:self", floorId: "floor:old", updatedAt: 0 })],
+      [
+        raw({
+          userId: "user:self",
+          clientId: "client:other-tab",
+          floorId: "floor:old",
+          updatedAt: 9_900,
+        }),
+      ],
       self,
       10_000,
       5_000,
     );
-    const me = result.find((p) => p.clientId === "client:self");
-    expect(me?.floorId).toBe("floor:a");
-    expect(me?.isSelf).toBe(true);
+    expect(result).toHaveLength(1);
+    expect(result[0]?.floorId).toBe("floor:a");
+    expect(result[0]?.isSelf).toBe(true);
   });
 
-  it("flags other clients as not self", () => {
+  it("flags other users as not self", () => {
     const result = activePresences(
-      [raw({ clientId: "client:other", updatedAt: 9_000 })],
+      [raw({ userId: "user:other", updatedAt: 9_000 })],
       self,
       10_000,
       5_000,
     );
-    expect(result.find((p) => p.clientId === "client:other")?.isSelf).toBe(
-      false,
-    );
+    expect(result.find((p) => p.userId === "user:other")?.isSelf).toBe(false);
   });
 
   it("does not inject self when it has no floor", () => {
@@ -91,9 +101,9 @@ describe("activePresences", () => {
 describe("sortPresences", () => {
   it("puts self first then sorts others by name", () => {
     const sorted = sortPresences([
-      { ...raw({ clientId: "c", displayName: "Charlie" }), isSelf: false },
-      { ...raw({ clientId: "me", displayName: "Moi" }), isSelf: true },
-      { ...raw({ clientId: "a", displayName: "Alice" }), isSelf: false },
+      { ...raw({ userId: "c", displayName: "Charlie" }), isSelf: false },
+      { ...raw({ userId: "me", displayName: "Moi" }), isSelf: true },
+      { ...raw({ userId: "a", displayName: "Alice" }), isSelf: false },
     ]);
     expect(sorted.map((p) => p.displayName)).toEqual([
       "Moi",

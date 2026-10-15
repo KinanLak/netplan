@@ -39,9 +39,9 @@ geometry key so that two blocks never occupy the same cell.
 Every page needs a better-auth login (ADR 0021), and every public Convex
 function checks the caller's role (Lecteur, Éditeur, Admin; ADR 0004) on the
 server; `convex/authorization.test.ts` lists the level of each one. The
-integration connector authenticates with a shared secret instead. Presence
-(`convex/presences.ts`) still shows a random pseudonym stored in
-`localStorage` under `netplan-identity`.
+integration connector authenticates with a shared secret instead. A
+Lecteur's map is read-only, and presence (`convex/presences.ts`) shows each
+signed-in user's name, one entry per user however many tabs they have open.
 
 ## Localization pipeline
 

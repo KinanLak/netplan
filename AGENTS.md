@@ -107,8 +107,10 @@ in a browser with it.
 - Convex tables use `objectId`. Convex `_id` stays inside `convex/`; UI and
   domain code use the branded ids from `src/types/map.ts`.
 - Convex owns durable state; Zustand holds only ephemeral UI state (selection,
-  tool, viewport). The only identity `localStorage` key is `netplan-identity`
-  until accounts land (ADR 0003).
+  tool, viewport). Who the user is comes from the session
+  (`useCurrentUser()`), never from `localStorage`.
+- Edit controls follow `useIsEditMode()`, which is already false for a
+  Lecteur; `useCanEdit()` answers whether the role may edit at all.
 - Walls are one 20×20 block per grid cell, keyed by `geometryKey`.
 - New device type: extend `DeviceType`; the registry and catalog tests point
   at the remaining places.

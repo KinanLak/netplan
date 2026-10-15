@@ -1,42 +1,24 @@
-import { useState } from "react";
 import type {
   ClientId,
   ObjectId,
   ObjectKind,
   OperationMeta,
   OperationId,
-  SessionId,
 } from "@/types/map";
-import { identityAdjectives } from "./identity-adjectives";
-import { identityAnimals } from "./identity-animals";
 
-const STORAGE_KEY = "netplan-identity";
-
+/**
+ * This page load's random id and the counters it names new objects and
+ * operations with. Who the user is comes from the session, not from here
+ * (ADR 0021).
+ */
 export interface LocalIdentity {
   clientId: ClientId;
-  sessionId: SessionId;
   nextObjectCounter: number;
   nextOperationCounter: number;
-  displayName: string;
-  colorHue: number;
 }
 
-interface PersistedIdentity {
-  clientId: ClientId;
-  displayName: string;
-  colorHue: number;
-}
-
-export type Identity = LocalIdentity;
-
-const hashString = (input: string): number => {
-  let hash = 0;
-  for (let i = 0; i < input.length; i += 1) {
-    hash = (hash * 31 + input.charCodeAt(i)) | 0;
-  }
-  return Math.abs(hash);
-};
-
+// `randomUUID` exists only in secure contexts, and a self-hosted install may
+// be served over plain HTTP on the LAN.
 const randomToken = (prefix: string): string => {
   const cryptoApi = globalThis.crypto;
   if (typeof cryptoApi.randomUUID === "function") {
@@ -52,102 +34,25 @@ const randomToken = (prefix: string): string => {
   throw new Error("Secure random identity generation is unavailable");
 };
 
-const generateClientId = (): ClientId => randomToken("client") as ClientId;
-const generateSessionId = (): SessionId => randomToken("session") as SessionId;
-
-const pickFrom = <T>(items: ReadonlyArray<T>, seed: number): T => {
-  if (items.length === 0) throw new Error("pickFrom: empty items");
-  return items[seed % items.length];
-};
-
-const buildDisplayName = (clientId: ClientId): string => {
-  const seed = hashString(clientId);
-  const adjective = pickFrom(identityAdjectives, seed);
-  const animal = pickFrom(identityAnimals, Math.floor(seed / 17));
-  return `${adjective} ${animal}`;
-};
-
-const buildPersistedIdentity = (
-  clientId = generateClientId(),
-): PersistedIdentity => ({
-  clientId,
-  displayName: buildDisplayName(clientId),
-  colorHue: hashString(clientId) % 360,
-});
-
-const buildIdentity = (
-  persisted = buildPersistedIdentity(),
-): LocalIdentity => ({
-  ...persisted,
-  sessionId: generateSessionId(),
+export const createLocalIdentity = (): LocalIdentity => ({
+  clientId: randomToken("client") as ClientId,
   nextObjectCounter: 0,
   nextOperationCounter: 0,
 });
-
-const isPersistedIdentity = (
-  value: object | null,
-): value is PersistedIdentity => {
-  if (!value || typeof value !== "object") return false;
-  const candidate = value as Partial<PersistedIdentity>;
-  return (
-    typeof candidate.clientId === "string" &&
-    typeof candidate.displayName === "string" &&
-    typeof candidate.colorHue === "number"
-  );
-};
-
-const persistIdentity = (identity: PersistedIdentity) => {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(identity));
-};
-
-export const loadOrCreateIdentity = (): LocalIdentity => {
-  if (typeof window === "undefined") {
-    return buildIdentity();
-  }
-
-  const raw = window.localStorage.getItem(STORAGE_KEY);
-  if (raw) {
-    try {
-      const parsed: unknown = JSON.parse(raw);
-      if (
-        parsed !== null &&
-        typeof parsed === "object" &&
-        isPersistedIdentity(parsed)
-      ) {
-        const persisted = {
-          clientId: parsed.clientId,
-          displayName: parsed.displayName,
-          colorHue: parsed.colorHue,
-        };
-        persistIdentity(persisted);
-        return buildIdentity(persisted);
-      }
-    } catch {
-      // fall through to fresh identity
-    }
-  }
-
-  const persisted = buildPersistedIdentity();
-  persistIdentity(persisted);
-  const identity = buildIdentity(persisted);
-  return identity;
-};
 
 export function createObjectId(
   kind: ObjectKind,
   identity: LocalIdentity,
 ): ObjectId {
   const id =
-    `${kind}:${identity.clientId}:${identity.sessionId}:${identity.nextObjectCounter}` as ObjectId;
+    `${kind}:${identity.clientId}:${identity.nextObjectCounter}` as ObjectId;
   identity.nextObjectCounter += 1;
   return id;
 }
 
 export function createOperationMeta(identity: LocalIdentity): OperationMeta {
   const clientSeq = identity.nextOperationCounter;
-  const opId =
-    `op:${identity.clientId}:${identity.sessionId}:${clientSeq}` as OperationId;
+  const opId = `op:${identity.clientId}:${clientSeq}` as OperationId;
   identity.nextOperationCounter += 1;
   return {
     opId,
@@ -171,10 +76,14 @@ export const colorForHue = (
   }
 };
 
+let pageIdentity: LocalIdentity | null = null;
+
+/**
+ * The page's identity, shared by the map and presence so a page publishes
+ * under the id its operations carry. `null` while rendering on the server.
+ */
 export const useIdentity = (): LocalIdentity | null => {
-  const [identity] = useState<LocalIdentity | null>(() => {
-    if (typeof window === "undefined") return null;
-    return loadOrCreateIdentity();
-  });
-  return identity;
+  if (typeof window === "undefined") return null;
+  pageIdentity ??= createLocalIdentity();
+  return pageIdentity;
 };
