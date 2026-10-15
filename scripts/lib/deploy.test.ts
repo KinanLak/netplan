@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { CONVEX_BACKEND_IMAGE } from "./convexBackend";
+import { MAILPIT_IMAGE } from "./devAgent";
 
 const root = join(import.meta.dir, "../..");
 
@@ -121,6 +122,11 @@ test("compose runs the backend and dashboard dev:agent runs", async () => {
   expect(field(services["convex-dashboard"], "image")).toBe(
     `ghcr.io/get-convex/convex-dashboard:${tag}`,
   );
+});
+
+test("compose runs the Mailpit dev:agent runs", async () => {
+  const services = await composeServices();
+  expect(field(services.mailpit, "image")).toBe(MAILPIT_IMAGE);
 });
 
 test("every compose service carries a netplan.role label", async () => {

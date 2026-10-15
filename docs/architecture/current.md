@@ -87,7 +87,7 @@ Built by lot F (ADRs 0018 and 0019).
   drives it with Playwright (`e2e/`).
 - `bun run dev:agent` runs one self-hosted Convex backend per worktree in
   Docker, with SQLite in a volume, ports derived from the worktree path, and a
-  generated `.env.local`. It seeds a fictional, disabled demo site through
+  generated `.env.local`; a Mailpit next to it catches every mail it sends. It seeds a fictional, disabled demo site through
   `applyMapOperation`, the same path as user edits, behind `ALLOW_DEV_SEED`.
 - zipzoup reviews each pull request when it is marked ready; agents merge
   their own once CI is green and no P0 or P1 finding is open.

@@ -7,7 +7,8 @@
 //   bun run dev:agent --down     remove this worktree's backend and data
 // The backend is a Docker container of the pinned self-hosted image, with
 // SQLite in a volume, both named after the worktree and labelled with its
-// path. It keeps running when this command stops.
+// path. A Mailpit container on a network of the same name catches the mail
+// it sends. Both keep running when this command stops.
 import {
   chmodSync,
   lstatSync,
@@ -25,10 +26,13 @@ import {
   isLoopbackUrl,
 } from "./lib/convexBackend";
 import {
+  MAILPIT_IMAGE,
   OWNER_LABEL,
   ROLE_LABEL,
   WORKTREE_LABEL,
+  backendOf,
   isGeneratedEnvFile,
+  mailName,
   nextBackendPorts,
   nextWebPort,
   parseEnvLines,
@@ -48,6 +52,7 @@ const WEB_URL_KEY = "NETPLAN_DEV_WEB_URL";
 const root = realpathSync(resolve(import.meta.dir, ".."));
 const envPath = join(root, ".env.local");
 const name = resourceName(root);
+const mail = mailName(name);
 // Docker is shared by every account on the host: orphan collection only
 // considers this account's backends.
 const owner = `${OWNER_LABEL}=${process.getuid?.() ?? "unknown"}`;
@@ -119,40 +124,48 @@ const docker = (...args: Array<string>) => run(["docker", ...args]);
 interface Container {
   running: boolean;
   image: string;
-  backendPort?: number;
+  /** The host port published for the container port asked about. */
+  port?: number;
+  networks: Array<string>;
 }
 
-const inspectContainer = async (): Promise<Container | undefined> => {
+const inspectContainer = async (
+  target: string,
+  containerPort: number,
+): Promise<Container | undefined> => {
   const result = await docker(
     "container",
     "inspect",
     "--format",
-    "{{json .State.Running}} {{json .Config.Image}} {{json .HostConfig.PortBindings}}",
-    name,
+    "{{json .State.Running}} {{json .Config.Image}} {{json .HostConfig.PortBindings}} {{json .NetworkSettings.Networks}}",
+    target,
   );
   if (!result.ok) return undefined;
-  const [running, image, bindings] = result.out
+  const [running, image, bindings, networks] = result.out
     .trim()
     .split(" ")
     .map((part) => JSON.parse(part) as unknown);
   return {
     running: running === true,
     image: String(image),
-    backendPort: publishedPort(
+    port: publishedPort(
       bindings as Parameters<typeof publishedPort>[0],
-      3210,
+      containerPort,
     ),
+    networks: Object.keys(networks ?? {}),
   };
 };
 
 /**
- * Removes a backend's container and volume; returns Docker's error, if any.
- * `--force` already accepts a resource that is not there.
+ * Removes a backend's containers, volume and network; returns Docker's
+ * error, if any. `--force` already accepts a resource that is not there.
  */
 const removeBackend = async (target: string): Promise<string | undefined> => {
   for (const command of [
+    ["container", "rm", "--force", mailName(target)],
     ["container", "rm", "--force", "--volumes", target],
     ["volume", "rm", "--force", target],
+    ["network", "rm", "--force", target],
   ]) {
     const { ok, out, err } = await docker(...command);
     if (!ok) return (err || out).trim() || `docker ${command[0]} rm failed`;
@@ -179,7 +192,7 @@ const isGone = (path: string) => {
 /** Removes this account's backends whose worktree no longer exists. */
 const collectOrphans = async () => {
   const listed = await Promise.all(
-    (["container", "volume"] as const).map((kind) =>
+    (["container", "volume", "network"] as const).map((kind) =>
       docker(
         kind,
         "ls",
@@ -197,7 +210,9 @@ const collectOrphans = async () => {
   for (const { out } of listed) {
     for (const line of out.split("\n").filter(Boolean)) {
       const [resource, worktree] = line.split("\t");
-      if (resource && worktree && isGone(worktree)) orphans.add(resource);
+      if (resource && worktree && isGone(worktree)) {
+        orphans.add(backendOf(resource));
+      }
     }
   }
   for (const orphan of orphans) {
@@ -219,15 +234,16 @@ const portIsFree = (port: number, hostnames: Array<string>) =>
     }
   });
 
+const labels = [
+  "--label",
+  ROLE_LABEL,
+  "--label",
+  `${WORKTREE_LABEL}=${root}`,
+  "--label",
+  owner,
+];
+
 const createContainer = async (backendPort: number) => {
-  const labels = [
-    "--label",
-    ROLE_LABEL,
-    "--label",
-    `${WORKTREE_LABEL}=${root}`,
-    "--label",
-    owner,
-  ];
   await must(
     docker("volume", "create", ...labels, name),
     "docker volume create",
@@ -259,16 +275,16 @@ const createContainer = async (backendPort: number) => {
 
 /** Starts the worktree's backend, creating it if needed; returns its API port. */
 const ensureBackend = async (): Promise<number> => {
-  let container = await inspectContainer();
+  let container = await inspectContainer(name, 3210);
   // A new image pin replaces the container; the data stays in the volume.
   if (container && container.image !== CONVEX_BACKEND_IMAGE) {
     console.log(`dev:agent: moving ${name} to the pinned backend image.`);
     await docker("container", "rm", "--force", name);
-    const port = container.backendPort;
+    const port = container.port;
     container = undefined;
     if (port) {
       await createContainer(port);
-      container = await inspectContainer();
+      container = await inspectContainer(name, 3210);
     }
   }
   if (!container) {
@@ -277,11 +293,11 @@ const ensureBackend = async (): Promise<number> => {
     );
     console.log(`dev:agent: creating ${name} on port ${port}.`);
     await createContainer(port);
-    container = await inspectContainer();
+    container = await inspectContainer(name, 3210);
   } else if (!container.running) {
     await must(docker("container", "start", name), "docker start");
   }
-  const port = container?.backendPort;
+  const port = container?.port;
   if (!port) return fail(`${name} publishes no port for 3210.`);
 
   const url = `http://127.0.0.1:${port}`;
@@ -290,6 +306,62 @@ const ensureBackend = async (): Promise<number> => {
     await Bun.sleep(500);
   }
   return fail(`the backend at ${url} did not answer within a minute.`);
+};
+
+/**
+ * Starts the worktree's Mailpit on a network shared with the backend, which
+ * reaches it by container name; returns the port of its inbox. Its mail lives
+ * in the container: a new image pin starts an empty inbox.
+ */
+const ensureMail = async (): Promise<number> => {
+  if (!(await docker("network", "inspect", name)).ok) {
+    await must(
+      docker("network", "create", ...labels, name),
+      "docker network create",
+    );
+  }
+  let container = await inspectContainer(mail, 8025);
+  if (container && container.image !== MAILPIT_IMAGE) {
+    await docker("container", "rm", "--force", mail);
+    container = undefined;
+  }
+  if (!container) {
+    const port = nextWebPort(preferredPorts(root).mail, (candidate) =>
+      portIsFree(candidate, ["127.0.0.1"]),
+    );
+    await must(
+      docker(
+        "run",
+        "--detach",
+        "--name",
+        mail,
+        ...labels,
+        "--network",
+        name,
+        "--publish",
+        `127.0.0.1:${port}:8025`,
+        "--env",
+        "MP_SMTP_AUTH_ACCEPT_ANY=1",
+        "--env",
+        "MP_SMTP_AUTH_ALLOW_INSECURE=1",
+        MAILPIT_IMAGE,
+      ),
+      "docker run mailpit",
+    );
+    container = await inspectContainer(mail, 8025);
+  } else if (!container.running) {
+    await must(docker("container", "start", mail), "docker start mailpit");
+  }
+  // A backend created before Mailpit joins the network while it runs.
+  if (!(await inspectContainer(name, 3210))?.networks.includes(name)) {
+    await must(
+      docker("network", "connect", name, name),
+      "docker network connect",
+    );
+  }
+  const port = container?.port;
+  if (!port) return fail(`${mail} publishes no port for 8025.`);
+  return port;
 };
 
 // ── .env.local ───────────────────────────────────────────────────────────────
@@ -338,17 +410,17 @@ if (flags.has("--down")) {
   await readOwnEnvFile();
   await mustRemoveBackend(name);
   rmSync(envPath, { force: true });
-  console.log(`dev:agent: removed ${name} and .env.local.`);
+  console.log(`dev:agent: removed ${name}, its Mailpit and .env.local.`);
   process.exit(0);
 }
 
 if (flags.has("--status")) {
-  const container = await inspectContainer();
-  if (!container?.backendPort) {
+  const container = await inspectContainer(name, 3210);
+  if (!container?.port) {
     console.log(`dev:agent: no backend for ${root}.`);
     process.exit(0);
   }
-  const { convex } = urls(container.backendPort);
+  const { convex } = urls(container.port);
   const web = parseEnvLines((await readOwnEnvFile()) ?? "").get(WEB_URL_KEY);
   const silent = (up: boolean) => (up ? "" : " (not answering)");
   console.log(
@@ -357,6 +429,11 @@ if (flags.has("--status")) {
   );
   if (web) {
     console.log(`  App      ${web}${silent(await servesThisWorktree(web))}`);
+  }
+  const inbox = await inspectContainer(mail, 8025);
+  if (inbox?.port) {
+    const url = `http://127.0.0.1:${inbox.port}`;
+    console.log(`  Mail     ${url}${silent(await webAnswers(url))}`);
   }
   process.exit(0);
 }
@@ -380,6 +457,7 @@ if (flags.has("--reseed")) {
 await must(run(["bun", "install"]), "bun install");
 
 const backendPort = await ensureBackend();
+const mailUrl = `http://127.0.0.1:${await ensureMail()}`;
 const { convex: convexUrl, site: siteUrl } = urls(backendPort);
 if (!isLoopbackUrl(convexUrl)) fail(`${convexUrl} is not on this machine.`);
 const convexCliWith = (env: Record<string, string>, args: Array<string>) =>
@@ -477,6 +555,9 @@ const authEnv: Record<string, string> = {
   // The backend checks each token against its own JWKS; its published port
   // does not answer inside its container.
   AUTH_JWKS_URL: "http://127.0.0.1:3211/api/auth/convex/jwks",
+  SMTP_HOST: mail,
+  SMTP_PORT: "1025",
+  SMTP_FROM: "Netplan <netplan@netplan.localhost>",
 };
 // Generated once per backend and never printed: it signs every session.
 if (!variables.get("BETTER_AUTH_SECRET")) {
@@ -540,6 +621,7 @@ console.log(`
 Netplan is running for ${root}
   App      ${webUrl}
   Convex   ${convexUrl}  (container ${name})
+  Mail     ${mailUrl}  (every mail the app sends)
   Data     Site de démonstration, Bâtiment A, two floors
 Ctrl-C stops the app; the backend keeps running. \`bun run dev:agent --down\` removes it.
 `);

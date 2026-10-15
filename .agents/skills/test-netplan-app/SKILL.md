@@ -27,7 +27,9 @@ bun run dev:agent --status
   ```
 
   Run it as a background task and keep its task or process id: that is the
-  only process you may stop. The banner prints the `App` and `Convex` URLs.
+  only process you may stop. The banner prints the `App` and `Convex` URLs,
+  and `Mail`: the Mailpit inbox of every mail the app sends (invitations,
+  password resets).
   The first run pulls the image and creates the backend; later runs reuse
   them.
 - Every run puts back what is missing from the seed: a cleared map, a deleted
