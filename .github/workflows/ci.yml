@@ -129,3 +129,69 @@ jobs:
           bun audit --audit-level=high
           --ignore=GHSA-vfj7-8cjw-p6xm
           --ignore=GHSA-c475-qrg2-pj4r
+
+  e2e:
+    name: End-to-end
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      # Same backend as `verify`, seeded with the demo site: what an agent's
+      # dev:agent instance shows (ADR 0018).
+      convex:
+        image: ghcr.io/get-convex/convex-backend:72ce13c379fe6dbdfc305bc8ad699c5663c68c2a
+        ports:
+          - 3210:3210
+          - 3211:3211
+        env:
+          INSTANCE_NAME: netplan-ci
+          CONVEX_CLOUD_ORIGIN: http://127.0.0.1:3210
+          CONVEX_SITE_ORIGIN: http://127.0.0.1:3211
+          DISABLE_BEACON: "true"
+        options: >-
+          --health-cmd "curl --fail --silent http://localhost:3210/version"
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - name: Install (frozen lockfile)
+        run: bun install --frozen-lockfile
+
+      - name: Connect the Convex backend
+        run: |
+          admin_key="$(docker exec "${{ job.services.convex.id }}" ./generate_admin_key.sh | tail -1)"
+          echo "::add-mask::$admin_key"
+          echo "CONVEX_SELF_HOSTED_URL=http://127.0.0.1:3210" >> "$GITHUB_ENV"
+          echo "CONVEX_SELF_HOSTED_ADMIN_KEY=$admin_key" >> "$GITHUB_ENV"
+
+      - name: Push the functions and seed
+        run: |
+          bun x convex dev --once --typecheck disable --tail-logs disable
+          bun x convex env set ALLOW_DEV_SEED true
+          bun x convex run dev:seed
+
+      - name: Build
+        run: bun run build
+        env:
+          VITE_CONVEX_URL: http://127.0.0.1:3210
+
+      - name: Install Chromium
+        run: bun x playwright install --with-deps --only-shell chromium
+
+      - name: Smoke test
+        run: bun run test:e2e
+
+      - name: Upload the report
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: |
+            playwright-report
+            test-results
+          retention-days: 7

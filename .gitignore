@@ -16,3 +16,5 @@ todos.json
 issues/
 .vscode/settings.json
 .vercel
+playwright-report
+test-results
