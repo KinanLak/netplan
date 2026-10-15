@@ -44,7 +44,13 @@ const POLICY: Record<string, Role> = {
   "sites:listSettings": "admin",
   "sites:remove": "admin",
   "sites:update": "admin",
+  "users:invite": "admin",
+  "users:list": "admin",
   "users:me": "reader",
+  "users:resendInvitation": "admin",
+  "users:sendTestMail": "admin",
+  "users:setDisabled": "admin",
+  "users:setRole": "admin",
   "walls:listForFloor": "reader",
 };
 
