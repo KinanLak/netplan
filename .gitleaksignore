@@ -1,0 +1,5 @@
+# Each entry is a finding checked by hand and judged not to be a secret.
+# A real secret is never listed here: it is rotated first.
+
+# A localStorage key name, not a credential (src/store/useMapStore.ts).
+39b205c9b4723b69fed3e736644507cf96961620:src/store/useMapStore.ts:generic-api-key:61

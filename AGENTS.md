@@ -23,13 +23,20 @@ canonical change over compatibility shims.
 ## Commands
 
 - `bun install`; Bun only, never npm, pnpm or yarn.
-- `bun run check` after every change: typecheck, lint, format and tests. A
-  change is done only when it is green.
+- `bun run check` after every change. It is read-only: typecheck, lint,
+  format check, tests, and Convex codegen freshness when a local self-hosted
+  backend answers (CI always checks it). A change is done only when it is
+  green.
+- `bun run fix` applies lint fixes and formatting; run it, then `check`.
+- `bun run verify` is `check` plus the production build and the route tree it
+  writes. CI runs it; run it before marking a pull request ready.
 - `bun test <path>` for one file.
 - `bun run dev`: Convex dev deployment and Vite together.
 - Never edit `package.json` by hand: `bun add <pkg>@latest`, `bun remove`, or
   `bun pm pkg set` for fields that are not dependencies. Dependencies stay on
-  their latest version, majors included.
+  their latest version, majors included. CI fails on a high or critical
+  advisory; one that cannot be fixed yet is accepted with an `--ignore` and
+  its reason in `.github/workflows/ci.yml`.
 - `convex/_generated/` and `src/routeTree.gen.ts` are generated and tracked.
   Never edit them by hand; commit what the tools regenerate.
 - Use Context7 (`ctx7`) or web search for library and API documentation
@@ -52,7 +59,8 @@ canonical change over compatibility shims.
    five minutes per site.
 3. **Leaking secrets.** Never print, log, commit or paste a secret value, not
    even in a PR body or a test fixture. Load them inside the command
-   (`set -a; . file; set +a`).
+   (`set -a; . file; set +a`). gitleaks scans the whole history on every
+   pull request; a fake value in a test carries a `gitleaks:allow` comment.
 
 ## Map domain
 

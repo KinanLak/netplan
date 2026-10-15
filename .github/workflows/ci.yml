@@ -1,0 +1,131 @@
+name: CI
+
+# Every pull request, drafts included (the repository is public, so hosted
+# minutes are free), and every push to `main`.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+jobs:
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GITLEAKS_VERSION: 8.30.1
+      GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+    steps:
+      # The whole history: a secret deleted in a later commit is still in it.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Install gitleaks
+        run: |
+          archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl --fail --silent --show-error --location --output "$RUNNER_TEMP/$archive" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/$archive"
+          echo "$GITLEAKS_SHA256  $RUNNER_TEMP/$archive" | sha256sum --check --strict
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" gitleaks
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      # Findings are printed redacted. A fake value in a test carries a
+      # `gitleaks:allow` comment on its line; a real one is rotated, then
+      # listed in .gitleaksignore. A merge is read against its first parent,
+      # so a secret written while resolving a conflict is caught too.
+      - name: Scan the history for secrets
+        run: gitleaks git --redact --verbose --no-banner --log-opts="--diff-merges=first-parent HEAD" .
+
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      # A throwaway local backend for Convex codegen. It generates its own
+      # instance secret; nothing remote is read or written. Keep the image
+      # equal to CONVEX_BACKEND_IMAGE in scripts/lib/convexBackend.ts (a test
+      # checks it).
+      convex:
+        image: ghcr.io/get-convex/convex-backend:72ce13c379fe6dbdfc305bc8ad699c5663c68c2a
+        ports:
+          - 3210:3210
+          - 3211:3211
+        env:
+          INSTANCE_NAME: netplan-ci
+          CONVEX_CLOUD_ORIGIN: http://127.0.0.1:3210
+          CONVEX_SITE_ORIGIN: http://127.0.0.1:3211
+          DISABLE_BEACON: "true"
+        options: >-
+          --health-cmd "curl --fail --silent http://localhost:3210/version"
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - name: Install (frozen lockfile)
+        run: bun install --frozen-lockfile
+
+      - name: Connect the Convex backend
+        run: |
+          admin_key="$(docker exec "${{ job.services.convex.id }}" ./generate_admin_key.sh | tail -1)"
+          echo "::add-mask::$admin_key"
+          echo "CONVEX_SELF_HOSTED_URL=http://127.0.0.1:3210" >> "$GITHUB_ENV"
+          echo "CONVEX_SELF_HOSTED_ADMIN_KEY=$admin_key" >> "$GITHUB_ENV"
+
+      # Codegen resolves the functions against a deployment, so push them
+      # first, without regenerating: the committed files are what `check`
+      # compares, and it fails, rather than skips, if codegen cannot run.
+      - name: Push the functions
+        run: >-
+          bun x convex dev --once --codegen disable
+          --typecheck disable --tail-logs disable
+
+      # Typecheck, lint, format check, tests, codegen freshness, build, and
+      # the route tree the build writes.
+      - name: Verify
+        run: bun run verify
+        env:
+          CODEGEN_CHECK_REQUIRED: "true"
+          VITE_CONVEX_URL: http://127.0.0.1:3210
+
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - name: Install (frozen lockfile)
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Every advisory
+        run: bun audit || true
+
+      # High and critical fail. Accepted advisories, each with its reason:
+      # - GHSA-vfj7-8cjw-p6xm (braces): no fixed version is published; only
+      #   reached through dev tooling (shadcn CLI, react-scan) on trusted input.
+      # - GHSA-c475-qrg2-pj4r (basic-ftp): only reached through electrobun,
+      #   which the infrastructure lot removes (ADR 0002); drop it then.
+      - name: No high or critical advisory
+        run: >-
+          bun audit --audit-level=high
+          --ignore=GHSA-vfj7-8cjw-p6xm
+          --ignore=GHSA-c475-qrg2-pj4r
