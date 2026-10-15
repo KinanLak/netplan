@@ -88,6 +88,11 @@ const main = async () => {
     }
     env.CONVEX_SELF_HOSTED_URL = url;
     env.CONVEX_SELF_HOSTED_ADMIN_KEY = adminKey;
+    // The CLI also reads `.env`, where a deploy key would beat the URL above.
+    // It treats an empty value as unset, and dotenv never overrides one.
+    env.CONVEX_DEPLOY_KEY = "";
+    env.CONVEX_DEPLOYMENT_TOKEN = "";
+    env.CONVEX_DEPLOYMENT = "";
     const codegen = Bun.spawn(
       ["bun", "x", "convex", "codegen", "--typecheck", "disable"],
       { env, stdout: "pipe", stderr: "pipe" },

@@ -87,9 +87,12 @@ jobs:
           echo "CONVEX_SELF_HOSTED_ADMIN_KEY=$admin_key" >> "$GITHUB_ENV"
 
       # Codegen resolves the functions against a deployment, so push them
-      # first. `check` then fails, rather than skips, if codegen cannot run.
+      # first, without regenerating: the committed files are what `check`
+      # compares, and it fails, rather than skips, if codegen cannot run.
       - name: Push the functions
-        run: bun x convex dev --once --typecheck disable --tail-logs disable
+        run: >-
+          bun x convex dev --once --codegen disable
+          --typecheck disable --tail-logs disable
 
       # Typecheck, lint, format check, tests, codegen freshness, build, and
       # the route tree the build writes.
