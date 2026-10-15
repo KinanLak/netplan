@@ -22,8 +22,7 @@ convex deploy --yes --typecheck disable
 while IFS= read -r name; do
   case "$name" in '' | '#'*) continue ;; esac
   if [[ -v "$name" ]]; then
-    convex env set -- "$name" "${!name}" >/dev/null
-    echo "convex-deploy: set $name"
+    convex env set -- "$name" "${!name}"
   fi
 done < deploy/convex-env.txt
 
