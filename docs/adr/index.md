@@ -34,3 +34,4 @@ record's Source section points to its questions in the
 - **[0021 — Accounts are enforced by Convex function wrappers, with roles mapped at Keycloak login and invitations through password reset](0021-accounts-implementation.md)**
 - **[0022 — Devices are a site inventory with ports and cables, optionally placed on a floor](0022-site-inventory-ports-cables.md)**
 - **[0023 — Sites and their integrations are configured in the admin, and one Convex cycle per site collects from them](0023-sites-integrations-collection.md)**
+- **[0024 — The calque is a raster image in Convex storage, placed by map operations, and the plan has a fixed scale of 100 units per metre](0024-floor-overlay-implementation.md)**
