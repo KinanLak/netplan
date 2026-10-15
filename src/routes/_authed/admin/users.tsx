@@ -306,8 +306,9 @@ function RoleMappingForm({
     <form onSubmit={(event) => void submit(event)} className="max-w-md">
       <FieldGroup>
         <FieldDescription>
-          Un compte Keycloak devient Lecteur, ou Éditeur et Admin s'il porte le
-          rôle ou le groupe indiqué. Son rôle est relu à chaque connexion.
+          Un compte Keycloak est Lecteur, sauf s'il porte l'un des rôles ou
+          groupes ci-dessous ; Admin l'emporte. Son rôle est relu à chaque
+          connexion.
         </FieldDescription>
         <Field>
           <FieldLabel htmlFor="keycloak-editor-role">
