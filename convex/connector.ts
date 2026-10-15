@@ -205,6 +205,45 @@ const beginImport = async (
   return { ...result, siteId, config: publicConfig };
 };
 
+const runningWorkflows = v.array(
+  v.union(v.literal("netbox"), v.literal("localization")),
+);
+
+export const getRunningWorkflows = internalQuery({
+  args: { siteKey: v.string() },
+  returns: v.union(v.null(), runningWorkflows),
+  handler: async (ctx, { siteKey }) => {
+    const site = await ctx.db
+      .query("sites")
+      .withIndex("by_config_key", (q) => q.eq("configKey", siteKey))
+      .unique();
+    if (!site) return null;
+    const states = await ctx.db
+      .query("integrationWorkflowStates")
+      .withIndex("by_site_workflow", (q) => q.eq("siteId", site.objectId))
+      .collect();
+    return states
+      .filter((state) => state.status === "running")
+      .map((state) => state.workflow);
+  },
+});
+
+// The scheduled worker has no user session, so it asks here, with the
+// connector secret, which workflows the scheduler has started.
+export const readRunningWorkflows = action({
+  args: { secret: v.string(), siteKey: v.string() },
+  returns: v.union(v.null(), runningWorkflows),
+  handler: async (
+    ctx,
+    args,
+  ): Promise<Array<"netbox" | "localization"> | null> => {
+    requireConnectorSecret(args.secret);
+    return await ctx.runQuery(internal.connector.getRunningWorkflows, {
+      siteKey: args.siteKey,
+    });
+  },
+});
+
 export const beginNetBoxImport = action({
   args: {
     secret: v.string(),

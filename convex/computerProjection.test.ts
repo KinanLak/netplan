@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { api, internal } from "./_generated/api";
-import { signedInTest } from "./_test/auth";
+import { signedInTest, ensureDefaultSite } from "./_test/auth.setup";
 import {
   expireVisuals,
   projectionPositions,
@@ -51,7 +51,7 @@ const deviceRow = (
 async function setup() {
   sequence += 1;
   const t = await signedInTest();
-  const siteId = await t.mutation(api.sites.ensureDefault, {});
+  const siteId = await ensureDefaultSite(t);
   const buildingId = await t.mutation(api.buildings.create, {
     siteId,
     objectId: `building:projection:${sequence}`,

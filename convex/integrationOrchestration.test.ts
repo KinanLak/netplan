@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { api, internal } from "./_generated/api";
-import { signedInTest } from "./_test/auth";
-import type { TestClient } from "./_test/auth";
+import { signedInTest } from "./_test/auth.setup";
+import type { TestClient } from "./_test/auth.setup";
 
 let sequence = 0;
 

@@ -1,8 +1,9 @@
 import { convexTest } from "convex-test";
 import type { TestConvex } from "convex-test";
 import authSchema from "../betterAuth/schema";
-import { components } from "../_generated/api";
+import { components, internal } from "../_generated/api";
 import schema from "../schema";
+import { DEFAULT_SITE } from "../sites";
 import type { Role } from "../lib/roles";
 import { modules } from "./modules";
 
@@ -83,3 +84,7 @@ export async function signedInTest(role: Role = "editor") {
 }
 
 export type TestClient = Awaited<ReturnType<typeof signedInTest>>;
+
+/** Creates the default site, which only an admin can do through the API. */
+export const ensureDefaultSite = (t: TestClient) =>
+  t.mutation(internal.sites.create, { site: DEFAULT_SITE });

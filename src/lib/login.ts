@@ -6,9 +6,14 @@ import { ConvexError } from "convex/values";
  */
 export function safeRedirect(value: unknown): string | undefined {
   if (typeof value !== "string" || !value.startsWith("/")) return undefined;
-  if (value.startsWith("//") || value.startsWith("/\\")) return undefined;
-  return value;
+  // Checked as the browser parses it: it drops tabs and newlines and reads a
+  // backslash as a slash, so `/\t/evil.example` would leave the site.
+  const url = new URL(value, LOCAL_ORIGIN);
+  if (url.origin !== LOCAL_ORIGIN) return undefined;
+  return `${url.pathname}${url.search}${url.hash}`;
 }
+
+const LOCAL_ORIGIN = "http://netplan.invalid";
 
 /** An email signs in by email; anything else is a username. */
 export function isEmail(identifier: string): boolean {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { api, internal } from "./_generated/api";
-import { signedInTest } from "./_test/auth";
+import { signedInTest } from "./_test/auth.setup";
 
 const configuredSite = (key: string) => ({
   objectId: `site:${key}`,
@@ -27,7 +27,7 @@ const configuredSite = (key: string) => ({
 
 describe("sites", () => {
   it("seeds the confirmed Arles identity idempotently", async () => {
-    const t = await signedInTest();
+    const t = await signedInTest("admin");
     const first = await t.mutation(api.sites.ensureDefault, {});
     const second = await t.mutation(api.sites.ensureDefault, {});
     const sites = await t.query(api.sites.list, {});

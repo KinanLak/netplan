@@ -1,13 +1,13 @@
 import { describe, expect, it } from "bun:test";
 import { api, internal } from "./_generated/api";
-import { signedInTest } from "./_test/auth";
-import type { TestClient } from "./_test/auth";
+import { signedInTest, ensureDefaultSite } from "./_test/auth.setup";
+import type { TestClient } from "./_test/auth.setup";
 
 let counter = 0;
 
 async function freshBuilding(t: TestClient) {
   counter += 1;
-  const siteId = await t.mutation(api.sites.ensureDefault, {});
+  const siteId = await ensureDefaultSite(t);
   return await t.mutation(api.buildings.create, {
     siteId,
     objectId: `building:${counter}`,

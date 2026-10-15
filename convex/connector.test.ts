@@ -1,9 +1,9 @@
-import { describe, expect, it, jest } from "bun:test";
+import { afterAll, describe, expect, it, jest } from "bun:test";
 import type { Infer } from "convex/values";
 import { api, internal } from "./_generated/api";
 import type { connectionInput, inventoryInput } from "./netboxModel";
-import { signedInTest } from "./_test/auth";
-import type { TestClient } from "./_test/auth";
+import { signedInTest } from "./_test/auth.setup";
+import type { TestClient } from "./_test/auth.setup";
 
 let sequence = 0;
 
@@ -1167,5 +1167,38 @@ describe("site-scoped integration foundations", () => {
       consecutiveAbsences: 2,
       lastConfirmedSocketExternalId: "device:socket",
     });
+  });
+});
+
+describe("the scheduled worker's state read", () => {
+  it("reports running workflows only to a caller with the connector secret", async () => {
+    const secret = "connector-test-secret"; // gitleaks:allow
+    const previous = process.env.NETPLAN_CONNECTOR_SECRET;
+    process.env.NETPLAN_CONNECTOR_SECRET = secret;
+    afterAll(() => {
+      process.env.NETPLAN_CONNECTOR_SECRET = previous;
+    });
+    const t = await signedInTest("reader");
+    const siteId = await createSite(t, "agent-state");
+    await begin(t, siteId, "netbox");
+
+    expect(
+      await t.action(api.connector.readRunningWorkflows, {
+        secret,
+        siteKey: "agent-state",
+      }),
+    ).toEqual(["netbox"]);
+    expect(
+      await t.action(api.connector.readRunningWorkflows, {
+        secret,
+        siteKey: "missing",
+      }),
+    ).toBeNull();
+    await expect(
+      t.action(api.connector.readRunningWorkflows, {
+        secret: "wrong",
+        siteKey: "agent-state",
+      }),
+    ).rejects.toThrow("Connecteur non autorisé");
   });
 });

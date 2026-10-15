@@ -61,7 +61,8 @@ better-auth password-reset token valid seven days and mails a link to a page
 where the user chooses a password. Forgotten password uses the same page with
 a one-hour token, is never sent to an account without a password (an SSO
 account), and revokes the user's other sessions. Disabling a user is a
-better-auth ban.
+better-auth ban. Admins cannot list sessions: better-auth's listing returns
+each session's bearer token, which would let an admin act as that user.
 
 The first admin comes from `BOOTSTRAP_ADMIN_*` Convex environment variables,
 applied by an internal function that does nothing once an admin exists; the
@@ -85,7 +86,8 @@ container, as with dev:agent's published ports, `AUTH_JWKS_URL` gives the
 address that does.
 
 better-auth rate-limits sign-in by client IP, which it reads from a
-single-address `X-Forwarded-For`; the edge must set that header. Token and
+single-address `X-Forwarded-For`; the edge must set that header, and an
+operator's proxy in front of the edge must not turn it into a chain. Token and
 session reads are not rate-limited: they need a valid session and run on
 every page load.
 

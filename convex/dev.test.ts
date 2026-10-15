@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { api, internal } from "./_generated/api";
 import { buildDemoFloors } from "../src/dev-seed/demoMap";
-import { signedInTest } from "./_test/auth";
-import type { TestClient } from "./_test/auth";
+import { signedInTest } from "./_test/auth.setup";
+import type { TestClient } from "./_test/auth.setup";
 
 afterEach(() => {
   delete process.env.ALLOW_DEV_SEED;

@@ -1,12 +1,11 @@
 import { describe, expect, it } from "bun:test";
 import { api, internal } from "./_generated/api";
-import { signedInTest } from "./_test/auth";
-import type { TestClient } from "./_test/auth";
+import { signedInTest, ensureDefaultSite } from "./_test/auth.setup";
+import type { TestClient } from "./_test/auth.setup";
 
 const SITE_ID = "site:arles";
 
-const ensureSite = async (t: TestClient) =>
-  await t.mutation(api.sites.ensureDefault, {});
+const ensureSite = async (t: TestClient) => await ensureDefaultSite(t);
 
 describe("buildings", () => {
   it("list returns buildings sorted by order with application ids", async () => {

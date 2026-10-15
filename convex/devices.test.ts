@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { api } from "./_generated/api";
-import { signedInTest } from "./_test/auth";
-import type { TestClient } from "./_test/auth";
+import { signedInTest, ensureDefaultSite } from "./_test/auth.setup";
+import type { TestClient } from "./_test/auth.setup";
 
 let counter = 0;
 
@@ -14,7 +14,7 @@ const meta = () => ({
 
 async function freshFloor(t: TestClient) {
   counter += 1;
-  const siteId = await t.mutation(api.sites.ensureDefault, {});
+  const siteId = await ensureDefaultSite(t);
   const buildingId = await t.mutation(api.buildings.create, {
     siteId,
     objectId: `building:devices:${counter}`,
@@ -126,7 +126,7 @@ describe("devices", () => {
 
   it("joins current exact NetBox source fields without mutating map-owned fields", async () => {
     const t = await signedInTest();
-    const siteId = await t.mutation(api.sites.ensureDefault, {});
+    const siteId = await ensureDefaultSite(t);
     const buildingId = await t.mutation(api.buildings.create, {
       siteId,
       objectId: `building:presentation:${counter}`,

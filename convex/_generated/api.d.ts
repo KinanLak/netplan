@@ -8,7 +8,6 @@
  * @module
  */
 
-import type * as _test_auth from "../_test/auth.js";
 import type * as _test_modules from "../_test/modules.js";
 import type * as auth from "../auth.js";
 import type * as bootstrap from "../bootstrap.js";
@@ -55,7 +54,6 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
-  "_test/auth": typeof _test_auth;
   "_test/modules": typeof _test_modules;
   auth: typeof auth;
   bootstrap: typeof bootstrap;

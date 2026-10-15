@@ -2,8 +2,8 @@ import { describe, expect, it } from "bun:test";
 import { join } from "node:path";
 import { ConvexError } from "convex/values";
 import { api, components } from "./_generated/api";
-import { createSignedInUser, testBackend } from "./_test/auth";
-import type { TestBackend } from "./_test/auth";
+import { createSignedInUser, testBackend } from "./_test/auth.setup";
+import type { TestBackend } from "./_test/auth.setup";
 import type { Role } from "./lib/roles";
 
 // ADR 0004 levels for every public function. A new public function fails the
@@ -24,6 +24,7 @@ const POLICY: Record<string, Role | "connector"> = {
   "connector:publishNetBoxGeneration": "connector",
   "connector:readLocalizationBaseline": "connector",
   "connector:readNetBoxGeneration": "connector",
+  "connector:readRunningWorkflows": "connector",
   "devices:listForFloor": "reader",
   "floors:create": "editor",
   "floors:listAll": "reader",
@@ -47,7 +48,8 @@ const POLICY: Record<string, Role | "connector"> = {
   "presences:list": "reader",
   "presences:remove": "reader",
   "presences:updateOnlineUser": "reader",
-  "sites:ensureDefault": "editor",
+  "sites:ensureDefault": "admin",
+  "sites:findDefault": "reader",
   "sites:get": "reader",
   "sites:getForFloor": "reader",
   "sites:list": "reader",
@@ -96,6 +98,12 @@ const as = async (
   options?: { banned?: boolean; expired?: boolean },
 ) => t.withIdentity((await createSignedInUser(t, role, options)).identity);
 
+const building = (key: string) => ({
+  siteId: "site:arles",
+  objectId: `building:authorization:${key}`,
+  name: key,
+});
+
 describe("authorization", () => {
   it("every public function requires the role ADR 0004 gives it", async () => {
     expect(await publicFunctions()).toEqual(POLICY);
@@ -127,17 +135,24 @@ describe("authorization", () => {
     const t = testBackend();
     const reader = await as(t, "reader");
     expect(await errorCode(reader.query(api.buildings.list, {}))).toBe("ok");
-    expect(await errorCode(reader.mutation(api.sites.ensureDefault, {}))).toBe(
-      "forbidden",
-    );
+    expect(
+      await errorCode(reader.mutation(api.buildings.create, building("r"))),
+    ).toBe("forbidden");
   });
 
-  it("lets an editor and an admin edit", async () => {
+  it("lets an editor and an admin edit, and only an admin create a site", async () => {
     const t = testBackend();
-    for (const role of ["editor", "admin"] as const) {
-      const caller = await as(t, role);
+    const editor = await as(t, "editor");
+    const admin = await as(t, "admin");
+    expect(await errorCode(editor.mutation(api.sites.ensureDefault, {}))).toBe(
+      "forbidden",
+    );
+    expect(await errorCode(admin.mutation(api.sites.ensureDefault, {}))).toBe(
+      "ok",
+    );
+    for (const [key, caller] of Object.entries({ editor, admin })) {
       expect(
-        await errorCode(caller.mutation(api.sites.ensureDefault, {})),
+        await errorCode(caller.mutation(api.buildings.create, building(key))),
       ).toBe("ok");
     }
   });
