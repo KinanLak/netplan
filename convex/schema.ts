@@ -808,6 +808,7 @@ export default defineSchema({
     userId: v.string(),
     displayName: v.string(),
     floorId: v.string(),
+    activeAt: v.number(),
     updatedAt: v.number(),
   })
     .index("by_client", ["clientId"])

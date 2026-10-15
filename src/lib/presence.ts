@@ -1,12 +1,15 @@
 import type { FloorId } from "@/types/map";
 
-/** A presence row as returned by `api.presences.list`, one per user. */
+/** A presence row as returned by `api.presences.list`, one per open page. */
 export interface RawPresence {
   clientId: string;
   userId: string;
   displayName: string;
   colorHue: number;
   floorId: string;
+  /** When the page last arrived on its floor or was brought back to view. */
+  activeAt: number;
+  /** Its last heartbeat. */
   updatedAt: number;
 }
 
@@ -27,10 +30,10 @@ export interface SelfPresence {
 export const PRESENCE_STALE_AFTER_MS = 5_000;
 
 /**
- * Collapse raw presences to one live entry per user, dropping rows older than
- * `now - staleAfterMs`. When this page is on a floor, the user's entry is
- * replaced with this page's, so it follows the current floor without waiting
- * for a heartbeat round-trip, even if another of their tabs spoke last.
+ * Collapse raw presences to one live entry per user: among the pages whose
+ * heartbeat is newer than `now - staleAfterMs`, the one the user was active
+ * on last. When this page is on a floor, the user's entry is this page's, so
+ * it follows the current floor without waiting for a round-trip.
  */
 export function activePresences(
   presences: ReadonlyArray<RawPresence>,
@@ -44,7 +47,7 @@ export function activePresences(
   for (const presence of presences) {
     if (presence.updatedAt < cutoff) continue;
     const current = byUser.get(presence.userId);
-    if (current && current.updatedAt >= presence.updatedAt) continue;
+    if (current && current.activeAt >= presence.activeAt) continue;
     byUser.set(presence.userId, {
       ...presence,
       isSelf: self?.userId === presence.userId,
@@ -58,6 +61,7 @@ export function activePresences(
       displayName: self.displayName,
       colorHue: self.colorHue,
       floorId: self.floorId,
+      activeAt: now,
       updatedAt: now,
       isSelf: true,
     });

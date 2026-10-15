@@ -50,10 +50,12 @@ describe("presences", () => {
     await alice.client.mutation(api.presences.updateOnlineUser, {
       clientId: "client:alice",
       floorId: floorA,
+      active: false,
     });
     await bob.client.mutation(api.presences.updateOnlineUser, {
       clientId: "client:bob",
       floorId: floorB,
+      active: false,
     });
 
     const byUser = new Map(
@@ -72,30 +74,59 @@ describe("presences", () => {
     expect(byUser.get(bob.userId)?.floorId).toBe(floorB);
   });
 
-  it("keeps one row per page and lists a user once across tabs", async () => {
+  it("keeps one row per page and lists every open page", async () => {
     const t = testBackend();
     const floorA = await freshFloor(t);
     const floorB = await freshFloor(t);
     const alice = await signedIn(t);
 
-    await alice.client.mutation(api.presences.updateOnlineUser, {
-      clientId: "client:tab-1",
-      floorId: floorA,
-    });
-    await alice.client.mutation(api.presences.updateOnlineUser, {
-      clientId: "client:tab-1",
-      floorId: floorA,
-    });
-    setSystemTime(Date.now() + 1_000);
-    await alice.client.mutation(api.presences.updateOnlineUser, {
-      clientId: "client:tab-2",
-      floorId: floorB,
-    });
+    for (const [clientId, floorId] of [
+      ["client:tab-1", floorA],
+      ["client:tab-1", floorA],
+      ["client:tab-2", floorB],
+    ]) {
+      await alice.client.mutation(api.presences.updateOnlineUser, {
+        clientId,
+        floorId,
+        active: false,
+      });
+    }
 
     expect(await rows(t)).toHaveLength(2);
     const presences = await alice.client.query(api.presences.list, {});
-    expect(presences).toHaveLength(1);
-    expect(presences[0]?.clientId).toBe("client:tab-2");
+    expect(presences.map((p) => p.clientId).toSorted()).toEqual([
+      "client:tab-1",
+      "client:tab-2",
+    ]);
+  });
+
+  it("marks a page active when it arrives, changes floor or is brought back, not at each heartbeat", async () => {
+    const t = testBackend();
+    const floorA = await freshFloor(t);
+    const floorB = await freshFloor(t);
+    const alice = await signedIn(t);
+    const start = Date.now();
+    const beat = async (at: number, floorId: string, active: boolean) => {
+      setSystemTime(start + at);
+      await alice.client.mutation(api.presences.updateOnlineUser, {
+        clientId: "client:tab",
+        floorId,
+        active,
+      });
+      const [row] = await rows(t);
+      return { activeAt: row.activeAt, updatedAt: row.updatedAt };
+    };
+
+    expect(await beat(0, floorA, false)).toEqual({
+      activeAt: start,
+      updatedAt: start,
+    });
+    expect(await beat(2_000, floorA, false)).toEqual({
+      activeAt: start,
+      updatedAt: start + 2_000,
+    });
+    expect((await beat(4_000, floorA, true)).activeAt).toBe(start + 4_000);
+    expect((await beat(6_000, floorB, false)).activeAt).toBe(start + 6_000);
   });
 
   it("clears a user's abandoned pages at their next heartbeat, not others'", async () => {
@@ -113,6 +144,7 @@ describe("presences", () => {
           userId,
           displayName: "Old",
           floorId,
+          activeAt: 0,
           updatedAt: 0,
         });
       }
@@ -121,6 +153,7 @@ describe("presences", () => {
     await alice.client.mutation(api.presences.updateOnlineUser, {
       clientId: "client:alice-open",
       floorId,
+      active: false,
     });
 
     expect((await rows(t)).map((p) => p.clientId).toSorted()).toEqual([
@@ -138,6 +171,7 @@ describe("presences", () => {
     await alice.client.mutation(api.presences.updateOnlineUser, {
       clientId: "client:alice",
       floorId,
+      active: false,
     });
     await bob.client.mutation(api.presences.remove, {
       clientId: "client:alice",
@@ -159,6 +193,7 @@ describe("presences", () => {
       await alice.client.mutation(api.presences.updateOnlineUser, {
         clientId: "client:alice",
         floorId: "floor:missing",
+        active: false,
       });
     } catch (error) {
       message = error instanceof Error ? error.message : String(error);

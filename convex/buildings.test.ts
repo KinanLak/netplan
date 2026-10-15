@@ -156,6 +156,7 @@ describe("buildings", () => {
         userId: "user:a",
         displayName: "A",
         floorId,
+        activeAt: 0,
         updatedAt: 0,
       });
       await ctx.db.insert("clientOperations", {

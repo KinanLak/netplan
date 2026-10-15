@@ -144,6 +144,7 @@ describe("floors", () => {
         userId: "user:a",
         displayName: "A",
         floorId,
+        activeAt: Date.now(),
         updatedAt: Date.now(),
       });
     });

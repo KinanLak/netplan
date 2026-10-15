@@ -40,13 +40,26 @@ export function usePresence(floorId: FloorId | null): Array<ActivePresence> {
       return;
     }
 
+    // Coming back to the page tells the server this is where the user is now,
+    // so their avatar follows them across tabs and devices.
+    let active = true;
+    const markActive = () => {
+      if (document.visibilityState === "visible") active = true;
+    };
     const publish = () => {
-      void updateOnlineUser({ clientId, floorId });
+      void updateOnlineUser({ clientId, floorId, active });
+      active = false;
     };
 
     publish();
     const interval = window.setInterval(publish, HEARTBEAT_MS);
-    return () => window.clearInterval(interval);
+    window.addEventListener("focus", markActive);
+    document.addEventListener("visibilitychange", markActive);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", markActive);
+      document.removeEventListener("visibilitychange", markActive);
+    };
   }, [floorId, identity, removePresence, updateOnlineUser]);
 
   useEffect(() => {

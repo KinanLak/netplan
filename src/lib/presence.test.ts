@@ -9,6 +9,7 @@ const raw = (over: Partial<RawPresence>): RawPresence => ({
   displayName: "Name",
   colorHue: 100,
   floorId: "floor:a",
+  activeAt: 1_000,
   updatedAt: 1_000,
   ...over,
 });
@@ -35,23 +36,53 @@ describe("activePresences", () => {
     expect(result.map((p) => p.userId)).toEqual(["fresh"]);
   });
 
-  it("keeps the latest row per user, whichever tab it came from", () => {
+  it("shows a user on the page they were active on last, not the one that spoke last", () => {
     const result = activePresences(
       [
         raw({
           userId: "bob",
-          clientId: "tab-1",
+          clientId: "idle-tab",
           floorId: "floor:b",
-          updatedAt: 9_500,
+          activeAt: 2_000,
+          updatedAt: 9_900,
         }),
-        raw({ userId: "bob", clientId: "tab-2", updatedAt: 9_000 }),
+        raw({
+          userId: "bob",
+          clientId: "used-tab",
+          activeAt: 8_000,
+          updatedAt: 9_000,
+        }),
       ],
       null,
       10_000,
       5_000,
     );
     expect(result).toHaveLength(1);
-    expect(result[0]?.floorId).toBe("floor:b");
+    expect(result[0]?.clientId).toBe("used-tab");
+  });
+
+  it("falls back to another page when the last active one stopped", () => {
+    const result = activePresences(
+      [
+        raw({
+          userId: "bob",
+          clientId: "closed-tab",
+          activeAt: 4_000,
+          updatedAt: 4_000,
+        }),
+        raw({
+          userId: "bob",
+          clientId: "open-tab",
+          floorId: "floor:b",
+          activeAt: 1_000,
+          updatedAt: 9_000,
+        }),
+      ],
+      null,
+      10_000,
+      5_000,
+    );
+    expect(result.map((p) => p.clientId)).toEqual(["open-tab"]);
   });
 
   it("injects self with fresh data on its current floor", () => {
