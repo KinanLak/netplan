@@ -1,10 +1,12 @@
 import { describe, expect, it } from "bun:test";
 import { ConvexError } from "convex/values";
 import {
+  forgotPasswordErrorMessage,
   isEmail,
   isForbidden,
   isSessionLost,
   loginErrorMessage,
+  resetPasswordErrorMessage,
   safeRedirect,
 } from "./login";
 
@@ -73,5 +75,23 @@ describe("isForbidden", () => {
     );
     expect(isForbidden(new ConvexError("forbidden"))).toBe(false);
     expect(isForbidden(new Error("forbidden"))).toBe(false);
+  });
+});
+
+describe("password reset messages", () => {
+  it("tells a rate-limited user to wait rather than retry", () => {
+    expect(forgotPasswordErrorMessage({ status: 429 })).toContain("Réessayez");
+    expect(resetPasswordErrorMessage({ status: 429 })).toContain(
+      "quelques minutes",
+    );
+  });
+
+  it("says what is wrong with a refused password", () => {
+    expect(
+      resetPasswordErrorMessage({ status: 400, code: "PASSWORD_TOO_SHORT" }),
+    ).toContain("8 caractères");
+    expect(
+      resetPasswordErrorMessage({ status: 400, code: "PASSWORD_TOO_LONG" }),
+    ).toContain("trop long");
   });
 });

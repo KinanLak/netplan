@@ -42,6 +42,32 @@ export function loginErrorMessage(error: {
   return "La connexion a échoué. Réessayez.";
 }
 
+/** better-auth's default, which Netplan keeps. */
+export const MIN_PASSWORD_LENGTH = 8;
+
+export function forgotPasswordErrorMessage(error: { status?: number }): string {
+  if (error.status === 429) {
+    return "Trop de demandes. Réessayez dans quelques minutes.";
+  }
+  return "La demande a échoué. Réessayez.";
+}
+
+export function resetPasswordErrorMessage(error: {
+  status?: number;
+  code?: string;
+}): string {
+  if (error.status === 429) {
+    return "Trop de tentatives. Réessayez dans quelques minutes.";
+  }
+  if (error.code === "PASSWORD_TOO_SHORT") {
+    return `Le mot de passe doit compter au moins ${MIN_PASSWORD_LENGTH} caractères.`;
+  }
+  if (error.code === "PASSWORD_TOO_LONG") {
+    return "Ce mot de passe est trop long.";
+  }
+  return "Le mot de passe n'a pas pu être enregistré. Réessayez.";
+}
+
 /**
  * The error a Convex function throws once the session behind a still-valid
  * token is gone: signed out elsewhere, expired or disabled.
