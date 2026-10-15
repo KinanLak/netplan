@@ -1,0 +1,175 @@
+# Netplan, self-hosted (ADR 0020). Copy .env.example to .env, fill it, then:
+#   docker compose up -d --build
+# docs/operations/ has the install, upgrade, backup and monitoring procedures.
+#
+# Only the edge publishes a port. It routes by host name and answers to every
+# public host name inside the network too, so one set of URLs works from
+# browsers and from containers.
+name: netplan
+
+x-convex-url: &convex-url ${NETPLAN_SCHEME:-http}://convex.${NETPLAN_DOMAIN:-netplan.localhost}:${NETPLAN_PORT:-8480}
+x-convex-site-url: &convex-site-url ${NETPLAN_SCHEME:-http}://convex-site.${NETPLAN_DOMAIN:-netplan.localhost}:${NETPLAN_PORT:-8480}
+
+services:
+  edge:
+    image: caddy:2.11.7-alpine
+    restart: unless-stopped
+    labels: { netplan.role: edge }
+    environment:
+      NETPLAN_SCHEME: ${NETPLAN_SCHEME:-http}
+      NETPLAN_DOMAIN: ${NETPLAN_DOMAIN:-netplan.localhost}
+      NETPLAN_PORT: ${NETPLAN_PORT:-8480}
+    # The same port inside and out: the public URLs carry it.
+    ports:
+      - ${NETPLAN_BIND_ADDRESS:-127.0.0.1}:${NETPLAN_PORT:-8480}:${NETPLAN_PORT:-8480}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - edge-data:/data
+    networks:
+      default:
+        aliases:
+          - ${NETPLAN_DOMAIN:-netplan.localhost}
+          - convex.${NETPLAN_DOMAIN:-netplan.localhost}
+          - convex-site.${NETPLAN_DOMAIN:-netplan.localhost}
+          - convex-dashboard.${NETPLAN_DOMAIN:-netplan.localhost}
+          - keycloak.${NETPLAN_DOMAIN:-netplan.localhost}
+          - mail.${NETPLAN_DOMAIN:-netplan.localhost}
+
+  app:
+    image: netplan-app:${NETPLAN_VERSION:-local}
+    build:
+      context: ..
+      target: app
+      labels: { netplan.role: app }
+    restart: unless-stopped
+    labels: { netplan.role: app }
+    # Bun sends every `*.localhost` name to loopback, ignoring the edge's
+    # aliases; in the edge's network namespace, loopback is the edge.
+    network_mode: service:edge
+    environment:
+      CONVEX_URL: *convex-url
+      CONVEX_SITE_URL: *convex-site-url
+    depends_on:
+      convex-deploy: { condition: service_completed_successfully }
+
+  postgres:
+    image: postgres:17.11-alpine
+    restart: unless-stopped
+    labels: { netplan.role: postgres }
+    environment:
+      POSTGRES_USER: netplan
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: netplan
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "netplan", "-d", "netplan"]
+      interval: 5s
+      retries: 20
+
+  convex-backend:
+    image: ghcr.io/get-convex/convex-backend:72ce13c379fe6dbdfc305bc8ad699c5663c68c2a
+    restart: unless-stopped
+    labels: { netplan.role: convex-backend }
+    stop_signal: SIGINT
+    stop_grace_period: 10s
+    environment:
+      # The database is INSTANCE_NAME with `-` as `_`: here `netplan`.
+      INSTANCE_NAME: netplan
+      INSTANCE_SECRET: ${INSTANCE_SECRET:?set INSTANCE_SECRET in .env}
+      CONVEX_CLOUD_ORIGIN: *convex-url
+      CONVEX_SITE_ORIGIN: *convex-site-url
+      POSTGRES_URL: postgresql://netplan:${POSTGRES_PASSWORD}@postgres:5432
+      DO_NOT_REQUIRE_SSL: "1"
+      DISABLE_BEACON: "true"
+    volumes:
+      - convex-data:/convex/data
+    depends_on:
+      postgres: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:3210/version"]
+      interval: 5s
+      start_period: 10s
+      retries: 30
+
+  # Deploys the functions and the variables listed in convex-env.txt, then
+  # exits. `docker compose up` runs it again on every start.
+  convex-deploy:
+    image: netplan-functions:${NETPLAN_VERSION:-local}
+    build:
+      context: ..
+      target: functions
+      labels: { netplan.role: convex-deploy }
+    labels: { netplan.role: convex-deploy }
+    restart: "no"
+    environment:
+      CONVEX_SELF_HOSTED_URL: http://convex-backend:3210
+      INSTANCE_NAME: netplan
+      INSTANCE_SECRET: ${INSTANCE_SECRET:?set INSTANCE_SECRET in .env}
+      # Every name in convex-env.txt; empty ones are left as they are.
+      NETBOX_URL: ${NETBOX_URL:-}
+      NETBOX_TOKEN: ${NETBOX_TOKEN:-}
+      LIBRENMS_URL: ${LIBRENMS_URL:-}
+      LIBRENMS_TOKEN: ${LIBRENMS_TOKEN:-}
+      NETPLAN_CONNECTOR_SECRET: ${NETPLAN_CONNECTOR_SECRET:-}
+      INTEGRATION_SCHEDULER_ENABLED: ${INTEGRATION_SCHEDULER_ENABLED:-}
+      INTEGRATION_MANUAL_REFRESH_ENABLED: ${INTEGRATION_MANUAL_REFRESH_ENABLED:-}
+      ALLOW_DEV_SEED: ${ALLOW_DEV_SEED:-}
+    depends_on:
+      convex-backend: { condition: service_healthy }
+
+  convex-dashboard:
+    image: ghcr.io/get-convex/convex-dashboard:72ce13c379fe6dbdfc305bc8ad699c5663c68c2a
+    restart: unless-stopped
+    labels: { netplan.role: convex-dashboard }
+    stop_signal: SIGINT
+    environment:
+      NEXT_PUBLIC_DEPLOYMENT_URL: *convex-url
+      NEXT_PUBLIC_LOAD_MONACO_INTERNALLY: "true"
+    depends_on:
+      convex-backend: { condition: service_healthy }
+
+  # Profile `local`: an identity provider and a mail catcher for evaluation
+  # and tests. Production uses its own.
+  keycloak:
+    profiles: [local]
+    image: netplan-keycloak:${NETPLAN_VERSION:-local}
+    build:
+      context: ./keycloak
+      labels: { netplan.role: keycloak }
+    restart: unless-stopped
+    labels: { netplan.role: keycloak }
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?set KEYCLOAK_ADMIN_PASSWORD in .env}
+      KC_HOSTNAME: ${NETPLAN_SCHEME:-http}://keycloak.${NETPLAN_DOMAIN:-netplan.localhost}:${NETPLAN_PORT:-8480}
+      KC_PROXY_HEADERS: xforwarded
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+    healthcheck:
+      # The image has no curl.
+      test:
+        - CMD-SHELL
+        - exec 3<>/dev/tcp/localhost/9000 && printf 'GET /health/ready HTTP/1.0\r\n\r\n' >&3 && grep -q 'HTTP/1.0 200' <&3
+      interval: 5s
+      start_period: 30s
+      retries: 30
+
+  mailpit:
+    profiles: [local]
+    image: axllent/mailpit:v1.31.6
+    restart: unless-stopped
+    labels: { netplan.role: mailpit }
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+
+networks:
+  default:
+    labels: { netplan.role: network }
+
+volumes:
+  edge-data: { labels: { netplan.role: edge } }
+  postgres-data: { labels: { netplan.role: postgres } }
+  convex-data: { labels: { netplan.role: convex-backend } }
