@@ -7,36 +7,19 @@ import {
   size,
   wallColor,
 } from "./mapValidators";
+import { siteCadence } from "./siteValidators";
 
 export default defineSchema({
   sites: defineTable({
     objectId: v.string(),
-    configKey: v.string(),
-    displayName: v.string(),
+    name: v.string(),
     timezone: v.string(),
-    enabled: v.boolean(),
-    configVersion: v.number(),
-    dayStartMinute: v.number(),
-    dayEndMinute: v.number(),
-    netboxInstanceKey: v.string(),
-    netboxExternalSiteId: v.string(),
-    netboxExternalSiteSlug: v.string(),
-    libreNmsInstanceKey: v.string(),
-    libreNmsDevices: v.array(
-      v.object({
-        externalId: v.string(),
-        hostname: v.string(),
-        networkName: v.string(),
-        role: v.union(v.literal("access"), v.literal("core")),
-        localizationTarget: v.boolean(),
-      }),
-    ),
+    cadence: siteCadence,
+    automaticRefresh: v.boolean(),
+    manualRefresh: v.boolean(),
     createdAt: v.number(),
     updatedAt: v.number(),
-  })
-    .index("by_object_id", ["objectId"])
-    .index("by_config_key", ["configKey"])
-    .index("by_netbox_site", ["netboxInstanceKey", "netboxExternalSiteId"]),
+  }).index("by_object_id", ["objectId"]),
 
   buildings: defineTable({
     objectId: v.string(),

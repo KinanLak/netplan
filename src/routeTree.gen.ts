@@ -13,8 +13,12 @@ import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as HealthRouteImport } from './routes/health'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthedIndexRouteImport } from './routes/_authed/index'
+import { Route as AuthedAdminRouteImport } from './routes/_authed/admin'
 import { Route as AuthedLogoRouteImport } from './routes/_authed/logo'
+import { Route as AuthedAdminIndexRouteImport } from './routes/_authed/admin/index'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as AuthedAdminSitesIndexRouteImport } from './routes/_authed/admin/sites/index'
+import { Route as AuthedAdminSitesSiteIdRouteImport } from './routes/_authed/admin/sites/$siteId'
 
 const AuthedRoute = AuthedRouteImport.update({
   id: '/_authed',
@@ -35,23 +39,47 @@ const AuthedIndexRoute = AuthedIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthedRoute,
 } as any)
+const AuthedAdminRoute = AuthedAdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => AuthedRoute,
+} as any)
 const AuthedLogoRoute = AuthedLogoRouteImport.update({
   id: '/logo',
   path: '/logo',
   getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedAdminIndexRoute = AuthedAdminIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AuthedAdminRoute,
 } as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthedAdminSitesIndexRoute = AuthedAdminSitesIndexRouteImport.update({
+  id: '/sites/',
+  path: '/sites/',
+  getParentRoute: () => AuthedAdminRoute,
+} as any)
+const AuthedAdminSitesSiteIdRoute = AuthedAdminSitesSiteIdRouteImport.update({
+  id: '/sites/$siteId',
+  path: '/sites/$siteId',
+  getParentRoute: () => AuthedAdminRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthedIndexRoute
   '/health': typeof HealthRoute
   '/login': typeof LoginRoute
+  '/admin': typeof AuthedAdminRouteWithChildren
   '/logo': typeof AuthedLogoRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/admin/': typeof AuthedAdminIndexRoute
+  '/admin/sites/$siteId': typeof AuthedAdminSitesSiteIdRoute
+  '/admin/sites/': typeof AuthedAdminSitesIndexRoute
 }
 export interface FileRoutesByTo {
   '/health': typeof HealthRoute
@@ -59,29 +87,57 @@ export interface FileRoutesByTo {
   '/logo': typeof AuthedLogoRoute
   '/': typeof AuthedIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/admin': typeof AuthedAdminIndexRoute
+  '/admin/sites/$siteId': typeof AuthedAdminSitesSiteIdRoute
+  '/admin/sites': typeof AuthedAdminSitesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_authed': typeof AuthedRouteWithChildren
   '/health': typeof HealthRoute
   '/login': typeof LoginRoute
+  '/_authed/admin': typeof AuthedAdminRouteWithChildren
   '/_authed/logo': typeof AuthedLogoRoute
   '/_authed/': typeof AuthedIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/_authed/admin/': typeof AuthedAdminIndexRoute
+  '/_authed/admin/sites/$siteId': typeof AuthedAdminSitesSiteIdRoute
+  '/_authed/admin/sites/': typeof AuthedAdminSitesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/health' | '/login' | '/logo' | '/api/auth/$'
+  fullPaths:
+    | '/'
+    | '/health'
+    | '/login'
+    | '/admin'
+    | '/logo'
+    | '/api/auth/$'
+    | '/admin/'
+    | '/admin/sites/$siteId'
+    | '/admin/sites/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/health' | '/login' | '/logo' | '/' | '/api/auth/$'
+  to:
+    | '/health'
+    | '/login'
+    | '/logo'
+    | '/'
+    | '/api/auth/$'
+    | '/admin'
+    | '/admin/sites/$siteId'
+    | '/admin/sites'
   id:
     | '__root__'
     | '/_authed'
     | '/health'
     | '/login'
+    | '/_authed/admin'
     | '/_authed/logo'
     | '/_authed/'
     | '/api/auth/$'
+    | '/_authed/admin/'
+    | '/_authed/admin/sites/$siteId'
+    | '/_authed/admin/sites/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -121,12 +177,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedIndexRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/_authed/admin': {
+      id: '/_authed/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AuthedAdminRouteImport
+      parentRoute: typeof AuthedRoute
+    }
     '/_authed/logo': {
       id: '/_authed/logo'
       path: '/logo'
       fullPath: '/logo'
       preLoaderRoute: typeof AuthedLogoRouteImport
       parentRoute: typeof AuthedRoute
+    }
+    '/_authed/admin/': {
+      id: '/_authed/admin/'
+      path: '/'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AuthedAdminIndexRouteImport
+      parentRoute: typeof AuthedAdminRoute
     }
     '/api/auth/$': {
       id: '/api/auth/$'
@@ -135,15 +205,47 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authed/admin/sites/': {
+      id: '/_authed/admin/sites/'
+      path: '/sites'
+      fullPath: '/admin/sites/'
+      preLoaderRoute: typeof AuthedAdminSitesIndexRouteImport
+      parentRoute: typeof AuthedAdminRoute
+    }
+    '/_authed/admin/sites/$siteId': {
+      id: '/_authed/admin/sites/$siteId'
+      path: '/sites/$siteId'
+      fullPath: '/admin/sites/$siteId'
+      preLoaderRoute: typeof AuthedAdminSitesSiteIdRouteImport
+      parentRoute: typeof AuthedAdminRoute
+    }
   }
 }
 
+interface AuthedAdminRouteChildren {
+  AuthedAdminIndexRoute: typeof AuthedAdminIndexRoute
+  AuthedAdminSitesSiteIdRoute: typeof AuthedAdminSitesSiteIdRoute
+  AuthedAdminSitesIndexRoute: typeof AuthedAdminSitesIndexRoute
+}
+
+const AuthedAdminRouteChildren: AuthedAdminRouteChildren = {
+  AuthedAdminIndexRoute: AuthedAdminIndexRoute,
+  AuthedAdminSitesSiteIdRoute: AuthedAdminSitesSiteIdRoute,
+  AuthedAdminSitesIndexRoute: AuthedAdminSitesIndexRoute,
+}
+
+const AuthedAdminRouteWithChildren = AuthedAdminRoute._addFileChildren(
+  AuthedAdminRouteChildren,
+)
+
 interface AuthedRouteChildren {
+  AuthedAdminRoute: typeof AuthedAdminRouteWithChildren
   AuthedLogoRoute: typeof AuthedLogoRoute
   AuthedIndexRoute: typeof AuthedIndexRoute
 }
 
 const AuthedRouteChildren: AuthedRouteChildren = {
+  AuthedAdminRoute: AuthedAdminRouteWithChildren,
   AuthedLogoRoute: AuthedLogoRoute,
   AuthedIndexRoute: AuthedIndexRoute,
 }

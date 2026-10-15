@@ -45,8 +45,13 @@ signed-in user's name, one entry per user however many tabs they have open.
 
 ## Sites
 
-The site is still a single hard-coded default (`convex/sites.ts`); the plan of
-the deleted localization pipeline is frozen in
+Admins create, configure and remove sites under `/admin` (ADR 0023). A site
+holds its name, unique ignoring case, its time zone and the cadence its
+collection cycle will follow; `src/sites/settings.ts` holds the rules both the
+form and the server apply. A site with a building cannot be removed. The map
+shows the site the `?site=` parameter names, the first one by name otherwise,
+and the sidebar switches between them. No site has an integration yet. The
+plan of the deleted localization pipeline is frozen in
 [`docs/history/2026-07-computer-location-refresh/`](../history/2026-07-computer-location-refresh/README.md).
 
 ## Deployment
@@ -87,7 +92,8 @@ Built by lot F (ADRs 0018 and 0019).
   drives it with Playwright (`e2e/`).
 - `bun run dev:agent` runs one self-hosted Convex backend per worktree in
   Docker, with SQLite in a volume, ports derived from the worktree path, and a
-  generated `.env.local`; a Mailpit next to it catches every mail it sends. It seeds a fictional, disabled demo site through
+  generated `.env.local`; a Mailpit next to it catches every mail it sends. It
+  seeds a fictional demo site through
   `applyMapOperation`, the same path as user edits, behind `ALLOW_DEV_SEED`.
 - zipzoup reviews each pull request when it is marked ready; agents merge
   their own once CI is green and no P0 or P1 finding is open.

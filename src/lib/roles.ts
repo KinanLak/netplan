@@ -11,3 +11,8 @@ export const ROLE_LABELS: Record<Role, string> = {
 export function canEditMap(role: unknown): boolean {
   return hasRole(roleOf(role), "editor");
 }
+
+/** Admin manages users, sites and integrations; the server enforces it. */
+export function isAdmin(role: unknown): boolean {
+  return hasRole(roleOf(role), "admin");
+}

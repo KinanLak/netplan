@@ -27,16 +27,15 @@ describe("dev seed", () => {
     expect(await t.query(api.sites.list, {})).toEqual([]);
   });
 
-  it("loads a disabled demo site whose map passes server validation", async () => {
+  it("loads a demo site whose map passes server validation", async () => {
     const t = await signedInTest();
     process.env.ALLOW_DEV_SEED = "true";
     const { buildingId, floorIds } = await t.mutation(internal.dev.seed, {});
 
     const sites = await t.query(api.sites.list, {});
-    expect(sites.map((site) => [site.id, site.enabled])).toEqual([
-      ["site:demo", false],
+    expect(sites.map((site) => [site.id, site.name])).toEqual([
+      ["site:demo", "Site de démonstration"],
     ]);
-    expect(sites[0]?.libreNmsDevices).toEqual([]);
     const floors = await t.query(api.floors.listForBuilding, { buildingId });
     expect(floors.map((floor) => floor.id).sort()).toEqual(
       [...floorIds].sort(),
@@ -87,9 +86,12 @@ describe("dev seed", () => {
     const { floorIds } = await t.mutation(internal.dev.seed, {});
     const seeded = await Promise.all(floorIds.map((id) => countFloor(t, id)));
     await t.mutation(api.buildings.clearMap, { siteId: "site:demo" });
-    await t.mutation(internal.sites.setEnabled, {
-      siteId: "site:demo",
-      enabled: true,
+    await t.run(async (ctx) => {
+      const site = await ctx.db
+        .query("sites")
+        .withIndex("by_object_id", (q) => q.eq("objectId", "site:demo"))
+        .unique();
+      if (site) await ctx.db.patch(site._id, { name: "Démo modifiée" });
     });
 
     await t.mutation(internal.dev.seed, {});
@@ -98,8 +100,8 @@ describe("dev seed", () => {
       seeded,
     );
     const sites = await t.query(api.sites.list, {});
-    expect(sites.map((site) => [site.id, site.enabled])).toEqual([
-      ["site:demo", true],
+    expect(sites.map((site) => [site.id, site.name])).toEqual([
+      ["site:demo", "Démo modifiée"],
     ]);
   });
 });

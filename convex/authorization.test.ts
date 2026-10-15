@@ -34,11 +34,12 @@ const POLICY: Record<string, Role> = {
   "presences:list": "reader",
   "presences:remove": "reader",
   "presences:updateOnlineUser": "reader",
-  "sites:ensureDefault": "admin",
-  "sites:findDefault": "reader",
-  "sites:get": "reader",
-  "sites:getForFloor": "reader",
+  "sites:create": "admin",
+  "sites:getSettings": "admin",
   "sites:list": "reader",
+  "sites:listSettings": "admin",
+  "sites:remove": "admin",
+  "sites:update": "admin",
   "users:me": "reader",
   "walls:listForFloor": "reader",
 };
@@ -84,8 +85,10 @@ const as = async (
   options?: { banned?: boolean; expired?: boolean },
 ) => t.withIdentity((await createSignedInUser(t, role, options)).identity);
 
-const building = (key: string) => ({
-  siteId: "site:arles",
+const SITE = { name: "Arles", timezone: "Europe/Paris" };
+
+const building = (key: string, siteId = "site:missing") => ({
+  siteId,
   objectId: `building:authorization:${key}`,
   name: key,
 });
@@ -100,7 +103,7 @@ describe("authorization", () => {
     expect(await errorCode(t.query(api.buildings.list, {}))).toBe(
       "unauthenticated",
     );
-    expect(await errorCode(t.mutation(api.sites.ensureDefault, {}))).toBe(
+    expect(await errorCode(t.mutation(api.sites.create, SITE))).toBe(
       "unauthenticated",
     );
   });
@@ -130,15 +133,15 @@ describe("authorization", () => {
     const t = testBackend();
     const editor = await as(t, "editor");
     const admin = await as(t, "admin");
-    expect(await errorCode(editor.mutation(api.sites.ensureDefault, {}))).toBe(
+    expect(await errorCode(editor.mutation(api.sites.create, SITE))).toBe(
       "forbidden",
     );
-    expect(await errorCode(admin.mutation(api.sites.ensureDefault, {}))).toBe(
-      "ok",
-    );
+    const siteId = await admin.mutation(api.sites.create, SITE);
     for (const [key, caller] of Object.entries({ editor, admin })) {
       expect(
-        await errorCode(caller.mutation(api.buildings.create, building(key))),
+        await errorCode(
+          caller.mutation(api.buildings.create, building(key, siteId)),
+        ),
       ).toBe("ok");
     }
   });
@@ -167,7 +170,7 @@ describe("authorization", () => {
     });
     const caller = t.withIdentity(identity);
     expect((await caller.query(api.users.me, {})).role).toBe("reader");
-    expect(await errorCode(caller.mutation(api.sites.ensureDefault, {}))).toBe(
+    expect(await errorCode(caller.mutation(api.sites.create, SITE))).toBe(
       "forbidden",
     );
   });

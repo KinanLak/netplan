@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, setSystemTime } from "bun:test";
 import { api } from "./_generated/api";
 import {
   createSignedInUser,
-  ensureDefaultSite,
+  createTestSite,
   testBackend,
 } from "./_test/auth.setup";
 import type { TestBackend } from "./_test/auth.setup";
@@ -19,7 +19,7 @@ async function signedIn(t: TestBackend, role: Role = "reader") {
 async function freshFloor(t: TestBackend) {
   counter += 1;
   const { client: editor } = await signedIn(t, "admin");
-  const siteId = await ensureDefaultSite(editor);
+  const siteId = await createTestSite(editor);
   const buildingId = await editor.mutation(api.buildings.create, {
     siteId,
     objectId: `building:presence:${counter}`,
