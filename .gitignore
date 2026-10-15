@@ -2,8 +2,6 @@ node_modules
 .DS_Store
 dist
 dist-ssr
-build
-artifacts
 *.local
 count.txt
 .env
@@ -15,6 +13,5 @@ count.txt
 todos.json
 issues/
 .vscode/settings.json
-.vercel
 playwright-report
 test-results

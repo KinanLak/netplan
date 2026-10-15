@@ -19,10 +19,8 @@ socket where the network last saw it.
 - **Backend** (`convex/`): Convex functions and schema. Convex owns every
   durable fact: sites, buildings, floors, devices, walls, links, presence,
   and the integration tables.
-- **Desktop app**: an Electrobun wrapper around the same web app
-  (`electrobun.config.ts`). Dropped by ADR 0002.
-- **Hosting**: Convex Cloud for the backend and Vercel for the web app
-  (`vercel.json`). Replaced by self-hosted Docker (ADR 0002).
+- **Hosting**: moving to a self-hosted Docker deployment (lot 0, ADR 0002,
+  ADR 0020). The Vercel configuration and the Electrobun desktop app are gone.
 
 ## Map editing
 

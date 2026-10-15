@@ -1,10 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import {
-  classifyWebGpuAdapter,
   classifyGraphicsRenderer,
   detectGraphicsBrowser,
-  detectGraphicsRuntime,
-} from "./graphicsAcceleration";
+} from "@/lib/graphicsAcceleration";
 
 describe("graphicsAcceleration", () => {
   it("classifies common software renderers", () => {
@@ -45,31 +43,5 @@ describe("graphicsAcceleration", () => {
     expect(
       detectGraphicsBrowser("Mozilla/5.0 Version/17.0 Safari/605.1.15"),
     ).toBe("safari");
-  });
-
-  it("detects the normal browser runtime outside Electrobun", () => {
-    expect(detectGraphicsRuntime()).toBe("browser");
-  });
-
-  it("classifies WebGPU fallback adapters as software", () => {
-    expect(classifyWebGpuAdapter({ isFallbackAdapter: true }).status).toBe(
-      "supposed-software",
-    );
-  });
-
-  it("classifies WebGPU adapters as hardware by default", () => {
-    expect(
-      classifyWebGpuAdapter({
-        isFallbackAdapter: false,
-        info: { vendor: "Apple", architecture: "Metal" },
-      }),
-    ).toEqual({
-      status: "supposed-hardware",
-      renderer: "Apple Metal",
-      browser: "unknown",
-      runtime: "electrobun",
-      reason:
-        "WebGPU is available through Chromium without a fallback adapter.",
-    });
   });
 });

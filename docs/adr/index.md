@@ -30,3 +30,4 @@ record's Source section points to its questions in the
 - **[0017 — The repository stays public, reviewed by zipzoup on maintainers' pull requests](0017-github-review.md)**
 - **[0018 — Each worktree runs its own local Convex backend with seeded data, and CI runs the same backend](0018-agent-dev-environment.md)**
 - **[0019 — Agents ship through stacked pull requests, a CI gate and zipzoup review, and merge their own work](0019-delivery-workflow.md)**
+- **[0020 — One runtime-configured app image, deployed with Docker Compose behind a host-routing edge](0020-deployment.md)**

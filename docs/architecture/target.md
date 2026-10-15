@@ -17,7 +17,6 @@ described in [Current](current.md).
   readiness.
 - A compose stack with the self-hosted Convex backend on Postgres, the Convex
   dashboard, the app, Keycloak and Mailpit (ADR 0002).
-- Vercel and the Electrobun desktop app are removed.
 
 ## Accounts (lot 1)
 
