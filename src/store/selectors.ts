@@ -24,6 +24,9 @@ export const useActiveDrawTool = () => useMapStore((s) => s.activeDrawTool);
 export const useSelectedWallColor = () =>
   useMapStore((s) => s.selectedWallColor);
 export const useWallEraserSize = () => useMapStore((s) => s.wallEraserSize);
+export const useIsOverlayPanelOpen = () =>
+  useMapStore((s) => s.isOverlayPanelOpen);
+export const useIsOverlayHidden = () => useMapStore((s) => s.isOverlayHidden);
 export const useHighlightedDeviceIds = () =>
   useMapStore((s) => s.highlightedDeviceIds);
 

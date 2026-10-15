@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { Layers01Icon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
 import { ShortcutHintAbsolute } from "@/components/ui/shortcut-hint";
 import {
@@ -14,6 +16,7 @@ import {
   useCurrentFloorId,
   useIsEditMode,
   useIsMultiSelectMode,
+  useIsOverlayPanelOpen,
   useSelectedDeviceIds,
   useSelectedWallColor,
 } from "@/store/selectors";
@@ -31,6 +34,7 @@ export default function Toolbar() {
   const isReady = useMapDocumentReady();
   const isMultiSelectMode = useIsMultiSelectMode();
   const selectedDeviceIds = useSelectedDeviceIds();
+  const isOverlayPanelOpen = useIsOverlayPanelOpen();
 
   const setActiveDrawTool = useMapStore((state) => state.setActiveDrawTool);
   const setSelectedWallColor = useMapStore(
@@ -40,6 +44,7 @@ export default function Toolbar() {
   const toggleMultiSelectMode = useMapStore(
     (state) => state.toggleMultiSelectMode,
   );
+  const setOverlayPanelOpen = useMapStore((state) => state.setOverlayPanelOpen);
   const [flashType, setFlashType] = useState<"undo" | "redo" | null>(null);
 
   useEffect(() => {
@@ -78,6 +83,12 @@ export default function Toolbar() {
     handleDrawToolClick("wall-brush"),
   );
   useShortcutIntentEffect("tool-room", () => handleDrawToolClick("room"));
+
+  const toggleOverlayPanel = () => {
+    if (!currentFloorId) return;
+    setOverlayPanelOpen(!isOverlayPanelOpen);
+  };
+  useShortcutIntentEffect("toggle-overlay-panel", toggleOverlayPanel);
 
   if (!isEditMode) return null;
 
@@ -191,6 +202,27 @@ export default function Toolbar() {
             })}
           </div>
         ) : null}
+
+        <div className="h-6 w-px bg-border" aria-hidden />
+        <div className="relative">
+          <Button
+            type="button"
+            variant={isOverlayPanelOpen ? "secondary" : "ghost"}
+            size="sm"
+            onClick={toggleOverlayPanel}
+            disabled={!currentFloorId}
+            aria-pressed={isOverlayPanelOpen}
+            className={cn("gap-2", isOverlayPanelOpen && "ring-2 ring-ring")}
+            title="Importer et régler le plan affiché sous l'étage"
+          >
+            <HugeiconsIcon icon={Layers01Icon} strokeWidth={2} />
+            Calque
+          </Button>
+          <ShortcutHintAbsolute
+            action="toggle-overlay-panel"
+            position="bottom-center"
+          />
+        </div>
       </div>
     </div>
   );
