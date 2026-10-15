@@ -7,7 +7,8 @@ let helpers: ReturnType<typeof convexBetterAuthReactStart> | undefined;
 // request time. CONVEX_SITE_URL is the Convex HTTP actions origin as this
 // server reaches it, which can differ from what the backend reports itself
 // as (ADR 0021).
-const auth = () => (helpers ??= convexBetterAuthReactStart(readRuntimeConfig(process.env)));
+const auth = () =>
+  (helpers ??= convexBetterAuthReactStart(readRuntimeConfig(process.env)));
 
 export const handler = (request: Request) => auth().handler(request);
 export const getToken = () => auth().getToken();

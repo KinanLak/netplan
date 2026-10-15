@@ -79,6 +79,11 @@ Convex token outlives a session ended elsewhere, so the signed-in layout
 sends the user back to the login page as soon as a function refuses the
 session.
 
+The backend checks each Convex token against its own JWKS, fetched from its
+public site URL. Where that URL does not answer from inside the backend's
+container, as with dev:agent's published ports, `AUTH_JWKS_URL` gives the
+address that does.
+
 better-auth rate-limits sign-in by client IP, which it reads from a
 single-address `X-Forwarded-For`; the edge must set that header. Token and
 session reads are not rate-limited: they need a valid session and run on
