@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { ReactFlowProvider } from "@xyflow/react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Edit01Icon, Tick01Icon, ViewIcon } from "@hugeicons/core-free-icons";
@@ -28,7 +28,10 @@ import {
   ShortcutIntentProvider,
   useShortcutIntentEffect,
 } from "@/hooks/use-shortcuts";
-import { useCanEdit } from "@/hooks/use-current-user";
+import { useCanEdit, useCurrentUser } from "@/hooks/use-current-user";
+import { buttonVariants } from "@/components/ui/button";
+import { isAdmin } from "@/lib/roles";
+import { siteSearch, useCurrentSite } from "@/sites/useCurrentSite";
 import { ShortcutsDialog } from "@/components/shortcuts-dialog";
 import { ShortcutHintAbsolute } from "@/components/ui/shortcut-hint";
 import { getNextConnectionHighlightIds } from "@/lib/shortcut-intents";
@@ -37,6 +40,7 @@ import { api } from "../../../convex/_generated/api";
 
 export const Route = createFileRoute("/_authed/")({
   ssr: false,
+  validateSearch: siteSearch,
   component: HomePage,
 });
 
@@ -51,7 +55,13 @@ function HomePage() {
 }
 
 function HomePageContent() {
-  const buildings = useQuery(api.buildings.list);
+  const { site: requestedSiteId } = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
+  const { site } = useCurrentSite();
+  const buildings = useQuery(
+    api.buildings.listForSite,
+    site ? { siteId: site.id } : "skip",
+  );
   const currentBuildingId = useCurrentBuildingId();
   const currentFloorId = useCurrentFloorId();
 
@@ -63,8 +73,18 @@ function HomePageContent() {
     currentBuildingId ? { buildingId: currentBuildingId } : "skip",
   );
 
+  // The URL always names the site shown, so a link or a reload keeps it.
   useEffect(() => {
-    if (!buildings || buildings.length === 0) return;
+    if (!site || site.id === requestedSiteId) return;
+    void navigate({ search: { site: site.id }, replace: true });
+  }, [site, requestedSiteId, navigate]);
+
+  useEffect(() => {
+    if (!buildings) return;
+    if (buildings.length === 0) {
+      if (currentBuildingId) setCurrentBuilding(null);
+      return;
+    }
     if (
       currentBuildingId &&
       buildings.some((building) => building.id === currentBuildingId)
@@ -95,6 +115,8 @@ function HomePageContent() {
     }
     setCurrentFloor(sortedFloors[0]?.id ?? null);
   }, [floors, sortedFloors, currentFloorId, setCurrentFloor]);
+
+  if (site === null) return <NoSite />;
 
   const isBootstrappingMap =
     buildings === undefined ||
@@ -280,5 +302,25 @@ function MapWorkspace({ sortedFloors }: { sortedFloors: Array<Floor> }) {
         <ShortcutsDialog hasRightDrawerOpen={Boolean(selectedDeviceId)} />
       </SidebarInset>
     </div>
+  );
+}
+
+function NoSite() {
+  const me = useCurrentUser();
+  const admin = me ? isAdmin(me.role) : false;
+  return (
+    <main className="flex h-screen w-screen flex-col items-center justify-center gap-3 bg-background p-6 text-center">
+      <h1 className="text-lg font-semibold">Aucun site</h1>
+      <p className="max-w-sm text-sm text-muted-foreground">
+        {admin
+          ? "Créez un premier site pour commencer à dessiner son plan."
+          : "Aucun site n'est encore configuré. Demandez à un administrateur d'en créer un."}
+      </p>
+      {admin ? (
+        <Link to="/admin/sites" className={buttonVariants()}>
+          Créer un site
+        </Link>
+      ) : null}
+    </main>
   );
 }

@@ -1,53 +1,115 @@
 import { describe, expect, it } from "bun:test";
-import { api, internal } from "./_generated/api";
-import { signedInTest } from "./_test/auth.setup";
+import { api } from "./_generated/api";
+import { createTestSite, signedInTest } from "./_test/auth.setup";
+import { DEFAULT_CADENCE } from "../src/sites/settings";
 
-const configuredSite = (key: string) => ({
-  objectId: `site:${key}`,
-  configKey: key,
-  displayName: key,
-  timezone: "Europe/Paris",
-  enabled: true,
-  dayStartMinute: 420,
-  dayEndMinute: 1200,
-  netboxInstanceKey: "netbox-main",
-  netboxExternalSiteId: key,
-  netboxExternalSiteSlug: key,
-  libreNmsInstanceKey: "librenms-main",
-  libreNmsDevices: [
-    {
-      externalId: "4",
-      hostname: `switch-${key}`,
-      networkName: "sw-access-01",
-      role: "access" as const,
-      localizationTarget: true,
-    },
-  ],
-});
+const arles = { name: "Arles", timezone: "Europe/Paris" };
 
 describe("sites", () => {
-  it("seeds the confirmed Arles identity idempotently", async () => {
-    const t = await signedInTest("admin");
-    const first = await t.mutation(api.sites.ensureDefault, {});
-    const second = await t.mutation(api.sites.ensureDefault, {});
-    const sites = await t.query(api.sites.list, {});
-
-    expect(first).toBe("site:arles");
-    expect(second).toBe(first);
-    expect(sites).toHaveLength(1);
-    expect(sites[0]).toMatchObject({
-      id: "site:arles",
-      configKey: "arles",
+  it("an admin creates a site with the default cadence, and everyone lists it", async () => {
+    const admin = await signedInTest("admin");
+    const siteId = await admin.mutation(api.sites.create, {
+      name: "  Arles ",
       timezone: "Europe/Paris",
-      netboxExternalSiteId: "1",
-      netboxExternalSiteSlug: "arles",
-      enabled: true,
     });
-    expect(
-      sites[0]?.libreNmsDevices
-        .filter((device) => device.localizationTarget)
-        .map((device) => device.externalId),
-    ).toEqual(["4", "5"]);
+
+    expect(siteId).toMatch(/^site:/);
+    expect(await admin.query(api.sites.getSettings, { siteId })).toEqual({
+      id: siteId,
+      name: "Arles",
+      timezone: "Europe/Paris",
+      cadence: DEFAULT_CADENCE,
+      automaticRefresh: true,
+      manualRefresh: true,
+      buildingCount: 0,
+    });
+    expect(await admin.query(api.sites.list, {})).toEqual([
+      { id: siteId, name: "Arles", timezone: "Europe/Paris" },
+    ]);
+  });
+
+  it("lists sites by name", async () => {
+    const admin = await signedInTest("admin");
+    for (const name of ["Évry", "Arles", "Lyon"]) {
+      await admin.mutation(api.sites.create, { ...arles, name });
+    }
+    const names = (await admin.query(api.sites.list, {})).map((s) => s.name);
+    expect(names).toEqual(["Arles", "Évry", "Lyon"]);
+  });
+
+  it("refuses a second site with the same name, whatever the case", async () => {
+    const admin = await signedInTest("admin");
+    const first = await admin.mutation(api.sites.create, arles);
+    await expect(
+      admin.mutation(api.sites.create, { ...arles, name: "ARLES" }),
+    ).rejects.toThrow("déjà ce nom");
+
+    const second = await admin.mutation(api.sites.create, {
+      ...arles,
+      name: "Lyon",
+    });
+    await expect(
+      admin.mutation(api.sites.update, {
+        siteId: second,
+        ...arles,
+        cadence: DEFAULT_CADENCE,
+        automaticRefresh: true,
+        manualRefresh: true,
+      }),
+    ).rejects.toThrow("déjà ce nom");
+    // Renaming a site to its own name in another case is not a conflict.
+    await admin.mutation(api.sites.update, {
+      siteId: first,
+      name: "arles",
+      timezone: "Europe/Paris",
+      cadence: DEFAULT_CADENCE,
+      automaticRefresh: true,
+      manualRefresh: true,
+    });
+  });
+
+  it("refuses invalid settings with the reason the admin sees", async () => {
+    const admin = await signedInTest("admin");
+    await expect(
+      admin.mutation(api.sites.create, { ...arles, timezone: "Mars/Olympus" }),
+    ).rejects.toThrow("fuseau horaire");
+    const siteId = await admin.mutation(api.sites.create, arles);
+    await expect(
+      admin.mutation(api.sites.update, {
+        siteId,
+        ...arles,
+        cadence: { ...DEFAULT_CADENCE, businessIntervalMinutes: 1 },
+        automaticRefresh: true,
+        manualRefresh: true,
+      }),
+    ).rejects.toThrow("intervalle");
+  });
+
+  it("saves the cadence and the refresh switches", async () => {
+    const admin = await signedInTest("admin");
+    const siteId = await admin.mutation(api.sites.create, arles);
+    const cadence = {
+      businessIntervalMinutes: 10,
+      otherIntervalMinutes: 120,
+      businessStartMinute: 8 * 60,
+      businessEndMinute: 18 * 60 + 30,
+      businessDays: [6, 1, 3],
+    };
+    await admin.mutation(api.sites.update, {
+      siteId,
+      name: "Arles",
+      timezone: "America/Montreal",
+      cadence,
+      automaticRefresh: false,
+      manualRefresh: true,
+    });
+
+    expect(await admin.query(api.sites.getSettings, { siteId })).toMatchObject({
+      timezone: "America/Montreal",
+      cadence: { ...cadence, businessDays: [1, 3, 6] },
+      automaticRefresh: false,
+      manualRefresh: true,
+    });
   });
 
   it("requires buildings to reference an existing site", async () => {
@@ -61,80 +123,10 @@ describe("sites", () => {
     ).rejects.toThrow("Site not found");
   });
 
-  it("derives a floor site through its building", async () => {
-    const t = await signedInTest();
-    const siteId = await t.mutation(internal.sites.create, {
-      site: configuredSite("floor"),
-    });
-    const buildingId = await t.mutation(api.buildings.create, {
-      siteId,
-      objectId: "building:floor",
-      name: "Building",
-    });
-    const floorId = await t.mutation(api.floors.create, {
-      buildingId,
-      objectId: "floor:site",
-      name: "Floor",
-    });
-
-    const site = await t.query(api.sites.getForFloor, { floorId });
-    expect(site?.id).toBe(siteId);
-  });
-
-  it("rejects duplicate configuration identities", async () => {
-    const t = await signedInTest();
-    await t.mutation(internal.sites.create, { site: configuredSite("first") });
-    await expect(
-      t.mutation(internal.sites.create, {
-        site: {
-          ...configuredSite("second"),
-          configKey: "first",
-        },
-      }),
-    ).rejects.toThrow("already exists");
-  });
-
-  it("rejects non-canonical LibreNMS device IDs", async () => {
-    const t = await signedInTest();
-    await expect(
-      t.mutation(internal.sites.create, {
-        site: {
-          ...configuredSite("invalid-switch"),
-          libreNmsDevices: [
-            {
-              externalId: "switch:4",
-              hostname: "switch",
-              networkName: "sw-access-01",
-              role: "access",
-              localizationTarget: true,
-            },
-          ],
-        },
-      }),
-    ).rejects.toThrow("canonical number");
-  });
-
-  it("rejects a reused site object ID with different configuration", async () => {
-    const t = await signedInTest();
-    await t.mutation(internal.sites.create, { site: configuredSite("object") });
-    await expect(
-      t.mutation(internal.sites.create, {
-        site: {
-          ...configuredSite("object"),
-          displayName: "Different",
-        },
-      }),
-    ).rejects.toThrow("different configuration");
-  });
-
   it("rejects a default-map identity owned by another site", async () => {
     const t = await signedInTest();
-    const siteA = await t.mutation(internal.sites.create, {
-      site: configuredSite("map-a"),
-    });
-    const siteB = await t.mutation(internal.sites.create, {
-      site: configuredSite("map-b"),
-    });
+    const siteA = await createTestSite(t);
+    const siteB = await createTestSite(t);
     await t.mutation(api.buildings.create, {
       siteId: siteB,
       objectId: `building:${siteA}:default`,
@@ -146,29 +138,29 @@ describe("sites", () => {
     ).rejects.toThrow("another site");
   });
 
-  it("refuses deletion while a site owns durable data", async () => {
-    const t = await signedInTest();
-    const siteId = await t.mutation(internal.sites.create, {
-      site: configuredSite("guard"),
-    });
-    await t.mutation(api.buildings.create, {
+  it("refuses to remove a site that still has buildings", async () => {
+    const admin = await signedInTest("admin");
+    const siteId = await admin.mutation(api.sites.create, arles);
+    await admin.mutation(api.buildings.create, {
       siteId,
       objectId: "building:guard",
       name: "Guard",
     });
 
-    await expect(t.mutation(internal.sites.remove, { siteId })).rejects.toThrow(
-      "durable data",
+    await expect(admin.mutation(api.sites.remove, { siteId })).rejects.toThrow(
+      "bâtiments",
     );
+    expect(await admin.query(api.sites.getSettings, { siteId })).toMatchObject({
+      buildingCount: 1,
+    });
   });
 
-  it("removes an unused site", async () => {
-    const t = await signedInTest();
-    const siteId = await t.mutation(internal.sites.create, {
-      site: configuredSite("unused"),
-    });
+  it("removes an empty site", async () => {
+    const admin = await signedInTest("admin");
+    const siteId = await admin.mutation(api.sites.create, arles);
 
-    await t.mutation(internal.sites.remove, { siteId });
-    expect(await t.query(api.sites.get, { siteId })).toBeNull();
+    await admin.mutation(api.sites.remove, { siteId });
+    expect(await admin.query(api.sites.getSettings, { siteId })).toBeNull();
+    expect(await admin.query(api.sites.list, {})).toEqual([]);
   });
 });

@@ -1,14 +1,29 @@
 import { useQuery } from "convex/react";
+import { useSearch } from "@tanstack/react-router";
+import type { FunctionReturnType } from "convex/server";
 import { api } from "../../convex/_generated/api";
-import { asSiteId } from "@/lib/objectIds";
-import { useCurrentBuildingId } from "@/store/selectors";
-import type { SiteId } from "@/types/map";
 
-export const useCurrentSiteId = (): SiteId | null => {
-  const currentBuildingId = useCurrentBuildingId();
-  const buildings = useQuery(api.buildings.list);
-  const siteId = buildings?.find(
-    (building) => building.id === currentBuildingId,
-  )?.siteId;
-  return siteId ? asSiteId(siteId) : null;
-};
+export type SiteSummary = FunctionReturnType<typeof api.sites.list>[number];
+
+/** The `site` search parameter of the map, read loosely. */
+export const siteSearch = (
+  search: Record<string, unknown>,
+): { site?: string } =>
+  typeof search.site === "string" ? { site: search.site } : {};
+
+/**
+ * The site the map shows: the one the URL names, else the first by name.
+ * `site` is `undefined` while the sites load and `null` when there is none.
+ */
+export function useCurrentSite(): {
+  sites: Array<SiteSummary> | undefined;
+  site: SiteSummary | null | undefined;
+} {
+  const { site: requested } = useSearch({ from: "/_authed/" });
+  const sites = useQuery(api.sites.list);
+  if (sites === undefined) return { sites, site: undefined };
+  return {
+    sites,
+    site: sites.find((site) => site.id === requested) ?? sites.at(0) ?? null,
+  };
+}

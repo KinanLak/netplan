@@ -7,29 +7,17 @@ import { internalAction, internalMutation } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
 import { applyMapOperation } from "./mapOperations";
 import { insertSite } from "./sites";
-import type { SiteInput } from "./sites";
 import { createAuth } from "./auth";
 import { DEV_ACCOUNTS, DEV_PASSWORD } from "../src/dev-seed/accounts";
 import { DEMO_BUILDING, buildDemoFloors } from "../src/dev-seed/demoMap";
 
 const SEED_CLIENT_ID = "dev-seed";
 
-// Disabled, with no LibreNMS switch and no NetBox site behind its keys: the
-// integrations never run against it.
 const DEMO_SITE = {
   objectId: "site:demo",
-  configKey: "demo",
-  displayName: "Site de démonstration",
+  name: "Site de démonstration",
   timezone: "Europe/Paris",
-  enabled: false,
-  dayStartMinute: 7 * 60,
-  dayEndMinute: 20 * 60,
-  netboxInstanceKey: "netbox-demo",
-  netboxExternalSiteId: "demo",
-  netboxExternalSiteSlug: "demo",
-  libreNmsInstanceKey: "librenms-demo",
-  libreNmsDevices: [],
-} satisfies SiteInput;
+};
 
 export const assertSeedable = () => {
   if (process.env.ALLOW_DEV_SEED !== "true") {
@@ -39,8 +27,8 @@ export const assertSeedable = () => {
   }
 };
 
-// An existing demo site is kept as it is, so a user's change to it, or a new
-// version of DEMO_SITE, does not make every later start fail.
+// An existing demo site is kept as it is, so a user's change to it does not
+// make every later start fail.
 const ensureSite = async (ctx: MutationCtx): Promise<string> => {
   const existing = await ctx.db
     .query("sites")

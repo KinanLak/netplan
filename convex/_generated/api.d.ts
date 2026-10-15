@@ -31,6 +31,7 @@ import type * as mapDocument from "../mapDocument.js";
 import type * as mapOperations from "../mapOperations.js";
 import type * as mapValidators from "../mapValidators.js";
 import type * as presences from "../presences.js";
+import type * as siteValidators from "../siteValidators.js";
 import type * as sites from "../sites.js";
 import type * as users from "../users.js";
 import type * as walls from "../walls.js";
@@ -65,6 +66,7 @@ declare const fullApi: ApiFromModules<{
   mapOperations: typeof mapOperations;
   mapValidators: typeof mapValidators;
   presences: typeof presences;
+  siteValidators: typeof siteValidators;
   sites: typeof sites;
   users: typeof users;
   walls: typeof walls;

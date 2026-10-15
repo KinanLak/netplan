@@ -3,7 +3,7 @@ import { ConvexError } from "convex/values";
 import { api, internal } from "./_generated/api";
 import {
   createSignedInUser,
-  ensureDefaultSite,
+  createTestSite,
   testBackend,
 } from "./_test/auth.setup";
 import type { TestClient } from "./_test/auth.setup";
@@ -36,7 +36,7 @@ async function setup() {
   const reader = t.withIdentity(
     (await createSignedInUser(t, "reader")).identity,
   );
-  const siteId = await ensureDefaultSite(editor);
+  const siteId = await createTestSite(editor);
   const buildingId = await editor.mutation(api.buildings.create, {
     siteId,
     objectId: `building:overlay:${counter}`,

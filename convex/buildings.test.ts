@@ -1,11 +1,12 @@
 import { describe, expect, it } from "bun:test";
 import { api, internal } from "./_generated/api";
-import { signedInTest, ensureDefaultSite } from "./_test/auth.setup";
+import { signedInTest, createTestSite } from "./_test/auth.setup";
 import type { TestClient } from "./_test/auth.setup";
 
-const SITE_ID = "site:arles";
+const SITE_ID = "site:main";
 
-const ensureSite = async (t: TestClient) => await ensureDefaultSite(t);
+const ensureSite = async (t: TestClient) =>
+  await createTestSite(t, { objectId: SITE_ID });
 
 describe("buildings", () => {
   it("list returns buildings sorted by order with application ids", async () => {
@@ -62,10 +63,10 @@ describe("buildings", () => {
     });
 
     expect(second).toEqual(first);
-    expect(first.buildingId).toBe("building:site:arles:default");
+    expect(first.buildingId).toBe("building:site:main:default");
     expect(first.floorIds).toEqual([
-      "floor:site:arles:default:rdc",
-      "floor:site:arles:default:etage-1",
+      "floor:site:main:default:rdc",
+      "floor:site:main:default:etage-1",
     ]);
 
     const buildings = await t.query(api.buildings.list);
@@ -74,7 +75,7 @@ describe("buildings", () => {
     });
     expect(buildings).toEqual([
       {
-        id: "building:site:arles:default",
+        id: "building:site:main:default",
         siteId: SITE_ID,
         name: "Bâtiment Principal",
         order: 0,
@@ -82,14 +83,14 @@ describe("buildings", () => {
     ]);
     expect(floors).toEqual([
       {
-        id: "floor:site:arles:default:rdc",
-        buildingId: "building:site:arles:default",
+        id: "floor:site:main:default:rdc",
+        buildingId: "building:site:main:default",
         name: "RDC",
         order: 0,
       },
       {
-        id: "floor:site:arles:default:etage-1",
-        buildingId: "building:site:arles:default",
+        id: "floor:site:main:default:etage-1",
+        buildingId: "building:site:main:default",
         name: "Étage 1",
         order: 1,
       },

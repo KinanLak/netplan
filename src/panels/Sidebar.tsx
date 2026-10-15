@@ -43,6 +43,8 @@ import {
 import { ModeToggle } from "@/components/mode-toggle";
 import { useCanEdit } from "@/hooks/use-current-user";
 import { SidebarAccount } from "@/panels/SidebarAccount";
+import { SiteSwitcher } from "@/sites/SiteSwitcher";
+import { useCurrentSite } from "@/sites/useCurrentSite";
 import { api } from "../../convex/_generated/api";
 
 /**
@@ -125,7 +127,10 @@ function SidebarUndoRedo() {
 }
 
 export default function AppSidebar() {
-  const buildings = useQuery(api.buildings.list) ?? [];
+  const { site } = useCurrentSite();
+  const buildings =
+    useQuery(api.buildings.listForSite, site ? { siteId: site.id } : "skip") ??
+    [];
   const currentBuildingId = useCurrentBuildingId();
   const currentFloorId = useCurrentFloorId();
   const presences = usePresence(currentFloorId);
@@ -138,9 +143,6 @@ export default function AppSidebar() {
   const setCurrentFloor = useMapStore((s) => s.setCurrentFloor);
   const createDefaultMap = useMutation(api.buildings.createDefaultMap);
   const clearMap = useMutation(api.buildings.clearMap);
-  const defaultSiteId = useQuery(api.sites.findDefault);
-  // Only an admin can create the site; an editor builds on the existing one.
-  const ensureDefaultSite = useMutation(api.sites.ensureDefault);
   const [devMapAction, setDevMapAction] = useState<"clear" | "create" | null>(
     null,
   );
@@ -159,10 +161,10 @@ export default function AppSidebar() {
     canEdit && (import.meta.env.DEV || buildings.length === 0);
 
   const handleCreateDefaultMap = async () => {
+    if (!site) return;
     setDevMapAction("create");
     try {
-      const siteId = defaultSiteId ?? (await ensureDefaultSite());
-      const result = await createDefaultMap({ siteId });
+      const result = await createDefaultMap({ siteId: site.id });
       setCurrentBuilding(asBuildingId(result.buildingId));
       const firstFloorId = result.floorIds[0];
       if (firstFloorId) setCurrentFloor(asFloorId(firstFloorId));
@@ -177,10 +179,10 @@ export default function AppSidebar() {
     );
     if (!confirmed) return;
 
+    if (!site) return;
     setDevMapAction("clear");
     try {
-      if (!currentBuilding) return;
-      await clearMap({ siteId: currentBuilding.siteId });
+      await clearMap({ siteId: site.id });
       setCurrentBuilding(null);
     } finally {
       setDevMapAction(null);
@@ -201,6 +203,12 @@ export default function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupLabel>Site</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SiteSwitcher />
+          </SidebarGroupContent>
+        </SidebarGroup>
         <SidebarGroup>
           <div className="flex items-center justify-between px-2">
             <SidebarGroupLabel className="px-0">Bâtiments</SidebarGroupLabel>
