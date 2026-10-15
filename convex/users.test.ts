@@ -108,6 +108,23 @@ describe("users.setDisabled", () => {
     const t = withMail();
     const { as } = await asAdmin(t);
     const target = await createSignedInUser(t, "editor");
+    // More sessions than one page of the adapter's deleteMany.
+    await t.run(async (ctx) => {
+      for (let n = 0; n < 250; n++) {
+        await ctx.runMutation(components.betterAuth.adapter.create, {
+          input: {
+            model: "session",
+            data: {
+              userId: target.userId,
+              token: `extra-${n}`,
+              expiresAt: Date.now() + 60_000,
+              createdAt: Date.now(),
+              updatedAt: Date.now(),
+            },
+          },
+        });
+      }
+    });
 
     await as.mutation(api.users.setDisabled, {
       userId: target.userId,

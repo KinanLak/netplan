@@ -186,14 +186,19 @@ export const setDisabled = adminMutation({
         },
       },
     });
-    if (disabled) {
-      await ctx.runMutation(components.betterAuth.adapter.deleteMany, {
-        input: {
-          model: "session",
-          where: [{ field: "userId", value: userId }],
-        },
-        paginationOpts: { numItems: 200, cursor: null },
-      });
+    // deleteMany removes one page per call.
+    let cursor: string | null = null;
+    while (disabled) {
+      const deleted: { isDone: boolean; continueCursor: string } =
+        await ctx.runMutation(components.betterAuth.adapter.deleteMany, {
+          input: {
+            model: "session",
+            where: [{ field: "userId", value: userId }],
+          },
+          paginationOpts: { numItems: 200, cursor },
+        });
+      if (deleted.isDone) break;
+      cursor = deleted.continueCursor;
     }
     return null;
   },
