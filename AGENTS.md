@@ -56,7 +56,9 @@ Docker (ADR 0018), seeds a demo site, and runs Convex and Vite on ports derived
 from the worktree path. It prints a banner with the app URL; `--status`
 prints it again, `--reseed` (app stopped) starts from an empty backend,
 `--down` removes the
-backend and its data. The skill `test-netplan-app` says how to check a change
+backend and its data. `--integrations` also connects the demo site to the NetBox
+and LibreNMS that `NETBOX_URL`/`_TOKEN` and `LIBRENMS_URL`/`_TOKEN` name in its
+environment (`source ~/.zshrc` first); it never prints them. The skill `test-netplan-app` says how to check a change
 in a browser with it.
 
 - It writes `.env.local` with a marker line and refuses to touch one it did

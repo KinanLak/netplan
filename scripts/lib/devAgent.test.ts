@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import {
   backendOf,
+  integrationSeedArgs,
   isGeneratedEnvFile,
   mailName,
   nextBackendPorts,
@@ -101,5 +102,20 @@ describe("env files", () => {
         ["TOKEN", "a=b"],
       ]),
     );
+  });
+});
+
+describe("integrationSeedArgs", () => {
+  it("connects each tool whose address and token are both set", () => {
+    expect(
+      integrationSeedArgs({
+        NETBOX_URL: " https://netbox.test ",
+        NETBOX_TOKEN: "nb", // gitleaks:allow
+        LIBRENMS_URL: "https://nms.test",
+      }),
+    ).toEqual({
+      args: { netbox: { url: "https://netbox.test", token: "nb" } }, // gitleaks:allow
+      missing: ["LIBRENMS_TOKEN"],
+    });
   });
 });

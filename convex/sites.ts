@@ -179,7 +179,8 @@ export const update = adminMutation({
   },
 });
 
-// Removing a site never takes a plan with it: its buildings go first.
+// Removing a site never takes a plan with it: its buildings go first. Its
+// integrations go with it.
 export const remove = adminMutation({
   args: { siteId: v.string() },
   returns: v.null(),
@@ -189,6 +190,13 @@ export const remove = adminMutation({
       throw new ConvexError(
         "Ce site a encore des bâtiments : supprimez-les d'abord.",
       );
+    }
+    const integrations = await ctx.db
+      .query("integrations")
+      .withIndex("by_site_kind", (q) => q.eq("siteId", siteId))
+      .collect();
+    for (const integration of integrations) {
+      await ctx.db.delete(integration._id);
     }
     await ctx.db.delete(site._id);
     return null;

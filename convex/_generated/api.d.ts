@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as _test_fetch from "../_test/fetch.js";
 import type * as _test_modules from "../_test/modules.js";
 import type * as auth from "../auth.js";
 import type * as bootstrap from "../bootstrap.js";
@@ -18,13 +19,17 @@ import type * as devices from "../devices.js";
 import type * as floorOverlays from "../floorOverlays.js";
 import type * as floors from "../floors.js";
 import type * as http from "../http.js";
+import type * as integrations from "../integrations.js";
 import type * as lib_authRoles from "../lib/authRoles.js";
 import type * as lib_functions from "../lib/functions.js";
+import type * as lib_httpRetry from "../lib/httpRetry.js";
 import type * as lib_imageHeader from "../lib/imageHeader.js";
+import type * as lib_integrationProbe from "../lib/integrationProbe.js";
 import type * as lib_mailTemplates from "../lib/mailTemplates.js";
 import type * as lib_overlayFiles from "../lib/overlayFiles.js";
 import type * as lib_presence from "../lib/presence.js";
 import type * as lib_roles from "../lib/roles.js";
+import type * as lib_secrets from "../lib/secrets.js";
 import type * as lib_smtp from "../lib/smtp.js";
 import type * as links from "../links.js";
 import type * as mail from "../mail.js";
@@ -44,6 +49,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  "_test/fetch": typeof _test_fetch;
   "_test/modules": typeof _test_modules;
   auth: typeof auth;
   bootstrap: typeof bootstrap;
@@ -54,13 +60,17 @@ declare const fullApi: ApiFromModules<{
   floorOverlays: typeof floorOverlays;
   floors: typeof floors;
   http: typeof http;
+  integrations: typeof integrations;
   "lib/authRoles": typeof lib_authRoles;
   "lib/functions": typeof lib_functions;
+  "lib/httpRetry": typeof lib_httpRetry;
   "lib/imageHeader": typeof lib_imageHeader;
+  "lib/integrationProbe": typeof lib_integrationProbe;
   "lib/mailTemplates": typeof lib_mailTemplates;
   "lib/overlayFiles": typeof lib_overlayFiles;
   "lib/presence": typeof lib_presence;
   "lib/roles": typeof lib_roles;
+  "lib/secrets": typeof lib_secrets;
   "lib/smtp": typeof lib_smtp;
   links: typeof links;
   mail: typeof mail;

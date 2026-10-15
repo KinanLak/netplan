@@ -54,6 +54,23 @@ current value alone, so a variable set from the dashboard survives until
 | `SMTP_SECURE`                                                               | `true` for implicit TLS, `false` for STARTTLS when the relay offers it. Defaults to `true` on port `465` only.                                                  |
 | `SMTP_USER`, `SMTP_PASSWORD`                                                | The relay's login, when it needs one.                                                                                                                           |
 | `SMTP_FROM`                                                                 | The sender, as `Name <address>`. Defaults to `Netplan <netplan@<domain>>`.                                                                                      |
+| `NETPLAN_SECRET_KEY`, `NETPLAN_SECRET_KEY_PREVIOUS`                         | Encrypt the integration tokens; the previous key only decrypts, during a rotation (below).                                                                      |
+
+`NETPLAN_SECRET_KEY` (base64 of 32 random bytes, `openssl rand -base64 32`)
+encrypts the NetBox and LibreNMS tokens admins enter for each site; no
+function ever returns one. Back it up with the database: losing it means
+entering every token again on each site's admin page, which says so when a
+test fails. To rotate it:
+
+1. Set `NETPLAN_SECRET_KEY_PREVIOUS` to the current key and
+   `NETPLAN_SECRET_KEY` to a new one, then `docker compose up -d`.
+2. Run `bun x convex run integrations:reencryptTokens` against the
+   deployment. It answers how many tokens it re-encrypted, lists any it
+   could not read, and under `pending` any saved again with the previous key
+   while it ran: run it again until `pending` is empty.
+3. Remove the previous key from the deployment
+   (`bun x convex env remove NETPLAN_SECRET_KEY_PREVIOUS`) and empty it in
+   `.env`; an empty value alone leaves it set.
 
 A new variable read by `convex/` goes in `convex-env.txt`, in the
 `convex-deploy` environment of `compose.yaml` and in `.env.example`;

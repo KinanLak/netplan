@@ -122,6 +122,8 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-Netplan <netplan@${NETPLAN_DOMAIN:-netplan.localhost}>}
+      NETPLAN_SECRET_KEY: ${NETPLAN_SECRET_KEY:-}
+      NETPLAN_SECRET_KEY_PREVIOUS: ${NETPLAN_SECRET_KEY_PREVIOUS:-}
     depends_on:
       convex-backend: { condition: service_healthy }
 

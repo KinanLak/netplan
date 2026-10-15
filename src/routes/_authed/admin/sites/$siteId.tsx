@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { adminErrorMessage } from "@/admin/errors";
+import { IntegrationsSection } from "@/admin/IntegrationsSection";
 import { TimeZoneField } from "@/admin/TimeZoneField";
 import {
   MAX_INTERVAL_MINUTES,
@@ -87,6 +88,7 @@ function SitePage() {
         </div>
       </header>
       <SiteSettingsForm key={site.id} site={site} />
+      <IntegrationsSection siteId={site.id} />
       <DeleteSite site={site} />
     </div>
   );
@@ -376,7 +378,8 @@ function DeleteSite({ site }: { site: Site }) {
           <AlertDialogHeader>
             <AlertDialogTitle>Supprimer « {site.name} » ?</AlertDialogTitle>
             <AlertDialogDescription>
-              Le site disparaît du sélecteur de tous les utilisateurs.
+              Le site disparaît du sélecteur de tous les utilisateurs, avec ses
+              intégrations.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

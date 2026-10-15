@@ -114,3 +114,32 @@ export const publishedPort = (
   const hostPort = bindings?.[`${containerPort}/tcp`]?.[0]?.HostPort;
   return hostPort ? Number(hostPort) : undefined;
 };
+
+type SeedConnection = { url: string; token: string };
+
+/**
+ * What `--integrations` connects the demo site to, read from the variables
+ * the caller exported, and the names it found missing.
+ */
+export const integrationSeedArgs = (
+  env: Record<string, string | undefined>,
+): {
+  args: { netbox?: SeedConnection; librenms?: SeedConnection };
+  missing: Array<string>;
+} => {
+  const args: { netbox?: SeedConnection; librenms?: SeedConnection } = {};
+  const missing: Array<string> = [];
+  for (const [kind, prefix] of [
+    ["netbox", "NETBOX"],
+    ["librenms", "LIBRENMS"],
+  ] as const) {
+    const url = env[`${prefix}_URL`]?.trim();
+    const token = env[`${prefix}_TOKEN`]?.trim();
+    if (url && token) args[kind] = { url, token };
+    else {
+      if (!url) missing.push(`${prefix}_URL`);
+      if (!token) missing.push(`${prefix}_TOKEN`);
+    }
+  }
+  return { args, missing };
+};

@@ -7,7 +7,12 @@ import {
   size,
   wallColor,
 } from "./mapValidators";
-import { siteCadence } from "./siteValidators";
+import {
+  connectionCheck,
+  encryptedSecret,
+  integrationKind,
+  siteCadence,
+} from "./siteValidators";
 
 export default defineSchema({
   sites: defineTable({
@@ -20,6 +25,17 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
   }).index("by_object_id", ["objectId"]),
+
+  // At most one per site and tool, so the pair is its identity.
+  integrations: defineTable({
+    siteId: v.string(),
+    kind: integrationKind,
+    baseUrl: v.string(),
+    enabled: v.boolean(),
+    token: encryptedSecret,
+    lastCheck: v.optional(connectionCheck),
+    updatedAt: v.number(),
+  }).index("by_site_kind", ["siteId", "kind"]),
 
   buildings: defineTable({
     objectId: v.string(),
