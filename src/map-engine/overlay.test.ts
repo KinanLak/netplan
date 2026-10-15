@@ -131,6 +131,26 @@ describe("overlay operations", () => {
     );
   });
 
+  it("undoes placing or replacing a calque that ends up locked", () => {
+    expect(
+      roundTrip(snapshot(null), set(overlay({ locked: true }))).overlay?.locked,
+    ).toBe(true);
+
+    const replacement = overlay({
+      fileId: "overlay-file:b" as OverlayFileId,
+      locked: true,
+    });
+    const replaced = roundTrip(snapshot(overlay({ locked: true })), {
+      kind: "batch",
+      meta: meta(1),
+      operations: [
+        { kind: "overlay.patch", floorId, patch: { locked: false } },
+        { kind: "overlay.set", floorId, overlay: replacement },
+      ],
+    });
+    expect(replaced.overlay).toEqual(replacement);
+  });
+
   it("locking then undoing restores an unlocked calque", () => {
     const after = roundTrip(snapshot(overlay()), patch({ locked: true }));
     expect(after.overlay?.locked).toBe(true);

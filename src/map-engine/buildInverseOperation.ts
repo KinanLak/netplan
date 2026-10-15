@@ -2,10 +2,11 @@ import type { MapDocumentSnapshot } from "@/types/map";
 import { applyOperation } from "./applyOperation";
 import type { BatchSubOperation, MapOperation } from "./types";
 
-const stripMeta = (operation: MapOperation): BatchSubOperation | null => {
-  if (operation.kind === "batch") return null;
+/** Sub-operations of an inverse, flattening a nested batch. */
+const batchOperations = (operation: MapOperation): Array<BatchSubOperation> => {
+  if (operation.kind === "batch") return operation.operations;
   const { meta: _meta, ...withoutMeta } = operation;
-  return withoutMeta;
+  return [withoutMeta];
 };
 
 const withMeta = (
@@ -97,10 +98,7 @@ export function buildInverseOperation(
         : {
             kind: "batch",
             meta: operation.meta,
-            operations: operations.flatMap((item) => {
-              const stripped = stripMeta(item);
-              return stripped ? [stripped] : [];
-            }),
+            operations: operations.flatMap(batchOperations),
           };
     }
 
@@ -135,13 +133,29 @@ export function buildInverseOperation(
         : null;
     }
 
-    case "overlay.set":
-      return {
+    case "overlay.set": {
+      const restore: BatchSubOperation = {
         kind: "overlay.set",
-        meta: operation.meta,
         floorId: operation.floorId,
         overlay: snapshotBeforeOperation.overlay,
       };
+      // A locked calque refuses to be replaced, so the undo of placing one
+      // locked first unlocks it, in the same change.
+      return operation.overlay?.locked
+        ? {
+            kind: "batch",
+            meta: operation.meta,
+            operations: [
+              {
+                kind: "overlay.patch",
+                floorId: operation.floorId,
+                patch: { locked: false },
+              },
+              restore,
+            ],
+          }
+        : withMeta(restore, operation.meta);
+    }
 
     case "overlay.patch":
       return invertOverlayPatch(snapshotBeforeOperation, operation);
@@ -167,10 +181,7 @@ export function buildInverseOperation(
         : {
             kind: "batch",
             meta: operation.meta,
-            operations: inverses.flatMap((item) => {
-              const stripped = stripMeta(item);
-              return stripped ? [stripped] : [];
-            }),
+            operations: inverses.flatMap(batchOperations),
           };
     }
   }

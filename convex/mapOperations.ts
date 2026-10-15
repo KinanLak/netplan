@@ -1222,6 +1222,10 @@ const planOverlayPatch = (
   };
   const invalid = overlayError(value);
   if (invalid) return `Invalid calque: ${invalid}`;
+  if (sameOverlay(current, value)) {
+    markAffectedFloor(state, operation.floorId);
+    return null;
+  }
   putOverlay(state, operation.floorId, value);
   return null;
 };

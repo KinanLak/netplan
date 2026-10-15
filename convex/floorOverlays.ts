@@ -47,19 +47,25 @@ export const upload = editorAction({
     const storageId = await ctx.storage.store(
       new Blob([bytes], { type: header.contentType }),
     );
-    const fileId: string = await ctx.runMutation(
-      internal.floorOverlays.recordFile,
-      {
-        storageId,
-        name: name.trim().slice(0, MAX_NAME_LENGTH),
-        contentType: header.contentType,
-        width: header.width,
-        height: header.height,
-        size: bytes.byteLength,
-        createdBy: ctx.user.id,
-      },
-    );
-    return { fileId, width: header.width, height: header.height };
+    try {
+      const fileId: string = await ctx.runMutation(
+        internal.floorOverlays.recordFile,
+        {
+          storageId,
+          name: name.trim().slice(0, MAX_NAME_LENGTH),
+          contentType: header.contentType,
+          width: header.width,
+          height: header.height,
+          size: bytes.byteLength,
+          createdBy: ctx.user.id,
+        },
+      );
+      return { fileId, width: header.width, height: header.height };
+    } catch (error) {
+      // Without its row, the daily cleanup would never find this file.
+      await ctx.storage.delete(storageId);
+      throw error;
+    }
   },
 });
 

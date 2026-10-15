@@ -205,6 +205,35 @@ describe("calque operations", () => {
     expect((await fileRow(editor, fileId))?.releasedAt).toBeNumber();
   });
 
+  it("does not rewrite the calque for a patch that changes nothing", async () => {
+    const { editor, floorId } = await setup();
+    const { fileId } = await editor.action(api.floorOverlays.upload, {
+      bytes: png(1200, 800),
+      name: "plan.png",
+    });
+    await editor.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "overlay.set",
+        meta: meta(1),
+        floorId,
+        overlay: placement(floorId, fileId),
+      },
+    });
+    const row = () =>
+      editor.run((ctx) => ctx.db.query("floorOverlays").first());
+    const before = await row();
+    const result = await editor.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "overlay.patch",
+        meta: meta(2),
+        floorId,
+        patch: { opacity: 0.6 },
+      },
+    });
+    expect(result.status).toBe("applied");
+    expect(await row()).toEqual(before);
+  });
+
   it("refuses a calque whose file is unknown or of another size", async () => {
     const { editor, floorId } = await setup();
     const { fileId } = await editor.action(api.floorOverlays.upload, {
