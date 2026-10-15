@@ -64,13 +64,11 @@ export function buildInverseOperation(
       );
       const operations: Array<MapOperation> = [
         { kind: "device.create", meta: operation.meta, device },
-        ...links.map(
-          (link): MapOperation => ({
-            kind: "link.create",
-            meta: operation.meta,
-            link,
-          }),
-        ),
+        ...links.map((link): MapOperation => ({
+          kind: "link.create",
+          meta: operation.meta,
+          link,
+        })),
       ];
       return operations.length === 1
         ? operations[0]

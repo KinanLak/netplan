@@ -90,13 +90,11 @@ const addBlocks = (
 
   const nextWalls = [
     ...walls,
-    ...Array.from(stagedByKey.values()).map(
-      (block): WallSegment => ({
-        ...block,
-        id: generateWallId(),
-        geometryKey: getWallGeometryKey(block) ?? "",
-      }),
-    ),
+    ...Array.from(stagedByKey.values()).map((block): WallSegment => ({
+      ...block,
+      id: generateWallId(),
+      geometryKey: getWallGeometryKey(block) ?? "",
+    })),
   ];
 
   return changedResult(nextWalls, [...stagedByKey.keys()]);

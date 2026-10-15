@@ -64,9 +64,9 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "happy-dom": "^21.0.1",
     "mitata": "^1.0.34",
-    "oxfmt": "^0.58.0",
-    "oxlint": "^1.73.0",
-    "oxlint-tsgolint": "^0.24.0",
+    "oxfmt": "^0.73.0",
+    "oxlint": "^1.88.0",
+    "oxlint-tsgolint": "^7.0.2004",
     "react-scan": "^0.5.7",
     "typescript": "^7",
     "vite": "^8.3.4"

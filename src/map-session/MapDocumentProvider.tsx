@@ -367,12 +367,10 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
     if (!isReadyRef.current || !identity || drafts.length === 0) return [];
     const meta = freshMeta();
     if (!meta) return [];
-    const devices = drafts.map(
-      (draft): Device => ({
-        id: createObjectId("device", identity) as DeviceId,
-        ...draft,
-      }),
-    );
+    const devices = drafts.map((draft): Device => ({
+      id: createObjectId("device", identity) as DeviceId,
+      ...draft,
+    }));
     dispatchOperation({
       kind: "batch",
       meta,
