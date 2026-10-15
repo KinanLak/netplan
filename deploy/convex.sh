@@ -10,7 +10,9 @@ set -euo pipefail
 if [[ -z "${CONVEX_SELF_HOSTED_ADMIN_KEY:-}" ]]; then
   : "${INSTANCE_NAME:?INSTANCE_NAME or CONVEX_SELF_HOSTED_ADMIN_KEY is required}"
   : "${INSTANCE_SECRET:?INSTANCE_SECRET or CONVEX_SELF_HOSTED_ADMIN_KEY is required}"
-  CONVEX_SELF_HOSTED_ADMIN_KEY="$(/convex/generate_key "$INSTANCE_NAME" "$INSTANCE_SECRET" 2>/dev/null)"
+  CONVEX_SELF_HOSTED_ADMIN_KEY="$(/convex/generate_key "$INSTANCE_NAME" "$INSTANCE_SECRET" 2>/dev/null)" || true
+  # generate_key fails silently on a malformed secret.
+  : "${CONVEX_SELF_HOSTED_ADMIN_KEY:?no admin key: INSTANCE_SECRET must be hex, e.g. openssl rand -hex 32}"
 fi
 export CONVEX_SELF_HOSTED_URL CONVEX_SELF_HOSTED_ADMIN_KEY
 
