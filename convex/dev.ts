@@ -2,11 +2,14 @@
 // sets ALLOW_DEV_SEED=true, which `bun run dev:agent` and the CI end-to-end
 // job do and no real installation does (ADR 0018).
 import { ConvexError, v } from "convex/values";
-import { internalMutation } from "./_generated/server";
+import { components } from "./_generated/api";
+import { internalAction, internalMutation } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
 import { applyMapOperation } from "./mapOperations";
 import { insertSite } from "./sites";
 import type { SiteInput } from "./sites";
+import { createAuth } from "./auth";
+import { DEV_ACCOUNTS, DEV_PASSWORD } from "../src/dev-seed/accounts";
 import { DEMO_BUILDING, buildDemoFloors } from "../src/dev-seed/demoMap";
 
 const SEED_CLIENT_ID = "dev-seed";
@@ -142,5 +145,37 @@ export const seed = internalMutation({
       buildingId: DEMO_BUILDING.id,
       floorIds: floors.map((floor) => floor.id),
     };
+  },
+});
+
+/**
+ * Creates one account per role with the shared dev password. An existing
+ * account is left as it is, whatever was changed on it since.
+ */
+export const seedAccounts = internalAction({
+  args: {},
+  returns: v.array(v.string()),
+  handler: async (ctx) => {
+    assertSeedable();
+    const auth = createAuth(ctx);
+    const created: Array<string> = [];
+    for (const account of DEV_ACCOUNTS) {
+      const existing = await ctx.runQuery(
+        components.betterAuth.adapter.findOne,
+        { model: "user", where: [{ field: "email", value: account.email }] },
+      );
+      if (existing) continue;
+      await auth.api.createUser({
+        body: {
+          email: account.email,
+          password: DEV_PASSWORD,
+          name: account.name,
+          role: account.role,
+          data: { username: account.username },
+        },
+      });
+      created.push(account.username);
+    }
+    return created;
   },
 });

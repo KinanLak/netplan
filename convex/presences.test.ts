@@ -1,14 +1,13 @@
 import { describe, expect, it } from "bun:test";
-import { convexTest } from "convex-test";
-import schema from "./schema";
 import { api } from "./_generated/api";
-import { modules } from "./_test/modules";
+import { signedInTest, ensureDefaultSite } from "./_test/auth.setup";
+import type { TestClient } from "./_test/auth.setup";
 
 let counter = 0;
 
-async function freshFloor(t: ReturnType<typeof convexTest>) {
+async function freshFloor(t: TestClient) {
   counter += 1;
-  const siteId = await t.mutation(api.sites.ensureDefault, {});
+  const siteId = await ensureDefaultSite(t);
   const buildingId = await t.mutation(api.buildings.create, {
     siteId,
     objectId: `building:presence:${counter}`,
@@ -23,7 +22,7 @@ async function freshFloor(t: ReturnType<typeof convexTest>) {
 
 describe("presences", () => {
   it("upserts an online user row keyed by clientId", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const floorId = await freshFloor(t);
 
     await t.mutation(api.presences.updateOnlineUser, {
@@ -48,7 +47,7 @@ describe("presences", () => {
   });
 
   it("replaces an older session for the same client", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const floorId = await freshFloor(t);
 
     await t.mutation(api.presences.updateOnlineUser, {
@@ -75,7 +74,7 @@ describe("presences", () => {
   });
 
   it("lists online users across floors with their floor", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const floorA = await freshFloor(t);
     const floorB = await freshFloor(t);
 
@@ -102,7 +101,7 @@ describe("presences", () => {
   });
 
   it("remove deletes online user rows for the session", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const floorId = await freshFloor(t);
 
     await t.mutation(api.presences.updateOnlineUser, {
@@ -119,7 +118,7 @@ describe("presences", () => {
   });
 
   it("rejects unknown floors", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
 
     let message = "";
     try {

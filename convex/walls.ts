@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { query } from "./_generated/server";
+import { readerQuery } from "./lib/functions";
 import type { Doc } from "./_generated/dataModel";
 import { wallSegment } from "./mapValidators";
 
@@ -12,7 +12,7 @@ const toWall = (row: Doc<"walls">) => ({
   geometryKey: row.geometryKey,
 });
 
-export const listForFloor = query({
+export const listForFloor = readerQuery({
   args: { floorId: v.string() },
   returns: v.array(wallSegment),
   handler: async (ctx, { floorId }) => {

@@ -179,27 +179,19 @@ const runLocalizationImport = async (
 };
 
 if (agentMode) {
-  const sites = await client.query(api.sites.list, {});
-  const site = sites.find((candidate) => candidate.configKey === siteKey);
-  if (!site) throw new Error(`Site ${siteKey} introuvable`);
-  const [netboxState, localizationState] = await Promise.all([
-    client.query(api.integrations.getState, {
-      siteId: site.id,
-      workflow: "netbox",
-    }),
-    client.query(api.integrations.getState, {
-      siteId: site.id,
-      workflow: "localization",
-    }),
-  ]);
+  const running = await client.action(api.connector.readRunningWorkflows, {
+    secret: connectorSecret,
+    siteKey,
+  });
+  if (!running) throw new Error(`Site ${siteKey} introuvable`);
   const completed: Array<string> = [];
-  if (netboxState?.status === "running") {
+  if (running.includes("netbox")) {
     const netbox = await runNetBoxImport("scheduled");
     completed.push(
       `NetBox ${netbox.result.inventoryCount}/${netbox.result.connectionCount}`,
     );
   }
-  if (localizationState?.status === "running") {
+  if (running.includes("localization")) {
     const localization = await runLocalizationImport(true, "scheduled");
     completed.push(`localisation ${localization.linkCount}`);
   }

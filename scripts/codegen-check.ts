@@ -1,5 +1,5 @@
-// Checks that `convex/_generated` is exactly what `convex codegen` writes for
-// the current functions. Codegen needs a deployment, so this runs against a
+// Checks that `convex/_generated`, and the better-auth component's, are
+// exactly what `convex codegen` writes for the current functions. Codegen needs a deployment, so this runs against a
 // self-hosted backend on this machine: the worktree's `dev:agent` backend
 // locally, the service container in CI. Without one it says it skipped, unless
 // `CODEGEN_CHECK_REQUIRED=true` (CI). The directory is restored afterwards, so the
@@ -8,25 +8,35 @@ import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
 import { backendAnswers, isLoopbackUrl } from "./lib/convexBackend";
 
-const GENERATED_DIR = join(import.meta.dir, "..", "convex", "_generated");
+const GENERATED_DIRS = ["_generated", "betterAuth/_generated"].map((dir) =>
+  join(import.meta.dir, "..", "convex", dir),
+);
 
 type Snapshot = Map<string, string>;
 
-const readSnapshot = async (dir: string): Promise<Snapshot> => {
+const CONVEX_DIR = join(import.meta.dir, "..", "convex");
+
+// Keyed by path under `convex/`, so one snapshot spans several directories.
+const readSnapshots = async (dirs: Array<string>): Promise<Snapshot> => {
   const snapshot: Snapshot = new Map();
-  const entries = await readdir(dir, { recursive: true, withFileTypes: true });
-  for (const entry of entries) {
-    if (!entry.isFile()) continue;
-    const path = join(entry.parentPath, entry.name);
-    snapshot.set(relative(dir, path), await readFile(path, "utf8"));
+  for (const dir of dirs) {
+    const entries = await readdir(dir, {
+      recursive: true,
+      withFileTypes: true,
+    });
+    for (const entry of entries) {
+      if (!entry.isFile()) continue;
+      const path = join(entry.parentPath, entry.name);
+      snapshot.set(relative(CONVEX_DIR, path), await readFile(path, "utf8"));
+    }
   }
   return snapshot;
 };
 
-const writeSnapshot = async (dir: string, snapshot: Snapshot) => {
-  await rm(dir, { recursive: true, force: true });
+const writeSnapshots = async (dirs: Array<string>, snapshot: Snapshot) => {
+  for (const dir of dirs) await rm(dir, { recursive: true, force: true });
   for (const [path, content] of snapshot) {
-    const target = join(dir, path);
+    const target = join(CONVEX_DIR, path);
     await mkdir(dirname(target), { recursive: true });
     await writeFile(target, content);
   }
@@ -77,11 +87,13 @@ const main = async () => {
     return;
   }
 
-  const committed = await readSnapshot(GENERATED_DIR);
+  const committed = await readSnapshots(GENERATED_DIRS);
   let generated: Snapshot;
   try {
     // Removed first, so a file codegen no longer writes shows up too.
-    await rm(GENERATED_DIR, { recursive: true, force: true });
+    for (const dir of GENERATED_DIRS) {
+      await rm(dir, { recursive: true, force: true });
+    }
     const env: Record<string, string> = {};
     for (const [key, value] of Object.entries(process.env)) {
       if (value !== undefined && !key.startsWith("CONVEX_")) env[key] = value;
@@ -105,20 +117,20 @@ const main = async () => {
       console.error(stderr);
       throw new Error(`convex codegen exited with ${exitCode}`);
     }
-    generated = await readSnapshot(GENERATED_DIR);
+    generated = await readSnapshots(GENERATED_DIRS);
   } finally {
-    await writeSnapshot(GENERATED_DIR, committed);
+    await writeSnapshots(GENERATED_DIRS, committed);
   }
 
   const differences = diffSnapshots(committed, generated);
   if (differences.length > 0) {
     console.error(
-      "codegen:check: convex/_generated is stale. Regenerate it with `bun x convex codegen` against your dev:agent backend and commit it:",
+      "codegen:check: generated Convex code is stale. Regenerate it with `bun x convex codegen` against your dev:agent backend and commit it:",
     );
     for (const line of differences) console.error(`  ${line}`);
     process.exit(1);
   }
-  console.log("codegen:check: convex/_generated is current.");
+  console.log("codegen:check: generated Convex code is current.");
 };
 
 if (import.meta.main) await main();

@@ -1,10 +1,9 @@
-import { describe, expect, it, jest } from "bun:test";
-import { convexTest } from "convex-test";
+import { afterAll, describe, expect, it, jest } from "bun:test";
 import type { Infer } from "convex/values";
-import schema from "./schema";
 import { api, internal } from "./_generated/api";
-import { modules } from "./_test/modules";
 import type { connectionInput, inventoryInput } from "./netboxModel";
+import { signedInTest } from "./_test/auth.setup";
+import type { TestClient } from "./_test/auth.setup";
 
 let sequence = 0;
 
@@ -99,12 +98,12 @@ const snapshot = (name: string) => ({
   ],
 });
 
-async function createSite(t: ReturnType<typeof convexTest>, key: string) {
+async function createSite(t: TestClient, key: string) {
   return await t.mutation(internal.sites.create, { site: siteInput(key) });
 }
 
 async function begin(
-  t: ReturnType<typeof convexTest>,
+  t: TestClient,
   siteId: string,
   workflow: "netbox" | "localization",
 ) {
@@ -119,7 +118,7 @@ async function begin(
 }
 
 async function publishNetBox(
-  t: ReturnType<typeof convexTest>,
+  t: TestClient,
   siteId: string,
   name: string,
   data: {
@@ -148,7 +147,7 @@ async function publishNetBox(
 
 describe("site-scoped integration foundations", () => {
   it("keeps one current workflow state and joins concurrent attempts", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const siteId = await createSite(t, "single-flight");
     const [first, second] = await Promise.all([
       t.mutation(internal.integrations.begin, {
@@ -180,7 +179,7 @@ describe("site-scoped integration foundations", () => {
   });
 
   it("publishes immutable NetBox generations and preserves the last success", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const siteId = await createSite(t, "alpha");
     const first = await publishNetBox(t, siteId, "alpha-a");
 
@@ -220,7 +219,7 @@ describe("site-scoped integration foundations", () => {
   });
 
   it("isolates identical external IDs between two sites and their queries", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const siteA = await createSite(t, "a");
     const siteB = await createSite(t, "b");
     await publishNetBox(t, siteA, "a");
@@ -271,7 +270,7 @@ describe("site-scoped integration foundations", () => {
   });
 
   it("rejects a NetBox payload carrying another site identity", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const siteId = await createSite(t, "identity");
     const attempt = await begin(t, siteId, "netbox");
 
@@ -297,7 +296,7 @@ describe("site-scoped integration foundations", () => {
   });
 
   it("pins one NetBox generation while a newer generation is published", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const siteId = await createSite(t, "pin");
     const first = await publishNetBox(t, siteId, "pin-a");
     const localization = await begin(t, siteId, "localization");
@@ -371,7 +370,7 @@ describe("site-scoped integration foundations", () => {
   });
 
   it("rejects empty and strongly incomplete generations without moving the pointer", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const siteId = await createSite(t, "guards");
     const first = await publishNetBox(t, siteId, "guards-a");
     const attempt = await begin(t, siteId, "netbox");
@@ -424,7 +423,7 @@ describe("site-scoped integration foundations", () => {
   });
 
   it("abandons an expired attempt and fences its delayed worker", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const siteId = await createSite(t, "recovery");
     const oldAttempt = await begin(t, siteId, "netbox");
     await t.run(async (ctx) => {
@@ -486,7 +485,7 @@ describe("site-scoped integration foundations", () => {
   });
 
   it("retains unconfigured-switch evidence without resolving a position", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const siteId = await createSite(t, "foreign-switch");
     const generation = await publishNetBox(t, siteId, "foreign-switch");
     const localization = await begin(t, siteId, "localization");
@@ -548,7 +547,7 @@ describe("site-scoped integration foundations", () => {
   });
 
   it("rejects a localization link without a supporting observation", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const siteId = await createSite(t, "unsupported-link");
     const generation = await publishNetBox(t, siteId, "unsupported-link");
     const localization = await begin(t, siteId, "localization");
@@ -585,7 +584,7 @@ describe("site-scoped integration foundations", () => {
   });
 
   it("publishes an explicit reason for a fresh MAC on an unknown NetBox port", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const siteId = await createSite(t, "unknown-port");
     const generation = await publishNetBox(t, siteId, "unknown-port");
     const localization = await begin(t, siteId, "localization");
@@ -658,7 +657,7 @@ describe("site-scoped integration foundations", () => {
   });
 
   it("publishes patch-panel and uncabled-socket diagnostics from pinned NetBox evidence", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const siteId = await createSite(t, "patch-diagnostics");
     const netbox = snapshot("patch-diagnostics");
     const generation = await publishNetBox(t, siteId, "patch-diagnostics", {
@@ -757,7 +756,7 @@ describe("site-scoped integration foundations", () => {
   });
 
   it("publishes conflicting MAC inventory for every affected computer", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const siteId = await createSite(t, "mac-conflict");
     const netbox = snapshot("mac-conflict");
     const generation = await publishNetBox(t, siteId, "mac-conflict", {
@@ -852,7 +851,7 @@ describe("site-scoped integration foundations", () => {
     // then drain it: Bun breaks later zero-delay timers if a pending fake
     // timer is dropped instead of run.
     jest.useFakeTimers();
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     await using _drainedScheduler = {
       [Symbol.asyncDispose]: async () => {
         try {
@@ -1168,5 +1167,38 @@ describe("site-scoped integration foundations", () => {
       consecutiveAbsences: 2,
       lastConfirmedSocketExternalId: "device:socket",
     });
+  });
+});
+
+describe("the scheduled worker's state read", () => {
+  it("reports running workflows only to a caller with the connector secret", async () => {
+    const secret = "connector-test-secret"; // gitleaks:allow
+    const previous = process.env.NETPLAN_CONNECTOR_SECRET;
+    process.env.NETPLAN_CONNECTOR_SECRET = secret;
+    afterAll(() => {
+      process.env.NETPLAN_CONNECTOR_SECRET = previous;
+    });
+    const t = await signedInTest("reader");
+    const siteId = await createSite(t, "agent-state");
+    await begin(t, siteId, "netbox");
+
+    expect(
+      await t.action(api.connector.readRunningWorkflows, {
+        secret,
+        siteKey: "agent-state",
+      }),
+    ).toEqual(["netbox"]);
+    expect(
+      await t.action(api.connector.readRunningWorkflows, {
+        secret,
+        siteKey: "missing",
+      }),
+    ).toBeNull();
+    await expect(
+      t.action(api.connector.readRunningWorkflows, {
+        secret: "wrong",
+        siteKey: "agent-state",
+      }),
+    ).rejects.toThrow("Connecteur non autorisé");
   });
 });

@@ -41,6 +41,7 @@ import {
   SidebarMenuSubItem,
 } from "@/components/ui/sidebar";
 import { ModeToggle } from "@/components/mode-toggle";
+import { SidebarAccount } from "@/panels/SidebarAccount";
 import { api } from "../../convex/_generated/api";
 
 /**
@@ -136,6 +137,8 @@ export default function AppSidebar() {
   const setCurrentFloor = useMapStore((s) => s.setCurrentFloor);
   const createDefaultMap = useMutation(api.buildings.createDefaultMap);
   const clearMap = useMutation(api.buildings.clearMap);
+  const defaultSiteId = useQuery(api.sites.findDefault);
+  // Only an admin can create the site; an editor builds on the existing one.
   const ensureDefaultSite = useMutation(api.sites.ensureDefault);
   const [devMapAction, setDevMapAction] = useState<"clear" | "create" | null>(
     null,
@@ -155,7 +158,7 @@ export default function AppSidebar() {
   const handleCreateDefaultMap = async () => {
     setDevMapAction("create");
     try {
-      const siteId = await ensureDefaultSite();
+      const siteId = defaultSiteId ?? (await ensureDefaultSite());
       const result = await createDefaultMap({ siteId });
       setCurrentBuilding(asBuildingId(result.buildingId));
       const firstFloorId = result.floorIds[0];
@@ -325,6 +328,7 @@ export default function AppSidebar() {
             {currentBuilding?.name ?? "Aucun bâtiment"}
           </div>
         </div>
+        <SidebarAccount />
       </SidebarFooter>
     </Sidebar>
   );

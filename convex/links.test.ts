@@ -1,8 +1,7 @@
 import { describe, expect, it } from "bun:test";
-import { convexTest } from "convex-test";
-import schema from "./schema";
 import { api } from "./_generated/api";
-import { modules } from "./_test/modules";
+import { signedInTest, ensureDefaultSite } from "./_test/auth.setup";
+import type { TestClient } from "./_test/auth.setup";
 
 let counter = 0;
 
@@ -13,9 +12,9 @@ const meta = () => ({
   createdAt: counter,
 });
 
-async function setupFloorWithDevices(t: ReturnType<typeof convexTest>) {
+async function setupFloorWithDevices(t: TestClient) {
   counter += 1;
-  const siteId = await t.mutation(api.sites.ensureDefault, {});
+  const siteId = await ensureDefaultSite(t);
   const buildingId = await t.mutation(api.buildings.create, {
     siteId,
     objectId: `building:links:${counter}`,
@@ -78,7 +77,7 @@ async function setupFloorWithDevices(t: ReturnType<typeof convexTest>) {
 }
 
 const createLink = async (
-  t: ReturnType<typeof convexTest>,
+  t: TestClient,
   floorId: string,
   id: string,
   fromDeviceId: string,
@@ -97,7 +96,7 @@ const createLink = async (
 
 describe("links", () => {
   it("listForDevice returns both incoming and outgoing edges", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const { floorId, a, b, c } = await setupFloorWithDevices(t);
     await createLink(t, floorId, "link:ab", a, b);
     await createLink(t, floorId, "link:cb", c, b);
@@ -109,7 +108,7 @@ describe("links", () => {
   });
 
   it("listForFloor returns links scoped to a floor", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const { floorId, a, b } = await setupFloorWithDevices(t);
     await createLink(t, floorId, "link:floor", a, b, "uplink");
 
@@ -119,7 +118,7 @@ describe("links", () => {
   });
 
   it("reflects link deletion applied through mapOperations", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const { floorId, a, b } = await setupFloorWithDevices(t);
     await createLink(t, floorId, "link:remove", a, b);
     counter += 1;

@@ -16,6 +16,7 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
+import { randomBytes } from "node:crypto";
 import { join, resolve } from "node:path";
 import type { Subprocess } from "bun";
 import {
@@ -38,8 +39,8 @@ import {
 } from "./lib/devAgent";
 
 // Every function the seed runs, in order. Each one is idempotent and refuses
-// to run without ALLOW_DEV_SEED. The auth lot adds the test accounts here.
-const SEED_FUNCTIONS = ["dev:seed"];
+// to run without ALLOW_DEV_SEED.
+const SEED_FUNCTIONS = ["dev:seed", "dev:seedAccounts"];
 
 // Where the last run served the app, for `--status`.
 const WEB_URL_KEY = "NETPLAN_DEV_WEB_URL";
@@ -85,11 +86,12 @@ const convexIsolation = {
 const run = async (
   command: Array<string>,
   env: Record<string, string> = baseEnv,
+  input?: string,
 ) => {
   const child = Bun.spawn(command, {
     cwd: root,
     env,
-    stdin: "ignore",
+    stdin: input === undefined ? "ignore" : new TextEncoder().encode(input),
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -466,10 +468,30 @@ if (!flags.has("--setup")) {
 const variables = parseEnvLines(
   await must(convexCli("env", "list"), "convex env list"),
 );
-if (variables.get("ALLOW_DEV_SEED") !== "true") {
+const authEnv: Record<string, string> = {
+  ALLOW_DEV_SEED: "true",
+  // better-auth accepts requests only from these origins: the app, and the
+  // production build `bun run test:e2e` serves against this backend.
+  SITE_URL: servedUrl ?? webUrl,
+  TRUSTED_ORIGINS: "http://127.0.0.1:4310",
+  // The backend checks each token against its own JWKS; its published port
+  // does not answer inside its container.
+  AUTH_JWKS_URL: "http://127.0.0.1:3211/api/auth/convex/jwks",
+};
+// Generated once per backend and never printed: it signs every session.
+if (!variables.get("BETTER_AUTH_SECRET")) {
+  authEnv.BETTER_AUTH_SECRET = randomBytes(32).toString("base64url");
+}
+for (const [key, value] of Object.entries(authEnv)) {
+  if (variables.get(key) === value) continue;
+  // Through stdin, so a secret never reaches a process list.
   await must(
-    convexCli("env", "set", "ALLOW_DEV_SEED", "true"),
-    "convex env set",
+    run(
+      [join(root, "node_modules/.bin/convex"), "env", "set", key],
+      { ...baseEnv, ...convexIsolation, ...convexValues },
+      value,
+    ),
+    `convex env set ${key}`,
   );
 }
 console.log("dev:agent: pushing functions…");

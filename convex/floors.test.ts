@@ -1,14 +1,13 @@
 import { describe, expect, it } from "bun:test";
-import { convexTest } from "convex-test";
-import schema from "./schema";
 import { api, internal } from "./_generated/api";
-import { modules } from "./_test/modules";
+import { signedInTest, ensureDefaultSite } from "./_test/auth.setup";
+import type { TestClient } from "./_test/auth.setup";
 
 let counter = 0;
 
-async function freshBuilding(t: ReturnType<typeof convexTest>) {
+async function freshBuilding(t: TestClient) {
   counter += 1;
-  const siteId = await t.mutation(api.sites.ensureDefault, {});
+  const siteId = await ensureDefaultSite(t);
   return await t.mutation(api.buildings.create, {
     siteId,
     objectId: `building:${counter}`,
@@ -18,7 +17,7 @@ async function freshBuilding(t: ReturnType<typeof convexTest>) {
 
 describe("floors", () => {
   it("listForBuilding returns floors of the given building only", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const a = await freshBuilding(t);
     const b = await freshBuilding(t);
     await t.mutation(api.floors.create, {
@@ -39,7 +38,7 @@ describe("floors", () => {
   });
 
   it("listAll returns floors across every building", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const a = await freshBuilding(t);
     const b = await freshBuilding(t);
     await t.mutation(api.floors.create, {
@@ -60,7 +59,7 @@ describe("floors", () => {
   });
 
   it("create assigns sequential order", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const buildingId = await freshBuilding(t);
     await t.mutation(api.floors.create, {
       objectId: "floor:x:2",
@@ -79,7 +78,7 @@ describe("floors", () => {
   });
 
   it("rename updates a floor name", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const buildingId = await freshBuilding(t);
     const id = await t.mutation(api.floors.create, {
       objectId: "floor:rename",
@@ -92,7 +91,7 @@ describe("floors", () => {
   });
 
   it("remove cascades devices, walls, links, and presences of the floor", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const buildingId = await freshBuilding(t);
     const floorId = await t.mutation(api.floors.create, {
       objectId: "floor:cascade",
@@ -166,7 +165,7 @@ describe("floors", () => {
   });
 
   it("rejects creates for deleted buildings", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const buildingId = await freshBuilding(t);
     await t.mutation(internal.buildings.remove, { id: buildingId });
 

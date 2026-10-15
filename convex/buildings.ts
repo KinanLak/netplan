@@ -1,5 +1,6 @@
 import { ConvexError, v } from "convex/values";
-import { internalMutation, mutation, query } from "./_generated/server";
+import { internalMutation } from "./_generated/server";
+import { readerQuery, editorMutation } from "./lib/functions";
 import type { Doc } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { requireSite } from "./sites";
@@ -40,7 +41,7 @@ const getBuildingRow = async (ctx: MutationCtx, objectId: string) => {
     .unique();
 };
 
-export const list = query({
+export const list = readerQuery({
   args: {},
   returns: v.array(buildingValidator),
   handler: async (ctx) => {
@@ -49,7 +50,7 @@ export const list = query({
   },
 });
 
-export const listForSite = query({
+export const listForSite = readerQuery({
   args: { siteId: v.string() },
   returns: v.array(buildingValidator),
   handler: async (ctx, { siteId }) => {
@@ -61,7 +62,7 @@ export const listForSite = query({
   },
 });
 
-export const create = mutation({
+export const create = editorMutation({
   args: { siteId: v.string(), objectId: v.string(), name: v.string() },
   returns: v.string(),
   handler: async (ctx, { siteId, objectId, name }) => {
@@ -85,7 +86,7 @@ export const create = mutation({
   },
 });
 
-export const createDefaultMap = mutation({
+export const createDefaultMap = editorMutation({
   args: { siteId: v.string() },
   returns: defaultMapResult,
   handler: async (ctx, { siteId }) => {
@@ -136,7 +137,7 @@ export const createDefaultMap = mutation({
   },
 });
 
-export const clearMap = mutation({
+export const clearMap = editorMutation({
   args: { siteId: v.string() },
   returns: v.null(),
   handler: async (ctx, { siteId }) => {
@@ -158,7 +159,7 @@ export const clearMap = mutation({
   },
 });
 
-export const rename = mutation({
+export const rename = editorMutation({
   args: { id: v.string(), name: v.string() },
   returns: v.null(),
   handler: async (ctx, { id, name }) => {

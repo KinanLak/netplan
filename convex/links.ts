@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { query } from "./_generated/server";
+import { readerQuery } from "./lib/functions";
 import type { Doc } from "./_generated/dataModel";
 import { getExpiredDeviceIdsForFloor } from "./computerPresentation";
 import { link } from "./mapValidators";
@@ -14,7 +14,7 @@ const toLink = (row: Doc<"links">) => ({
   label: row.label,
 });
 
-export const listForFloor = query({
+export const listForFloor = readerQuery({
   args: { floorId: v.string() },
   returns: v.array(link),
   handler: async (ctx, { floorId }) => {
@@ -35,7 +35,7 @@ export const listForFloor = query({
   },
 });
 
-export const listForDevice = query({
+export const listForDevice = readerQuery({
   args: { deviceId: v.string() },
   returns: v.array(link),
   handler: async (ctx, { deviceId }) => {

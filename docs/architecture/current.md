@@ -36,9 +36,12 @@ clients use to reconcile.
 Walls are stored as one 20×20 block per grid cell (`src/walls/`), keyed by a
 geometry key so that two blocks never occupy the same cell.
 
-Identity is a random pseudonym stored in `localStorage` under
-`netplan-identity`; there are no accounts and anyone who can reach the app can
-edit it. Presence (`convex/presences.ts`) shows who else is on a floor.
+Every page needs a better-auth login (ADR 0021), and every public Convex
+function checks the caller's role (Lecteur, Éditeur, Admin; ADR 0004) on the
+server; `convex/authorization.test.ts` lists the level of each one. The
+integration connector authenticates with a shared secret instead. Presence
+(`convex/presences.ts`) still shows a random pseudonym stored in
+`localStorage` under `netplan-identity`.
 
 ## Localization pipeline
 

@@ -3,7 +3,7 @@ import { NetplanLogo } from "@/components/netplan-logo";
 
 const PREVIEW_SIZES = [24, 36, 52, 80] as const;
 
-export const Route = createFileRoute("/logo")({
+export const Route = createFileRoute("/_authed/logo")({
   component: LogoPreviewPage,
 });
 

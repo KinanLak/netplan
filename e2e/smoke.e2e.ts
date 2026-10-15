@@ -1,6 +1,9 @@
 import { expect, test } from "@playwright/test";
+import { DEV_ACCOUNTS, DEV_PASSWORD } from "../src/dev-seed/accounts";
 
-test("the seeded demo map opens on both floors", async ({ page }) => {
+test("an editor signs in and the seeded demo map opens on both floors", async ({
+  page,
+}) => {
   const errors: Array<string> = [];
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("console", (message) => {
@@ -8,6 +11,12 @@ test("the seeded demo map opens on both floors", async ({ page }) => {
   });
 
   await page.goto("/");
+  await expect(page).toHaveURL(/\/login/);
+  const editor = DEV_ACCOUNTS.find((account) => account.role === "editor");
+  await page.getByLabel("Identifiant ou e-mail").fill(editor?.username ?? "");
+  await page.getByLabel("Mot de passe").fill(DEV_PASSWORD);
+  await page.getByRole("button", { name: "Se connecter" }).click();
+
   await expect(page.getByRole("button", { name: "Bâtiment A" })).toBeVisible();
 
   await page.getByText("Rez-de-chaussée", { exact: true }).click();

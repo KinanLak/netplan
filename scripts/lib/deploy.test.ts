@@ -108,7 +108,9 @@ test("compose hands convex-deploy every variable in convex-env.txt", async () =>
   const services = await composeServices();
   const environment = field(services["convex-deploy"], "environment");
   for (const name of await convexEnvNames()) {
-    expect(field(environment, name)).toBe(`\${${name}:-}`);
+    // The operator's value always wins; a few names fall back to one derived
+    // from the public URLs instead of staying empty.
+    expect(String(field(environment, name))).toStartWith(`\${${name}:-`);
   }
 });
 

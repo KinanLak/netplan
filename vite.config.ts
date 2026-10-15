@@ -10,6 +10,9 @@ const config = defineConfig({
   resolve: {
     tsconfigPaths: true,
   },
+  // The package ships untranspiled ESM that imports React; bundling it keeps
+  // one React instance on the server.
+  ssr: { noExternal: ["@convex-dev/better-auth"] },
   plugins: [
     devtools(),
     nitro({

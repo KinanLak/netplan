@@ -42,14 +42,19 @@ by `convex-deploy` on every start. An empty value leaves the deployment's
 current value alone, so a variable set from the dashboard survives until
 `.env` gives it a value.
 
-| Variable                             | Meaning                                                                  |
-| ------------------------------------ | ------------------------------------------------------------------------ |
-| `NETBOX_URL`, `NETBOX_TOKEN`         | NetBox API used by the localization pipeline.                            |
-| `LIBRENMS_URL`, `LIBRENMS_TOKEN`     | LibreNMS API used by the localization pipeline.                          |
-| `NETPLAN_CONNECTOR_SECRET`           | Shared secret of the external integration agent.                         |
-| `INTEGRATION_SCHEDULER_ENABLED`      | `true` lets the cron reserve integration cycles.                         |
-| `INTEGRATION_MANUAL_REFRESH_ENABLED` | `true` allows refreshes requested from the interface.                    |
-| `ALLOW_DEV_SEED`                     | `true` allows the fictional demo site to be seeded. Never in production. |
+| Variable                                                                    | Meaning                                                                                                                                 |
+| --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `NETBOX_URL`, `NETBOX_TOKEN`                                                | NetBox API used by the localization pipeline.                                                                                           |
+| `LIBRENMS_URL`, `LIBRENMS_TOKEN`                                            | LibreNMS API used by the localization pipeline.                                                                                         |
+| `NETPLAN_CONNECTOR_SECRET`                                                  | Shared secret of the external integration agent.                                                                                        |
+| `INTEGRATION_SCHEDULER_ENABLED`                                             | `true` lets the cron reserve integration cycles.                                                                                        |
+| `INTEGRATION_MANUAL_REFRESH_ENABLED`                                        | `true` allows refreshes requested from the interface.                                                                                   |
+| `ALLOW_DEV_SEED`                                                            | `true` allows the fictional demo site to be seeded. Never in production.                                                                |
+| `BETTER_AUTH_SECRET`                                                        | Signs sessions and tokens. Required; generate it like the secrets above.                                                                |
+| `SITE_URL`                                                                  | The app's public URL, trusted for sign-in and redirects. Defaults to `<scheme>://<domain>:<port>`.                                      |
+| `TRUSTED_ORIGINS`                                                           | Other origins allowed to sign in, comma-separated.                                                                                      |
+| `AUTH_JWKS_URL`                                                             | Where the backend fetches its own signing keys, when its public site URL does not answer from inside its container. Empty with compose. |
+| `BOOTSTRAP_ADMIN_EMAIL`, `BOOTSTRAP_ADMIN_PASSWORD`, `BOOTSTRAP_ADMIN_NAME` | The first admin, created by `convex-deploy` while no admin exists. Sign-up is closed, so nobody can sign in before it.                  |
 
 A new variable read by `convex/` goes in `convex-env.txt`, in the
 `convex-deploy` environment of `compose.yaml` and in `.env.example`;

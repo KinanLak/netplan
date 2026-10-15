@@ -1,6 +1,6 @@
 import type { Infer } from "convex/values";
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { readerQuery, editorMutation } from "./lib/functions";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { mapOperation, mapOperationResult } from "./mapValidators";
@@ -1596,7 +1596,7 @@ const clientOperationResult = (operation: Doc<"clientOperations">) => ({
   error: operation.error,
 });
 
-export const observePending = query({
+export const observePending = readerQuery({
   args: { opIds: v.array(v.string()) },
   returns: v.array(mapOperationResult),
   handler: async (ctx, { opIds }) => {
@@ -1684,7 +1684,7 @@ export const applyMapOperation = async (
   };
 };
 
-export const apply = mutation({
+export const apply = editorMutation({
   args: { operation: mapOperation },
   returns: mapOperationResult,
   handler: async (ctx, { operation }) =>

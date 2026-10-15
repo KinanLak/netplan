@@ -23,7 +23,10 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "convex": "^1.46.0"
+    "@convex-dev/better-auth": "^0.12.5",
+    "better-auth": "1.6.33",
+    "convex": "^1.46.0",
+    "convex-helpers": "^0.1.128"
   },
   "devDependencies": {
     "@babel/core": "^8.0.7",

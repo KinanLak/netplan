@@ -1,18 +1,14 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { convexTest } from "convex-test";
-import schema from "./schema";
 import { api, internal } from "./_generated/api";
-import { modules } from "./_test/modules";
 import { buildDemoFloors } from "../src/dev-seed/demoMap";
+import { signedInTest } from "./_test/auth.setup";
+import type { TestClient } from "./_test/auth.setup";
 
 afterEach(() => {
   delete process.env.ALLOW_DEV_SEED;
 });
 
-const countFloor = async (
-  t: ReturnType<typeof convexTest>,
-  floorId: string,
-) => {
+const countFloor = async (t: TestClient, floorId: string) => {
   const [devices, walls, links] = await Promise.all([
     t.query(api.mapDocument.getFloorDevices, { floorId }),
     t.query(api.mapDocument.getFloorWalls, { floorId }),
@@ -23,7 +19,7 @@ const countFloor = async (
 
 describe("dev seed", () => {
   it("refuses to run unless ALLOW_DEV_SEED is true", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     process.env.ALLOW_DEV_SEED = "1";
     await expect(t.mutation(internal.dev.seed, {})).rejects.toThrow(
       /ALLOW_DEV_SEED/,
@@ -32,7 +28,7 @@ describe("dev seed", () => {
   });
 
   it("loads a disabled demo site whose map passes server validation", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     process.env.ALLOW_DEV_SEED = "true";
     const { buildingId, floorIds } = await t.mutation(internal.dev.seed, {});
 
@@ -60,7 +56,7 @@ describe("dev seed", () => {
   });
 
   it("changes nothing when run again", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     process.env.ALLOW_DEV_SEED = "true";
     const { floorIds } = await t.mutation(internal.dev.seed, {});
     const before = await Promise.all(floorIds.map((id) => countFloor(t, id)));
@@ -86,7 +82,7 @@ describe("dev seed", () => {
   });
 
   it("draws a cleared map again and keeps a changed demo site", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     process.env.ALLOW_DEV_SEED = "true";
     const { floorIds } = await t.mutation(internal.dev.seed, {});
     const seeded = await Promise.all(floorIds.map((id) => countFloor(t, id)));
