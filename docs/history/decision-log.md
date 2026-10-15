@@ -772,3 +772,90 @@ Questions of 2026-10-15, in the order they came up.
 - Decision: `--down` and `--reseed` fail on a Docker error (`--force` already accepts an absent resource); orphan collection logs it and continues.
 - Why: a teardown must not lie; an orphan of another worktree must not block this one.
 - Who: agent (obvious)
+
+### L0 — Infra
+
+Questions of 2026-10-15, in the order they came up.
+
+#### How do browser and containers share one set of URLs locally?
+
+- Context: published `127.0.0.1:<port>` URLs work for the browser but not inside containers (app `/health`, Convex reaching Keycloak and its own site origin for better-auth).
+- Decision: a Caddy edge publishes one port (`127.0.0.1:8480`) and routes by host name; it carries a Docker network alias for every public host (`netplan.localhost`, `convex.netplan.localhost`, …), so the same URL resolves to the edge from the browser (Chromium maps `*.localhost` to loopback) and from containers (Docker DNS).
+- Why: production-shaped (one reverse proxy, host routing), no internal/public URL split to configure; verified with musl and glibc containers. curl special-cases `*.localhost`, so container healthchecks use service names.
+- Who: agent (judgement call)
+
+#### Where does the web app get the Convex URLs?
+
+- Context: one image for every installation (ADR 0002); `VITE_*` values are inlined at build.
+- Decision: server env `CONVEX_URL` and `CONVEX_SITE_URL`, read at request time by a server function; the root loader returns them and the browser builds a memoised `ConvexReactClient` from them. No `VITE_` prefix, so nothing can inline them.
+- Why: the TanStack Start documented pattern; `ConvexReactClient` connects lazily, so creating it from loader data costs nothing in SSR.
+- Who: agent (obvious)
+
+#### How are Convex functions deployed in compose?
+
+- Context: `convex deploy` needs the CLI, the functions source and an admin key.
+- Decision: a one-shot `convex-deploy` service whose image is built FROM the pinned convex-backend image (Node 22 and `generate_key` inside) plus the functions and `node_modules`; it derives the admin key from `INSTANCE_NAME`/`INSTANCE_SECRET`, deploys, then sets the allowlisted Convex env vars.
+- Why: `docker compose up` gives a working stack with no manual key step; shares layers with the running backend (disk is tight); the same image can run as a Kubernetes Job later.
+- Who: agent (judgement call)
+
+#### Which Postgres major?
+
+- Context: Postgres 18 is newest; upstream Convex says it is tested with 17.
+- Decision: `postgres:17` (pinned minor) in compose.
+- Why: the backend's tested version beats "latest" for the database under it; moving to 18 is a dump/restore when upstream tests it.
+- Who: agent (judgement call)
+
+#### Are Keycloak and Mailpit part of every install?
+
+- Context: production installs bring their own IdP and SMTP relay.
+- Decision: both sit in the compose profile `local`, enabled by `COMPOSE_PROFILES=local` in `.env.example`; production removes it.
+- Why: one compose file, no dev-only services in production.
+- Who: agent (obvious)
+
+#### How does the Bun app server reach `*.localhost` URLs inside Docker?
+
+- Context: Bun's `fetch` (like curl and Chromium) sends every `*.localhost` name to loopback, ignoring Docker DNS aliases; `/health` from the app container failed. Node, glibc/musl `getaddrinfo` and the Convex backend's action `fetch` follow the aliases.
+- Decision: the `app` service uses `network_mode: service:edge`; inside it, `127.0.0.1:<edge port>` is the edge, so the public URLs work. The edge proxies the app host to `127.0.0.1:3000`.
+- Why: keeps one set of URLs and Bun as the runtime (vs an internal-URL split or running the image on Node); in production the hosts are real DNS names and both paths reach the edge anyway. Verified: `/health` 200, browser end to end, Convex action reaching Keycloak and convex-site via public URLs.
+- Who: agent (judgement call)
+
+#### SSR stylesheet 404 (pre-existing)
+
+- Context: the SSR bundle links `styles-<hash>.css` from its own build, the client build emits a different hash; the link 404s but the client manifest CSS still styles the page.
+- Decision: out of L0 scope; record as a leftover for the owner.
+- Who: agent (obvious)
+
+#### What goes in the functions image?
+
+- Context: `convex deploy` bundles `convex/` (and the `src/` files it imports) at deploy time, so the image needs their packages; the functions only import `convex`, but `package.json` lists build tools (vite, tanstack, hugeicons) under `dependencies`.
+- Decision: the backend image plus `bun install --production --frozen-lockfile` node_modules (~360 MB over the shared 582 MB base). A test keeps `deploy/convex-env.txt` equal to the `process.env` names the functions read.
+- Why: correct by construction from the lockfile; a hand-picked `convex` closure breaks silently when a dependency changes. Moving build tools to `devDependencies` would trim it: leftover for the owner.
+- Who: agent (judgement call)
+
+#### Does an empty `.env` value clear a Convex variable?
+
+- Context: `convex-deploy` sets every name in `convex-env.txt` on each start; `.env.example` leaves the integration variables empty.
+- Decision: an empty value leaves the deployment's value alone; only a non-empty value is set.
+- Why: a value set from the dashboard must survive a restart; clearing one is a deliberate dashboard action.
+- Who: agent (judgement call)
+
+#### Does the app image run as root?
+
+- Context: the distroless Bun image defaults to root; the server only reads `.output/` and listens on 3000.
+- Decision: `USER nonroot` (65532).
+- Why: nothing needs root, and a compromise of the server should not own the container.
+- Who: agent (obvious)
+
+#### How do operators run Convex CLI commands (export, import, env)?
+
+- Context: backups and upgrades need `convex export`/`import`/`env list` with an admin key, which only the backend's `generate_key` can derive.
+- Decision: `deploy/convex.sh` in the functions image derives the key from `INSTANCE_NAME`/`INSTANCE_SECRET` and runs any CLI command; `convex-deploy.sh` uses it too. Operators call it with `docker compose run --entrypoint ./deploy/convex.sh convex-deploy …`.
+- Why: no admin key ever lands in `.env` or on screen, and there is one key path for deploy and operations.
+- Who: agent (obvious)
+
+#### Which backup procedure is documented?
+
+- Context: the brief asks for Postgres plus Convex storage; upstream recommends `convex export` for upgrades.
+- Decision: both: A, `convex export --include-file-storage` (online, portable across versions); B, `pg_dump` plus a tar of the `convex-data` volume with the backend stopped (exact, same version). Both verified by a round trip through `down -v` with identical document counts.
+- Why: A is the safe default and the upgrade fallback; B is the fast one for large data and the only one that keeps the backend's internal state as is.
+- Who: agent (judgement call)

@@ -19,8 +19,8 @@ socket where the network last saw it.
 - **Backend** (`convex/`): Convex functions and schema. Convex owns every
   durable fact: sites, buildings, floors, devices, walls, links, presence,
   and the integration tables.
-- **Hosting**: moving to a self-hosted Docker deployment (lot 0, ADR 0002,
-  ADR 0020). The Vercel configuration and the Electrobun desktop app are gone.
+- **Hosting**: self-hosted with Docker Compose (ADRs 0002 and 0020), described
+  below.
 
 ## Map editing
 
@@ -64,6 +64,32 @@ The site is a single hardcoded default (`convex/sites.ts`), and device
 identity is keyed on NetBox ids. The French plan that built this pipeline is
 frozen in
 [`docs/history/2026-07-computer-location-refresh/`](../history/2026-07-computer-location-refresh/README.md).
+
+## Deployment
+
+Built by lot 0 (ADR 0020); procedures in [`docs/operations/`](../operations/index.md).
+
+- One `Dockerfile` builds two images. `app` is the Nitro server output on
+  distroless Bun, run as an unprivileged user; it reads `CONVEX_URL` and
+  `CONVEX_SITE_URL` at request time (`src/lib/runtimeConfig.ts`) and hands
+  them to the browser through the root loader, so one image serves every
+  installation. `functions` is the pinned `convex-backend` image plus the
+  functions and their production dependencies; its `deploy/convex.sh`
+  derives an admin key from the instance secret and runs the Convex CLI.
+- `GET /health` reports the configuration and whether the backend answers,
+  `200` or `503`, uncached and without login.
+- `deploy/compose.yaml` runs Postgres 17, the Convex backend on it, the
+  dashboard, the app and a Caddy edge, plus a `convex-deploy` one-shot that
+  pushes the functions and the variables listed in `deploy/convex-env.txt`
+  before the app starts. The `local` profile adds Keycloak (dev mode, realm
+  imported from `deploy/keycloak/import/`) and Mailpit.
+- Only the edge publishes a port. It routes by host name
+  (`netplan.<domain>`, `convex.<domain>`, …) and carries a network alias for
+  each, so the public URLs work from browsers and containers alike; the app
+  shares the edge's network namespace because Bun sends `*.localhost` to
+  loopback.
+- CI builds both images, deploys the functions to a backend service and
+  checks the app's `/health`; nothing is pushed to a registry.
 
 ## Development and delivery
 
