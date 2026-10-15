@@ -1,4 +1,10 @@
 import type { MapDocumentSnapshot } from "@/types/map";
+import {
+  applyOverlayPatch,
+  isPatchBlockedByLock,
+  overlayError,
+  sameOverlay,
+} from "./overlay";
 import type {
   ApplyOperationReason,
   ApplyOperationResult,
@@ -97,6 +103,9 @@ const isSafeBatchNoop = (
       return reason === "duplicate-wall-geometry";
     case "walls.delete":
       return reason === "missing-wall";
+    case "overlay.set":
+      return reason === "already-exists";
+    case "overlay.patch":
     case "device.patch":
     case "batch":
       return false;
@@ -251,6 +260,37 @@ export function applyOperation(
       return nextWalls.length === snapshot.walls.length
         ? unchanged(snapshot, "missing-wall")
         : changed({ ...snapshot, walls: nextWalls });
+    }
+
+    case "overlay.set": {
+      if (operation.floorId !== snapshot.floorId) {
+        return unchanged(snapshot, "wrong-floor");
+      }
+      const current = snapshot.overlay;
+      const next = operation.overlay;
+      if (!current && !next) return unchanged(snapshot, "missing-overlay");
+      if (current && next && sameOverlay(current, next)) {
+        return unchanged(snapshot, "already-exists");
+      }
+      if (current?.locked) return unchanged(snapshot, "overlay-locked");
+      if (next && (next.floorId !== operation.floorId || overlayError(next))) {
+        return unchanged(snapshot, "invalid-overlay");
+      }
+      return changed({ ...snapshot, overlay: next });
+    }
+
+    case "overlay.patch": {
+      if (operation.floorId !== snapshot.floorId) {
+        return unchanged(snapshot, "wrong-floor");
+      }
+      const current = snapshot.overlay;
+      if (!current) return unchanged(snapshot, "missing-overlay");
+      if (isPatchBlockedByLock(current, operation.patch)) {
+        return unchanged(snapshot, "overlay-locked");
+      }
+      const next = applyOverlayPatch(current, operation.patch);
+      if (overlayError(next)) return unchanged(snapshot, "invalid-overlay");
+      return changed({ ...snapshot, overlay: next });
     }
 
     case "batch":

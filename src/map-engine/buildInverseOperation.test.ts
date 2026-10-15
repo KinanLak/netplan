@@ -34,6 +34,7 @@ describe("buildInverseOperation", () => {
       devices: [original],
       walls: [],
       links: [],
+      overlay: null,
     };
     const move: MapOperation = {
       kind: "device.patch",
@@ -67,6 +68,7 @@ describe("buildInverseOperation", () => {
       devices: [a, b],
       walls: [],
       links: [link],
+      overlay: null,
     };
 
     const inverse = buildInverseOperation(snapshot, {
@@ -91,6 +93,7 @@ describe("buildInverseOperation", () => {
       devices: [a],
       walls: [],
       links: [],
+      overlay: null,
     };
     const batch: MapOperation = {
       kind: "batch",
@@ -129,7 +132,14 @@ describe("buildInverseOperation", () => {
     };
 
     const inverse = buildInverseOperation(
-      { floorId, revision: 0, devices: [], walls: [wall], links: [] },
+      {
+        floorId,
+        revision: 0,
+        devices: [],
+        walls: [wall],
+        links: [],
+        overlay: null,
+      },
       { kind: "walls.delete", meta: meta(5), wallIds: [wall.id] },
     );
 

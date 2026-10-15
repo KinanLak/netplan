@@ -123,6 +123,26 @@ export const link = v.object({
   label: v.optional(v.string()),
 });
 
+export const floorOverlay = v.object({
+  floorId: v.string(),
+  fileId: v.string(),
+  imageWidth: v.number(),
+  imageHeight: v.number(),
+  center: position,
+  scale: v.number(),
+  rotation: v.number(),
+  opacity: v.number(),
+  locked: v.boolean(),
+});
+
+export const overlayPatch = v.object({
+  center: v.optional(position),
+  scale: v.optional(v.number()),
+  rotation: v.optional(v.number()),
+  opacity: v.optional(v.number()),
+  locked: v.optional(v.boolean()),
+});
+
 export const mapOperation = v.union(
   v.object({ kind: v.literal("device.create"), meta: operationMeta, device }),
   v.object({
@@ -151,6 +171,18 @@ export const mapOperation = v.union(
     kind: v.literal("walls.delete"),
     meta: operationMeta,
     wallIds: v.array(v.string()),
+  }),
+  v.object({
+    kind: v.literal("overlay.set"),
+    meta: operationMeta,
+    floorId: v.string(),
+    overlay: v.union(floorOverlay, v.null()),
+  }),
+  v.object({
+    kind: v.literal("overlay.patch"),
+    meta: operationMeta,
+    floorId: v.string(),
+    patch: overlayPatch,
   }),
   v.object({
     kind: v.literal("batch"),
@@ -182,6 +214,16 @@ export const mapOperation = v.union(
         v.object({
           kind: v.literal("walls.delete"),
           wallIds: v.array(v.string()),
+        }),
+        v.object({
+          kind: v.literal("overlay.set"),
+          floorId: v.string(),
+          overlay: v.union(floorOverlay, v.null()),
+        }),
+        v.object({
+          kind: v.literal("overlay.patch"),
+          floorId: v.string(),
+          patch: overlayPatch,
         }),
       ),
     ),

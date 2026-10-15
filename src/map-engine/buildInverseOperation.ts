@@ -37,6 +37,28 @@ const invertDevicePatch = (
   };
 };
 
+const invertOverlayPatch = (
+  snapshot: MapDocumentSnapshot,
+  operation: Extract<MapOperation, { kind: "overlay.patch" }>,
+): MapOperation | null => {
+  const overlay = snapshot.overlay;
+  if (!overlay) return null;
+
+  const patch: Extract<MapOperation, { kind: "overlay.patch" }>["patch"] = {};
+  if (operation.patch.center !== undefined) patch.center = overlay.center;
+  if (operation.patch.scale !== undefined) patch.scale = overlay.scale;
+  if (operation.patch.rotation !== undefined) patch.rotation = overlay.rotation;
+  if (operation.patch.opacity !== undefined) patch.opacity = overlay.opacity;
+  if (operation.patch.locked !== undefined) patch.locked = overlay.locked;
+
+  return {
+    kind: "overlay.patch",
+    meta: operation.meta,
+    floorId: operation.floorId,
+    patch,
+  };
+};
+
 export function buildInverseOperation(
   snapshotBeforeOperation: MapDocumentSnapshot,
   operation: MapOperation,
@@ -112,6 +134,17 @@ export function buildInverseOperation(
         ? { kind: "walls.add", meta: operation.meta, walls }
         : null;
     }
+
+    case "overlay.set":
+      return {
+        kind: "overlay.set",
+        meta: operation.meta,
+        floorId: operation.floorId,
+        overlay: snapshotBeforeOperation.overlay,
+      };
+
+    case "overlay.patch":
+      return invertOverlayPatch(snapshotBeforeOperation, operation);
 
     case "batch": {
       const inverses: Array<MapOperation> = [];

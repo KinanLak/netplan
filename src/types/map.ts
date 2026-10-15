@@ -11,6 +11,8 @@ export type FloorId = Brand<string, "FloorId">;
 export type BuildingId = Brand<string, "BuildingId">;
 export type LinkId = Brand<string, "LinkId">;
 export type SiteId = Brand<string, "SiteId">;
+/** A calque image file, the object id of its `floorOverlayFiles` row. */
+export type OverlayFileId = Brand<string, "OverlayFileId">;
 
 export type ObjectId =
   | DeviceId
@@ -146,12 +148,30 @@ export interface LinkDoc {
 
 export type Link = LinkDoc;
 
+/**
+ * The floor's background image (ADR 0024). The image is drawn centred on
+ * `center`, scaled by `scale` plan units per image pixel, then rotated
+ * clockwise by `rotation` degrees.
+ */
+export interface FloorOverlay {
+  floorId: FloorId;
+  fileId: OverlayFileId;
+  imageWidth: number;
+  imageHeight: number;
+  center: Position;
+  scale: number;
+  rotation: number;
+  opacity: number;
+  locked: boolean;
+}
+
 export interface MapDocumentSnapshot {
   floorId: FloorId;
   revision: number;
   devices: Array<Device>;
   walls: Array<WallSegment>;
   links: Array<LinkDoc>;
+  overlay: FloorOverlay | null;
 }
 
 // ── Operation metadata ───────────────────────────────────────────────────────

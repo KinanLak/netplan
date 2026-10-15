@@ -64,6 +64,10 @@ export const withOperationMeta = (
       return { ...operation, meta };
     case "walls.delete":
       return { ...operation, meta };
+    case "overlay.set":
+      return { ...operation, meta };
+    case "overlay.patch":
+      return { ...operation, meta };
     case "batch":
       return {
         ...operation,

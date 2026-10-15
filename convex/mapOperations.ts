@@ -6,6 +6,13 @@ import type { MutationCtx } from "./_generated/server";
 import { mapOperation, mapOperationResult } from "./mapValidators";
 import { getExpiredDeviceIdsForFloor } from "./computerPresentation";
 import { applySystemDeviceRelocation } from "../src/map-engine/systemDeviceRelocation";
+import {
+  applyOverlayPatch,
+  isPatchBlockedByLock,
+  overlayError,
+  sameOverlay,
+} from "../src/map-engine/overlay";
+import { syncOverlayFileReleases } from "./lib/overlayFiles";
 import type {
   Device,
   DeviceId,
@@ -23,6 +30,8 @@ type WallAddOperation = Extract<OperationInput, { kind: "walls.add" }>;
 type WallDeleteOperation = Extract<OperationInput, { kind: "walls.delete" }>;
 type LinkCreateOperation = Extract<OperationInput, { kind: "link.create" }>;
 type LinkDeleteOperation = Extract<OperationInput, { kind: "link.delete" }>;
+type OverlaySetOperation = Extract<OperationInput, { kind: "overlay.set" }>;
+type OverlayPatchOperation = Extract<OperationInput, { kind: "overlay.patch" }>;
 
 type DeviceInput = DeviceCreateOperation["device"];
 type WallInput = WallAddOperation["walls"][number];
@@ -31,6 +40,7 @@ type LinkInput = LinkCreateOperation["link"];
 type DeviceInsert = Omit<Doc<"devices">, "_id" | "_creationTime">;
 type WallInsert = Omit<Doc<"walls">, "_id" | "_creationTime">;
 type LinkInsert = Omit<Doc<"links">, "_id" | "_creationTime">;
+type OverlayValue = Omit<Doc<"floorOverlays">, "_id" | "_creationTime">;
 type BindingInsert = Omit<
   Doc<"externalObjectBindings">,
   "_id" | "_creationTime"
@@ -63,6 +73,12 @@ type WritePlan = Array<
   | { kind: "deleteLink"; rowId: Id<"links"> }
   | { kind: "insertBinding"; value: BindingInsert }
   | { kind: "deleteBinding"; rowId: Id<"externalObjectBindings"> }
+  | {
+      kind: "putOverlay";
+      rowId?: Id<"floorOverlays">;
+      value: OverlayValue | null;
+      floorId: string;
+    }
 >;
 
 interface PlanningState {
@@ -76,6 +92,11 @@ interface PlanningState {
   bindingsByKey: Map<string, PlannedBinding>;
   bindingKeyByDevice: Map<string, string>;
   wallGeometry: Map<string, string>;
+  /** The calque each loaded floor will have, `null` for none. */
+  overlays: Map<string, OverlayValue | null>;
+  overlayRowIds: Map<string, Id<"floorOverlays">>;
+  overlayFiles: Map<string, { width: number; height: number }>;
+  touchedOverlayFileIds: Set<string>;
   collisionExcludedDeviceIds: Set<string>;
   affectedFloorIds: Set<string>;
   plan: WritePlan;
@@ -267,6 +288,7 @@ interface OperationScope {
   deviceIds: Set<string>;
   wallIds: Set<string>;
   linkIds: Set<string>;
+  overlayFileIds: Set<string>;
   externalIdentities: Map<
     string,
     { siteId: string; instanceKey: string; externalId: string }
@@ -304,6 +326,7 @@ const collectOperationScope = (
     deviceIds: new Set(),
     wallIds: new Set(),
     linkIds: new Set(),
+    overlayFileIds: new Set(),
     externalIdentities: new Map(),
   },
 ): OperationScope => {
@@ -336,6 +359,13 @@ const collectOperationScope = (
       break;
     case "walls.delete":
       for (const wallId of operation.wallIds) scope.wallIds.add(wallId);
+      break;
+    case "overlay.set":
+      scope.floorIds.add(operation.floorId);
+      if (operation.overlay) scope.overlayFileIds.add(operation.overlay.fileId);
+      break;
+    case "overlay.patch":
+      scope.floorIds.add(operation.floorId);
       break;
     case "batch":
       for (const subOperation of operation.operations) {
@@ -397,6 +427,8 @@ const buildPlanningState = async (
     bindingsByDevice,
     bindingsByExternal,
     expiredDeviceIdsByFloor,
+    overlayRows,
+    overlayFileRows,
   ] = await Promise.all([
     ctx.db.query("floors").collect(),
     ctx.db.query("buildings").collect(),
@@ -450,7 +482,24 @@ const buildPlanningState = async (
     Promise.all(
       floorIdList.map((floorId) => getExpiredDeviceIdsForFloor(ctx, floorId)),
     ),
+    Promise.all(
+      floorIdList.map((floorId) =>
+        ctx.db
+          .query("floorOverlays")
+          .withIndex("by_floor", (q) => q.eq("floorId", floorId))
+          .unique(),
+      ),
+    ),
+    Promise.all(
+      [...scope.overlayFileIds].map((fileId) =>
+        ctx.db
+          .query("floorOverlayFiles")
+          .withIndex("by_object_id", (q) => q.eq("objectId", fileId))
+          .unique(),
+      ),
+    ),
   ]);
+  const loadedOverlays = overlayRows.flatMap((row) => (row ? [row] : []));
 
   const devices = devicesByFloor.flat();
   const walls = wallsByFloor.flat();
@@ -591,6 +640,24 @@ const buildPlanningState = async (
         wall.objectId,
       ]),
     ),
+    overlays: new Map([
+      ...floorIdList.map((floorId) => [floorId, null] as const),
+      ...loadedOverlays.map(
+        ({ _id, _creationTime, ...overlay }) =>
+          [overlay.floorId, overlay] as const,
+      ),
+    ]),
+    overlayRowIds: new Map(
+      loadedOverlays.map((overlay) => [overlay.floorId, overlay._id]),
+    ),
+    overlayFiles: new Map(
+      overlayFileRows.flatMap((file) =>
+        file
+          ? [[file.objectId, { width: file.width, height: file.height }]]
+          : [],
+      ),
+    ),
+    touchedOverlayFileIds: new Set(),
     collisionExcludedDeviceIds: new Set(
       expiredDeviceIdsByFloor.flatMap((deviceIds) => [...deviceIds]),
     ),
@@ -1058,6 +1125,107 @@ const planWallsDelete = (
   return null;
 };
 
+const overlayValueError = (
+  state: PlanningState,
+  overlay: OverlayValue,
+): string | null => {
+  const invalid = overlayError(overlay);
+  if (invalid) return `Invalid calque: ${invalid}`;
+  const file = state.overlayFiles.get(overlay.fileId);
+  if (!file) return "Calque file not found";
+  if (
+    file.width !== overlay.imageWidth ||
+    file.height !== overlay.imageHeight
+  ) {
+    return "Calque size does not match its file";
+  }
+  return null;
+};
+
+/**
+ * Records the floor's final calque as one write, so a batch that touches it
+ * twice still inserts, replaces or deletes the row once.
+ */
+const putOverlay = (
+  state: PlanningState,
+  floorId: string,
+  value: OverlayValue | null,
+) => {
+  const previous = state.overlays.get(floorId);
+  if (previous) state.touchedOverlayFileIds.add(previous.fileId);
+  if (value) state.touchedOverlayFileIds.add(value.fileId);
+  state.overlays.set(floorId, value);
+  state.plan = state.plan.filter(
+    (write) => write.kind !== "putOverlay" || write.floorId !== floorId,
+  );
+  state.plan.push({
+    kind: "putOverlay",
+    floorId,
+    rowId: state.overlayRowIds.get(floorId),
+    value,
+  });
+  markAffectedFloor(state, floorId);
+};
+
+const planOverlaySet = (
+  state: PlanningState,
+  operation: OverlaySetOperation,
+): string | null => {
+  const existingFloorError = floorError(state, operation.floorId);
+  if (existingFloorError) return existingFloorError;
+  const current = state.overlays.get(operation.floorId) ?? null;
+  const next = operation.overlay;
+  if (!current && !next) return "Calque not found";
+
+  if (next) {
+    if (next.floorId !== operation.floorId) {
+      return "Calque belongs to another floor";
+    }
+    if (current && sameOverlay(current, next)) {
+      markAffectedFloor(state, operation.floorId);
+      return null;
+    }
+  }
+  if (current?.locked) return "Calque is locked";
+  if (!next) {
+    putOverlay(state, operation.floorId, null);
+    return null;
+  }
+
+  const value: OverlayValue = {
+    ...next,
+    updatedAt: operation.meta.createdAt,
+    updatedBy: operation.meta.clientId,
+  };
+  const valueError = overlayValueError(state, value);
+  if (valueError) return valueError;
+  putOverlay(state, operation.floorId, value);
+  return null;
+};
+
+const planOverlayPatch = (
+  state: PlanningState,
+  operation: OverlayPatchOperation,
+): string | null => {
+  const existingFloorError = floorError(state, operation.floorId);
+  if (existingFloorError) return existingFloorError;
+  const current = state.overlays.get(operation.floorId);
+  if (!current) return "Calque not found";
+  if (isPatchBlockedByLock(current, operation.patch)) {
+    return "Calque is locked";
+  }
+
+  const value: OverlayValue = {
+    ...applyOverlayPatch(current, operation.patch),
+    updatedAt: operation.meta.createdAt,
+    updatedBy: operation.meta.clientId,
+  };
+  const invalid = overlayError(value);
+  if (invalid) return `Invalid calque: ${invalid}`;
+  putOverlay(state, operation.floorId, value);
+  return null;
+};
+
 const planOperation = (
   state: PlanningState,
   operation: OperationInput,
@@ -1077,6 +1245,10 @@ const planOperation = (
       return planWallsAdd(state, operation);
     case "walls.delete":
       return planWallsDelete(state, operation);
+    case "overlay.set":
+      return planOverlaySet(state, operation);
+    case "overlay.patch":
+      return planOverlayPatch(state, operation);
     case "batch": {
       if (operation.operations.length > MAX_BATCH_OPERATIONS) {
         return "Too many operations in one batch";
@@ -1148,6 +1320,15 @@ const executePlan = async (ctx: MutationCtx, plan: WritePlan) => {
         break;
       case "deleteBinding":
         await ctx.db.delete(write.rowId);
+        break;
+      case "putOverlay":
+        if (write.rowId && write.value) {
+          await ctx.db.replace(write.rowId, write.value);
+        } else if (write.rowId) {
+          await ctx.db.delete(write.rowId);
+        } else if (write.value) {
+          await ctx.db.insert("floorOverlays", write.value);
+        }
         break;
     }
   }
@@ -1240,6 +1421,8 @@ const integrationSnapshot = (
     toPort: link.toPort,
     label: link.label,
   })),
+  // Device relocation never reads or changes the calque.
+  overlay: null,
 });
 
 const integrationHistoryResult = (
@@ -1563,6 +1746,9 @@ const operationFloorId = (operation: OperationInput): string | undefined => {
       return operation.link.floorId;
     case "walls.add":
       return operation.walls[0]?.floorId;
+    case "overlay.set":
+    case "overlay.patch":
+      return operation.floorId;
     case "batch":
       return operation.operations[0]
         ? operationFloorId({
@@ -1653,6 +1839,7 @@ export const applyMapOperation = async (
   let floorId = singleAffectedFloorId(state) ?? operationFloorId(operation);
   if (!error) {
     await executePlan(ctx, state.plan);
+    await syncOverlayFileReleases(ctx, state.touchedOverlayFileIds, now);
     const revisions = await bumpDocumentRevisions(
       ctx,
       state.affectedFloorIds,

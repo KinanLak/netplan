@@ -56,6 +56,7 @@ const emptySnapshot = {
   devices: [],
   walls: [],
   links: [],
+  overlay: null,
 };
 
 describe("applyOperation", () => {

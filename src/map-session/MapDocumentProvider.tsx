@@ -24,6 +24,7 @@ import type {
   DeviceDraft,
   DeviceId,
   FloorId,
+  FloorOverlay,
   LinkDoc,
   LinkId,
   MapDocumentSnapshot,
@@ -161,6 +162,7 @@ const emptyDocument = (floorId: FloorId): MapDocumentSnapshot => ({
   devices: [],
   walls: [],
   links: [],
+  overlay: null,
 });
 
 const NONE_FLOOR_ID = "floor:none" as FloorId;
@@ -212,6 +214,9 @@ const operationFloorId = (
       return operation.link.floorId;
     case "walls.add":
       return operation.walls[0]?.floorId ?? fallbackFloorId;
+    case "overlay.set":
+    case "overlay.patch":
+      return operation.floorId;
     case "batch": {
       if (operation.operations.length === 0) return fallbackFloorId;
       const first = operation.operations[0];
@@ -219,6 +224,8 @@ const operationFloorId = (
       if (first.kind === "link.create") return first.link.floorId;
       if (first.kind === "walls.add")
         return first.walls[0]?.floorId ?? fallbackFloorId;
+      if (first.kind === "overlay.set" || first.kind === "overlay.patch")
+        return first.floorId;
       return fallbackFloorId;
     }
     case "device.patch":
@@ -778,6 +785,7 @@ export function MapDocumentProvider({
   const queriedWalls = useQuery(api.mapDocument.getFloorWalls, queryArgs);
   const queriedLinks = useQuery(api.mapDocument.getFloorLinks, queryArgs);
   const queriedRevision = useQuery(api.mapDocument.getFloorRevision, queryArgs);
+  const queriedOverlay = useQuery(api.mapDocument.getFloorOverlay, queryArgs);
 
   const [pendingEntries, setPendingEntries] = useState<
     ReadonlyArray<PendingOperationEntry>
@@ -803,13 +811,15 @@ export function MapDocumentProvider({
       queriedDevices !== undefined &&
       queriedWalls !== undefined &&
       queriedLinks !== undefined &&
-      queriedRevision !== undefined
+      queriedRevision !== undefined &&
+      queriedOverlay !== undefined
         ? ({
             floorId: activeFloorId,
             revision: queriedRevision,
             devices: queriedDevices as Array<Device>,
             walls: queriedWalls as Array<WallSegment>,
             links: queriedLinks as Array<LinkDoc>,
+            overlay: queriedOverlay as FloorOverlay | null,
           } satisfies MapDocumentSnapshot)
         : undefined,
     [
@@ -817,6 +827,7 @@ export function MapDocumentProvider({
       queriedWalls,
       queriedLinks,
       queriedRevision,
+      queriedOverlay,
       activeFloorId,
     ],
   );

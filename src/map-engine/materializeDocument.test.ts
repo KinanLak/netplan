@@ -26,7 +26,14 @@ const device: Device = {
 describe("materializeDocument", () => {
   it("reapplies pending operations over a stale server snapshot", () => {
     const visible = materializeDocument(
-      { floorId, revision: 0, devices: [device], walls: [], links: [] },
+      {
+        floorId,
+        revision: 0,
+        devices: [device],
+        walls: [],
+        links: [],
+        overlay: null,
+      },
       [
         {
           kind: "device.patch",

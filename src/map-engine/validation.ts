@@ -127,6 +127,8 @@ export function validateOperation(
     case "link.delete":
     case "walls.add":
     case "walls.delete":
+    case "overlay.set":
+    case "overlay.patch":
       return valid();
   }
 }
