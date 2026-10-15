@@ -40,19 +40,18 @@ export function usePresence(floorId: FloorId | null): Array<ActivePresence> {
       return;
     }
 
-    // Coming back to the page tells the server this is where the user is now,
-    // so their avatar follows them across tabs and devices.
-    let active = true;
-    const markActive = () => {
-      if (document.visibilityState === "visible") active = true;
-    };
-    const publish = () => {
+    // Coming back to the page tells the server at once that this is where the
+    // user is now, so their avatar follows them across tabs and devices in
+    // the order they switched, not in the order their heartbeats fire.
+    const publish = (active: boolean) => {
       void updateOnlineUser({ clientId, floorId, active });
-      active = false;
+    };
+    const markActive = () => {
+      if (document.visibilityState === "visible") publish(true);
     };
 
-    publish();
-    const interval = window.setInterval(publish, HEARTBEAT_MS);
+    publish(true);
+    const interval = window.setInterval(() => publish(false), HEARTBEAT_MS);
     window.addEventListener("focus", markActive);
     document.addEventListener("visibilitychange", markActive);
     return () => {
