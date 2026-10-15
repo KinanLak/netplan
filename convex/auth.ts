@@ -1,22 +1,52 @@
 import { createClient } from "@convex-dev/better-auth";
 import type { GenericCtx } from "@convex-dev/better-auth";
 import { convex } from "@convex-dev/better-auth/plugins";
+import { requireActionCtx } from "@convex-dev/better-auth/utils";
 import { betterAuth } from "better-auth/minimal";
 import type { BetterAuthOptions } from "better-auth/minimal";
 import { admin } from "better-auth/plugins/admin";
 import { username } from "better-auth/plugins/username";
-import { components } from "./_generated/api";
+import { components, internal } from "./_generated/api";
 import type { DataModel } from "./_generated/dataModel";
 import authConfig from "./auth.config";
 import authSchema from "./betterAuth/schema";
 import { authRoles } from "./lib/authRoles";
+import { resetPasswordMail } from "./lib/mailTemplates";
 
 const SESSION_SECONDS = 24 * 60 * 60;
+const RESET_PASSWORD_SECONDS = 60 * 60;
 
 export const authComponent = createClient<DataModel, typeof authSchema>(
   components.betterAuth,
   { local: { schema: authSchema } },
 );
+
+/**
+ * Whether a forgotten-password mail may go to this user. Not to a disabled
+ * account, and not to an SSO account: setting a password would give it a
+ * second way in that its identity provider does not control. An invited
+ * user who has not chosen a password yet has no account at all and may.
+ */
+async function mayResetPassword(
+  ctx: GenericCtx<DataModel>,
+  userId: string,
+): Promise<boolean> {
+  const { runQuery } = requireActionCtx(ctx);
+  const user = await runQuery(components.betterAuth.adapter.findOne, {
+    model: "user",
+    where: [{ field: "_id", value: userId }],
+  });
+  if (!user || user.banned === true) return false;
+  const account = (providerId?: string) =>
+    runQuery(components.betterAuth.adapter.findOne, {
+      model: "account",
+      where: [
+        { field: "userId", value: userId },
+        ...(providerId ? [{ field: "providerId", value: providerId }] : []),
+      ],
+    });
+  return (await account("credential")) !== null || !(await account());
+}
 
 export const createAuthOptions = (ctx: GenericCtx<DataModel>) =>
   ({
@@ -43,7 +73,22 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) =>
       // user out together.
       customRules: { "/convex/token": false, "/get-session": false },
     },
-    emailAndPassword: { enabled: true, disableSignUp: true },
+    emailAndPassword: {
+      enabled: true,
+      disableSignUp: true,
+      resetPasswordTokenExpiresIn: RESET_PASSWORD_SECONDS,
+      // A reset is how a stolen session is taken back.
+      revokeSessionsOnPasswordReset: true,
+      // better-auth answers the same whether or not a mail leaves, so the
+      // form says nothing about which addresses have an account.
+      sendResetPassword: async ({ user, url }) => {
+        if (!(await mayResetPassword(ctx, user.id))) return;
+        await requireActionCtx(ctx).scheduler.runAfter(0, internal.mail.send, {
+          to: user.email,
+          ...resetPasswordMail({ name: user.name, url }),
+        });
+      },
+    },
     plugins: [
       username(),
       admin({ roles: authRoles, defaultRole: "reader", adminRoles: ["admin"] }),

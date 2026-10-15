@@ -21,6 +21,7 @@ import type * as http from "../http.js";
 import type * as lib_authRoles from "../lib/authRoles.js";
 import type * as lib_functions from "../lib/functions.js";
 import type * as lib_imageHeader from "../lib/imageHeader.js";
+import type * as lib_mailTemplates from "../lib/mailTemplates.js";
 import type * as lib_overlayFiles from "../lib/overlayFiles.js";
 import type * as lib_presence from "../lib/presence.js";
 import type * as lib_roles from "../lib/roles.js";
@@ -56,6 +57,7 @@ declare const fullApi: ApiFromModules<{
   "lib/authRoles": typeof lib_authRoles;
   "lib/functions": typeof lib_functions;
   "lib/imageHeader": typeof lib_imageHeader;
+  "lib/mailTemplates": typeof lib_mailTemplates;
   "lib/overlayFiles": typeof lib_overlayFiles;
   "lib/presence": typeof lib_presence;
   "lib/roles": typeof lib_roles;

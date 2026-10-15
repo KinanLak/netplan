@@ -1,10 +1,13 @@
 import { describe, expect, it } from "bun:test";
 import { ConvexError } from "convex/values";
 import {
+  forgotPasswordErrorMessage,
   isEmail,
   isForbidden,
   isSessionLost,
   loginErrorMessage,
+  requestFailure,
+  resetPasswordErrorMessage,
   safeRedirect,
 } from "./login";
 
@@ -73,5 +76,38 @@ describe("isForbidden", () => {
     );
     expect(isForbidden(new ConvexError("forbidden"))).toBe(false);
     expect(isForbidden(new Error("forbidden"))).toBe(false);
+  });
+});
+
+describe("password reset messages", () => {
+  it("tells a rate-limited user to wait rather than retry", () => {
+    expect(forgotPasswordErrorMessage({ status: 429 })).toContain("Réessayez");
+    expect(resetPasswordErrorMessage({ status: 429 })).toContain(
+      "quelques minutes",
+    );
+  });
+
+  it("says what is wrong with a refused password", () => {
+    expect(
+      resetPasswordErrorMessage({ status: 400, code: "PASSWORD_TOO_SHORT" }),
+    ).toContain("8 caractères");
+    expect(
+      resetPasswordErrorMessage({ status: 400, code: "PASSWORD_TOO_LONG" }),
+    ).toContain("trop long");
+  });
+});
+
+describe("requestFailure", () => {
+  it("reads a dropped connection as a failure the form can show", async () => {
+    const dropped = Promise.reject(new TypeError("Failed to fetch"));
+    expect(await requestFailure(dropped)).toEqual({ status: 0 });
+  });
+
+  it("passes a refusal through and is null on success", async () => {
+    const refusal = { status: 429, code: "TOO_MANY_REQUESTS" };
+    expect(await requestFailure(Promise.resolve({ error: refusal }))).toBe(
+      refusal,
+    );
+    expect(await requestFailure(Promise.resolve({ error: null }))).toBeNull();
   });
 });

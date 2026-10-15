@@ -23,6 +23,23 @@ export function isEmail(identifier: string): boolean {
   return identifier.includes("@");
 }
 
+type AuthFailure = { status?: number; code?: string };
+
+/**
+ * The failure of an auth client request, or null once it succeeded. The client
+ * rejects when the connection drops instead of returning an `error`, which
+ * would leave a form pending with no message, so that counts as a failure too.
+ */
+export async function requestFailure<E extends AuthFailure>(
+  request: Promise<{ error: E | null }>,
+): Promise<E | AuthFailure | null> {
+  try {
+    return (await request).error;
+  } catch {
+    return { status: 0 };
+  }
+}
+
 export function loginErrorMessage(error: {
   status?: number;
   code?: string;
@@ -40,6 +57,32 @@ export function loginErrorMessage(error: {
     return "Identifiant ou mot de passe incorrect.";
   }
   return "La connexion a échoué. Réessayez.";
+}
+
+/** better-auth's default, which Netplan keeps. */
+export const MIN_PASSWORD_LENGTH = 8;
+
+export function forgotPasswordErrorMessage(error: { status?: number }): string {
+  if (error.status === 429) {
+    return "Trop de demandes. Réessayez dans quelques minutes.";
+  }
+  return "La demande a échoué. Réessayez.";
+}
+
+export function resetPasswordErrorMessage(error: {
+  status?: number;
+  code?: string;
+}): string {
+  if (error.status === 429) {
+    return "Trop de tentatives. Réessayez dans quelques minutes.";
+  }
+  if (error.code === "PASSWORD_TOO_SHORT") {
+    return `Le mot de passe doit compter au moins ${MIN_PASSWORD_LENGTH} caractères.`;
+  }
+  if (error.code === "PASSWORD_TOO_LONG") {
+    return "Ce mot de passe est trop long.";
+  }
+  return "Le mot de passe n'a pas pu être enregistré. Réessayez.";
 }
 
 /**
