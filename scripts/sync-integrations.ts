@@ -13,8 +13,7 @@ const requiredEnv = (name: string): string => {
   return value;
 };
 
-const convexUrl =
-  process.env.CONVEX_URL?.trim() || requiredEnv("VITE_CONVEX_URL");
+const convexUrl = requiredEnv("CONVEX_URL");
 const connectorSecret = requiredEnv("NETPLAN_CONNECTOR_SECRET");
 const siteKey = process.env.NETPLAN_SITE_KEY?.trim() || "arles";
 const client = new ConvexHttpClient(convexUrl);

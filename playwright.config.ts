@@ -2,7 +2,9 @@ import { defineConfig, devices } from "@playwright/test";
 
 // Drives the production build (`bun run build`) against a backend seeded by
 // `convex/dev.ts`: the worktree's dev:agent backend locally, the service
-// container in CI. The build reads the backend URL from `VITE_CONVEX_URL`.
+// container in CI. The server reads the backend URLs from `CONVEX_URL` and
+// `CONVEX_SITE_URL` at runtime; `bun run` loads them from dev:agent's
+// `.env.local` locally.
 const port = Number(process.env.E2E_PORT ?? 4310);
 const baseURL = `http://127.0.0.1:${port}`;
 

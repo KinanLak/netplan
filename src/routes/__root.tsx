@@ -12,7 +12,8 @@ import { useEffect } from "react";
 import type { ReactNode } from "react";
 import appCss from "@/styles.css?url";
 import logoCss from "@/netplan-logo.css?url";
-import { convexClient } from "@/lib/convex";
+import { getConvexClient } from "@/lib/convex";
+import { getRuntimeConfig } from "@/lib/getRuntimeConfig";
 import { logGraphicsAccelerationStatusOnce } from "@/lib/graphicsAcceleration";
 
 export const Route = createRootRoute({
@@ -32,6 +33,8 @@ export const Route = createRootRoute({
       },
     ],
   }),
+  loader: () => getRuntimeConfig(),
+  staleTime: Infinity,
   component: RootComponent,
   notFoundComponent: NotFoundComponent,
 });
@@ -51,8 +54,9 @@ function NotFoundComponent() {
 }
 
 function RootComponent() {
+  const { convexUrl } = Route.useLoaderData();
   return (
-    <ConvexProvider client={convexClient}>
+    <ConvexProvider client={getConvexClient(convexUrl)}>
       <RootDocument>
         <Outlet />
       </RootDocument>

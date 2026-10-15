@@ -100,7 +100,6 @@ jobs:
         run: bun run verify
         env:
           CODEGEN_CHECK_REQUIRED: "true"
-          VITE_CONVEX_URL: http://127.0.0.1:3210
 
   audit:
     name: Dependency audit
@@ -174,14 +173,15 @@ jobs:
 
       - name: Build
         run: bun run build
-        env:
-          VITE_CONVEX_URL: http://127.0.0.1:3210
 
       - name: Install Chromium
         run: bun x playwright install --with-deps --only-shell chromium
 
       - name: Smoke test
         run: bun run test:e2e
+        env:
+          CONVEX_URL: http://127.0.0.1:3210
+          CONVEX_SITE_URL: http://127.0.0.1:3211
 
       - name: Upload the report
         if: failure()

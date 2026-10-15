@@ -32,8 +32,8 @@ canonical change over compatibility shims.
   writes. CI runs it; run it before marking a pull request ready.
 - `bun test <path>` for one file.
 - `bun run build && bun run test:e2e`: the Playwright smoke test (`e2e/`)
-  against the production build. Locally the build points at the worktree's
-  `dev:agent` backend, so start that first.
+  against the production build. The server reads `CONVEX_URL` at run time,
+  locally from the `.env.local` that `dev:agent` writes, so start that first.
 - `bun run dev:agent`: this worktree's own local instance (below). `bun run
   dev` is for a checkout already configured against another deployment.
 - Never edit `package.json` by hand: `bun add <pkg>@latest`, `bun remove`, or
