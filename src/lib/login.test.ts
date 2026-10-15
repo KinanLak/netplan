@@ -19,6 +19,7 @@ describe("safeRedirect", () => {
       "/\\evil.test",
       "/\t/evil.test",
       "/\n/evil.test",
+      "/a/..//evil.test",
       "javascript:alert(1)",
       42,
       undefined,

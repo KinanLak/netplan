@@ -10,7 +10,10 @@ export function safeRedirect(value: unknown): string | undefined {
   // backslash as a slash, so `/\t/evil.example` would leave the site.
   const url = new URL(value, LOCAL_ORIGIN);
   if (url.origin !== LOCAL_ORIGIN) return undefined;
-  return `${url.pathname}${url.search}${url.hash}`;
+  // Normalizing can itself make a host: `/a/..//evil.example` becomes
+  // `//evil.example`.
+  const path = `${url.pathname}${url.search}${url.hash}`;
+  return path.startsWith("//") ? undefined : path;
 }
 
 const LOCAL_ORIGIN = "http://netplan.invalid";
