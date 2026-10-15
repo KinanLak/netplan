@@ -261,7 +261,8 @@ jobs:
       # stylesheets the client build emitted.
       - name: Server-rendered stylesheets are served
         run: |
-          hrefs="$(curl --fail --silent --show-error http://127.0.0.1:3000/ \
+          # A signed-out visitor is redirected to the login page.
+          hrefs="$(curl --fail --silent --show-error --location http://127.0.0.1:3000/ \
             | grep --only-matching '<link rel="stylesheet" href="[^"]*"' \
             | sed 's/.*href="//; s/"$//')"
           test -n "$hrefs"
