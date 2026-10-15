@@ -31,25 +31,26 @@ function AdminShell() {
   if (!isAdmin(me.role)) return <AdminOnly />;
 
   return (
-    <div className="flex h-svh bg-background text-foreground">
+    // On a narrow screen the navigation becomes a row above the content.
+    <div className="flex h-svh flex-col bg-background text-foreground md:flex-row">
       <nav
         aria-label="Administration"
-        className="flex w-56 shrink-0 flex-col gap-1 border-r bg-sidebar p-3"
+        className="flex shrink-0 items-center gap-1 overflow-x-auto border-b bg-sidebar p-2 md:w-56 md:flex-col md:items-stretch md:overflow-x-visible md:border-r md:border-b-0 md:p-3"
       >
-        <div className="mb-3 flex items-center justify-between">
+        <div className="flex shrink-0 items-center justify-between gap-2 md:mb-3">
           <Link to="/" aria-label="Retour à la carte">
             <NetplanLogo size={30} />
           </Link>
           <ModeToggle />
         </div>
-        <div className="px-2 pb-1 text-xs font-medium text-muted-foreground">
+        <div className="hidden px-2 pb-1 text-xs font-medium text-muted-foreground md:block">
           Administration
         </div>
         {ADMIN_SECTIONS.map((section) => (
           <Link
             key={section.to}
             to={section.to}
-            className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            className="flex shrink-0 items-center gap-2 rounded-md px-2 py-1.5 text-sm text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
             activeProps={{
               className:
                 "bg-sidebar-accent font-medium text-sidebar-accent-foreground",
@@ -61,14 +62,14 @@ function AdminShell() {
         ))}
         <Link
           to="/"
-          className="mt-auto flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+          className="mt-auto hidden items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground md:flex"
         >
           <HugeiconsIcon icon={ArrowLeft01Icon} size={16} strokeWidth={1.5} />
           Retour à la carte
         </Link>
       </nav>
       <main className="min-w-0 flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-4xl p-8">
+        <div className="mx-auto max-w-4xl p-4 md:p-8">
           <Outlet />
         </div>
       </main>

@@ -60,10 +60,10 @@ function SitesPage() {
               <Link
                 to="/admin/sites/$siteId"
                 params={{ siteId: site.id }}
-                className="flex items-center justify-between gap-4 px-4 py-3 hover:bg-muted"
+                className="flex flex-col gap-1 px-4 py-3 hover:bg-muted sm:flex-row sm:items-center sm:justify-between sm:gap-4"
               >
                 <span className="font-medium">{site.name}</span>
-                <span className="flex gap-4 text-sm text-muted-foreground">
+                <span className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
                   <span>{site.timezone}</span>
                   <span>
                     {site.buildingCount === 0
