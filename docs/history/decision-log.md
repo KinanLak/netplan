@@ -873,3 +873,123 @@ Questions of 2026-10-15, in the order they came up.
 - Decision: `dependencies` is `convex` alone; everything else is a dev dependency. A test fails if `dependencies` lists a package `convex/` does not import. The functions image drops from 944 MB to 636 MB; the app image is unchanged at 98.5 MB.
 - Why: "runtime" for a bundled app is the bundle; only the functions deploy installs packages.
 - Who: agent (judgement call)
+
+### L3a — Floor overlay
+
+Questions of 2026-10-15 and 16, in the order they came up.
+
+#### Does the plan already have a unit in metres?
+
+- Context: calibration needs "real distance in metres → plan units". Nothing in src/ or convex/ defines a scale; the grid is 20 units, walls are one 20×20 block.
+- Decision: fix 100 plan units = 1 m (a cell/wall block = 20 cm), recorded in ADR 0024 (drafted as 0022; renumbered when lot 2 took 0022 and 0023).
+- Why: 20 cm walls are realistic, the seed's rooms and racks come out at plausible sizes (tech room ≈ 4.8 × 3.2 m), and ADR 0011 says the map keeps its own grid and the image is calibrated, so the scale must be a constant, not a per-floor setting.
+- Who: agent (judgement call)
+
+#### How do we keep SVG/PDF from running anything?
+
+- Context: an SVG served from the Convex storage origin can run script if opened directly; PDFs need a renderer.
+- Decision: rasterize both in the browser at import (SVG via `<img>` → canvas, PDF via pdf.js, chosen page) and store only PNG/JPEG.
+- Why: a raster image cannot execute; no sanitizer to keep up to date; the calque is a visual guide only (Q16), so vector fidelity is not needed.
+- Who: agent (obvious)
+
+#### Upload URL or action?
+
+- Context: Convex `generateUploadUrl` lets the client store any bytes with any content type before the server sees them.
+- Decision: an Éditeur action receives the bytes, checks the PNG/JPEG signature, size and dimensions, then stores them and records a `floorOverlayFiles` row.
+- Why: nothing unchecked ever lands in storage, and the pixel size comes from the server, not the client.
+- Who: agent (judgement call)
+
+#### Is show/hide shared or personal?
+
+- Context: brief lists show/hide among the controls; readers "see it but cannot change it".
+- Decision: personal and session-only (Zustand); opacity and lock are durable.
+- Why: hiding the calque to check the drawn plan is a viewing need every role has; a durable hide by one editor would hide it from everyone. Removing it is the durable way.
+- Who: agent (judgement call)
+
+#### What does "lock" protect against?
+
+- Decision: lock blocks placement changes (move, resize, rotate, calibrate) and replacement/removal, on the client and the server, unless the same change unlocks. Opacity stays editable.
+- Why: the risk is nudging a calibrated calque while drawing walls over it; fading it is exactly what you do while drawing.
+- Who: agent (judgement call)
+
+#### When are calque files deleted?
+
+- Decision: a daily cron deletes files no calque references once they have been unused for 7 days.
+- Why: undo/redo can bring back a replaced or removed calque, so deletion must wait; undo history is per session.
+- Who: agent (obvious)
+
+#### Is the calque one more draw tool?
+
+- Context: the toolbar's draw tools (wall, eraser, device) are mutually exclusive; the calque panel could have been one of them.
+- Decision: the panel is its own state (`isOverlayPanelOpen`), opened from a "Calque" button or `C`, and closes when a draw tool, multi-select or a device is chosen; edit tools are dropped together when edit rights go.
+- Why: the panel is settings, not a pointer mode; making it a DrawTool would have forced wall drawing off while the panel is open, and the brief wants walls drawn over the calque.
+- Who: agent (judgement call)
+
+#### What is stored for each import format?
+
+- Decision: PNG and JPEG are re-encoded through a canvas too; SVG renders through `<img>`; a PDF page renders at 200 dpi with its longest side capped at 8192 px. The result is PNG unless that exceeds the 15 MB client cap, then JPEG on white, then smaller.
+- Why: re-encoding strips metadata and any trailing payload; 200 dpi keeps 1:100 plans legible at the zoom used to draw walls; the cap stays under Convex's 16 MiB action argument limit (checked against the self-hosted backend).
+- Who: agent (judgement call)
+
+#### Where does a new or replaced calque land?
+
+- Decision: a first import is fitted to 80 % of the visible area at opacity 0.6; a replacement keeps the old centre, rotation, opacity and width on the plan (a locked calque must be unlocked before it can be replaced).
+- Why: the user sees the calque immediately; replacing a plan with a newer revision of the same drawing should not lose its calibration.
+- Who: agent (judgement call)
+
+#### Reader gating for the calque UI
+
+- Context: L1 (#21) landed `useCanEdit` while PR2 was in review.
+- Decision: the panel, its shortcut and the toolbar button follow L1's edit-mode gating; readers keep the personal hide toggle.
+- Why: no extra checks needed; the server already rejects reader writes.
+- Who: agent (obvious)
+
+#### When does the placement gizmo show, and does it snap?
+
+- Decision: the move/resize/rotate frame shows only while the Calque panel is open in edit mode and the calque is unlocked; it reads the pointer without the wall grid's snap.
+- Why: outside the panel the canvas is for walls and devices, and the frame would steal their clicks; snapping to the 20-unit grid made a resize land on 8.12 m instead of 7.98 m, and a plan must align freely.
+- Who: agent (judgement call)
+
+#### How many operations does a gesture send?
+
+- Decision: a gesture previews through a local Zustand draft and commits one `overlay.patch` on release; the opacity slider does the same on release or key up.
+- Why: one gesture is one undo step, the outbox is not flooded with intermediate positions, and other users see only the final placement.
+- Who: agent (obvious)
+
+#### Which shortcuts?
+
+- Decision: `C` opens the panel, `Shift+L` toggles the lock, `Shift+E` starts calibration, all only while the panel's controls apply.
+- Why: `L` and `E` were taken (edit mode is `E`); the shifted forms read as "the calque's L/E" and bare bindings never match shifted events.
+- Who: agent (judgement call)
+
+#### Scale field: pixels-per-unit or metres?
+
+- Decision: the panel shows and edits the calque's width in metres (decimal comma), not the raw scale.
+- Why: users know how wide their building is; the scale factor means nothing to them.
+- Who: agent (obvious)
+
+#### How does pdf.js find its decoders, fonts and CMaps?
+
+- Context: pdf.js 6 loads wasm decoders, standard fonts and CMaps on demand; without them some PDFs render blank glyphs or fail. zipzoup flagged it (P2).
+- Decision: `openPdf` passes a `BinaryDataFactory` that resolves each asset from lazy `import.meta.glob` URLs into the package, with `assetsInclude` for the binary types.
+- Why: self-hosted means no CDN at run time; lazy globs keep them out of the main bundle until a PDF needs them.
+- Who: agent (obvious)
+
+#### What happens to an import still running when the panel closes?
+
+- Decision: each import takes an id; a new import, a reset or unmounting the panel bumps it, and the upload and the `overlay.set` check it first. A failed PDF open destroys its loading task.
+- Why: a slow upload must not place a calque the user walked away from (zipzoup P2).
+- Who: agent (obvious)
+
+#### How is the scale calibrated?
+
+- Decision: two clicks on the calque, then the real distance in metres; the image scales about the first point, as one `overlay.patch`. The points are kept in image pixels with the file id, so they follow a calque that moves and are dropped if its file is replaced; two points under 10 image pixels apart are refused, as is a distance that would leave the scale bounds.
+- Why: scaling about the first point keeps a known corner where it was; image pixels are what the user actually clicked on; under 10 px a one-pixel click error is already 10 %.
+- Who: agent (judgement call)
+
+#### Why did a real mouse not reach the gizmo?
+
+- Context: browser checks with synthesised pointer events passed, yet a real drag panned the canvas.
+- Decision: React Flow's `.react-flow__viewport` sets `pointer-events: none`, inherited by `ViewportPortal` children; the gizmo and the calibration layer set `pointer-events-auto`. Browser checks of canvas gestures now use real mouse drags.
+- Why: synthesised events skip hit testing, so they cannot prove an element is reachable.
+- Who: agent (obvious)

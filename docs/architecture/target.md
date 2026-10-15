@@ -7,8 +7,8 @@ description: The shape the rebuild lots are building towards.
 
 The rebuild replaces the current design in place, with no transitional layers
 and data restarting from zero (ADR 0001). Order: F, then lots 0 and 1 in
-parallel, then lot 2 alongside lot 3a, then 3b, 4 and 5. Lots F and 0 are
-done and described in [Current](current.md).
+parallel, then lot 2 alongside lot 3a, then 3b, 4 and 5. Lots F, 0 and 3a
+are done and described in [Current](current.md).
 
 ## Accounts (lot 1)
 
@@ -32,10 +32,6 @@ done and described in [Current](current.md).
 - Cables are modelled port to port (ADR 0009). Collection runs inside Convex
   at a per-site cadence (ADR 0010, ADR 0012); the external agent, connector
   and systemd units are deleted.
-
-## Floor overlay (lot 3a, alongside lot 2)
-
-A calibrated background "calque" per floor (ADR 0011).
 
 ## Map (lot 3b, after lot 2)
 
