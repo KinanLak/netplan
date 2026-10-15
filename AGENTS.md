@@ -41,6 +41,9 @@ canonical change over compatibility shims.
   their latest version, majors included. CI fails on a high or critical
   advisory; one that cannot be fixed yet is accepted with an `--ignore` and
   its reason in `.github/workflows/ci.yml`.
+- The app ships as a bundle, so a new package is a `bun add -d`.
+  `dependencies` holds only what `convex/` imports: the functions image
+  installs it, and `scripts/lib/deploy.test.ts` keeps it that way.
 - `convex/_generated/` and `src/routeTree.gen.ts` are generated and tracked.
   Never edit them by hand; commit what the tools regenerate.
 - Use Context7 (`ctx7`) or web search for library and API documentation
