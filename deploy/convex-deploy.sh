@@ -19,6 +19,8 @@ done < deploy/convex-env.txt
 
 # Sign-up is closed, so the first admin must exist before anyone can sign in.
 # Does nothing once an admin exists, or while BOOTSTRAP_ADMIN_* is unset.
-echo "convex-deploy: first admin: $(./deploy/convex.sh run bootstrap:ensureFirstAdmin)"
+# Assigned first: inside echo's arguments a failure would not stop the script.
+first_admin="$(./deploy/convex.sh run bootstrap:ensureFirstAdmin)"
+echo "convex-deploy: first admin: $first_admin"
 
 echo "convex-deploy: done"
