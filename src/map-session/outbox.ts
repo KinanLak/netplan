@@ -1,4 +1,5 @@
 import type { MapOperation } from "@/map-engine/types";
+import { isForbidden } from "@/lib/login";
 
 export interface OutboxApplyResult {
   status: "applied" | "rejected";
@@ -7,6 +8,29 @@ export interface OutboxApplyResult {
   floorId?: string;
   error?: string;
 }
+
+/** The rejection an operation gets when the user's role cannot edit. */
+export const FORBIDDEN_REJECTION = "forbidden";
+
+/**
+ * Turns the server's refusal of the caller's role into a rejection. It fails
+ * the same way on every retry, so retrying it would leave the operation
+ * pending forever behind a "reconnecting" banner.
+ */
+export const rejectingForbidden =
+  (send: SequentialOutboxOptions["send"]): SequentialOutboxOptions["send"] =>
+  async (operation) => {
+    try {
+      return await send(operation);
+    } catch (error) {
+      if (!isForbidden(error)) throw error;
+      return {
+        status: "rejected",
+        opId: operation.meta.opId,
+        error: FORBIDDEN_REJECTION,
+      };
+    }
+  };
 
 export interface OutboxState {
   pendingCount: number;

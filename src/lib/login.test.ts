@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { ConvexError } from "convex/values";
 import {
   isEmail,
+  isForbidden,
   isSessionLost,
   loginErrorMessage,
   safeRedirect,
@@ -58,5 +59,19 @@ describe("isSessionLost", () => {
     expect(isSessionLost(new ConvexError({ code: "forbidden" }))).toBe(false);
     expect(isSessionLost(new ConvexError("unauthenticated"))).toBe(false);
     expect(isSessionLost(new Error("unauthenticated"))).toBe(false);
+  });
+});
+
+describe("isForbidden", () => {
+  it("recognises the error a function throws for a role too low", () => {
+    expect(isForbidden(new ConvexError({ code: "forbidden" }))).toBe(true);
+  });
+
+  it("leaves a lost session and other failures alone", () => {
+    expect(isForbidden(new ConvexError({ code: "unauthenticated" }))).toBe(
+      false,
+    );
+    expect(isForbidden(new ConvexError("forbidden"))).toBe(false);
+    expect(isForbidden(new Error("forbidden"))).toBe(false);
   });
 });

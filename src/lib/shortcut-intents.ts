@@ -11,7 +11,10 @@ export type ShortcutIntentEvent = Pick<
 
 export type ShortcutIntentRuntime = {
   activeDrawTool: DrawTool;
+  /** The user's role allows changing the map. */
+  canEdit: boolean;
   currentFloorId: string | null;
+  /** Edit mode as the user sees it: their choice, and only if `canEdit`. */
   isEditMode: boolean;
   isInputFocused: boolean;
   isModalFocused: boolean;
@@ -233,6 +236,8 @@ const isActionAllowedByContext = (
   runtime: ShortcutIntentRuntime,
 ): boolean => {
   switch (action) {
+    case "toggle-edit-mode":
+      return runtime.canEdit;
     case "cancel-wall-tool":
       return runtime.isEditMode && runtime.activeDrawTool !== "device";
     case "delete-device":

@@ -250,6 +250,8 @@ export interface MapInteractionActions {
   setSelectedDevices: (deviceIds: Array<DeviceId>) => void;
   setHoveredDevice: (deviceId: DeviceId | null) => void;
   toggleEditMode: () => void;
+  /** Drops the edit-only tools and multi-selection, keeping the edit-mode flag. */
+  leaveEditTools: () => void;
   toggleMultiSelectMode: () => void;
   setActiveDrawTool: (tool: DrawTool) => void;
   setSelectedWallColor: (color: WallColor) => void;

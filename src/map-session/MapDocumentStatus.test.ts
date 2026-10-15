@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { FORBIDDEN_REJECTION } from "./outbox";
 import {
   getDocumentActivityMessage,
   getRejectedOperationMessage,
@@ -8,6 +9,12 @@ describe("MapDocumentStatus", () => {
   it("formats collision rejections for users", () => {
     expect(getRejectedOperationMessage("Device collides with a wall")).toBe(
       "Action refusee: collision avec un autre element.",
+    );
+  });
+
+  it("tells a reader their role cannot edit the map", () => {
+    expect(getRejectedOperationMessage(FORBIDDEN_REJECTION)).toContain(
+      "votre rôle ne permet pas de modifier le plan",
     );
   });
 

@@ -1,3 +1,4 @@
+import { hasRole, roleOf } from "../../convex/lib/roles";
 import type { Role } from "../../convex/lib/roles";
 
 export const ROLE_LABELS: Record<Role, string> = {
@@ -5,3 +6,8 @@ export const ROLE_LABELS: Record<Role, string> = {
   editor: "Éditeur",
   admin: "Admin",
 };
+
+/** Éditeur and Admin change the map; the server enforces the same rule. */
+export function canEditMap(role: unknown): boolean {
+  return hasRole(roleOf(role), "editor");
+}

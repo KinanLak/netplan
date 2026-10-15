@@ -47,8 +47,16 @@ export function loginErrorMessage(error: {
  * token is gone: signed out elsewhere, expired or disabled.
  */
 export function isSessionLost(error: unknown): boolean {
-  return (
-    error instanceof ConvexError &&
-    (error.data as { code?: unknown } | null)?.code === "unauthenticated"
-  );
+  return authErrorCode(error) === "unauthenticated";
+}
+
+/** The error a Convex function throws when the caller's role is too low. */
+export function isForbidden(error: unknown): boolean {
+  return authErrorCode(error) === "forbidden";
+}
+
+function authErrorCode(error: unknown): unknown {
+  return error instanceof ConvexError
+    ? (error.data as { code?: unknown } | null)?.code
+    : undefined;
 }

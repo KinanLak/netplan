@@ -22,6 +22,7 @@ import {
   OVERLAY_VISIBILITY_DELAY_MS,
 } from "@/lib/constants";
 import { useMapStore } from "@/store/useMapStore";
+import { useCanEdit } from "@/hooks/use-current-user";
 
 type ShortcutEffect = ShortcutIntentRegistration & {
   run: (event: KeyboardEvent) => void;
@@ -60,6 +61,7 @@ export function ShortcutIntentProvider({
   children,
 }: ShortcutIntentProviderProps) {
   const effectsRef = useRef(new Map<string, ShortcutEffect>());
+  const canEdit = useCanEdit();
 
   const register = useCallback((effect: ShortcutEffect) => {
     effectsRef.current.set(effect.id, effect);
@@ -82,8 +84,9 @@ export function ShortcutIntentProvider({
         registrations: effects,
         runtime: {
           activeDrawTool: state.activeDrawTool,
+          canEdit,
           currentFloorId: state.currentFloorId,
-          isEditMode: state.isEditMode,
+          isEditMode: state.isEditMode && canEdit,
           isInputFocused: isShortcutInputTarget(event.target),
           isModalFocused: isShortcutModalTarget(event.target),
           selectedDeviceId: state.selectedDeviceId,
@@ -107,7 +110,7 @@ export function ShortcutIntentProvider({
     return () => {
       window.removeEventListener("keydown", handleKeyDown, true);
     };
-  }, []);
+  }, [canEdit]);
 
   const contextValue = useMemo(() => ({ register }), [register]);
 

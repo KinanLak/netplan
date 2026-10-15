@@ -41,6 +41,7 @@ import {
   SidebarMenuSubItem,
 } from "@/components/ui/sidebar";
 import { ModeToggle } from "@/components/mode-toggle";
+import { useCanEdit } from "@/hooks/use-current-user";
 import { SidebarAccount } from "@/panels/SidebarAccount";
 import { api } from "../../convex/_generated/api";
 
@@ -153,7 +154,9 @@ export default function AppSidebar() {
   const sortedFloors = floorsForCurrent
     ? [...floorsForCurrent].sort((a, b) => a.order - b.order)
     : [];
-  const showDevMapControls = import.meta.env.DEV || buildings.length === 0;
+  const canEdit = useCanEdit();
+  const showDevMapControls =
+    canEdit && (import.meta.env.DEV || buildings.length === 0);
 
   const handleCreateDefaultMap = async () => {
     setDevMapAction("create");

@@ -15,6 +15,7 @@ import {
   createConvexReactModuleMock,
 } from "./convexReactMock";
 import { BENCH_FLOOR_ID, buildBenchDocument } from "./fixtures";
+import { SignedInEditor } from "../currentUser";
 
 const backend = new FakeConvexBackend();
 mock.module("convex/react", () => createConvexReactModuleMock(backend));
@@ -64,7 +65,9 @@ const seedStore = (
 const mountTree = async () => {
   const stats = new RenderStats();
   const handles = createBenchHandles();
-  const view = render(<BenchTree stats={stats} handles={handles} />);
+  const view = render(<BenchTree stats={stats} handles={handles} />, {
+    wrapper: SignedInEditor,
+  });
   await act(async () => {
     await flushMicrotasks(8);
   });

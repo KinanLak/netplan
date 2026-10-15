@@ -1,5 +1,6 @@
 import { AuthBoundary } from "@convex-dev/better-auth/react";
 import { Outlet, createFileRoute, redirect } from "@tanstack/react-router";
+import { CurrentUserProvider } from "@/hooks/use-current-user";
 import { providerAuthClient } from "@/lib/auth-client";
 import { isSessionLost } from "@/lib/login";
 import { api } from "../../convex/_generated/api";
@@ -32,7 +33,9 @@ function AuthedLayout() {
       isAuthError={isSessionLost}
       onUnauth={backToLogin}
     >
-      <Outlet />
+      <CurrentUserProvider>
+        <Outlet />
+      </CurrentUserProvider>
     </AuthBoundary>
   );
 }

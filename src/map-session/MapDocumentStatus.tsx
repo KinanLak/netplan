@@ -3,8 +3,12 @@ import {
   useMapDocumentReady,
   useMapDocumentSyncStatus,
 } from "./useMapDocument";
+import { FORBIDDEN_REJECTION } from "./outbox";
 
 export const getRejectedOperationMessage = (message: string): string => {
+  if (message === FORBIDDEN_REJECTION) {
+    return "Action refusée : votre rôle ne permet pas de modifier le plan.";
+  }
   const normalized = message.toLowerCase();
   if (normalized.includes("collides") || normalized.includes("collision")) {
     return "Action refusee: collision avec un autre element.";

@@ -61,7 +61,7 @@ import {
   withOperationMeta,
 } from "./history";
 import type { SessionHistoryEntry } from "./history";
-import { SequentialOutbox } from "./outbox";
+import { SequentialOutbox, rejectingForbidden } from "./outbox";
 import type { OutboxState } from "./outbox";
 import {
   appendPendingOperation,
@@ -906,8 +906,9 @@ export function MapDocumentProvider({
 
   useEffect(() => {
     const outbox = new SequentialOutbox({
-      send: (operation) =>
+      send: rejectingForbidden((operation) =>
         applyMutation({ operation: toServerOperation(operation) }),
+      ),
       onAck: (operation, result) => {
         ackedRevisionsRef.current.set(
           operation.meta.opId,
