@@ -819,17 +819,17 @@ Questions of 2026-10-15, in the order they came up.
 - Why: keeps one set of URLs and Bun as the runtime (vs an internal-URL split or running the image on Node); in production the hosts are real DNS names and both paths reach the edge anyway. Verified: `/health` 200, browser end to end, Convex action reaching Keycloak and convex-site via public URLs.
 - Who: agent (judgement call)
 
-#### SSR stylesheet 404
+#### SSR stylesheet 404 (pre-existing)
 
 - Context: the SSR bundle links `styles-<hash>.css` from its own build, the client build emits a different hash; the link 404s but the client manifest CSS still styles the page.
-- Decision: first recorded as a leftover for the owner; the orchestrator asked the lot to fix it, and the root cause turned out to be the image build (below).
-- Who: orchestrator
+- Decision: out of L0 scope; record as a leftover for the owner.
+- Who: agent (obvious)
 
 #### What goes in the functions image?
 
 - Context: `convex deploy` bundles `convex/` (and the `src/` files it imports) at deploy time, so the image needs their packages; the functions only import `convex`, but `package.json` lists build tools (vite, tanstack, hugeicons) under `dependencies`.
 - Decision: the backend image plus `bun install --production --frozen-lockfile` node_modules (~360 MB over the shared 582 MB base). A test keeps `deploy/convex-env.txt` equal to the `process.env` names the functions read.
-- Why: correct by construction from the lockfile; a hand-picked `convex` closure breaks silently when a dependency changes. Moving build tools to `devDependencies` would trim it: done later in the lot (below).
+- Why: correct by construction from the lockfile; a hand-picked `convex` closure breaks silently when a dependency changes. Moving build tools to `devDependencies` would trim it: leftover for the owner.
 - Who: agent (judgement call)
 
 #### Does an empty `.env` value clear a Convex variable?
