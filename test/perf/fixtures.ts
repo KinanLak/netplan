@@ -140,6 +140,7 @@ export const buildBenchDocument = ({
   links: Array.from({ length: links }, (_, index) =>
     buildBenchLink(index, devices),
   ),
+  overlay: null,
 });
 
 export const buildBenchMeta = (sequence: number): OperationMeta => ({

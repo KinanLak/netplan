@@ -22,6 +22,7 @@ describe("reconcileEphemeralState", () => {
         devices: [device("device:a")],
         walls: [],
         links: [],
+        overlay: null,
       },
       {
         selectedDeviceId: "device:missing" as DeviceId,
@@ -46,6 +47,7 @@ describe("reconcileEphemeralState", () => {
           devices: [device("device:a")],
           walls: [],
           links: [],
+          overlay: null,
         },
         {
           selectedDeviceId: "device:a" as DeviceId,

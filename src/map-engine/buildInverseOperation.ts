@@ -2,10 +2,11 @@ import type { MapDocumentSnapshot } from "@/types/map";
 import { applyOperation } from "./applyOperation";
 import type { BatchSubOperation, MapOperation } from "./types";
 
-const stripMeta = (operation: MapOperation): BatchSubOperation | null => {
-  if (operation.kind === "batch") return null;
+/** Sub-operations of an inverse, flattening a nested batch. */
+const batchOperations = (operation: MapOperation): Array<BatchSubOperation> => {
+  if (operation.kind === "batch") return operation.operations;
   const { meta: _meta, ...withoutMeta } = operation;
-  return withoutMeta;
+  return [withoutMeta];
 };
 
 const withMeta = (
@@ -33,6 +34,28 @@ const invertDevicePatch = (
     kind: "device.patch",
     meta: operation.meta,
     deviceId: operation.deviceId,
+    patch,
+  };
+};
+
+const invertOverlayPatch = (
+  snapshot: MapDocumentSnapshot,
+  operation: Extract<MapOperation, { kind: "overlay.patch" }>,
+): MapOperation | null => {
+  const overlay = snapshot.overlay;
+  if (!overlay) return null;
+
+  const patch: Extract<MapOperation, { kind: "overlay.patch" }>["patch"] = {};
+  if (operation.patch.center !== undefined) patch.center = overlay.center;
+  if (operation.patch.scale !== undefined) patch.scale = overlay.scale;
+  if (operation.patch.rotation !== undefined) patch.rotation = overlay.rotation;
+  if (operation.patch.opacity !== undefined) patch.opacity = overlay.opacity;
+  if (operation.patch.locked !== undefined) patch.locked = overlay.locked;
+
+  return {
+    kind: "overlay.patch",
+    meta: operation.meta,
+    floorId: operation.floorId,
     patch,
   };
 };
@@ -75,10 +98,7 @@ export function buildInverseOperation(
         : {
             kind: "batch",
             meta: operation.meta,
-            operations: operations.flatMap((item) => {
-              const stripped = stripMeta(item);
-              return stripped ? [stripped] : [];
-            }),
+            operations: operations.flatMap(batchOperations),
           };
     }
 
@@ -113,6 +133,33 @@ export function buildInverseOperation(
         : null;
     }
 
+    case "overlay.set": {
+      const restore: BatchSubOperation = {
+        kind: "overlay.set",
+        floorId: operation.floorId,
+        overlay: snapshotBeforeOperation.overlay,
+      };
+      // A locked calque refuses to be replaced, so the undo of placing one
+      // locked first unlocks it, in the same change.
+      return operation.overlay?.locked
+        ? {
+            kind: "batch",
+            meta: operation.meta,
+            operations: [
+              {
+                kind: "overlay.patch",
+                floorId: operation.floorId,
+                patch: { locked: false },
+              },
+              restore,
+            ],
+          }
+        : withMeta(restore, operation.meta);
+    }
+
+    case "overlay.patch":
+      return invertOverlayPatch(snapshotBeforeOperation, operation);
+
     case "batch": {
       const inverses: Array<MapOperation> = [];
       let currentSnapshot = snapshotBeforeOperation;
@@ -134,10 +181,7 @@ export function buildInverseOperation(
         : {
             kind: "batch",
             meta: operation.meta,
-            operations: inverses.flatMap((item) => {
-              const stripped = stripMeta(item);
-              return stripped ? [stripped] : [];
-            }),
+            operations: inverses.flatMap(batchOperations),
           };
     }
   }

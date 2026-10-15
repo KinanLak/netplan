@@ -4,6 +4,7 @@ import { readerQuery, editorMutation } from "./lib/functions";
 import type { Doc } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { requireSite } from "./sites";
+import { syncOverlayFileReleases } from "./lib/overlayFiles";
 
 const buildingValidator = v.object({
   id: v.string(),
@@ -227,6 +228,17 @@ export async function cascadeRemoveFloor(ctx: MutationCtx, floorId: string) {
     .withIndex("by_floor", (q) => q.eq("floorId", floorId))
     .collect();
   for (const wall of walls) await ctx.db.delete(wall._id);
+
+  const overlays = await ctx.db
+    .query("floorOverlays")
+    .withIndex("by_floor", (q) => q.eq("floorId", floorId))
+    .collect();
+  for (const overlay of overlays) await ctx.db.delete(overlay._id);
+  await syncOverlayFileReleases(
+    ctx,
+    overlays.map((overlay) => overlay.fileId),
+    Date.now(),
+  );
 
   const revisions = await ctx.db
     .query("documentRevisions")

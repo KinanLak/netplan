@@ -39,6 +39,7 @@ const snapshot = (
   devices,
   walls: [],
   links: [],
+  overlay: null,
 });
 
 const relocation = (input: {

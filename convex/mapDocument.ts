@@ -5,7 +5,7 @@ import {
   getExpiredDeviceIdsForFloor,
   toPublicDevice,
 } from "./computerPresentation";
-import { device, link, wallSegment } from "./mapValidators";
+import { device, floorOverlay, link, wallSegment } from "./mapValidators";
 import type { Doc } from "./_generated/dataModel";
 
 const toWall = (row: Doc<"walls">) => ({
@@ -92,5 +92,28 @@ export const getFloorRevision = readerQuery({
       .withIndex("by_floor", (q) => q.eq("floorId", floorId))
       .unique();
     return revision?.revision ?? 0;
+  },
+});
+
+export const getFloorOverlay = readerQuery({
+  args: { floorId: v.string() },
+  returns: v.union(v.null(), floorOverlay),
+  handler: async (ctx, { floorId }) => {
+    const row = await ctx.db
+      .query("floorOverlays")
+      .withIndex("by_floor", (q) => q.eq("floorId", floorId))
+      .unique();
+    if (!row) return null;
+    return {
+      floorId: row.floorId,
+      fileId: row.fileId,
+      imageWidth: row.imageWidth,
+      imageHeight: row.imageHeight,
+      center: row.center,
+      scale: row.scale,
+      rotation: row.rotation,
+      opacity: row.opacity,
+      locked: row.locked,
+    };
   },
 });
