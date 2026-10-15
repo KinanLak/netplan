@@ -1,5 +1,4 @@
 import { useReactFlow } from "@xyflow/react";
-import { useQuery } from "convex/react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Cancel01Icon, UserIcon, WasteIcon } from "@hugeicons/core-free-icons";
 import type { DeviceId, DeviceStatus } from "@/types/map";
@@ -14,16 +13,6 @@ import {
   useSelectedDeviceId,
 } from "@/store/selectors";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Kbd } from "@/components/ui/kbd";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ShortcutHintInline } from "@/components/ui/shortcut-hint";
@@ -34,14 +23,6 @@ import { cn } from "@/lib/utils";
 import { DrawerConnectionsSection } from "@/panels/drawer/DrawerConnectionsSection";
 import type { ConnectedDeviceSummary } from "@/panels/drawer/DrawerConnectionsSection";
 import { DrawerPortsSection } from "@/panels/drawer/DrawerPortsSection";
-import {
-  isNetBoxValueDefined,
-  netBoxLifecycleLabel,
-  netBoxLocationLabel,
-} from "@/integrations/netbox/inventory";
-import { api } from "../../convex/_generated/api";
-import { useLinkedSocketActions } from "@/integrations/netbox/useLinkedSocketActions";
-import { useCurrentSiteId } from "@/sites/useCurrentSite";
 
 const statusLabels: Record<DeviceStatus, string> = {
   up: "En ligne",
@@ -49,44 +30,15 @@ const statusLabels: Record<DeviceStatus, string> = {
   unknown: "Inconnu",
 };
 
-const localizationStateLabels = {
-  online: "En ligne",
-  resolved_unplaced: "Résolu, prise non placée",
-  missing: "Absent du dernier relevé",
-  offline: "Hors ligne",
-  ambiguous: "Localisation ambiguë",
-  unresolvable: "Localisation impossible",
-  socket_conflict: "Conflit de prise",
-} as const;
-
-const projectionStatusLabels = {
-  idle: "En attente de localisation",
-  pending: "Projection planifiée",
-  running: "Projection en cours",
-  success: "Position à jour",
-  blocked: "Projection bloquée",
-  error: "Échec de projection",
-} as const;
-
-const readableCode = (value: string): string =>
-  value.replaceAll("_", " ").replaceAll("-", " ");
-
 export default function DeviceDrawer() {
   const selectedDeviceId = useSelectedDeviceId();
   const isEditMode = useIsEditMode();
   const highlightedDeviceIds = useHighlightedDeviceIds();
-  const menuActions = useLinkedSocketActions(selectedDeviceId);
-  const siteId = useCurrentSiteId();
 
   const selectDevice = useMapStore((s) => s.selectDevice);
   const setHighlightedDevices = useMapStore((s) => s.setHighlightedDevices);
 
   const { document } = useMapDocumentData();
-  const discoveredConnections =
-    useQuery(
-      api.librenms.listDiscoveredConnections,
-      siteId ? { siteId } : "skip",
-    ) ?? [];
   const { commands } = useMapDocumentActions();
   const { devices, links } = document;
   const { deleteDevice } = commands;
@@ -175,14 +127,6 @@ export default function DeviceDrawer() {
   }
 
   const status = device.metadata.status ?? "unknown";
-  const externalId = device.metadata.source?.externalId;
-  const discoveredConnection = externalId
-    ? discoveredConnections.find(
-        (connection) =>
-          connection.computerExternalId === externalId ||
-          connection.socketExternalId === externalId,
-      )
-    : undefined;
 
   return (
     <aside className="absolute top-0 right-0 z-20 flex h-full w-80 flex-col border-l border-border bg-card shadow-xl">
@@ -197,58 +141,6 @@ export default function DeviceDrawer() {
             </p>
           </div>
           <div className="flex items-center gap-1">
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={`Actions pour ${device.name}`}
-                  />
-                }
-              >
-                <span aria-hidden="true" className="text-lg leading-none">
-                  •••
-                </span>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-56">
-                <DropdownMenuGroup>
-                  <DropdownMenuLabel>{device.name}</DropdownMenuLabel>
-                  {menuActions.isLoading ? (
-                    <DropdownMenuItem disabled>
-                      Recherche de la prise…
-                    </DropdownMenuItem>
-                  ) : menuActions.placedSocket && menuActions.discovery ? (
-                    <DropdownMenuItem
-                      onClick={() =>
-                        menuActions.focusDevice(menuActions.placedSocket!.id)
-                      }
-                    >
-                      Voir la prise {menuActions.discovery.socketName}
-                    </DropdownMenuItem>
-                  ) : menuActions.socketItem &&
-                    menuActions.discovery &&
-                    menuActions.isEditMode ? (
-                    <DropdownMenuItem onClick={menuActions.placeLinkedSocket}>
-                      Placer la prise {menuActions.discovery.socketName}
-                    </DropdownMenuItem>
-                  ) : null}
-                </DropdownMenuGroup>
-                {menuActions.isEditMode ? (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuGroup>
-                      <DropdownMenuItem
-                        variant="destructive"
-                        onClick={menuActions.deleteDevice}
-                      >
-                        Supprimer de la carte
-                      </DropdownMenuItem>
-                    </DropdownMenuGroup>
-                  </>
-                ) : null}
-              </DropdownMenuContent>
-            </DropdownMenu>
             <Button
               variant="ghost"
               size="sm"
@@ -308,149 +200,6 @@ export default function DeviceDrawer() {
             </section>
           ) : null}
 
-          {device.metadata.source?.provider === "netbox" ? (
-            <section>
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <h3 className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-                  Source
-                </h3>
-                <Badge variant="outline">NetBox</Badge>
-              </div>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between gap-3">
-                  <span className="text-muted-foreground">État inventaire</span>
-                  <span className="text-right text-foreground">
-                    {netBoxLifecycleLabel(
-                      device.metadata.source.lifecycleStatus,
-                    )}
-                  </span>
-                </div>
-                <div className="flex justify-between gap-3">
-                  <span className="text-muted-foreground">Emplacement</span>
-                  <span className="text-right text-foreground">
-                    {netBoxLocationLabel(device.metadata.source.locationPath)}
-                  </span>
-                </div>
-                <a
-                  href={device.metadata.source.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex text-sm text-primary underline-offset-4 hover:underline"
-                >
-                  Ouvrir dans NetBox
-                </a>
-              </div>
-            </section>
-          ) : null}
-
-          {device.metadata.localization ? (
-            <section>
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <h3 className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-                  Localisation
-                </h3>
-                <Badge variant="outline">
-                  {device.metadata.localization.positionState === "current"
-                    ? "Actuelle"
-                    : "Historique"}
-                </Badge>
-              </div>
-              <div className="space-y-2 rounded-md border border-border bg-muted p-3 text-xs">
-                <div className="flex justify-between gap-3">
-                  <span className="text-muted-foreground">État</span>
-                  <span className="text-right font-medium text-foreground">
-                    {
-                      localizationStateLabels[
-                        device.metadata.localization.state
-                      ]
-                    }
-                  </span>
-                </div>
-                <div className="flex justify-between gap-3">
-                  <span className="text-muted-foreground">Projection</span>
-                  <span className="text-right text-foreground">
-                    {
-                      projectionStatusLabels[
-                        device.metadata.localization.projectionStatus
-                      ]
-                    }
-                  </span>
-                </div>
-                {device.metadata.localization.reason ? (
-                  <div className="flex justify-between gap-3">
-                    <span className="text-muted-foreground">Raison</span>
-                    <span className="text-right text-foreground">
-                      {readableCode(device.metadata.localization.reason)}
-                    </span>
-                  </div>
-                ) : null}
-                {device.metadata.localization.targetFloorId &&
-                device.metadata.localization.targetPosition ? (
-                  <div className="flex justify-between gap-3">
-                    <span className="text-muted-foreground">Cible</span>
-                    <span className="text-right font-mono text-foreground">
-                      {device.metadata.localization.targetFloorId} ·{" "}
-                      {device.metadata.localization.targetPosition.x},
-                      {device.metadata.localization.targetPosition.y}
-                    </span>
-                  </div>
-                ) : null}
-                {device.metadata.localization.errorCode ? (
-                  <div className="flex justify-between gap-3">
-                    <span className="text-muted-foreground">Erreur</span>
-                    <span className="text-right text-destructive">
-                      {readableCode(device.metadata.localization.errorCode)}
-                    </span>
-                  </div>
-                ) : null}
-                {device.metadata.localization.nextAttemptAt ? (
-                  <div className="flex justify-between gap-3">
-                    <span className="text-muted-foreground">
-                      Prochaine tentative
-                    </span>
-                    <span className="text-right text-foreground">
-                      {new Intl.DateTimeFormat("fr-FR", {
-                        dateStyle: "short",
-                        timeStyle: "short",
-                      }).format(device.metadata.localization.nextAttemptAt)}
-                    </span>
-                  </div>
-                ) : null}
-              </div>
-            </section>
-          ) : null}
-
-          {discoveredConnection ? (
-            <section>
-              <h3 className="mb-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-                Connexion observée
-              </h3>
-              <div className="rounded-md border border-border bg-muted p-3">
-                <div className="flex items-center justify-between gap-3 text-sm">
-                  <span className="text-muted-foreground">
-                    {discoveredConnection.computerExternalId === externalId
-                      ? "Prise"
-                      : "Poste"}
-                  </span>
-                  <span className="font-medium text-foreground">
-                    {discoveredConnection.computerExternalId === externalId
-                      ? discoveredConnection.socketName
-                      : discoveredConnection.computerName}
-                  </span>
-                </div>
-                <div className="mt-2 flex items-center justify-between gap-3 text-xs">
-                  <span className="text-muted-foreground">Détection</span>
-                  <span className="text-foreground">
-                    {discoveredConnection.method.toUpperCase()} · confiance{" "}
-                    {discoveredConnection.confidence === "high"
-                      ? "élevée"
-                      : "moyenne"}
-                  </span>
-                </div>
-              </div>
-            </section>
-          ) : null}
-
           {device.type === "pc" && device.metadata.lastUser ? (
             <section>
               <h3 className="mb-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
@@ -477,7 +226,7 @@ export default function DeviceDrawer() {
             </section>
           ) : null}
 
-          {isNetBoxValueDefined(device.metadata.model) ? (
+          {device.metadata.model ? (
             <section>
               <h3 className="mb-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
                 Matériel

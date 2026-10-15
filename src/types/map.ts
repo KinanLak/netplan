@@ -45,19 +45,6 @@ export interface PortInfo {
   status: DeviceStatus;
 }
 
-export interface ExternalDeviceSource {
-  provider: "netbox";
-  siteId: SiteId;
-  instanceKey: string;
-  externalId: string;
-  url: string;
-  location?: string;
-  locationPath: Array<string>;
-  role: string;
-  lifecycleStatus: string;
-  syncedAt: number;
-}
-
 export interface DeviceMetadata {
   ip?: string;
   status?: DeviceStatus;
@@ -65,30 +52,6 @@ export interface DeviceMetadata {
   ports?: Array<PortInfo>;
   lastUser?: string;
   macs?: Array<string>;
-  source?: ExternalDeviceSource;
-  localization?: {
-    state:
-      | "online"
-      | "resolved_unplaced"
-      | "missing"
-      | "offline"
-      | "ambiguous"
-      | "unresolvable"
-      | "socket_conflict";
-    reason?: string;
-    positionState: "current" | "historical";
-    projectionStatus:
-      | "idle"
-      | "pending"
-      | "running"
-      | "success"
-      | "blocked"
-      | "error";
-    targetFloorId?: FloorId;
-    targetPosition?: Position;
-    errorCode?: string;
-    nextAttemptAt?: number;
-  };
 }
 
 // ── Domain documents ─────────────────────────────────────────────────────────

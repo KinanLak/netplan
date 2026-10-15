@@ -22,7 +22,7 @@ import { GRID_SIZE } from "@/lib/grid";
 import { cn } from "@/lib/utils";
 import { CanvasZoomControls } from "@/canvas/components/CanvasZoomControls";
 import { ContextMenu, ContextMenuTrigger } from "@/components/ui/context-menu";
-import { DeviceContextMenu } from "@/integrations/netbox/DeviceContextMenu";
+import { DeviceContextMenu } from "./DeviceContextMenu";
 import {
   WallInteractionLayer,
   createWallPaneEventBridge,

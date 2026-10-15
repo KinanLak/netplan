@@ -1,26 +1,16 @@
 import { v } from "convex/values";
 import { readerQuery } from "./lib/functions";
-import {
-  getComputerPresentationsForFloor,
-  getExpiredDeviceIdsForFloor,
-  toPublicDevice,
-} from "./computerPresentation";
+import { toPublicDevice } from "./mapDocument";
 import { device } from "./mapValidators";
 
 export const listForFloor = readerQuery({
   args: { floorId: v.string() },
   returns: v.array(device),
   handler: async (ctx, { floorId }) => {
-    const [devices, expiredDeviceIds, locations] = await Promise.all([
-      ctx.db
-        .query("devices")
-        .withIndex("by_floor", (q) => q.eq("floorId", floorId))
-        .collect(),
-      getExpiredDeviceIdsForFloor(ctx, floorId),
-      getComputerPresentationsForFloor(ctx, floorId),
-    ]);
-    return devices
-      .filter((row) => !expiredDeviceIds.has(row.objectId))
-      .map((row) => toPublicDevice(row, locations.get(row.objectId)));
+    const devices = await ctx.db
+      .query("devices")
+      .withIndex("by_floor", (q) => q.eq("floorId", floorId))
+      .collect();
+    return devices.map(toPublicDevice);
   },
 });

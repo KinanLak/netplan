@@ -77,7 +77,6 @@ export type ApplyOperationReason =
   | "missing-wall"
   | "missing-endpoint"
   | "cross-floor-link"
-  | "external-binding-conflict"
   | "duplicate-wall-geometry"
   | "missing-overlay"
   | "overlay-locked"

@@ -1,12 +1,22 @@
 import { v } from "convex/values";
 import { readerQuery } from "./lib/functions";
-import {
-  getComputerPresentationsForFloor,
-  getExpiredDeviceIdsForFloor,
-  toPublicDevice,
-} from "./computerPresentation";
 import { device, floorOverlay, link, wallSegment } from "./mapValidators";
 import type { Doc } from "./_generated/dataModel";
+
+// MAC addresses stay server-side until the inventory decides who sees them.
+export const toPublicDevice = (row: Doc<"devices">) => {
+  const { macs: _macs, ...metadata } = row.metadata;
+  return {
+    id: row.objectId,
+    floorId: row.floorId,
+    type: row.type,
+    name: row.name,
+    hostname: row.hostname,
+    position: row.position,
+    size: row.size,
+    metadata,
+  };
+};
 
 const toWall = (row: Doc<"walls">) => ({
   id: row.objectId,
@@ -36,17 +46,11 @@ export const getFloorDevices = readerQuery({
   args: { floorId: v.string() },
   returns: v.array(device),
   handler: async (ctx, { floorId }) => {
-    const [rows, expiredDeviceIds, locations] = await Promise.all([
-      ctx.db
-        .query("devices")
-        .withIndex("by_floor", (q) => q.eq("floorId", floorId))
-        .collect(),
-      getExpiredDeviceIdsForFloor(ctx, floorId),
-      getComputerPresentationsForFloor(ctx, floorId),
-    ]);
-    return rows
-      .filter((row) => !expiredDeviceIds.has(row.objectId))
-      .map((row) => toPublicDevice(row, locations.get(row.objectId)));
+    const rows = await ctx.db
+      .query("devices")
+      .withIndex("by_floor", (q) => q.eq("floorId", floorId))
+      .collect();
+    return rows.map(toPublicDevice);
   },
 });
 
@@ -66,20 +70,11 @@ export const getFloorLinks = readerQuery({
   args: { floorId: v.string() },
   returns: v.array(link),
   handler: async (ctx, { floorId }) => {
-    const [rows, expiredDeviceIds] = await Promise.all([
-      ctx.db
-        .query("links")
-        .withIndex("by_floor", (q) => q.eq("floorId", floorId))
-        .collect(),
-      getExpiredDeviceIdsForFloor(ctx, floorId),
-    ]);
-    return rows
-      .filter(
-        (row) =>
-          !expiredDeviceIds.has(row.fromDeviceId) &&
-          !expiredDeviceIds.has(row.toDeviceId),
-      )
-      .map(toLink);
+    const rows = await ctx.db
+      .query("links")
+      .withIndex("by_floor", (q) => q.eq("floorId", floorId))
+      .collect();
+    return rows.map(toLink);
   },
 });
 
