@@ -36,9 +36,11 @@ function EndpointNode({ data: device, id }: NodeProps<EndpointNodeType>) {
           </span>
           <StatusDot status={status} />
         </div>
-        <span className="text-3xs truncate text-center leading-tight font-semibold text-foreground">
-          {device.hostname ?? device.name}
-        </span>
+        <div className="flex flex-1 items-center justify-center px-0.5">
+          <span className="text-2xs text-center leading-tight font-bold break-all text-foreground uppercase">
+            {device.hostname ?? device.name}
+          </span>
+        </div>
       </div>
 
       <Handle type="target" position={Position.Top} className="opacity-0" />
