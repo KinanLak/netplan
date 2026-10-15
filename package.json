@@ -23,7 +23,8 @@
     "codegen:check": "bun scripts/codegen-check.ts",
     "fix": "bun run lint:fix && bun run format",
     "verify": "bun run check && bun run build && git diff --exit-code -- src/routeTree.gen.ts",
-    "dev:agent": "bun scripts/dev-agent.ts"
+    "dev:agent": "bun scripts/dev-agent.ts",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
@@ -54,6 +55,7 @@
   "devDependencies": {
     "@babel/core": "^8.0.7",
     "@happy-dom/global-registrator": "^21.0.1",
+    "@playwright/test": "^1.64.1",
     "@rolldown/plugin-babel": "^0.2.4",
     "@tanstack/devtools-vite": "^0.8.5",
     "@testing-library/dom": "^10.4.2",

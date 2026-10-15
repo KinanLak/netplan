@@ -5,9 +5,9 @@ description: How Netplan is built today and the shape the rebuild is heading to.
 
 # Architecture
 
-- **[Current](current.md)** — the code as it stands at the start of the
-  rebuild: map editor, map operations, and the NetBox/LibreNMS localization
-  pipeline with its external agent.
+- **[Current](current.md)** — the code as it stands: map editor, map
+  operations, the NetBox/LibreNMS localization pipeline with its external
+  agent, and the development and delivery tooling.
 - **[Target](target.md)** — where the lots of the rebuild take it: self-hosted
   Docker, accounts and roles, a Netplan-owned inventory with optional
   integrations running inside Convex.

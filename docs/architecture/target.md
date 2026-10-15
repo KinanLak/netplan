@@ -7,17 +7,8 @@ description: The shape the rebuild lots are building towards.
 
 The rebuild replaces the current design in place, with no transitional layers
 and data restarting from zero (ADR 0001). Order: F, then lots 0 and 1 in
-parallel, then lot 2 alongside lot 3a, then 3b, 4 and 5.
-
-## Foundations (lot F)
-
-- Agent instructions in `AGENTS.md`, decisions in `docs/adr/`, history in
-  `docs/history/`.
-- Read-only `check`, `fix` and `verify` scripts; CI with secret scanning,
-  verification, codegen freshness, dependency audit and an end-to-end smoke
-  test; zipzoup review (ADR 0019).
-- One local Convex backend per worktree with seeded fictional data, so every
-  agent can drive the real app in a browser (ADR 0018).
+parallel, then lot 2 alongside lot 3a, then 3b, 4 and 5. Lot F is done and
+described in [Current](current.md).
 
 ## Infrastructure (lot 0)
 
