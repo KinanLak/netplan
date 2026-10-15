@@ -21,6 +21,28 @@ test("the image runs the Bun version the repository pins", async () => {
   expect(packageManager).toBe(`bun@${await dockerfileArg("BUN_VERSION")}`);
 });
 
+// The functions image installs `dependencies`; the app image is a bundle.
+test("dependencies are only the packages the Convex functions import", async () => {
+  const pkg: unknown = JSON.parse(
+    await readFile(join(root, "package.json"), "utf8"),
+  );
+  const dependencies =
+    typeof pkg === "object" && pkg !== null && "dependencies" in pkg
+      ? Object.keys(pkg.dependencies as Record<string, string>)
+      : [];
+  const imported = new Set<string>();
+  for await (const file of new Bun.Glob("convex/**/*.ts").scan(root)) {
+    if (file.includes("/_generated/") || file.endsWith(".test.ts")) continue;
+    const source = await readFile(join(root, file), "utf8");
+    for (const match of source.matchAll(
+      /from "((?:@[^/"]+\/)?[^./"][^/"]*)/g,
+    )) {
+      imported.add(match[1]);
+    }
+  }
+  expect(dependencies.filter((name) => !imported.has(name))).toEqual([]);
+});
+
 test("the functions image deploys with the backend image dev:agent runs", async () => {
   expect(await dockerfileArg("CONVEX_BACKEND_IMAGE")).toBe(
     CONVEX_BACKEND_IMAGE,

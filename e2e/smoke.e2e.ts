@@ -22,3 +22,20 @@ test("the seeded demo map opens on both floors", async ({ page }) => {
 
   expect(errors).toEqual([]);
 });
+
+// The server and client builds each hash the stylesheets; a mismatch leaves
+// the server-rendered page linking files that do not exist.
+test("every stylesheet the server renders is served", async ({ request }) => {
+  const html = await (await request.get("/")).text();
+  const hrefs = Array.from(
+    html.matchAll(/<link rel="stylesheet" href="([^"]+)"/g),
+    (match) => match[1],
+  );
+  expect(hrefs.length).toBeGreaterThan(0);
+  for (const href of hrefs) {
+    expect({ href, status: (await request.get(href)).status() }).toEqual({
+      href,
+      status: 200,
+    });
+  }
+});
