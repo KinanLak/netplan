@@ -8,23 +8,13 @@ import type { Role } from "./lib/roles";
 
 // ADR 0004 levels for every public function. A new public function fails the
 // first test until it is listed here with the level it needs.
-const POLICY: Record<string, Role | "connector"> = {
+const POLICY: Record<string, Role> = {
   "buildings:clearMap": "editor",
   "buildings:create": "editor",
   "buildings:createDefaultMap": "editor",
   "buildings:list": "reader",
   "buildings:listForSite": "reader",
   "buildings:rename": "editor",
-  "connector:beginLocalizationImport": "connector",
-  "connector:beginNetBoxImport": "connector",
-  "connector:failLocalizationImport": "connector",
-  "connector:failNetBoxImport": "connector",
-  "connector:heartbeatImport": "connector",
-  "connector:publishLocalizationSnapshot": "connector",
-  "connector:publishNetBoxGeneration": "connector",
-  "connector:readLocalizationBaseline": "connector",
-  "connector:readNetBoxGeneration": "connector",
-  "connector:readRunningWorkflows": "connector",
   "devices:listForFloor": "reader",
   "floorOverlays:imageUrl": "reader",
   "floorOverlays:upload": "editor",
@@ -32,10 +22,6 @@ const POLICY: Record<string, Role | "connector"> = {
   "floors:listAll": "reader",
   "floors:listForBuilding": "reader",
   "floors:rename": "editor",
-  "integrationOrchestration:requestManualLocalization": "editor",
-  "integrations:getState": "reader",
-  "librenms:getSyncState": "reader",
-  "librenms:listDiscoveredConnections": "reader",
   "links:listForDevice": "reader",
   "links:listForFloor": "reader",
   "mapDocument:getFloorDevices": "reader",
@@ -45,9 +31,6 @@ const POLICY: Record<string, Role | "connector"> = {
   "mapDocument:getFloorWalls": "reader",
   "mapOperations:apply": "editor",
   "mapOperations:observePending": "reader",
-  "netbox:getSyncState": "reader",
-  "netbox:listConnections": "reader",
-  "netbox:listInventory": "reader",
   "presences:list": "reader",
   "presences:remove": "reader",
   "presences:updateOnlineUser": "reader",
@@ -77,7 +60,7 @@ const publicFunctions = async () => {
       found[`${file.slice(0, -3)}:${name}`] =
         typeof exported.requiredRole === "string"
           ? exported.requiredRole
-          : "connector";
+          : "unguarded";
     }
   }
   return found;

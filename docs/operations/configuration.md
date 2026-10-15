@@ -44,11 +44,6 @@ current value alone, so a variable set from the dashboard survives until
 
 | Variable                                                                    | Meaning                                                                                                                                 |
 | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `NETBOX_URL`, `NETBOX_TOKEN`                                                | NetBox API used by the localization pipeline.                                                                                           |
-| `LIBRENMS_URL`, `LIBRENMS_TOKEN`                                            | LibreNMS API used by the localization pipeline.                                                                                         |
-| `NETPLAN_CONNECTOR_SECRET`                                                  | Shared secret of the external integration agent.                                                                                        |
-| `INTEGRATION_SCHEDULER_ENABLED`                                             | `true` lets the cron reserve integration cycles.                                                                                        |
-| `INTEGRATION_MANUAL_REFRESH_ENABLED`                                        | `true` allows refreshes requested from the interface.                                                                                   |
 | `ALLOW_DEV_SEED`                                                            | `true` allows the fictional demo site to be seeded. Never in production.                                                                |
 | `BETTER_AUTH_SECRET`                                                        | Signs sessions and tokens. Required; generate it like the secrets above.                                                                |
 | `SITE_URL`                                                                  | The app's public URL, trusted for sign-in and redirects. Defaults to `<scheme>://<domain>:<port>`.                                      |

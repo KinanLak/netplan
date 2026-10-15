@@ -29,7 +29,7 @@ full rules; these are the ones a review has to enforce.
   `objectId`s from `src/types/map.ts`.
 - Zustand holds only ephemeral UI state; durable state belongs in Convex.
 
-## Integrations (convex/netbox*, librenms*, localization*, integration*)
+## Integrations (NetBox, LibreNMS)
 
 - NetBox and LibreNMS are real production tools. Reads are free; writes are
   minimal, behind a feature switch, and never touch a real device, cable or

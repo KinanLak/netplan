@@ -107,13 +107,6 @@ services:
       INSTANCE_NAME: netplan
       INSTANCE_SECRET: ${INSTANCE_SECRET:?set INSTANCE_SECRET in .env}
       # Every name in convex-env.txt; empty ones are left as they are.
-      NETBOX_URL: ${NETBOX_URL:-}
-      NETBOX_TOKEN: ${NETBOX_TOKEN:-}
-      LIBRENMS_URL: ${LIBRENMS_URL:-}
-      LIBRENMS_TOKEN: ${LIBRENMS_TOKEN:-}
-      NETPLAN_CONNECTOR_SECRET: ${NETPLAN_CONNECTOR_SECRET:-}
-      INTEGRATION_SCHEDULER_ENABLED: ${INTEGRATION_SCHEDULER_ENABLED:-}
-      INTEGRATION_MANUAL_REFRESH_ENABLED: ${INTEGRATION_MANUAL_REFRESH_ENABLED:-}
       ALLOW_DEV_SEED: ${ALLOW_DEV_SEED:-}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
       # better-auth's links and redirects point at the app's public URL.

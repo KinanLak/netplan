@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ShortcutHintAbsolute } from "@/components/ui/shortcut-hint";
-import { NetBoxInventoryPanel } from "@/integrations/netbox/NetBoxInventoryPanel";
 import {
   TOOLBAR_WALL_COLOR_SELECTION_ENABLED,
   UNDO_REDO_EVENT_NAME,
@@ -192,9 +191,6 @@ export default function Toolbar() {
             })}
           </div>
         ) : null}
-
-        <div className="h-6 w-px bg-border" aria-hidden />
-        <NetBoxInventoryPanel />
       </div>
     </div>
   );

@@ -4,7 +4,6 @@ import { internalMutation } from "./_generated/server";
 import { readerQuery, adminMutation } from "./lib/functions";
 import type { Doc } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
-import { nextNetBoxAttempt, nextNominalAttempt } from "./integrationSchedule";
 
 const libreNmsDevice = v.object({
   externalId: v.string(),
@@ -219,24 +218,6 @@ export const insertSite = async (
     createdAt: now,
     updatedAt: now,
   });
-  for (const workflow of ["netbox", "localization"] as const) {
-    await ctx.db.insert("integrationWorkflowStates", {
-      siteId: input.objectId,
-      workflow,
-      status: input.enabled ? "idle" : "disabled",
-      fenceCounter: 0,
-      recentConfirmationMs: 2 * 60 * 1000,
-      backoffLevel: 0,
-      consecutiveFailures: 0,
-      timeoutMs: 2 * 60 * 1000,
-      switchProgress: [],
-      nextScheduledAt:
-        workflow === "netbox"
-          ? nextNetBoxAttempt(now)
-          : nextNominalAttempt(now, input),
-      configVersion: 1,
-    });
-  }
   return input.objectId;
 };
 
@@ -310,50 +291,10 @@ export const setEnabled = internalMutation({
   returns: v.null(),
   handler: async (ctx, { siteId, enabled }) => {
     const site = await requireSite(ctx, siteId);
-    const now = Date.now();
-    const configVersion = site.configVersion + 1;
-    const states = await ctx.db
-      .query("integrationWorkflowStates")
-      .withIndex("by_site_workflow", (q) => q.eq("siteId", siteId))
-      .collect();
-    for (const state of states) {
-      if (state.activeAttemptId) {
-        const attempt = await ctx.db
-          .query("integrationAttempts")
-          .withIndex("by_site_workflow_attempt", (q) =>
-            q
-              .eq("siteId", siteId)
-              .eq("workflow", state.workflow)
-              .eq("attemptId", state.activeAttemptId as string),
-          )
-          .unique();
-        if (attempt?.status === "running") {
-          await ctx.db.patch(attempt._id, {
-            status: "abandoned",
-            completedAt: now,
-          });
-        }
-      }
-      await ctx.db.patch(state._id, {
-        status: enabled
-          ? state.lastPublishedId
-            ? "success"
-            : "idle"
-          : "disabled",
-        activeAttemptId: undefined,
-        activeOrigin: undefined,
-        nextScheduledAt: enabled
-          ? state.workflow === "netbox"
-            ? nextNetBoxAttempt(now)
-            : nextNominalAttempt(now, site)
-          : state.nextScheduledAt,
-        configVersion,
-      });
-    }
     await ctx.db.patch(site._id, {
       enabled,
-      configVersion,
-      updatedAt: now,
+      configVersion: site.configVersion + 1,
+      updatedAt: Date.now(),
     });
     return null;
   },
@@ -364,68 +305,11 @@ export const remove = internalMutation({
   returns: v.null(),
   handler: async (ctx, { siteId }) => {
     const site = await requireSite(ctx, siteId);
-    const workflowStates = await ctx.db
-      .query("integrationWorkflowStates")
-      .withIndex("by_site_workflow", (q) => q.eq("siteId", siteId))
-      .collect();
-    const ownedRows = await Promise.all([
-      ctx.db
-        .query("buildings")
-        .withIndex("by_site", (q) => q.eq("siteId", siteId))
-        .first(),
-      ctx.db
-        .query("integrationAttempts")
-        .withIndex("by_site_workflow_started", (q) => q.eq("siteId", siteId))
-        .first(),
-      ctx.db
-        .query("netboxGenerations")
-        .withIndex("by_site_published", (q) => q.eq("siteId", siteId))
-        .first(),
-      ctx.db
-        .query("netboxInventory")
-        .withIndex("by_generation", (q) => q.eq("siteId", siteId))
-        .first(),
-      ctx.db
-        .query("netboxConnections")
-        .withIndex("by_generation", (q) => q.eq("siteId", siteId))
-        .first(),
-      ctx.db
-        .query("localizationSnapshots")
-        .withIndex("by_site_published", (q) => q.eq("siteId", siteId))
-        .first(),
-      ctx.db
-        .query("localizationObservations")
-        .withIndex("by_snapshot", (q) => q.eq("siteId", siteId))
-        .first(),
-      ctx.db
-        .query("localizationLinks")
-        .withIndex("by_snapshot", (q) => q.eq("siteId", siteId))
-        .first(),
-      ctx.db
-        .query("switchRefreshStates")
-        .withIndex("by_site_switch", (q) => q.eq("siteId", siteId))
-        .first(),
-      ctx.db
-        .query("computerLocations")
-        .withIndex("by_site_computer", (q) => q.eq("siteId", siteId))
-        .first(),
-      ctx.db
-        .query("localizationCycles")
-        .withIndex("by_site_completed", (q) => q.eq("siteId", siteId))
-        .first(),
-      ctx.db
-        .query("localizationEvents")
-        .withIndex("by_site_cycle", (q) => q.eq("siteId", siteId))
-        .first(),
-      ctx.db
-        .query("externalObjectBindings")
-        .withIndex("by_external", (q) => q.eq("siteId", siteId))
-        .first(),
-    ]);
-    if (ownedRows.some(Boolean)) {
-      throw new ConvexError("Site still owns durable data");
-    }
-    for (const state of workflowStates) await ctx.db.delete(state._id);
+    const building = await ctx.db
+      .query("buildings")
+      .withIndex("by_site", (q) => q.eq("siteId", siteId))
+      .first();
+    if (building) throw new ConvexError("Site still owns durable data");
     await ctx.db.delete(site._id);
     return null;
   },

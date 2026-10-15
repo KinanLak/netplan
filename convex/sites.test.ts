@@ -127,44 +127,6 @@ describe("sites", () => {
     ).rejects.toThrow("different configuration");
   });
 
-  it("atomically disables active workflows and allows a clean re-enable", async () => {
-    const t = await signedInTest();
-    const siteId = await t.mutation(internal.sites.create, {
-      site: configuredSite("disable"),
-    });
-    const attempt = await t.mutation(internal.integrations.begin, {
-      siteId,
-      workflow: "netbox",
-      attemptId: "attempt:disable",
-      leaseId: "lease:disable",
-      origin: "manual",
-    });
-
-    await t.mutation(internal.sites.setEnabled, { siteId, enabled: false });
-    let state = await t.query(api.integrations.getState, {
-      siteId,
-      workflow: "netbox",
-    });
-    expect(state).toMatchObject({ status: "disabled" });
-    expect(state?.activeAttemptId).toBeUndefined();
-    await expect(
-      t.mutation(internal.integrations.heartbeat, {
-        siteId,
-        workflow: "netbox",
-        attemptId: attempt.attemptId,
-        leaseId: attempt.leaseId,
-        fence: attempt.fence,
-      }),
-    ).rejects.toThrow("replaced");
-
-    await t.mutation(internal.sites.setEnabled, { siteId, enabled: true });
-    state = await t.query(api.integrations.getState, {
-      siteId,
-      workflow: "netbox",
-    });
-    expect(state?.status).toBe("idle");
-  });
-
   it("rejects a default-map identity owned by another site", async () => {
     const t = await signedInTest();
     const siteA = await t.mutation(internal.sites.create, {
@@ -200,7 +162,7 @@ describe("sites", () => {
     );
   });
 
-  it("removes pristine workflow states with an unused site", async () => {
+  it("removes an unused site", async () => {
     const t = await signedInTest();
     const siteId = await t.mutation(internal.sites.create, {
       site: configuredSite("unused"),
@@ -208,10 +170,5 @@ describe("sites", () => {
 
     await t.mutation(internal.sites.remove, { siteId });
     expect(await t.query(api.sites.get, { siteId })).toBeNull();
-    await t.run(async (ctx) => {
-      expect(
-        await ctx.db.query("integrationWorkflowStates").collect(),
-      ).toHaveLength(0);
-    });
   });
 });

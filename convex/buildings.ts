@@ -207,12 +207,6 @@ export async function cascadeRemoveFloor(ctx: MutationCtx, floorId: string) {
     .withIndex("by_floor", (q) => q.eq("floorId", floorId))
     .collect();
 
-  const bindings = await ctx.db
-    .query("externalObjectBindings")
-    .withIndex("by_floor", (q) => q.eq("floorId", floorId))
-    .collect();
-  for (const binding of bindings) await ctx.db.delete(binding._id);
-
   const presences = await ctx.db
     .query("presences")
     .withIndex("by_floor", (q) => q.eq("floorId", floorId))

@@ -25,28 +25,6 @@ const changed = (snapshot: MapDocumentSnapshot): ApplyOperationResult => ({
 const sameJson = (left: object, right: object): boolean =>
   JSON.stringify(left) === JSON.stringify(right);
 
-const externalSourceKey = (
-  source: MapDocumentSnapshot["devices"][number]["metadata"]["source"],
-): string | undefined =>
-  source
-    ? `${source.siteId}\0${source.provider}\0${source.instanceKey}\0${source.externalId}`
-    : undefined;
-
-const hasExternalBindingConflict = (
-  snapshot: MapDocumentSnapshot,
-  deviceId: string,
-  source: MapDocumentSnapshot["devices"][number]["metadata"]["source"],
-): boolean => {
-  const key = externalSourceKey(source);
-  return key
-    ? snapshot.devices.some(
-        (device) =>
-          device.id !== deviceId &&
-          externalSourceKey(device.metadata.source) === key,
-      )
-    : false;
-};
-
 const withoutConnectedLinks = (
   snapshot: MapDocumentSnapshot,
   deviceId: string,
@@ -126,16 +104,6 @@ export function applyOperation(
           ? unchanged(snapshot, "already-exists")
           : unchanged(snapshot, "conflict");
       }
-      if (
-        hasExternalBindingConflict(
-          snapshot,
-          operation.device.id,
-          operation.device.metadata.source,
-        )
-      ) {
-        return unchanged(snapshot, "external-binding-conflict");
-      }
-
       return changed({
         ...snapshot,
         devices: [...snapshot.devices, operation.device],
@@ -150,17 +118,7 @@ export function applyOperation(
 
       const devices = [...snapshot.devices];
       const device = devices[index];
-      const patched = { ...device, ...operation.patch };
-      if (
-        hasExternalBindingConflict(
-          snapshot,
-          operation.deviceId,
-          patched.metadata.source,
-        )
-      ) {
-        return unchanged(snapshot, "external-binding-conflict");
-      }
-      devices[index] = patched;
+      devices[index] = { ...device, ...operation.patch };
 
       return changed({ ...snapshot, devices });
     }

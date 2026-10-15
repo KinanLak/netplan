@@ -8,7 +8,6 @@ import FlowCanvas from "@/canvas/FlowCanvas";
 import AppSidebar from "@/panels/Sidebar";
 import Toolbar from "@/panels/Toolbar";
 import DeviceDrawer from "@/panels/DeviceDrawer";
-import { NetBoxInventoryPanel } from "@/integrations/netbox/NetBoxInventoryPanel";
 import { MapDocumentProvider } from "@/map-session/MapDocumentProvider";
 import { MapDocumentStatus } from "@/map-session/MapDocumentStatus";
 import {
@@ -273,9 +272,6 @@ function MapWorkspace({ sortedFloors }: { sortedFloors: Array<Floor> }) {
                 Lecture seule
               </div>
             )}
-            {/* In edit mode the inventory sits in the toolbar; outside it, and
-              always for a reader, it stays reachable here. */}
-            {isEditMode ? null : <NetBoxInventoryPanel />}
           </div>
         </ReactFlowProvider>
 

@@ -6,9 +6,10 @@ description: Netplan as it stands now, partway through the rebuild.
 # Current architecture
 
 Netplan is a collaborative map editor for buildings: floors, walls and network
-devices (racks, switches, PCs, wall sockets) with the cables between them. On
-top of the map sits a localization pipeline that places each PC at the wall
-socket where the network last saw it.
+devices (racks, switches, PCs, wall sockets) with the cables between them.
+Lot 2 is replacing the old NetBox/LibreNMS localization pipeline (deleted) with
+a site inventory and a collection cycle inside Convex (ADRs 0022 and 0023);
+until it lands, no integration runs.
 
 ## Pieces
 
@@ -17,8 +18,8 @@ socket where the network last saw it.
   toolbar and drawer live in `src/panels/`. Zustand (`src/store/`) holds only
   ephemeral UI state such as selection and tool mode.
 - **Backend** (`convex/`): Convex functions and schema. Convex owns every
-  durable fact: sites, buildings, floors, devices, walls, links, presence,
-  and the integration tables.
+  durable fact: sites, buildings, floors, devices, walls, links and
+  presence.
 - **Hosting**: self-hosted with Docker Compose (ADRs 0002 and 0020), described
   below.
 
@@ -38,34 +39,14 @@ geometry key so that two blocks never occupy the same cell.
 
 Every page needs a better-auth login (ADR 0021), and every public Convex
 function checks the caller's role (Lecteur, Éditeur, Admin; ADR 0004) on the
-server; `convex/authorization.test.ts` lists the level of each one. The
-integration connector authenticates with a shared secret instead. A
+server; `convex/authorization.test.ts` lists the level of each one. A
 Lecteur's map is read-only, and presence (`convex/presences.ts`) shows each
 signed-in user's name, one entry per user however many tabs they have open.
 
-## Localization pipeline
+## Sites
 
-The pipeline follows MAC → LibreNMS forwarding table → switch port → NetBox
-cable → wall socket → socket placed on the map → PC position:
-
-- `convex/netbox*.ts` import a generation of NetBox inventory and cables.
-- `convex/librenms*.ts` read forwarding tables and port status from LibreNMS.
-- `convex/localization*.ts` and `computerLocations` resolve each MAC to a
-  socket; `convex/computerProjection.ts` moves the PC on the map through the
-  same map operations as a user.
-- `convex/integrationOrchestration.ts` reserves cycles from a cron, behind
-  the `INTEGRATION_SCHEDULER_ENABLED` and
-  `INTEGRATION_MANUAL_REFRESH_ENABLED` switches. It only records attempts and
-  per-switch states: nothing inside Convex runs the collection yet.
-
-Because Convex Cloud cannot reach LibreNMS on the internal network, the real
-work is done by an external agent (`scripts/sync-integrations.ts`, `scripts/librenms-agent.ts`,
-`ops/systemd/`) runs on a workstation, reads both tools and pushes results
-through `convex/connector.ts`, authenticated by `NETPLAN_CONNECTOR_SECRET`.
-
-The site is a single hardcoded default (`convex/sites.ts`), and device
-identity is keyed on NetBox ids. The French plan that built this pipeline is
-frozen in
+The site is still a single hard-coded default (`convex/sites.ts`); the plan of
+the deleted localization pipeline is frozen in
 [`docs/history/2026-07-computer-location-refresh/`](../history/2026-07-computer-location-refresh/README.md).
 
 ## Deployment
