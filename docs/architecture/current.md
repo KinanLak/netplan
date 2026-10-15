@@ -1,6 +1,6 @@
 ---
 title: Current architecture
-description: Netplan as it stands at the start of the rebuild (2026-10-15).
+description: Netplan as it stands now, partway through the rebuild.
 ---
 
 # Current architecture
@@ -66,3 +66,20 @@ The site is a single hardcoded default (`convex/sites.ts`), and device
 identity is keyed on NetBox ids. The French plan that built this pipeline is
 frozen in
 [`docs/history/2026-07-computer-location-refresh/`](../history/2026-07-computer-location-refresh/README.md).
+
+## Development and delivery
+
+Built by lot F (ADRs 0018 and 0019).
+
+- `bun run check` is read-only (typecheck, lint, format, tests, Convex
+  codegen freshness against a local backend); `bun run verify` adds the
+  production build. CI on every pull request runs a gitleaks history scan,
+  `verify` against a self-hosted backend service container, a dependency
+  audit, and an end-to-end job that seeds that backend, builds the app and
+  drives it with Playwright (`e2e/`).
+- `bun run dev:agent` runs one self-hosted Convex backend per worktree in
+  Docker, with SQLite in a volume, ports derived from the worktree path, and a
+  generated `.env.local`. It seeds a fictional, disabled demo site through
+  `applyMapOperation`, the same path as user edits, behind `ALLOW_DEV_SEED`.
+- zipzoup reviews each pull request when it is marked ready; agents merge
+  their own once CI is green and no P0 or P1 finding is open.
