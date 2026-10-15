@@ -589,4 +589,186 @@ Each lot appends its question journal here in its last PR.
 
 ### F — Foundations
 
-_Appended at the end of the lot._
+Questions of 2026-10-15, in the order they came up.
+
+#### How is the lot split into PRs?
+
+- Context: PLAN suggests docs → tooling → dev env → CI e2e.
+- Decision: four stacked PRs in that order; each PR updates AGENTS.md only for what it introduces, so AGENTS.md is never ahead of the code.
+- Why: a reviewer reading PR 1 alone must not find instructions for scripts that do not exist yet.
+- Who: agent (judgement call)
+
+#### Which ADR is the lot's design doc?
+
+- Context: PLAN asks for a design doc as an ADR in the first PR.
+- Decision: the product decisions get one ADR each (0001–0017); the Foundations design is split into 0018 (agent dev environment and CI e2e) and 0019 (delivery: check/fix/verify, CI gate, zipzoup, agents merge).
+- Why: one ADR per decision; the two Foundations choices can be superseded independently.
+- Who: agent (judgement call)
+
+#### AGENTS.md or CLAUDE.md as the source?
+
+- Context: anglix keeps CLAUDE.md as the file and AGENTS.md as a symlink; Netplan already has `CLAUDE.md -> AGENTS.md`.
+- Decision: keep AGENTS.md as the file, CLAUDE.md the symlink.
+- Why: already in place; AGENTS.md is the cross-harness name (Codex/zipzoup read it first).
+- Who: agent (obvious)
+
+#### Which convex-backend image?
+
+- Context: owner asked to pin the latest version tag.
+- Decision: `ghcr.io/get-convex/convex-backend:72ce13c379fe6dbdfc305bc8ad699c5663c68c2a` (release `precompiled-2026-10-10-72ce13c`, the newest on 2026-10-15), digest `sha256:294944b3…392e5a`.
+- Why: ghcr has no semver tags; the commit-sha tag of the newest precompiled release is the version tag. One constant shared by dev:agent and CI.
+- Who: agent (obvious)
+
+#### Where is Convex codegen freshness checked?
+
+- Context: `convex codegen` refuses to run without a deployment (checked: "No CONVEX_DEPLOYMENT set").
+- Decision: CI runs it against a convex-backend service container; locally `bun run check` runs it only when the worktree's dev:agent backend answers, otherwise prints that it skipped. It restores the committed files, so `check` never mutates.
+- Why: check must stay non-mutating and fast; CI is the authority.
+- Who: agent (judgement call)
+
+#### Does CI run on draft pull requests?
+
+- Context: PLAN opens a draft after the first commit; GitHub-hosted minutes cost nothing on a public repository.
+- Decision: CI runs on every pull request, drafts included, and on pushes to `main`.
+- Why: a draft's CI tells the agent early what breaks; nothing is saved by waiting for ready.
+- Who: agent (judgement call)
+
+#### Which audit advisories are accepted?
+
+- Context: `bun audit --audit-level=high` failed on two advisories with no fix reachable by updating.
+- Decision: ignore GHSA-vfj7-8cjw-p6xm (braces, no fixed version, dev tooling only) and GHSA-c475-qrg2-pj4r (basic-ftp, only through electrobun, removed in lot 0), each with its reason in `ci.yml`.
+- Why: the gate must be green to be useful; each ignore is narrow and has an end (lot 0 for electrobun).
+- Who: agent (judgement call)
+
+#### What does gitleaks do with the localStorage key name?
+
+- Context: gitleaks' generic-api-key rule flagged the `netplan-identity`-style storage key constant in an old commit of `src/store/useMapStore.ts`.
+- Decision: list that one finding (commit:file:rule:line) in `.gitleaksignore` with its reason; a real secret is rotated, never ignored.
+- Why: it is a key name, not a credential, and history is not rewritten.
+- Who: agent (obvious)
+
+#### Does ADR 0004 claim French role names in the code?
+
+- Context: a draft said role names are French in the code.
+- Decision: dropped; only the UI labels (Lecteur, Éditeur, Admin) are French, identifiers stay English like the rest of the repo.
+- Why: the language rule: repository in English, UI strings in French.
+- Who: agent (obvious)
+
+#### Where does the CI backend's secret come from?
+
+- Context: ADR 0018 first said CI starts the backend "with a throwaway secret".
+- Decision: no secret is passed; the image generates `INSTANCE_SECRET` in its data directory on first start, and the admin key comes from `generate_admin_key.sh`. ADR corrected.
+- Why: nothing to store, nothing to leak; each run gets a new instance.
+- Who: agent (obvious)
+
+#### How does dev:agent store its backend?
+
+- Context: per-worktree backend (ADR 0018); `--local` binaries do not run on this RHEL 9 host.
+- Decision: one container and one SQLite volume per worktree, both named `netplan-cvx-<slug>-<hash6>` and labelled `netplan.role=dev-backend`, `netplan.worktree=<path>`; ports bound to 127.0.0.1; `--reseed` removes container and volume; an image pin change recreates the container on the same port and keeps the volume.
+- Why: isolation without a shared database server; labels make GC of deleted worktrees safe on a host with other stacks.
+- Who: agent (judgement call)
+
+#### Is the seed run only on an empty backend?
+
+- Context: the seed could be gated on "backend empty" or made idempotent. A first version replayed a fixed `opId` per floor; the self-review found that a cleared map then stayed empty (the replay answered from the stored record) and that a changed demo site made every start fail.
+- Decision: every run fills what is missing: the site, building and floors when absent, and a floor's map while the floor has no device and no wall, each batch with the next `dev-seed` sequence number. An existing site is left as it is. A change to the demo data reaches an existing backend through `--reseed`.
+- Why: a cleared map comes back, user edits stay, and nothing about an existing backend can make the start fail.
+- Who: agent (judgement call)
+
+#### What is the demo site?
+
+- Context: the seed needs a site for integrations not to break, without contacting anything real.
+- Decision: "Site de démonstration" (`site:demo`), `enabled: false`, with placeholder NetBox and LibreNMS config names (no tokens); data uses documentation IPs (192.0.2.0/24) and locally administered MACs.
+- Why: a disabled site never schedules a sync; fictional addresses can never match a real device.
+- Who: agent (obvious)
+
+#### Where does the seed's map live, and how is it written?
+
+- Context: the seed must obey server validation (ADR 0018) and be testable without Convex.
+- Decision: a pure builder in `src/dev-seed/demoMap.ts` (relative imports, because Convex bundles it without the `@/` alias); `convex/dev.ts` applies it through `applyMapOperation`, extracted from `mapOperations.apply` so both share one code path.
+- Why: the same validation as users, unit tests of the map in the engine, and no second write path.
+- Who: agent (judgement call)
+
+#### How are ports chosen?
+
+- Context: parallel worktrees must not collide, and the same worktree should keep its URLs.
+- Decision: backend pair from 13200 + 2·(h mod 400), web from 3100 + (h mod 900), h from the path's SHA-256; walk up while taken (web checked on 127.0.0.1 and ::1); skip 3659, which Chrome refuses. The last served app URL is recorded in the marked `.env.local` for `--status`.
+- Why: stable per worktree, collision-free, and no browser-blocked port.
+- Who: agent (obvious)
+
+#### Is the admin key regenerated on every run?
+
+- Context: `generate_admin_key.sh` returns a different key each call; rewriting `.env.local` restarts a running Vite.
+- Decision: keep the recorded key while the backend accepts it (`convex env list`); generate a new one otherwise (new volume after `--reseed`).
+- Why: a second `dev:agent --setup` next to a running app must not restart it.
+- Who: agent (obvious)
+
+#### What does the worktree setup do?
+
+- Context: `t3.json` runs a setup command when T3 Code creates a worktree.
+- Decision: `scripts/setup-worktree.ts` runs `bun install` with stdin closed and pulls the pinned backend image if missing; it does not start a backend.
+- Why: a worktree that never runs the app costs no container; the first `dev:agent` does not wait for the pull. No env files to link: dev:agent writes its own.
+- Who: agent (judgement call)
+
+#### What about the failing Vercel check?
+
+- Context: the legacy Vercel integration fails on `main` and on this lot's PRs: its own install leaves `@tanstack/router-utils` without its nested `@babel/generator`, so `vite build` cannot load the config. GitHub CI's build of the same commit passes. Vercel is not a required check.
+- Decision: ignore it in the merge gate; do not fix it.
+- Why: the failure predates the lot and is specific to Vercel's environment; a failed Vercel deploy leaves the previous one live; lot 0 removes Vercel (ADR 0002).
+- Who: agent (judgement call)
+
+#### Can a `.env` deploy key redirect dev:agent?
+
+- Context: the Convex CLI loads `.env` itself, and a `CONVEX_DEPLOY_KEY` there wins over `CONVEX_SELF_HOSTED_URL`; dev:agent strips `CONVEX_*` from its own environment, which unshadowed it. Checked in the CLI source and with a fake key.
+- Decision: every Convex child gets `CONVEX_DEPLOY_KEY`, `CONVEX_DEPLOYMENT_TOKEN` and `CONVEX_DEPLOYMENT` set to empty, which the CLI treats as unset and dotenv never overrides.
+- Why: the push and the seed must never leave the worktree's backend.
+- Who: agent (obvious)
+
+#### Whose orphans does dev:agent remove?
+
+- Context: Docker is shared by every account on the host, and `existsSync` reports another account's unreadable worktree as missing.
+- Decision: resources also carry `netplan.owner=<uid>`; collection lists only the caller's, and a worktree counts as gone only on `ENOENT`.
+- Why: never delete another person's data on a shared host.
+- Who: agent (obvious)
+
+#### What does `--reseed` do while the app runs?
+
+- Context: it removed the container under a running `convex dev`, which kept the old admin key.
+- Decision: it refuses while this worktree's app answers; stop the process first. Every run already restores what is missing, so most resets need no reseed.
+- Why: a reset must not leave a half-broken instance.
+- Who: agent (judgement call)
+
+#### How does `--status` know the recorded app URL is this worktree's?
+
+- Context: the URL stays in `.env.local` after the app stops, and another worktree's Vite may take the port.
+- Decision: it asks the server for this worktree's `package.json` through Vite's `/@fs/` route, which serves only its own workspace.
+- Why: an agent must not test someone else's checkout.
+- Who: agent (judgement call)
+
+#### Is `.env.local` loadable by a shell?
+
+- Context: AGENTS.md loads env files with `set -a; . file`, and the admin key holds a `|`; unquoted, the shell ran part of the key as a command and printed it in an error (a local, loopback-only key; rotated by reseeding).
+- Decision: values are single-quoted; the file is created with mode 0600 instead of chmod after writing.
+- Why: the documented way to load secrets must work and must never echo them.
+- Who: agent (obvious)
+
+#### Does CI's function push regenerate the files it then checks?
+
+- Context: zipzoup on the tooling PR: `convex dev --once` regenerated `convex/_generated` before `verify`, so a stale committed file was repaired in the checkout and `codegen:check` passed.
+- Decision: the push runs with `--codegen disable`; `codegen:check` alone regenerates, against the committed baseline.
+- Why: the check must compare the commit, not a repaired checkout.
+- Who: agent (obvious)
+
+#### May the lot correct its own ADR 0018 after it merged with the first PR?
+
+- Context: zipzoup (P2) asked for a superseding ADR when the dev-agent PR corrected 0018's description of the seed and the labels; AGENTS.md says an ADR is never rewritten after a change of mind.
+- Decision: correct 0018 in place within lot F; a later lot that revises the design supersedes it with a new ADR. Answered in the review thread.
+- Why: the decision is unchanged; only the description of this lot's implementation was wrong, and the lot has not landed yet. A superseding ADR inside the same lot would record noise, not a change of mind.
+- Who: agent (judgement call)
+
+#### Does `--down` succeed when Docker cannot remove the backend?
+
+- Context: zipzoup (P2): removal results were ignored, so `--down` deleted `.env.local` and reported success with the backend still there.
+- Decision: `--down` and `--reseed` fail on a Docker error (`--force` already accepts an absent resource); orphan collection logs it and continues.
+- Why: a teardown must not lie; an orphan of another worktree must not block this one.
+- Who: agent (obvious)
