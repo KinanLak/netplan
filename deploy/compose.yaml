@@ -142,7 +142,7 @@ services:
     command: ["start-dev", "--import-realm"]
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
-      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?set KEYCLOAK_ADMIN_PASSWORD in .env}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-}
       KC_HOSTNAME: ${NETPLAN_SCHEME:-http}://keycloak.${NETPLAN_DOMAIN:-netplan.localhost}:${NETPLAN_PORT:-8480}
       KC_PROXY_HEADERS: xforwarded
       KC_HTTP_ENABLED: "true"
