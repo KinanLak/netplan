@@ -143,9 +143,24 @@ const inspectContainer = async (): Promise<Container | undefined> => {
   };
 };
 
-const removeBackend = async (target: string) => {
-  await docker("container", "rm", "--force", "--volumes", target);
-  await docker("volume", "rm", "--force", target);
+/**
+ * Removes a backend's container and volume; returns Docker's error, if any.
+ * `--force` already accepts a resource that is not there.
+ */
+const removeBackend = async (target: string): Promise<string | undefined> => {
+  for (const command of [
+    ["container", "rm", "--force", "--volumes", target],
+    ["volume", "rm", "--force", target],
+  ]) {
+    const { ok, out, err } = await docker(...command);
+    if (!ok) return (err || out).trim() || `docker ${command[0]} rm failed`;
+  }
+  return undefined;
+};
+
+const mustRemoveBackend = async (target: string) => {
+  const error = await removeBackend(target);
+  if (error) fail(`could not remove ${target}: ${error}`);
 };
 
 // Only a path that is certainly gone: another account's worktree is
@@ -185,7 +200,9 @@ const collectOrphans = async () => {
   }
   for (const orphan of orphans) {
     console.log(`dev:agent: removing ${orphan}, its worktree is gone.`);
-    await removeBackend(orphan);
+    // Not this worktree's: a failure is worth a line, not a stop.
+    const error = await removeBackend(orphan);
+    if (error) console.error(`dev:agent: could not remove ${orphan}: ${error}`);
   }
 };
 
@@ -317,7 +334,7 @@ const urls = (backendPort: number, webPort?: number) => ({
 
 if (flags.has("--down")) {
   await readOwnEnvFile();
-  await removeBackend(name);
+  await mustRemoveBackend(name);
   rmSync(envPath, { force: true });
   console.log(`dev:agent: removed ${name} and .env.local.`);
   process.exit(0);
@@ -353,7 +370,7 @@ if (flags.has("--reseed")) {
     fail(`the app is running at ${recorded}; stop it before --reseed.`);
   }
   console.log(`dev:agent: removing ${name} to start from an empty backend.`);
-  await removeBackend(name);
+  await mustRemoveBackend(name);
 }
 
 // A worktree may start without dependencies, and a pull may change the
