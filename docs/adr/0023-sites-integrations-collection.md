@@ -65,11 +65,12 @@ admin.
   deleted. The integration environment variables are replaced by the site
   configuration; `NETPLAN_SECRET_KEY` is required wherever integrations are
   used.
-- The old pipeline is keyed on NetBox objects and cannot run on the new
-  inventory, so it is deleted at the start of the lot rather than after the
-  new cycle passes the real test (ADR 0012, Q13). Nothing was deployed and
-  the agent's timer was inactive; the lot is not finished until the cycle
-  has passed that test against the real NetBox and LibreNMS.
+- The owner's Q13 order was changed by the agent: the old pipeline is
+  deleted at the start of the lot rather than after the new cycle passes the
+  real test (ADR 0012). The reason: it is keyed on NetBox objects and cannot
+  run on the new inventory, nothing was deployed, and the agent's timer was
+  inactive. The lot is not finished until the cycle has passed that test
+  against the real NetBox and LibreNMS.
 - Losing the key means re-entering every token; the procedure is in
   `docs/operations/`.
 - A site with no integration still works as a hand-drawn plan.
