@@ -13,6 +13,7 @@ import {
 } from "@/store/selectors";
 import { useMapStore } from "@/store/useMapStore";
 import type { FloorOverlay } from "@/types/map";
+import { OverlayCalibrationLayer } from "./OverlayCalibrationLayer";
 import { gesturePatch, patchChangesOverlay } from "./gesture";
 import type { OverlayCorner, OverlayGesture } from "./gesture";
 
@@ -30,20 +31,27 @@ const corners: ReadonlyArray<OverlayCorner> = [
 ];
 
 /**
- * Move, resize and rotate handles on the calque while its panel is open.
- * A gesture previews through the store's draft and commits one undoable
- * patch on release.
+ * Move, resize and rotate handles on the calque while its panel is open, or
+ * the calibration points while they are being picked. A gesture previews
+ * through the store's draft and commits one undoable patch on release.
  */
 export function OverlayGizmo() {
   const isOpen = useIsOverlayPanelOpen();
   const isEditMode = useIsEditMode();
   const isHidden = useIsOverlayHidden();
+  const calibration = useMapStore((s) => s.overlayCalibration);
   const { document } = useMapDocumentData();
   const overlay =
     document.overlay?.floorId === document.floorId ? document.overlay : null;
 
   if (!isOpen || !isEditMode || isHidden || !overlay || overlay.locked) {
     return null;
+  }
+  // Points picked on a replaced image would not mean anything on the new one.
+  if (calibration?.fileId === overlay.fileId) {
+    return (
+      <OverlayCalibrationLayer overlay={overlay} calibration={calibration} />
+    );
   }
   return <OverlayGizmoFrame overlay={overlay} />;
 }

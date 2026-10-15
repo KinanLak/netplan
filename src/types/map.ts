@@ -229,11 +229,22 @@ export interface MapInteractionState {
   isOverlayHidden: boolean;
   /** The calque as a gesture in progress shows it, committed on release. */
   overlayDraft: OverlayDraft | null;
+  /** A two-point scale calibration being picked on the calque. */
+  overlayCalibration: OverlayCalibration | null;
 }
 
 export type OverlayDraft = Partial<
   Pick<FloorOverlay, "center" | "scale" | "rotation" | "opacity">
 >;
+
+/**
+ * The points picked so far, as pixels of the image they were picked on, so
+ * they stay on the same spot of the plan if the calque moves meanwhile.
+ */
+export interface OverlayCalibration {
+  fileId: OverlayFileId;
+  points: Array<Position>;
+}
 
 export interface MapInteractionActions {
   setCurrentBuilding: (buildingId: BuildingId | null) => void;
@@ -252,6 +263,7 @@ export interface MapInteractionActions {
   setOverlayPanelOpen: (open: boolean) => void;
   toggleOverlayHidden: () => void;
   setOverlayDraft: (draft: OverlayDraft | null) => void;
+  setOverlayCalibration: (calibration: OverlayCalibration | null) => void;
 }
 
 export type MapStore = MapInteractionState & MapInteractionActions;

@@ -266,6 +266,25 @@ describe("shortcut intents", () => {
     ).toBe(null);
   });
 
+  it("calibrates the calque with Shift+E, apart from edit mode's E", () => {
+    const actions: Array<ShortcutAction> = [
+      "toggle-edit-mode",
+      "calibrate-overlay",
+    ];
+    const e = keyEvent({ code: "KeyE", key: "e" });
+    const shiftE = keyEvent({ code: "KeyE", key: "E", shiftKey: true });
+
+    expect(resolveAction({ actions, event: e })).toBe("toggle-edit-mode");
+    expect(resolveAction({ actions, event: shiftE })).toBe("calibrate-overlay");
+    expect(
+      resolveAction({
+        actions,
+        event: shiftE,
+        runtime: { ...baseRuntime, isEditMode: false },
+      }),
+    ).toBe(null);
+  });
+
   it("routes every device tool shortcut from registry metadata", () => {
     deviceKinds.forEach((kind) => {
       const key = kind.shortcut.keys[0];

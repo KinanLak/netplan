@@ -48,6 +48,7 @@ export type ShortcutAction =
   | "toggle-overlay-panel"
   | "toggle-overlay-visibility"
   | "toggle-overlay-lock"
+  | "calibrate-overlay"
   // Tools - Devices (number hotbar)
   | DeviceToolShortcutAction
   // Device drawer
@@ -276,6 +277,13 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
     keys: ["Shift+L"],
     label: "Verrouiller le calque",
     description: "Verrouiller/déverrouiller le calque (panneau ouvert)",
+    scope: "canvas",
+  },
+  "calibrate-overlay": {
+    keys: ["Shift+E"],
+    label: "Étalonner le calque",
+    description:
+      "Mettre le calque à l'échelle par deux points (panneau ouvert)",
     scope: "canvas",
   },
 

@@ -32,7 +32,7 @@ const clampScale = (scale: number) =>
   Math.min(OVERLAY_MAX_SCALE, Math.max(OVERLAY_MIN_SCALE, scale));
 
 /** Rotates a vector clockwise on screen (y points down), like CSS rotate(). */
-const rotate = (vector: Position, degrees: number): Position => {
+export const rotate = (vector: Position, degrees: number): Position => {
   const radians = (degrees * Math.PI) / 180;
   const cos = Math.cos(radians);
   const sin = Math.sin(radians);

@@ -219,10 +219,16 @@ function MapWorkspace({ sortedFloors }: { sortedFloors: Array<Floor> }) {
   useShortcutIntentEffect("delete-device", deleteSelectedDevice);
   useShortcutIntentEffect("highlight-connections", highlightConnections);
   useShortcutIntentEffect("escape", () => {
-    const { activeDrawTool, isOverlayPanelOpen, setOverlayPanelOpen } =
-      useMapStore.getState();
+    const {
+      activeDrawTool,
+      isOverlayPanelOpen,
+      overlayCalibration,
+      setOverlayCalibration,
+      setOverlayPanelOpen,
+    } = useMapStore.getState();
     if (!isEditMode || activeDrawTool !== "device") return;
-    if (isOverlayPanelOpen) setOverlayPanelOpen(false);
+    if (overlayCalibration) setOverlayCalibration(null);
+    else if (isOverlayPanelOpen) setOverlayPanelOpen(false);
     else toggleEditMode();
   });
   useShortcutIntentEffect("undo", () => {
