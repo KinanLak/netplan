@@ -37,6 +37,20 @@ describe("probeIntegration", () => {
     expect(new Headers(init?.headers).get("Authorization")).toBe("Token tok");
   });
 
+  it("sends a NetBox v2 token as a bearer", async () => {
+    const calls = answer(json({ "netbox-version": "4.6.10" }));
+    await probeIntegration(
+      "netbox",
+      "https://nb.test",
+      "nbt_key.secret",
+      noWait,
+    ); // gitleaks:allow
+    const [, init] = calls[0] ?? [];
+    expect(new Headers(init?.headers).get("Authorization")).toBe(
+      "Bearer nbt_key.secret", // gitleaks:allow
+    );
+  });
+
   it("reads LibreNMS's version", async () => {
     const calls = answer(
       json({ status: "ok", system: [{ local_ver: "25.9.1" }], count: 1 }),

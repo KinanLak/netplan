@@ -170,6 +170,27 @@ describe("integrations", () => {
     );
   });
 
+  it("keeps a token saved while the rotation re-encrypted the older one", async () => {
+    const admin = await signedInTest("admin");
+    const siteId = await createTestSite(admin);
+    await saveNetBox(admin, siteId);
+    const [read] = await stored(admin);
+    // Same key, so only the ciphertext tells the two saves apart.
+    await saveNetBox(admin, siteId, { token: "another-token-for-tests" }); // gitleaks:allow
+    const [newer] = await stored(admin);
+
+    expect(
+      await admin.mutation(internal.integrations.replaceToken, {
+        siteId,
+        kind: "netbox",
+        baseUrl: read.baseUrl,
+        previous: read.token,
+        token: read.token,
+      }),
+    ).toBe(false);
+    expect((await stored(admin))[0]?.token).toEqual(newer.token);
+  });
+
   it("drops a test result when the connection was saved again meanwhile", async () => {
     const admin = await signedInTest("admin");
     const siteId = await createTestSite(admin);

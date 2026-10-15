@@ -23,9 +23,14 @@ export const authHeaders = (
   Accept: "application/json",
   "User-Agent": "Netplan",
   ...(kind === "netbox"
-    ? { Authorization: `Token ${token}` }
+    ? { Authorization: netboxAuthorization(token) }
     : { "X-Auth-Token": token }),
 });
+
+// NetBox 4.5 added v2 tokens, `nbt_<key>.<token>`, sent as a bearer; the
+// older ones keep the `Token` scheme.
+const netboxAuthorization = (token: string) =>
+  token.startsWith("nbt_") ? `Bearer ${token}` : `Token ${token}`;
 
 const PROBE_PATH: Record<IntegrationKind, string> = {
   netbox: "/api/status/",

@@ -286,14 +286,22 @@ export const replaceToken = internalMutation({
     siteId: v.string(),
     kind: integrationKind,
     baseUrl: v.string(),
-    previousKeyId: v.string(),
+    /** The ciphertext that was re-encrypted. */
+    previous: encryptedSecret,
     token: encryptedSecret,
   },
   returns: v.boolean(),
-  handler: async (ctx, { siteId, kind, baseUrl, previousKeyId, token }) => {
+  handler: async (ctx, { siteId, kind, baseUrl, previous, token }) => {
     const row = await find(ctx, siteId, kind);
-    // Saved again since it was read: the new token is already current.
-    if (!row || row.baseUrl !== baseUrl || row.token.keyId !== previousKeyId) {
+    // Saved again since it was read, possibly with the same key: keep the
+    // newer token. Each encryption has its own IV, so equal ciphertexts are
+    // the same save.
+    if (
+      !row ||
+      row.baseUrl !== baseUrl ||
+      row.token.ciphertext !== previous.ciphertext ||
+      row.token.iv !== previous.iv
+    ) {
       return false;
     }
     await ctx.db.patch(row._id, { token });
@@ -335,7 +343,7 @@ export const reencryptTokens = internalAction({
           siteId: row.siteId,
           kind: row.kind,
           baseUrl: row.baseUrl,
-          previousKeyId: row.token.keyId,
+          previous: row.token,
           token: await encryptSecret(
             current,
             plaintext,

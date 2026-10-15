@@ -45,6 +45,24 @@ describe("fetchWithRetry", () => {
     expect(pauses).toEqual([2_000, 4_000, 5_000]);
   });
 
+  it("retries a body that breaks off after the headers", async () => {
+    stub = stubFetch(
+      () =>
+        new Response(
+          new ReadableStream({
+            start: (controller) =>
+              controller.error(new TypeError("terminated")),
+          }),
+        ),
+      () => new Response('{"ok":true}'),
+    );
+    const response = await fetchWithRetry("https://x.test", {}, options);
+
+    expect(await response.json()).toEqual({ ok: true });
+    expect(stub.calls).toHaveLength(2);
+    expect(pauses).toEqual([2_000]);
+  });
+
   it("returns a 4xx at once", async () => {
     answers(403);
     expect((await fetchWithRetry("https://x.test", {}, options)).status).toBe(
