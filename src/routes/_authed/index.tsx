@@ -8,6 +8,7 @@ import FlowCanvas from "@/canvas/FlowCanvas";
 import AppSidebar from "@/panels/Sidebar";
 import Toolbar from "@/panels/Toolbar";
 import DeviceDrawer from "@/panels/DeviceDrawer";
+import { NetBoxInventoryPanel } from "@/integrations/netbox/NetBoxInventoryPanel";
 import { MapDocumentProvider } from "@/map-session/MapDocumentProvider";
 import { MapDocumentStatus } from "@/map-session/MapDocumentStatus";
 import {
@@ -126,6 +127,14 @@ function MapWorkspace({ sortedFloors }: { sortedFloors: Array<Floor> }) {
   const selectDevice = useMapStore((s) => s.selectDevice);
   const setActiveDrawTool = useMapStore((s) => s.setActiveDrawTool);
   const setHighlightedDevices = useMapStore((s) => s.setHighlightedDevices);
+  const leaveEditTools = useMapStore((s) => s.leaveEditTools);
+
+  // A draw tool or a multi-selection left on swallows device clicks, and a
+  // user who cannot edit has no toolbar or shortcut to leave it, as when an
+  // editor is made a reader mid-session.
+  useEffect(() => {
+    if (!canEdit) leaveEditTools();
+  }, [canEdit, leaveEditTools]);
 
   const { theme, setTheme } = useTheme();
 
@@ -209,63 +218,66 @@ function MapWorkspace({ sortedFloors }: { sortedFloors: Array<Floor> }) {
           <Toolbar />
           {selectedDeviceId ? <DeviceDrawer /> : null}
           <MapDocumentStatus />
-        </ReactFlowProvider>
 
-        <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
-          {canEdit ? (
-            <button
-              onClick={toggleEditMode}
-              disabled={!currentFloorId || !isReady}
-              className={`relative flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium shadow-lg transition-all ${
-                isEditMode
-                  ? "border-accent bg-accent text-accent-foreground"
-                  : "border-primary bg-primary text-primary-foreground"
-              } `}
-              title={
-                isEditMode ? "Terminer les modifications" : "Modifier le plan"
-              }
-            >
-              {isEditMode ? (
-                <>
-                  <HugeiconsIcon
-                    icon={Tick01Icon}
-                    size={20}
-                    color="currentColor"
-                    strokeWidth={1.5}
-                  />
-                  Terminer
-                </>
-              ) : (
-                <>
-                  <HugeiconsIcon
-                    icon={Edit01Icon}
-                    size={20}
-                    color="currentColor"
-                    strokeWidth={1.5}
-                  />
-                  Modifier
-                </>
-              )}
-              <ShortcutHintAbsolute
-                action="toggle-edit-mode"
-                position="bottom-right"
-              />
-            </button>
-          ) : (
-            <div
-              className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-muted-foreground shadow-lg"
-              title="Votre rôle permet de consulter le plan, pas de le modifier"
-            >
-              <HugeiconsIcon
-                icon={ViewIcon}
-                size={20}
-                color="currentColor"
-                strokeWidth={1.5}
-              />
-              Lecture seule
-            </div>
-          )}
-        </div>
+          <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
+            {canEdit ? (
+              <button
+                onClick={toggleEditMode}
+                disabled={!currentFloorId || !isReady}
+                className={`relative flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium shadow-lg transition-all ${
+                  isEditMode
+                    ? "border-accent bg-accent text-accent-foreground"
+                    : "border-primary bg-primary text-primary-foreground"
+                } `}
+                title={
+                  isEditMode ? "Terminer les modifications" : "Modifier le plan"
+                }
+              >
+                {isEditMode ? (
+                  <>
+                    <HugeiconsIcon
+                      icon={Tick01Icon}
+                      size={20}
+                      color="currentColor"
+                      strokeWidth={1.5}
+                    />
+                    Terminer
+                  </>
+                ) : (
+                  <>
+                    <HugeiconsIcon
+                      icon={Edit01Icon}
+                      size={20}
+                      color="currentColor"
+                      strokeWidth={1.5}
+                    />
+                    Modifier
+                  </>
+                )}
+                <ShortcutHintAbsolute
+                  action="toggle-edit-mode"
+                  position="bottom-right"
+                />
+              </button>
+            ) : (
+              <div
+                className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-muted-foreground shadow-lg"
+                title="Votre rôle permet de consulter le plan, pas de le modifier"
+              >
+                <HugeiconsIcon
+                  icon={ViewIcon}
+                  size={20}
+                  color="currentColor"
+                  strokeWidth={1.5}
+                />
+                Lecture seule
+              </div>
+            )}
+            {/* In edit mode the inventory sits in the toolbar; outside it, and
+              always for a reader, it stays reachable here. */}
+            {isEditMode ? null : <NetBoxInventoryPanel />}
+          </div>
+        </ReactFlowProvider>
 
         <ShortcutsDialog hasRightDrawerOpen={Boolean(selectedDeviceId)} />
       </SidebarInset>

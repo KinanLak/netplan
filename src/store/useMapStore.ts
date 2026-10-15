@@ -1,5 +1,11 @@
 import { create } from "zustand";
-import type { BuildingId, DeviceId, FloorId, MapStore } from "@/types/map";
+import type {
+  BuildingId,
+  DeviceId,
+  FloorId,
+  MapInteractionState,
+  MapStore,
+} from "@/types/map";
 import { WALL_ERASER_DEFAULT_SIZE, clampWallEraserSize } from "@/lib/constants";
 
 const EMPTY_HIGHLIGHT_SET: ReadonlySet<DeviceId> = new Set<DeviceId>();
@@ -8,6 +14,22 @@ const toHighlightedDeviceIdSet = (
 ): ReadonlySet<DeviceId> => {
   return deviceIds.length === 0 ? EMPTY_HIGHLIGHT_SET : new Set(deviceIds);
 };
+
+const withoutMultiSelect = (state: MapInteractionState) => ({
+  isMultiSelectMode: false,
+  ...(state.isMultiSelectMode
+    ? {
+        selectedDeviceId: null,
+        selectedDeviceIds: [],
+        selectedDeviceIdSet: new Set<DeviceId>(),
+      }
+    : {}),
+});
+
+const withoutEditTools = (state: MapInteractionState) => ({
+  ...withoutMultiSelect(state),
+  activeDrawTool: "device" as const,
+});
 
 export const useMapStore = create<MapStore>()((set) => ({
   currentBuildingId: null,
@@ -80,21 +102,15 @@ export const useMapStore = create<MapStore>()((set) => ({
     );
   },
   toggleEditMode: () => {
-    set((state) => {
-      const selection = state.isMultiSelectMode
-        ? {
-            selectedDeviceId: null,
-            selectedDeviceIds: [],
-            selectedDeviceIdSet: new Set<DeviceId>(),
-          }
-        : {};
-      return {
-        isEditMode: !state.isEditMode,
-        isMultiSelectMode: false,
-        activeDrawTool: state.isEditMode ? "device" : state.activeDrawTool,
-        ...selection,
-      };
-    });
+    set((state) => ({
+      isEditMode: !state.isEditMode,
+      ...(state.isEditMode
+        ? withoutEditTools(state)
+        : withoutMultiSelect(state)),
+    }));
+  },
+  leaveEditTools: () => {
+    set(withoutEditTools);
   },
   toggleMultiSelectMode: () => {
     set((state) => ({

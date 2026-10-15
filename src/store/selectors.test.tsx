@@ -125,4 +125,24 @@ describe("map store selectors", () => {
 
     expect(useMapStore.getState().selectedDeviceIds).toEqual([did("a")]);
   });
+
+  it("drops edit tools and a multi-selection without touching the edit-mode flag", () => {
+    seedMapStore({
+      isEditMode: true,
+      isMultiSelectMode: true,
+      activeDrawTool: "wall",
+      selectedDeviceId: null,
+      selectedDeviceIds: [did("a")],
+      selectedDeviceIdSet: new Set([did("a")]),
+    });
+
+    useMapStore.getState().leaveEditTools();
+
+    expect(useMapStore.getState()).toMatchObject({
+      isEditMode: true,
+      isMultiSelectMode: false,
+      activeDrawTool: "device",
+      selectedDeviceIds: [],
+    });
+  });
 });
