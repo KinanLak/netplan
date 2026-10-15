@@ -7,16 +7,26 @@ import {
 } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import { TanStackDevtools } from "@tanstack/react-devtools";
-import { ConvexProvider } from "convex/react";
+import { ConvexBetterAuthProvider } from "@convex-dev/better-auth/react";
+import { createServerFn } from "@tanstack/react-start";
 import { useEffect } from "react";
 import type { ReactNode } from "react";
 import appCss from "@/styles.css?url";
 import logoCss from "@/netplan-logo.css?url";
+import { providerAuthClient } from "@/lib/auth-client";
+import { getToken } from "@/lib/auth-server";
 import { getConvexClient } from "@/lib/convex";
 import { getRuntimeConfig } from "@/lib/getRuntimeConfig";
 import { logGraphicsAccelerationStatusOnce } from "@/lib/graphicsAcceleration";
 
+// Read from the session cookie on the server, so a signed-out visitor is
+// redirected before any page renders and a signed-in one starts authenticated.
+const getAuthToken = createServerFn({ method: "GET" }).handler(
+  async () => (await getToken()) ?? null,
+);
+
 export const Route = createRootRoute({
+  beforeLoad: async () => ({ token: await getAuthToken() }),
   head: () => ({
     meta: [
       { charSet: "utf-8" },
@@ -55,12 +65,17 @@ function NotFoundComponent() {
 
 function RootComponent() {
   const { convexUrl } = Route.useLoaderData();
+  const { token } = Route.useRouteContext();
   return (
-    <ConvexProvider client={getConvexClient(convexUrl)}>
+    <ConvexBetterAuthProvider
+      client={getConvexClient(convexUrl)}
+      authClient={providerAuthClient}
+      initialToken={token}
+    >
       <RootDocument>
         <Outlet />
       </RootDocument>
-    </ConvexProvider>
+    </ConvexBetterAuthProvider>
   );
 }
 

@@ -1,8 +1,7 @@
 import { describe, expect, it } from "bun:test";
-import { convexTest } from "convex-test";
-import schema from "./schema";
 import { api } from "./_generated/api";
-import { modules } from "./_test/modules";
+import { signedInTest } from "./_test/auth";
+import type { TestClient } from "./_test/auth";
 
 let counter = 0;
 
@@ -13,7 +12,7 @@ const meta = () => ({
   createdAt: counter,
 });
 
-async function freshFloor(t: ReturnType<typeof convexTest>) {
+async function freshFloor(t: TestClient) {
   counter += 1;
   const siteId = await t.mutation(api.sites.ensureDefault, {});
   const buildingId = await t.mutation(api.buildings.create, {
@@ -29,7 +28,7 @@ async function freshFloor(t: ReturnType<typeof convexTest>) {
 }
 
 const createDevice = async (
-  t: ReturnType<typeof convexTest>,
+  t: TestClient,
   floorId: string,
   objectId: string,
   name: string,
@@ -56,7 +55,7 @@ const createDevice = async (
 
 describe("devices", () => {
   it("listForFloor returns only devices on that floor", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const floorA = await freshFloor(t);
     const floorB = await freshFloor(t);
 
@@ -69,7 +68,7 @@ describe("devices", () => {
   });
 
   it("reflects device patches applied through mapOperations", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const floorId = await freshFloor(t);
     const id = await createDevice(t, floorId, "device:patch", "Old", 0);
     counter += 1;
@@ -96,7 +95,7 @@ describe("devices", () => {
   });
 
   it("never exposes MAC addresses from public device queries", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const floorId = await freshFloor(t);
     await t.run(async (ctx) => {
       await ctx.db.insert("devices", {
@@ -126,7 +125,7 @@ describe("devices", () => {
   });
 
   it("joins current exact NetBox source fields without mutating map-owned fields", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const siteId = await t.mutation(api.sites.ensureDefault, {});
     const buildingId = await t.mutation(api.buildings.create, {
       siteId,

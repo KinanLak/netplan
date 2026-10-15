@@ -32,9 +32,9 @@ import { ShortcutsDialog } from "@/components/shortcuts-dialog";
 import { ShortcutHintAbsolute } from "@/components/ui/shortcut-hint";
 import { getNextConnectionHighlightIds } from "@/lib/shortcut-intents";
 import { asBuildingId, asFloorId } from "@/lib/objectIds";
-import { api } from "../../convex/_generated/api";
+import { api } from "../../../convex/_generated/api";
 
-export const Route = createFileRoute("/")({
+export const Route = createFileRoute("/_authed/")({
   ssr: false,
   component: HomePage,
 });

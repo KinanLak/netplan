@@ -1,10 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import { convexTest } from "convex-test";
-import schema from "./schema";
 import { api, internal } from "./_generated/api";
-import { modules } from "./_test/modules";
 import { addLine } from "../src/walls/engine";
 import type { FloorId, WallId } from "../src/types/map";
+import { signedInTest } from "./_test/auth";
+import type { TestClient } from "./_test/auth";
 
 let counter = 0;
 
@@ -15,10 +14,7 @@ const meta = (seq: number) => ({
   createdAt: seq,
 });
 
-async function getFloorDocument(
-  t: ReturnType<typeof convexTest>,
-  floorId: string,
-) {
+async function getFloorDocument(t: TestClient, floorId: string) {
   const [devices, walls, links, revision] = await Promise.all([
     t.query(api.mapDocument.getFloorDevices, { floorId }),
     t.query(api.mapDocument.getFloorWalls, { floorId }),
@@ -28,7 +24,7 @@ async function getFloorDocument(
   return { floorId, revision, devices, walls, links };
 }
 
-async function freshFloor(t: ReturnType<typeof convexTest>) {
+async function freshFloor(t: TestClient) {
   counter += 1;
   const siteId = await t.mutation(api.sites.ensureDefault, {});
   const buildingId = await t.mutation(api.buildings.create, {
@@ -91,7 +87,7 @@ const siteConfig = (key: string) => ({
   libreNmsDevices: [],
 });
 
-async function siteFloor(t: ReturnType<typeof convexTest>, key: string) {
+async function siteFloor(t: TestClient, key: string) {
   const siteId = await t.mutation(internal.sites.create, {
     site: siteConfig(key),
   });
@@ -182,7 +178,7 @@ const expectApplicationRejected = async (
 
 describe("mapOperations.apply", () => {
   it("is idempotent by opId and writes one operation log row", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const floorId = await freshFloor(t);
     const operation = {
       kind: "device.create" as const,
@@ -206,7 +202,7 @@ describe("mapOperations.apply", () => {
   });
 
   it("treats duplicate create with same object id and payload as safe", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const floorId = await freshFloor(t);
     const first = {
       kind: "device.create" as const,
@@ -227,7 +223,7 @@ describe("mapOperations.apply", () => {
   });
 
   it("rejects duplicate create with same object id and different payload", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const floorId = await freshFloor(t);
     await t.mutation(api.mapOperations.apply, {
       operation: {
@@ -250,7 +246,7 @@ describe("mapOperations.apply", () => {
   });
 
   it("rejects moving into another device", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const floorId = await freshFloor(t);
     await t.mutation(api.mapOperations.apply, {
       operation: {
@@ -281,7 +277,7 @@ describe("mapOperations.apply", () => {
   });
 
   it("rejects moving into a wall", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const floorId = await freshFloor(t);
     await t.mutation(api.mapOperations.apply, {
       operation: {
@@ -321,7 +317,7 @@ describe("mapOperations.apply", () => {
   });
 
   it("rejects linking across floors", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const floorA = await freshFloor(t);
     const floorB = await freshFloor(t);
     await t.mutation(api.mapOperations.apply, {
@@ -357,7 +353,7 @@ describe("mapOperations.apply", () => {
   });
 
   it("deleting a device removes connected links", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const floorId = await freshFloor(t);
     await t.mutation(api.mapOperations.apply, {
       operation: {
@@ -399,7 +395,7 @@ describe("mapOperations.apply", () => {
   });
 
   it("rejects walls.add atomically without inserting earlier valid walls", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const floorId = await freshFloor(t);
     await t.mutation(api.mapOperations.apply, {
       operation: {
@@ -441,7 +437,7 @@ describe("mapOperations.apply", () => {
   });
 
   it("rejects batches atomically when a later sub-operation is invalid", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const floorId = await freshFloor(t);
 
     const result = await t.mutation(api.mapOperations.apply, {
@@ -474,7 +470,7 @@ describe("mapOperations.apply", () => {
   });
 
   it("applies all writes for a valid batch", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const floorId = await freshFloor(t);
 
     const operation = {
@@ -516,7 +512,7 @@ describe("mapOperations.apply", () => {
   });
 
   it("rejects batch sub-operations with hidden metadata", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const floorId = await freshFloor(t);
     const operation = {
       kind: "batch" as const,
@@ -540,7 +536,7 @@ describe("mapOperations.apply", () => {
   });
 
   it("rejects oversized batches before applying writes", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const floorId = await freshFloor(t);
     const operation = {
       kind: "batch" as const,
@@ -560,7 +556,7 @@ describe("mapOperations.apply", () => {
   });
 
   it("returns stored rejections for repeated rejected opIds without writing", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const floorId = await freshFloor(t);
     const operation = {
       kind: "batch" as const,
@@ -595,7 +591,7 @@ describe("mapOperations.apply", () => {
   });
 
   it("rejects non-canonical wall geometry keys", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const floorId = await freshFloor(t);
 
     const result = await t.mutation(api.mapOperations.apply, {
@@ -620,7 +616,7 @@ describe("mapOperations.apply", () => {
   });
 
   it("accepts wall segments produced by the wall engine", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const floorId = await freshFloor(t);
     const generated = addLine({
       walls: [],
@@ -652,7 +648,7 @@ describe("mapOperations.apply", () => {
   });
 
   it("persists canonical wall endpoints for reversed equivalent input", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const floorId = await freshFloor(t);
 
     const result = await t.mutation(api.mapOperations.apply, {
@@ -680,7 +676,7 @@ describe("mapOperations.apply", () => {
   });
 
   it("accepts finite negative positions for devices and walls", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const floorId = await freshFloor(t);
 
     const created = await t.mutation(api.mapOperations.apply, {
@@ -712,7 +708,7 @@ describe("mapOperations.apply", () => {
   });
 
   it("rejects non-finite device and wall positions", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const floorId = await freshFloor(t);
     const values = [NaN, Infinity, -Infinity];
 
@@ -751,7 +747,7 @@ describe("mapOperations.apply", () => {
   });
 
   it("rejects invalid device sizes", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const floorId = await freshFloor(t);
     const applicationRejectedSizes = [
       { width: -1, height: 80 },
@@ -800,7 +796,7 @@ describe("mapOperations.apply", () => {
   });
 
   it("rejects cross-floor operations", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const floorA = await freshFloor(t);
     const floorB = await freshFloor(t);
 
@@ -861,7 +857,7 @@ describe("mapOperations.apply", () => {
   });
 
   it("rejects new deletes for missing objects but replays applied delete opIds", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const floorId = await freshFloor(t);
     await t.mutation(api.mapOperations.apply, {
       operation: {
@@ -930,7 +926,7 @@ describe("mapOperations.apply", () => {
   });
 
   it("observes applied and rejected pending operation log rows by op id", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const floorId = await freshFloor(t);
     const appliedOperation = {
       kind: "device.create" as const,
@@ -968,7 +964,7 @@ describe("mapOperations.apply", () => {
   });
 
   it("bounds walls.delete payload size", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const floorId = await freshFloor(t);
     const walls = Array.from({ length: 500 }, (_, index) =>
       wall(`wall:cap:${index}`, floorId, 0, index * 20),
@@ -1001,7 +997,7 @@ describe("mapOperations.apply", () => {
   });
 
   it("enforces one external placement across all floors of a site", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const {
       siteId,
       buildingId,
@@ -1041,7 +1037,7 @@ describe("mapOperations.apply", () => {
   });
 
   it("allows the same external ID in different sites", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const a = await siteFloor(t, "binding-a");
     const b = await siteFloor(t, "binding-b");
     const first = await t.mutation(api.mapOperations.apply, {
@@ -1069,7 +1065,7 @@ describe("mapOperations.apply", () => {
   });
 
   it("rejects fabricated instances and objects absent from active inventory", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const { siteId, floorId } = await siteFloor(t, "binding-authority");
     const valid = externalDevice(
       "device:invalid-instance",
@@ -1118,7 +1114,7 @@ describe("mapOperations.apply", () => {
   });
 
   it("rejects duplicate bindings inside a batch without partial writes", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const { siteId, floorId } = await siteFloor(t, "binding-batch");
     const result = await t.mutation(api.mapOperations.apply, {
       operation: {
@@ -1159,7 +1155,7 @@ describe("mapOperations.apply", () => {
   });
 
   it("releases an external binding when its device is deleted", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const { siteId, floorId } = await siteFloor(t, "binding-delete");
     await t.mutation(api.mapOperations.apply, {
       operation: {
@@ -1192,7 +1188,7 @@ describe("mapOperations.apply", () => {
   });
 
   it("serializes concurrent claims for the same external identity", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const {
       siteId,
       buildingId,

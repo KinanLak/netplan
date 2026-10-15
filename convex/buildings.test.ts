@@ -1,17 +1,16 @@
 import { describe, expect, it } from "bun:test";
-import { convexTest } from "convex-test";
-import schema from "./schema";
 import { api, internal } from "./_generated/api";
-import { modules } from "./_test/modules";
+import { signedInTest } from "./_test/auth";
+import type { TestClient } from "./_test/auth";
 
 const SITE_ID = "site:arles";
 
-const ensureSite = async (t: ReturnType<typeof convexTest>) =>
+const ensureSite = async (t: TestClient) =>
   await t.mutation(api.sites.ensureDefault, {});
 
 describe("buildings", () => {
   it("list returns buildings sorted by order with application ids", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     await ensureSite(t);
     await t.run(async (ctx) => {
       await ctx.db.insert("buildings", {
@@ -40,7 +39,7 @@ describe("buildings", () => {
   });
 
   it("create inserts a building by stable object id", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     await ensureSite(t);
     const id = await t.mutation(api.buildings.create, {
       siteId: SITE_ID,
@@ -53,7 +52,7 @@ describe("buildings", () => {
   });
 
   it("createDefaultMap idempotently creates the temporary dev map", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     await ensureSite(t);
 
     const first = await t.mutation(api.buildings.createDefaultMap, {
@@ -99,7 +98,7 @@ describe("buildings", () => {
   });
 
   it("clearMap removes all temporary map data", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     await ensureSite(t);
     const buildingId = await t.mutation(api.buildings.create, {
       siteId: SITE_ID,
@@ -187,7 +186,7 @@ describe("buildings", () => {
   });
 
   it("rename updates the building name", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     await ensureSite(t);
     const id = await t.mutation(api.buildings.create, {
       siteId: SITE_ID,
@@ -200,7 +199,7 @@ describe("buildings", () => {
   });
 
   it("remove cascades floors, devices, walls, links", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     await ensureSite(t);
     const buildingId = await t.mutation(api.buildings.create, {
       siteId: SITE_ID,

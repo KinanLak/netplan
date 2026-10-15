@@ -1,8 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { convexTest } from "convex-test";
 import { api, internal } from "./_generated/api";
-import { modules } from "./_test/modules";
-import schema from "./schema";
+import { signedInTest } from "./_test/auth";
+import type { TestClient } from "./_test/auth";
 
 let sequence = 0;
 
@@ -57,10 +56,7 @@ const netboxSnapshot = {
   connections: [],
 };
 
-const createSiteWithNetBox = async (
-  t: ReturnType<typeof convexTest>,
-  key: string,
-) => {
+const createSiteWithNetBox = async (t: TestClient, key: string) => {
   const site = siteInput(key);
   const siteId = await t.mutation(internal.sites.create, { site });
   sequence += 1;
@@ -97,7 +93,7 @@ beforeEach(() => {
 
 describe("integration orchestration", () => {
   it("reserves durable switch work while concurrent requests join", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const siteId = await createSiteWithNetBox(t, "single-flight");
     const [first, second] = await Promise.all([
       t.mutation(api.integrationOrchestration.requestManualLocalization, {
@@ -138,7 +134,7 @@ describe("integration orchestration", () => {
   });
 
   it("keeps sites independent", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const [siteA, siteB] = await Promise.all([
       createSiteWithNetBox(t, "a"),
       createSiteWithNetBox(t, "b"),
@@ -156,7 +152,7 @@ describe("integration orchestration", () => {
   });
 
   it("keeps manual network activity disabled behind the rollout switch", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const siteId = await createSiteWithNetBox(t, "manual-disabled");
     delete process.env.INTEGRATION_MANUAL_REFRESH_ENABLED;
     expect(
@@ -167,7 +163,7 @@ describe("integration orchestration", () => {
   });
 
   it("applies active, blocked, and recent-snapshot manual priorities", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const siteId = await createSiteWithNetBox(t, "manual-policy");
     const started = await t.mutation(
       api.integrationOrchestration.requestManualLocalization,
@@ -255,7 +251,7 @@ describe("integration orchestration", () => {
 
   it("scans due workflows, ignores disabled sites, and skips active deadlines", async () => {
     process.env.INTEGRATION_SCHEDULER_ENABLED = "true";
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const dueSite = await createSiteWithNetBox(t, "due");
     await t.mutation(internal.sites.create, {
       site: siteInput("disabled", false),
@@ -294,7 +290,7 @@ describe("integration orchestration", () => {
   });
 
   it("lets a manual refresh override localization backoff", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const siteId = await createSiteWithNetBox(t, "backoff");
     await t.run(async (ctx) => {
       const state = await ctx.db
@@ -319,7 +315,7 @@ describe("integration orchestration", () => {
   });
 
   it("stages switch results immutably and rejects an incoherent capture window", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const siteId = await createSiteWithNetBox(t, "staging");
     const started = await t.mutation(
       api.integrationOrchestration.requestManualLocalization,
@@ -420,7 +416,7 @@ describe("integration orchestration", () => {
   });
 
   it("does not finalize staged results without agent freshness evidence", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const siteId = await createSiteWithNetBox(t, "finalizer");
     const started = await t.mutation(
       api.integrationOrchestration.requestManualLocalization,
@@ -478,7 +474,7 @@ describe("integration orchestration", () => {
   });
 
   it("retries only the definitive failed switch and blocks uncertain work", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const siteId = await createSiteWithNetBox(t, "switch-policy");
     const started = await t.mutation(
       api.integrationOrchestration.requestManualLocalization,
@@ -586,7 +582,7 @@ describe("integration orchestration", () => {
   });
 
   it("recovers an expired triggered worker as uncertain without retriggering", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const siteId = await createSiteWithNetBox(t, "crash-recovery");
     const started = await t.mutation(
       api.integrationOrchestration.requestManualLocalization,
@@ -652,7 +648,7 @@ describe("integration orchestration", () => {
   });
 
   it("restores the workflow when an uncertain switch eventually completes", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const siteId = await createSiteWithNetBox(t, "uncertain-release");
     const started = await t.mutation(
       api.integrationOrchestration.requestManualLocalization,
@@ -713,7 +709,7 @@ describe("integration orchestration", () => {
   });
 
   it("progresses localization backoff and resets it after success", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const siteId = await createSiteWithNetBox(t, "backoff-progression");
     for (let level = 1; level <= 4; level += 1) {
       const attempt = await t.mutation(internal.integrations.begin, {

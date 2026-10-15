@@ -1,8 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { convexTest } from "convex-test";
-import schema from "./schema";
 import { api, internal } from "./_generated/api";
-import { modules } from "./_test/modules";
+import { signedInTest } from "./_test/auth";
 
 const configuredSite = (key: string) => ({
   objectId: `site:${key}`,
@@ -29,7 +27,7 @@ const configuredSite = (key: string) => ({
 
 describe("sites", () => {
   it("seeds the confirmed Arles identity idempotently", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const first = await t.mutation(api.sites.ensureDefault, {});
     const second = await t.mutation(api.sites.ensureDefault, {});
     const sites = await t.query(api.sites.list, {});
@@ -53,7 +51,7 @@ describe("sites", () => {
   });
 
   it("requires buildings to reference an existing site", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     await expect(
       t.mutation(api.buildings.create, {
         siteId: "site:missing",
@@ -64,7 +62,7 @@ describe("sites", () => {
   });
 
   it("derives a floor site through its building", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const siteId = await t.mutation(internal.sites.create, {
       site: configuredSite("floor"),
     });
@@ -84,7 +82,7 @@ describe("sites", () => {
   });
 
   it("rejects duplicate configuration identities", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     await t.mutation(internal.sites.create, { site: configuredSite("first") });
     await expect(
       t.mutation(internal.sites.create, {
@@ -97,7 +95,7 @@ describe("sites", () => {
   });
 
   it("rejects non-canonical LibreNMS device IDs", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     await expect(
       t.mutation(internal.sites.create, {
         site: {
@@ -117,7 +115,7 @@ describe("sites", () => {
   });
 
   it("rejects a reused site object ID with different configuration", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     await t.mutation(internal.sites.create, { site: configuredSite("object") });
     await expect(
       t.mutation(internal.sites.create, {
@@ -130,7 +128,7 @@ describe("sites", () => {
   });
 
   it("atomically disables active workflows and allows a clean re-enable", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const siteId = await t.mutation(internal.sites.create, {
       site: configuredSite("disable"),
     });
@@ -168,7 +166,7 @@ describe("sites", () => {
   });
 
   it("rejects a default-map identity owned by another site", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const siteA = await t.mutation(internal.sites.create, {
       site: configuredSite("map-a"),
     });
@@ -187,7 +185,7 @@ describe("sites", () => {
   });
 
   it("refuses deletion while a site owns durable data", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const siteId = await t.mutation(internal.sites.create, {
       site: configuredSite("guard"),
     });
@@ -203,7 +201,7 @@ describe("sites", () => {
   });
 
   it("removes pristine workflow states with an unused site", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const siteId = await t.mutation(internal.sites.create, {
       site: configuredSite("unused"),
     });

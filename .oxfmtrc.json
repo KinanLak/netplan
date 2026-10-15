@@ -14,6 +14,8 @@
     "bun.lock",
     "src/routeTree.gen.ts",
     "convex/_generated/**",
-    ".agents/skills/**/*.md"
+    ".agents/skills/**/*.md",
+    "convex/betterAuth/_generated/**",
+    "convex/betterAuth/schema.ts"
   ]
 }

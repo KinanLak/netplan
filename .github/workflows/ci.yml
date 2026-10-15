@@ -169,7 +169,11 @@ jobs:
         run: |
           bun x convex dev --once --typecheck disable --tail-logs disable
           bun x convex env set ALLOW_DEV_SEED true
+          bun x convex env set SITE_URL http://127.0.0.1:4310
+          # Through stdin, so the value never reaches a log or a process list.
+          openssl rand -base64 32 | bun x convex env set BETTER_AUTH_SECRET
           bun x convex run dev:seed
+          bun x convex run dev:seedAccounts
 
       - name: Build
         run: bun run build

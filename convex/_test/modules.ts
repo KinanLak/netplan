@@ -4,12 +4,15 @@
 // convex-test can locate its modules root via `findModulesRoot`.
 export const modules: Record<string, () => Promise<Record<string, any>>> = {
   "./_generated/api.ts": () => import("../_generated/api.js"),
+  "./auth.ts": () => import("../auth"),
+  "./bootstrap.ts": () => import("../bootstrap"),
   "./buildings.ts": () => import("../buildings"),
   "./connector.ts": () => import("../connector"),
   "./computerProjection.ts": () => import("../computerProjection"),
   "./dev.ts": () => import("../dev"),
   "./devices.ts": () => import("../devices"),
   "./floors.ts": () => import("../floors"),
+  "./http.ts": () => import("../http"),
   "./integrationModel.ts": () => import("../integrationModel"),
   "./integrationOrchestration.ts": () => import("../integrationOrchestration"),
   "./integrationSchedule.ts": () => import("../integrationSchedule"),
@@ -32,5 +35,6 @@ export const modules: Record<string, () => Promise<Record<string, any>>> = {
   "./schema.ts": () => import("../schema"),
   "./sites.ts": () => import("../sites"),
   "./topology.ts": () => import("../topology"),
+  "./users.ts": () => import("../users"),
   "./walls.ts": () => import("../walls"),
 };

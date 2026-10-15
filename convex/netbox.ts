@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import type { Infer } from "convex/values";
-import { query } from "./_generated/server";
+import { readerQuery } from "./lib/functions";
 import type { connectionInput } from "./netboxModel";
 import { inventoryInput } from "./netboxModel";
 
@@ -481,7 +481,7 @@ export const buildNetBoxSnapshot = async (
   };
 };
 
-export const getSyncState = query({
+export const getSyncState = readerQuery({
   args: { siteId: v.string() },
   returns: v.union(v.null(), syncState),
   handler: async (ctx, { siteId }) => {
@@ -516,7 +516,7 @@ export const getSyncState = query({
   },
 });
 
-export const listInventory = query({
+export const listInventory = readerQuery({
   args: { siteId: v.string() },
   returns: v.array(inventoryItem),
   handler: async (ctx, { siteId }) => {
@@ -586,7 +586,7 @@ export const listInventory = query({
   },
 });
 
-export const listConnections = query({
+export const listConnections = readerQuery({
   args: { siteId: v.string(), externalId: v.string() },
   returns: v.array(
     v.object({

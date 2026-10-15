@@ -41,6 +41,7 @@ import {
   SidebarMenuSubItem,
 } from "@/components/ui/sidebar";
 import { ModeToggle } from "@/components/mode-toggle";
+import { SidebarAccount } from "@/panels/SidebarAccount";
 import { api } from "../../convex/_generated/api";
 
 /**
@@ -325,6 +326,7 @@ export default function AppSidebar() {
             {currentBuilding?.name ?? "Aucun bâtiment"}
           </div>
         </div>
+        <SidebarAccount />
       </SidebarFooter>
     </Sidebar>
   );

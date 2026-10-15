@@ -1,7 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { convexTest } from "convex-test";
 import { api, internal } from "./_generated/api";
-import { modules } from "./_test/modules";
+import { signedInTest } from "./_test/auth";
 import {
   expireVisuals,
   projectionPositions,
@@ -9,7 +8,6 @@ import {
 } from "./computerProjection";
 import { publishComputerLocations } from "./localizationModel";
 import { applyIntegrationDeviceRelocation } from "./mapOperations";
-import schema from "./schema";
 
 let sequence = 0;
 const computerExternalId = "netbox:computer:1";
@@ -52,7 +50,7 @@ const deviceRow = (
 
 async function setup() {
   sequence += 1;
-  const t = convexTest(schema, modules);
+  const t = await signedInTest();
   const siteId = await t.mutation(api.sites.ensureDefault, {});
   const buildingId = await t.mutation(api.buildings.create, {
     siteId,

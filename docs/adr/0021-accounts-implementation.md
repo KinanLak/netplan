@@ -23,17 +23,19 @@ Roles are stored as `reader`, `editor` and `admin` on the better-auth user
 
 ## Authorization
 
-`convex/lib/functions.ts` defines the only builders public functions may use:
-one per role level (`readerQuery`, `editorMutation`, `adminMutation`, …) and
-one for "any signed-in user". Each loads the user through the better-auth
-component, so the session is checked in the database, refuses banned users
-and puts the user in the function context. A lint rule forbids the raw
-`query`, `mutation` and `action` builders outside that file. Tests call every
-function group as each role.
+`convex/lib/functions.ts` defines the only builders public functions may use,
+one per role level (`readerQuery`, `editorMutation`, `adminMutation`, …).
+Each loads the user through the better-auth component, so the session is
+checked in the database, refuses banned users and puts the user in the
+function context. A lint rule forbids the raw `query`, `mutation` and
+`action` builders outside that file. A test lists every public function with
+its level and fails when one is added or changes level without the list
+saying so; behaviour tests cover each role.
 
 Levels follow ADR 0004: reads need Lecteur; map, building and floor edits and
 manual refresh need Éditeur; sites, integrations, users and role mapping need
-Admin; presence needs a signed-in user and only touches that user's rows.
+Admin; presence needs a signed-in user, which every Lecteur is, and only
+touches that user's rows.
 
 ## Sessions
 
@@ -68,6 +70,20 @@ deploy step and a script run it.
 Mail goes through a Node action with nodemailer, configured by `SMTP_*`
 Convex environment variables.
 
+## The app server
+
+The app server proxies `/api/auth/*` to the Convex site URL
+(`CONVEX_SITE_URL`) and reads the session cookie before rendering, so a
+signed-out visitor is sent to the login page before any map loads. The
+Convex token outlives a session ended elsewhere, so the signed-in layout
+sends the user back to the login page as soon as a function refuses the
+session.
+
+better-auth rate-limits sign-in by client IP, which it reads from a
+single-address `X-Forwarded-For`; the edge must set that header. Token and
+session reads are not rate-limited: they need a valid session and run on
+every page load.
+
 ## Identity on the client
 
 The `netplan-identity` local storage entry and the pseudonym lists are gone.
@@ -80,6 +96,8 @@ presence takes name and colour from the signed-in user on the server.
   exception, which review sees.
 - The connector actions keep their shared-secret check and a lint exception
   until lot 2 deletes them.
+- Without an edge that sets `X-Forwarded-For`, every sign-in attempt shares
+  one rate-limit bucket.
 - Moving to better-auth 1.7 changes the Keycloak redirect URI
   (`/api/auth/oauth2/callback/keycloak` today).
 

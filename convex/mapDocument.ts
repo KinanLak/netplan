@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { query } from "./_generated/server";
+import { readerQuery } from "./lib/functions";
 import {
   getComputerPresentationsForFloor,
   getExpiredDeviceIdsForFloor,
@@ -32,7 +32,7 @@ const toLink = (row: Doc<"links">) => ({
 // does not re-transmit every wall). Convex updates all subscribed queries at
 // the same logical timestamp, so the combined snapshot stays consistent.
 
-export const getFloorDevices = query({
+export const getFloorDevices = readerQuery({
   args: { floorId: v.string() },
   returns: v.array(device),
   handler: async (ctx, { floorId }) => {
@@ -50,7 +50,7 @@ export const getFloorDevices = query({
   },
 });
 
-export const getFloorWalls = query({
+export const getFloorWalls = readerQuery({
   args: { floorId: v.string() },
   returns: v.array(wallSegment),
   handler: async (ctx, { floorId }) => {
@@ -62,7 +62,7 @@ export const getFloorWalls = query({
   },
 });
 
-export const getFloorLinks = query({
+export const getFloorLinks = readerQuery({
   args: { floorId: v.string() },
   returns: v.array(link),
   handler: async (ctx, { floorId }) => {
@@ -83,7 +83,7 @@ export const getFloorLinks = query({
   },
 });
 
-export const getFloorRevision = query({
+export const getFloorRevision = readerQuery({
   args: { floorId: v.string() },
   returns: v.number(),
   handler: async (ctx, { floorId }) => {

@@ -1,5 +1,6 @@
 import { v } from "convex/values";
-import { internalMutation, query } from "./_generated/server";
+import { internalMutation } from "./_generated/server";
+import { readerQuery } from "./lib/functions";
 import {
   beginWorkflowAttempt,
   failWorkflowAttempt,
@@ -79,7 +80,7 @@ export const fail = internalMutation({
   },
 });
 
-export const getState = query({
+export const getState = readerQuery({
   args: { siteId: v.string(), workflow },
   returns: v.union(
     v.null(),

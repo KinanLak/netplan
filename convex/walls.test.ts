@@ -1,8 +1,7 @@
 import { describe, expect, it } from "bun:test";
-import { convexTest } from "convex-test";
-import schema from "./schema";
 import { api } from "./_generated/api";
-import { modules } from "./_test/modules";
+import { signedInTest } from "./_test/auth";
+import type { TestClient } from "./_test/auth";
 
 let counter = 0;
 
@@ -13,7 +12,7 @@ const meta = () => ({
   createdAt: counter,
 });
 
-async function freshFloor(t: ReturnType<typeof convexTest>) {
+async function freshFloor(t: TestClient) {
   counter += 1;
   const siteId = await t.mutation(api.sites.ensureDefault, {});
   const buildingId = await t.mutation(api.buildings.create, {
@@ -29,7 +28,7 @@ async function freshFloor(t: ReturnType<typeof convexTest>) {
 }
 
 const addWall = async (
-  t: ReturnType<typeof convexTest>,
+  t: TestClient,
   floorId: string,
   id: string,
   color: "sand" | "concrete" | "slate",
@@ -55,7 +54,7 @@ const addWall = async (
 
 describe("walls", () => {
   it("listForFloor isolates walls by floor", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const a = await freshFloor(t);
     const b = await freshFloor(t);
     await addWall(t, a, "wall:a", "sand");
@@ -68,7 +67,7 @@ describe("walls", () => {
   });
 
   it("reflects wall deletion applied through mapOperations", async () => {
-    const t = convexTest(schema, modules);
+    const t = await signedInTest();
     const floorId = await freshFloor(t);
     await addWall(t, floorId, "wall:delete", "slate");
     counter += 1;

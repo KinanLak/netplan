@@ -30,7 +30,8 @@
     "node_modules",
     "src/components/ui/**/*",
     ".output/**/*",
-    "src/routeTree.gen.ts"
+    "src/routeTree.gen.ts",
+    "convex/betterAuth/_generated/**"
   ],
   "rules": {
     "react/rules-of-hooks": "error",
@@ -138,5 +139,29 @@
     "typescript/prefer-for-of": "warn",
     "typescript/require-await": "warn",
     "typescript/triple-slash-reference": "error"
-  }
+  },
+  "overrides": [
+    {
+      "files": ["convex/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "./_generated/server",
+                "importNames": ["query", "mutation", "action"],
+                "message": "Public Convex functions use the role builders from convex/lib/functions.ts (ADR 0021)."
+              },
+              {
+                "name": "../_generated/server",
+                "importNames": ["query", "mutation", "action"],
+                "message": "Public Convex functions use the role builders from convex/lib/functions.ts (ADR 0021)."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
 }

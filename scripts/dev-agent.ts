@@ -16,6 +16,7 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
+import { randomBytes } from "node:crypto";
 import { join, resolve } from "node:path";
 import type { Subprocess } from "bun";
 import {
@@ -38,8 +39,8 @@ import {
 } from "./lib/devAgent";
 
 // Every function the seed runs, in order. Each one is idempotent and refuses
-// to run without ALLOW_DEV_SEED. The auth lot adds the test accounts here.
-const SEED_FUNCTIONS = ["dev:seed"];
+// to run without ALLOW_DEV_SEED.
+const SEED_FUNCTIONS = ["dev:seed", "dev:seedAccounts"];
 
 // Where the last run served the app, for `--status`.
 const WEB_URL_KEY = "NETPLAN_DEV_WEB_URL";
@@ -85,11 +86,12 @@ const convexIsolation = {
 const run = async (
   command: Array<string>,
   env: Record<string, string> = baseEnv,
+  input?: string,
 ) => {
   const child = Bun.spawn(command, {
     cwd: root,
     env,
-    stdin: "ignore",
+    stdin: input === undefined ? "ignore" : new TextEncoder().encode(input),
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -117,25 +119,33 @@ const docker = (...args: Array<string>) => run(["docker", ...args]);
 interface Container {
   running: boolean;
   image: string;
+  env: Array<string>;
   backendPort?: number;
 }
+
+// Functions see this as CONVEX_SITE_URL. better-auth's JWT issuer and JWKS
+// URL derive from it and the backend fetches that JWKS itself, so it must
+// answer inside the container; the app reaches the published port instead.
+const SITE_ORIGIN_ENV = "CONVEX_SITE_ORIGIN=http://127.0.0.1:3211";
 
 const inspectContainer = async (): Promise<Container | undefined> => {
   const result = await docker(
     "container",
     "inspect",
     "--format",
-    "{{json .State.Running}} {{json .Config.Image}} {{json .HostConfig.PortBindings}}",
+    "{{json .State.Running}}\t{{json .Config.Image}}\t{{json .HostConfig.PortBindings}}\t{{json .Config.Env}}",
     name,
   );
   if (!result.ok) return undefined;
-  const [running, image, bindings] = result.out
+  // JSON escapes tabs inside strings, so a tab only separates the fields.
+  const [running, image, bindings, env] = result.out
     .trim()
-    .split(" ")
+    .split("\t")
     .map((part) => JSON.parse(part) as unknown);
   return {
     running: running === true,
     image: String(image),
+    env: Array.isArray(env) ? env.map(String) : [],
     backendPort: publishedPort(
       bindings as Parameters<typeof publishedPort>[0],
       3210,
@@ -246,7 +256,7 @@ const createContainer = async (backendPort: number) => {
       "--env",
       `CONVEX_CLOUD_ORIGIN=http://127.0.0.1:${backendPort}`,
       "--env",
-      `CONVEX_SITE_ORIGIN=http://127.0.0.1:${backendPort + 1}`,
+      SITE_ORIGIN_ENV,
       "--env",
       "DISABLE_BEACON=true",
       CONVEX_BACKEND_IMAGE,
@@ -258,9 +268,14 @@ const createContainer = async (backendPort: number) => {
 /** Starts the worktree's backend, creating it if needed; returns its API port. */
 const ensureBackend = async (): Promise<number> => {
   let container = await inspectContainer();
-  // A new image pin replaces the container; the data stays in the volume.
-  if (container && container.image !== CONVEX_BACKEND_IMAGE) {
-    console.log(`dev:agent: moving ${name} to the pinned backend image.`);
+  // A new image pin or container setting replaces the container; the data
+  // stays in the volume.
+  if (
+    container &&
+    (container.image !== CONVEX_BACKEND_IMAGE ||
+      !container.env.includes(SITE_ORIGIN_ENV))
+  ) {
+    console.log(`dev:agent: recreating ${name} with the current settings.`);
     await docker("container", "rm", "--force", name);
     const port = container.backendPort;
     container = undefined;
@@ -427,6 +442,8 @@ const convexValues = {
   CONVEX_SELF_HOSTED_URL: convexUrl,
   CONVEX_SELF_HOSTED_ADMIN_KEY: adminKey ?? "",
   CONVEX_URL: convexUrl,
+  // The app server proxies auth here: the published port, not the origin the
+  // backend reports.
   CONVEX_SITE_URL: siteUrl,
 };
 // Written before Vite starts: Vite restarts when an env file changes.
@@ -466,10 +483,27 @@ if (!flags.has("--setup")) {
 const variables = parseEnvLines(
   await must(convexCli("env", "list"), "convex env list"),
 );
-if (variables.get("ALLOW_DEV_SEED") !== "true") {
+const authEnv: Record<string, string> = {
+  ALLOW_DEV_SEED: "true",
+  // better-auth accepts requests only from these origins: the app, and the
+  // production build `bun run test:e2e` serves against this backend.
+  SITE_URL: servedUrl ?? webUrl,
+  TRUSTED_ORIGINS: "http://127.0.0.1:4310",
+};
+// Generated once per backend and never printed: it signs every session.
+if (!variables.get("BETTER_AUTH_SECRET")) {
+  authEnv.BETTER_AUTH_SECRET = randomBytes(32).toString("base64url");
+}
+for (const [key, value] of Object.entries(authEnv)) {
+  if (variables.get(key) === value) continue;
+  // Through stdin, so a secret never reaches a process list.
   await must(
-    convexCli("env", "set", "ALLOW_DEV_SEED", "true"),
-    "convex env set",
+    run(
+      [join(root, "node_modules/.bin/convex"), "env", "set", key],
+      { ...baseEnv, ...convexIsolation, ...convexValues },
+      value,
+    ),
+    `convex env set ${key}`,
   );
 }
 console.log("dev:agent: pushing functions…");

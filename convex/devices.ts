@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { query } from "./_generated/server";
+import { readerQuery } from "./lib/functions";
 import {
   getComputerPresentationsForFloor,
   getExpiredDeviceIdsForFloor,
@@ -7,7 +7,7 @@ import {
 } from "./computerPresentation";
 import { device } from "./mapValidators";
 
-export const listForFloor = query({
+export const listForFloor = readerQuery({
   args: { floorId: v.string() },
   returns: v.array(device),
   handler: async (ctx, { floorId }) => {

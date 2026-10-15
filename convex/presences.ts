@@ -1,6 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
-import { mutation, query } from "./_generated/server";
+import { readerQuery, readerMutation } from "./lib/functions";
 
 const onlineUserShape = v.object({
   sessionId: v.string(),
@@ -26,7 +26,7 @@ const latestPresencesByClient = (
   return Array.from(latestByClient.values());
 };
 
-export const updateOnlineUser = mutation({
+export const updateOnlineUser = readerMutation({
   args: {
     sessionId: v.string(),
     clientId: v.string(),
@@ -72,7 +72,7 @@ export const updateOnlineUser = mutation({
   },
 });
 
-export const remove = mutation({
+export const remove = readerMutation({
   args: { sessionId: v.string() },
   returns: v.null(),
   handler: async (ctx, { sessionId }) => {
@@ -89,7 +89,7 @@ export const remove = mutation({
   },
 });
 
-export const list = query({
+export const list = readerQuery({
   args: {},
   returns: v.array(onlineUserShape),
   handler: async (ctx) => {

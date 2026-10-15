@@ -1,6 +1,7 @@
 import { ConvexError, v } from "convex/values";
 import type { Infer } from "convex/values";
-import { internalMutation, mutation, query } from "./_generated/server";
+import { internalMutation } from "./_generated/server";
+import { readerQuery, editorMutation } from "./lib/functions";
 import type { Doc } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { nextNetBoxAttempt, nextNominalAttempt } from "./integrationSchedule";
@@ -239,7 +240,7 @@ export const insertSite = async (
   return input.objectId;
 };
 
-export const list = query({
+export const list = readerQuery({
   args: {},
   returns: v.array(siteOutput),
   handler: async (ctx) => {
@@ -250,7 +251,7 @@ export const list = query({
   },
 });
 
-export const get = query({
+export const get = readerQuery({
   args: { siteId: v.string() },
   returns: v.union(v.null(), siteOutput),
   handler: async (ctx, { siteId }) => {
@@ -262,7 +263,7 @@ export const get = query({
   },
 });
 
-export const getForFloor = query({
+export const getForFloor = readerQuery({
   args: { floorId: v.string() },
   returns: v.union(v.null(), siteOutput),
   handler: async (ctx, { floorId }) => {
@@ -290,7 +291,7 @@ export const create = internalMutation({
   handler: async (ctx, { site }) => await insertSite(ctx, site),
 });
 
-export const ensureDefault = mutation({
+export const ensureDefault = editorMutation({
   args: {},
   returns: v.string(),
   handler: async (ctx) => await insertSite(ctx, DEFAULT_SITE),

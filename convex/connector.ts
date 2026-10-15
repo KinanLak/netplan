@@ -1,5 +1,8 @@
 import { ConvexError, v } from "convex/values";
 import type { Infer } from "convex/values";
+// The connector authenticates with a shared secret, not a user session, so it
+// keeps the raw builder until lot 2 replaces it (ADR 0021).
+// oxlint-disable-next-line no-restricted-imports
 import { action, internalQuery } from "./_generated/server";
 import type { ActionCtx } from "./_generated/server";
 import { internal } from "./_generated/api";

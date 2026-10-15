@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { query } from "./_generated/server";
+import { readerQuery } from "./lib/functions";
 import { libreNmsApiBaseUrl } from "./librenmsUrl";
 import {
   normalizedFdbIdentitySet,
@@ -600,7 +600,7 @@ export const buildLibreNmsDiscoveries = async (input: {
 
 export const libreNmsClientFromEnvironment = environmentClient;
 
-export const getSyncState = query({
+export const getSyncState = readerQuery({
   args: { siteId: v.string() },
   returns: v.union(
     v.null(),
@@ -642,7 +642,7 @@ export const getSyncState = query({
   },
 });
 
-export const listDiscoveredConnections = query({
+export const listDiscoveredConnections = readerQuery({
   args: { siteId: v.string() },
   returns: v.array(
     v.object({

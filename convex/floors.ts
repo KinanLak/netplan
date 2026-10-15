@@ -1,5 +1,6 @@
 import { ConvexError, v } from "convex/values";
-import { internalMutation, mutation, query } from "./_generated/server";
+import { internalMutation } from "./_generated/server";
+import { readerQuery, editorMutation } from "./lib/functions";
 import type { Doc } from "./_generated/dataModel";
 import { cascadeRemoveFloor } from "./buildings";
 
@@ -17,7 +18,7 @@ const toFloor = (row: Doc<"floors">) => ({
   order: row.order,
 });
 
-export const listForBuilding = query({
+export const listForBuilding = readerQuery({
   args: { buildingId: v.string() },
   returns: v.array(floorValidator),
   handler: async (ctx, { buildingId }) => {
@@ -29,7 +30,7 @@ export const listForBuilding = query({
   },
 });
 
-export const listAll = query({
+export const listAll = readerQuery({
   args: {},
   returns: v.array(floorValidator),
   handler: async (ctx) => {
@@ -38,7 +39,7 @@ export const listAll = query({
   },
 });
 
-export const create = mutation({
+export const create = editorMutation({
   args: {
     objectId: v.string(),
     buildingId: v.string(),
@@ -69,7 +70,7 @@ export const create = mutation({
   },
 });
 
-export const rename = mutation({
+export const rename = editorMutation({
   args: { id: v.string(), name: v.string() },
   returns: v.null(),
   handler: async (ctx, { id, name }) => {

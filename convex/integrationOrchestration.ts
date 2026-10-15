@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import { internalMutation, internalQuery, mutation } from "./_generated/server";
+import { internalMutation, internalQuery } from "./_generated/server";
+import { editorMutation } from "./lib/functions";
 import type { MutationCtx } from "./_generated/server";
 import {
   beginWorkflowAttempt,
@@ -186,7 +187,7 @@ const blockingSwitch = async (ctx: MutationCtx, siteId: string) => {
     : recovered;
 };
 
-export const requestManualLocalization = mutation({
+export const requestManualLocalization = editorMutation({
   args: {
     siteId: v.string(),
     confirmedSnapshotId: v.optional(v.string()),
