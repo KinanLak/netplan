@@ -192,3 +192,67 @@ jobs:
             playwright-report
             test-results
           retention-days: 7
+
+  image:
+    name: Image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      # A throwaway backend for the functions image to deploy to. Keep the
+      # image equal to CONVEX_BACKEND_IMAGE in scripts/lib/convexBackend.ts.
+      convex:
+        image: ghcr.io/get-convex/convex-backend:72ce13c379fe6dbdfc305bc8ad699c5663c68c2a
+        ports:
+          - 3210:3210
+          - 3211:3211
+        env:
+          INSTANCE_NAME: netplan-ci
+          CONVEX_CLOUD_ORIGIN: http://127.0.0.1:3210
+          CONVEX_SITE_ORIGIN: http://127.0.0.1:3211
+          DISABLE_BEACON: "true"
+        options: >-
+          --health-cmd "curl --fail --silent http://localhost:3210/version"
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 30
+    steps:
+      - uses: actions/checkout@v7
+
+      # Built, never pushed (ADR 0020).
+      - name: Build the app and functions images
+        run: |
+          docker build --target app --tag netplan-app:ci .
+          docker build --target functions --tag netplan-functions:ci .
+          docker image ls netplan-*
+
+      - name: Deploy the functions with the functions image
+        run: |
+          admin_key="$(docker exec "${{ job.services.convex.id }}" ./generate_admin_key.sh | tail -1)"
+          echo "::add-mask::$admin_key"
+          docker run --rm --network host \
+            --env CONVEX_SELF_HOSTED_URL=http://127.0.0.1:3210 \
+            --env CONVEX_SELF_HOSTED_ADMIN_KEY="$admin_key" \
+            --env ALLOW_DEV_SEED=false \
+            netplan-functions:ci
+
+      # The URLs reach the server only now, at run time.
+      - name: Start the app image
+        run: >-
+          docker run --detach --name netplan-app --network host
+          --env CONVEX_URL=http://127.0.0.1:3210
+          --env CONVEX_SITE_URL=http://127.0.0.1:3211
+          netplan-app:ci
+
+      - name: Health and home page answer
+        run: |
+          for _ in $(seq 30); do
+            curl --fail --silent --output /dev/null http://127.0.0.1:3000/health && break
+            sleep 1
+          done
+          curl --fail --silent --show-error http://127.0.0.1:3000/health
+          echo
+          curl --fail --silent --show-error --output /dev/null http://127.0.0.1:3000/
+
+      - name: App logs
+        if: always()
+        run: docker logs netplan-app || true
