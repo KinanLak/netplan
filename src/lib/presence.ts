@@ -1,24 +1,27 @@
 import type { FloorId } from "@/types/map";
 
-/** A presence row as returned by `api.presences.list`. */
+/** A presence row as returned by `api.presences.list`, one per open page. */
 export interface RawPresence {
-  sessionId: string;
   clientId: string;
+  userId: string;
   displayName: string;
   colorHue: number;
   floorId: string;
+  /** When the page last arrived on its floor or was brought back to view. */
+  activeAt: number;
+  /** Its last heartbeat. */
   updatedAt: number;
 }
 
-/** A live presence, deduped by client and flagged when it is the local user. */
+/** A live presence, flagged when it is the signed-in user. */
 export interface ActivePresence extends RawPresence {
   isSelf: boolean;
 }
 
-/** The local user, used to inject a fresh self entry into the live list. */
+/** The signed-in user on this page, used to inject a fresh self entry. */
 export interface SelfPresence {
-  sessionId: string;
   clientId: string;
+  userId: string;
   displayName: string;
   colorHue: number;
   floorId: FloorId | null;
@@ -27,10 +30,10 @@ export interface SelfPresence {
 export const PRESENCE_STALE_AFTER_MS = 5_000;
 
 /**
- * Collapse raw presences to one live entry per client, dropping rows older than
- * `now - staleAfterMs`. When `self` is on a floor we override its row with fresh
- * data so the local user always reflects its current floor without waiting for
- * the next heartbeat round-trip.
+ * Collapse raw presences to one live entry per user: among the pages whose
+ * heartbeat is newer than `now - staleAfterMs`, the one the user was active
+ * on last. When this page is on a floor, the user's entry is this page's, so
+ * it follows the current floor without waiting for a round-trip.
  */
 export function activePresences(
   presences: ReadonlyArray<RawPresence>,
@@ -39,31 +42,32 @@ export function activePresences(
   staleAfterMs: number = PRESENCE_STALE_AFTER_MS,
 ): Array<ActivePresence> {
   const cutoff = now - staleAfterMs;
-  const byClient = new Map<string, ActivePresence>();
+  const byUser = new Map<string, ActivePresence>();
 
   for (const presence of presences) {
     if (presence.updatedAt < cutoff) continue;
-    const current = byClient.get(presence.clientId);
-    if (current && current.updatedAt >= presence.updatedAt) continue;
-    byClient.set(presence.clientId, {
+    const current = byUser.get(presence.userId);
+    if (current && current.activeAt >= presence.activeAt) continue;
+    byUser.set(presence.userId, {
       ...presence,
-      isSelf: self?.clientId === presence.clientId,
+      isSelf: self?.userId === presence.userId,
     });
   }
 
   if (self && self.floorId) {
-    byClient.set(self.clientId, {
-      sessionId: self.sessionId,
+    byUser.set(self.userId, {
       clientId: self.clientId,
+      userId: self.userId,
       displayName: self.displayName,
       colorHue: self.colorHue,
       floorId: self.floorId,
+      activeAt: now,
       updatedAt: now,
       isSelf: true,
     });
   }
 
-  return Array.from(byClient.values());
+  return Array.from(byUser.values());
 }
 
 /** Self first, then alphabetically by display name. */

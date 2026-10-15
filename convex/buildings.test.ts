@@ -152,11 +152,11 @@ describe("buildings", () => {
         updatedBy: "test",
       });
       await ctx.db.insert("presences", {
-        sessionId: "session:clear",
         clientId: "client:clear",
-        displayName: "Clear",
-        colorHue: 120,
+        userId: "user:a",
+        displayName: "A",
         floorId,
+        activeAt: 0,
         updatedAt: 0,
       });
       await ctx.db.insert("clientOperations", {

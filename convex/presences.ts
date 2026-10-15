@@ -1,71 +1,72 @@
 import { ConvexError, v } from "convex/values";
-import type { Doc } from "./_generated/dataModel";
 import { readerQuery, readerMutation } from "./lib/functions";
+import { colorHueFor } from "./lib/presence";
 
 const onlineUserShape = v.object({
-  sessionId: v.string(),
   clientId: v.string(),
+  userId: v.string(),
   displayName: v.string(),
   colorHue: v.number(),
   floorId: v.string(),
+  activeAt: v.number(),
   updatedAt: v.number(),
 });
 
-const latestPresencesByClient = (
-  presences: Array<Doc<"presences">>,
-): Array<Doc<"presences">> => {
-  const latestByClient = new Map<string, Doc<"presences">>();
-
-  for (const presence of presences) {
-    const current = latestByClient.get(presence.clientId);
-    if (!current || presence.updatedAt > current.updatedAt) {
-      latestByClient.set(presence.clientId, presence);
-    }
-  }
-
-  return Array.from(latestByClient.values());
-};
+// A page that closes without `pagehide` leaves its row behind; the next
+// heartbeat of the same user removes it once it is clearly gone.
+const ABANDONED_AFTER_MS = 60_000;
 
 export const updateOnlineUser = readerMutation({
   args: {
-    sessionId: v.string(),
     clientId: v.string(),
-    displayName: v.string(),
-    colorHue: v.number(),
     floorId: v.string(),
+    // The page was focused or shown since its last heartbeat.
+    active: v.boolean(),
   },
   returns: v.null(),
-  handler: async (ctx, args) => {
+  handler: async (ctx, { clientId, floorId, active }) => {
     const floor = await ctx.db
       .query("floors")
-      .withIndex("by_object_id", (q) => q.eq("objectId", args.floorId))
+      .withIndex("by_object_id", (q) => q.eq("objectId", floorId))
       .unique();
     if (!floor) throw new ConvexError("Floor not found");
 
-    const existingByClient = await ctx.db
+    const now = Date.now();
+    const mine = await ctx.db
       .query("presences")
-      .withIndex("by_client", (q) => q.eq("clientId", args.clientId))
+      .withIndex("by_user", (q) => q.eq("userId", ctx.user.id))
       .collect();
-
-    const next = {
-      clientId: args.clientId,
-      displayName: args.displayName,
-      colorHue: args.colorHue,
-      floorId: args.floorId,
-      updatedAt: Date.now(),
-    };
-
-    if (existingByClient.length > 0) {
-      const existing =
-        existingByClient.find(
-          (presence) => presence.sessionId === args.sessionId,
-        ) ?? existingByClient[0];
-      await ctx.db.patch(existing._id, { sessionId: args.sessionId, ...next });
-      for (const duplicate of existingByClient) {
-        if (duplicate._id !== existing._id) await ctx.db.delete(duplicate._id);
+    const current = mine.find((presence) => presence.clientId === clientId);
+    for (const presence of mine) {
+      if (
+        presence !== current &&
+        presence.updatedAt < now - ABANDONED_AFTER_MS
+      ) {
+        await ctx.db.delete(presence._id);
       }
+    }
+
+    // Every page heartbeats, so the time of the last heartbeat says nothing
+    // about which page the user is looking at; arriving on a floor or coming
+    // back to the page does.
+    const activeAt =
+      !current || current.floorId !== floorId || active
+        ? now
+        : current.activeAt;
+    const next = {
+      displayName: ctx.user.name,
+      floorId,
+      activeAt,
+      updatedAt: now,
+    };
+    if (current) {
+      await ctx.db.patch(current._id, next);
     } else {
-      await ctx.db.insert("presences", { sessionId: args.sessionId, ...next });
+      await ctx.db.insert("presences", {
+        clientId,
+        userId: ctx.user.id,
+        ...next,
+      });
     }
 
     return null;
@@ -73,16 +74,16 @@ export const updateOnlineUser = readerMutation({
 });
 
 export const remove = readerMutation({
-  args: { sessionId: v.string() },
+  args: { clientId: v.string() },
   returns: v.null(),
-  handler: async (ctx, { sessionId }) => {
+  handler: async (ctx, { clientId }) => {
     const existing = await ctx.db
       .query("presences")
-      .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
+      .withIndex("by_client", (q) => q.eq("clientId", clientId))
       .collect();
 
     for (const presence of existing) {
-      await ctx.db.delete(presence._id);
+      if (presence.userId === ctx.user.id) await ctx.db.delete(presence._id);
     }
 
     return null;
@@ -93,14 +94,17 @@ export const list = readerQuery({
   args: {},
   returns: v.array(onlineUserShape),
   handler: async (ctx) => {
+    // One entry per page: which of a user's pages to show depends on which
+    // are still alive, and only the client's clock ticks between updates.
     const presences = await ctx.db.query("presences").collect();
 
-    return latestPresencesByClient(presences).map((presence) => ({
-      sessionId: presence.sessionId,
+    return presences.map((presence) => ({
       clientId: presence.clientId,
+      userId: presence.userId,
       displayName: presence.displayName,
-      colorHue: presence.colorHue,
+      colorHue: colorHueFor(presence.userId),
       floorId: presence.floorId,
+      activeAt: presence.activeAt,
       updatedAt: presence.updatedAt,
     }));
   },

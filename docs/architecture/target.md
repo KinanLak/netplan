@@ -17,7 +17,6 @@ done and described in [Current](current.md).
   (ADR 0003).
 - Global roles Lecteur, Éditeur and Admin checked by every Convex function;
   the SSO role comes from a Keycloak role name chosen by the admin (ADR 0004).
-- Presence shows real users; `netplan-identity` goes away.
 - An admin page for users, invitations and role mapping, and SMTP for mail.
 
 ## Domain model (lot 2)

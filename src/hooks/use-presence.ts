@@ -4,18 +4,21 @@ import type { FloorId } from "@/types/map";
 import { useIdentity } from "@/lib/identity";
 import { activePresences } from "@/lib/presence";
 import type { ActivePresence } from "@/lib/presence";
+import { useCurrentUser } from "@/hooks/use-current-user";
 import { api } from "../../convex/_generated/api";
+import { colorHueFor } from "../../convex/lib/presence";
 
 const HEARTBEAT_MS = 2_000;
 const STALE_TICK_MS = 1_000;
 
 /**
- * Publishes the local user's presence for `floorId`, subscribes to every live
- * presence across the map, and returns them deduped by client with stale rows
+ * Publishes this page's presence for `floorId`, subscribes to every live
+ * presence across the map, and returns one entry per user with stale rows
  * dropped. Mount this once (the sidebar) so a single heartbeat runs per tab.
  */
 export function usePresence(floorId: FloorId | null): Array<ActivePresence> {
   const identity = useIdentity();
+  const me = useCurrentUser();
   const updateOnlineUser = useMutation(api.presences.updateOnlineUser);
   const removePresence = useMutation(api.presences.remove);
   const [now, setNow] = useState(() => Date.now());
@@ -31,31 +34,38 @@ export function usePresence(floorId: FloorId | null): Array<ActivePresence> {
 
   useEffect(() => {
     if (!identity) return;
+    const clientId = identity.clientId;
     if (!floorId) {
-      void removePresence({ sessionId: identity.sessionId });
+      void removePresence({ clientId });
       return;
     }
 
-    const publish = () => {
-      void updateOnlineUser({
-        sessionId: identity.sessionId,
-        clientId: identity.clientId,
-        displayName: identity.displayName,
-        colorHue: identity.colorHue,
-        floorId,
-      });
+    // Coming back to the page tells the server at once that this is where the
+    // user is now, so their avatar follows them across tabs and devices in
+    // the order they switched, not in the order their heartbeats fire.
+    const publish = (active: boolean) => {
+      void updateOnlineUser({ clientId, floorId, active });
+    };
+    const markActive = () => {
+      if (document.visibilityState === "visible") publish(true);
     };
 
-    publish();
-    const interval = window.setInterval(publish, HEARTBEAT_MS);
-    return () => window.clearInterval(interval);
+    publish(true);
+    const interval = window.setInterval(() => publish(false), HEARTBEAT_MS);
+    window.addEventListener("focus", markActive);
+    document.addEventListener("visibilitychange", markActive);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", markActive);
+      document.removeEventListener("visibilitychange", markActive);
+    };
   }, [floorId, identity, removePresence, updateOnlineUser]);
 
   useEffect(() => {
     if (!identity) return;
-    const sessionId = identity.sessionId;
+    const clientId = identity.clientId;
     const remove = () => {
-      void removePresence({ sessionId });
+      void removePresence({ clientId });
     };
 
     window.addEventListener("pagehide", remove);
@@ -67,12 +77,12 @@ export function usePresence(floorId: FloorId | null): Array<ActivePresence> {
 
   return activePresences(
     presences,
-    identity
+    identity && me
       ? {
-          sessionId: identity.sessionId,
           clientId: identity.clientId,
-          displayName: identity.displayName,
-          colorHue: identity.colorHue,
+          userId: me.id,
+          displayName: me.name,
+          colorHue: colorHueFor(me.id),
           floorId,
         }
       : null,

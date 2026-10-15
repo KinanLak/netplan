@@ -44,7 +44,7 @@ const SIZE_CLASSES = {
 
 interface UserAvatarStackProps {
   users: ReadonlyArray<{
-    clientId: string;
+    userId: string;
     displayName: string;
     colorHue: number;
   }>;
@@ -67,7 +67,7 @@ export function UserAvatarStack({
     <span className={cn("flex items-center -space-x-1.5", className)}>
       {visible.map((user, index) => (
         <UserAvatar
-          key={user.clientId}
+          key={user.userId}
           displayName={user.displayName}
           colorHue={user.colorHue}
           className={sizeClass}

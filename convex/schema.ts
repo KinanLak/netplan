@@ -801,15 +801,17 @@ export default defineSchema({
     ])
     .index("by_site_cycle", ["siteId", "cycleId"]),
 
+  // One row per open page, keyed by the page's random id (ADR 0021); the
+  // name is the signed-in user's, copied at each heartbeat.
   presences: defineTable({
-    sessionId: v.string(),
     clientId: v.string(),
+    userId: v.string(),
     displayName: v.string(),
-    colorHue: v.number(),
     floorId: v.string(),
+    activeAt: v.number(),
     updatedAt: v.number(),
   })
-    .index("by_session", ["sessionId"])
     .index("by_client", ["clientId"])
+    .index("by_user", ["userId"])
     .index("by_floor", ["floorId"]),
 });
