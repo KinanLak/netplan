@@ -1,12 +1,3 @@
-import {
-  ComputerIcon,
-  DeviceAccessIcon,
-  EthernetPortIcon,
-  HardDriveIcon,
-  PlugSocketIcon,
-  ServerStack03Icon,
-} from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
 import type { NodeTypes } from "@xyflow/react";
 import EndpointNode from "@/canvas/nodeTypes/EndpointNode";
 import PatchPanelNode from "@/canvas/nodeTypes/PatchPanelNode";
@@ -14,11 +5,7 @@ import PcNode from "@/canvas/nodeTypes/PcNode";
 import RackNode from "@/canvas/nodeTypes/RackNode";
 import SwitchNode from "@/canvas/nodeTypes/SwitchNode";
 import WallPortNode from "@/canvas/nodeTypes/WallPortNode";
-import { TOOLBAR_ICON_SIZE_CLASS } from "@/lib/constants";
-import type { ShortcutKeyBinding } from "@/lib/shortcut-types";
 import type { DeviceType, Size } from "@/types/map";
-
-export type DeviceToolShortcutAction = `tool-${DeviceType}`;
 
 type DeviceNodeAdapter = NonNullable<NodeTypes[string]>;
 
@@ -27,30 +14,8 @@ export interface DeviceKind<TType extends DeviceType = DeviceType> {
   label: string;
   drawerLabel: string;
   defaultSize: Size;
-  toolbar: {
-    id: TType;
-    label: string;
-    title: string;
-    shortcut: DeviceToolShortcutAction;
-    icon: React.ReactNode;
-  };
-  shortcut: {
-    action: DeviceToolShortcutAction;
-    keys: [ShortcutKeyBinding, ...Array<ShortcutKeyBinding>];
-    label: string;
-    description: string;
-  };
   nodeAdapter: DeviceNodeAdapter;
 }
-
-const toolbarIcon = (icon: typeof ServerStack03Icon): React.ReactNode => (
-  <HugeiconsIcon
-    icon={icon}
-    className={TOOLBAR_ICON_SIZE_CLASS}
-    color="currentColor"
-    strokeWidth={1.5}
-  />
-);
 
 export const deviceKindRegistry = {
   rack: {
@@ -58,19 +23,6 @@ export const deviceKindRegistry = {
     label: "Rack",
     drawerLabel: "Rack Serveur",
     defaultSize: { width: 80, height: 160 },
-    toolbar: {
-      id: "rack",
-      label: "Rack",
-      title: "Ajouter Rack",
-      shortcut: "tool-rack",
-      icon: toolbarIcon(ServerStack03Icon),
-    },
-    shortcut: {
-      action: "tool-rack",
-      keys: ["5"],
-      label: "Rack",
-      description: "Ajouter un rack serveur",
-    },
     nodeAdapter: RackNode,
   },
   switch: {
@@ -78,19 +30,6 @@ export const deviceKindRegistry = {
     label: "Switch",
     drawerLabel: "Switch Réseau",
     defaultSize: { width: 200, height: 60 },
-    toolbar: {
-      id: "switch",
-      label: "Switch",
-      title: "Ajouter Switch",
-      shortcut: "tool-switch",
-      icon: toolbarIcon(HardDriveIcon),
-    },
-    shortcut: {
-      action: "tool-switch",
-      keys: ["6"],
-      label: "Switch",
-      description: "Ajouter un switch réseau",
-    },
     nodeAdapter: SwitchNode,
   },
   pc: {
@@ -98,19 +37,6 @@ export const deviceKindRegistry = {
     label: "PC",
     drawerLabel: "Poste de travail",
     defaultSize: { width: 80, height: 80 },
-    toolbar: {
-      id: "pc",
-      label: "PC",
-      title: "Ajouter PC",
-      shortcut: "tool-pc",
-      icon: toolbarIcon(ComputerIcon),
-    },
-    shortcut: {
-      action: "tool-pc",
-      keys: ["7"],
-      label: "PC",
-      description: "Ajouter un poste de travail",
-    },
     nodeAdapter: PcNode,
   },
   "wall-port": {
@@ -118,19 +44,6 @@ export const deviceKindRegistry = {
     label: "Prise",
     drawerLabel: "Prise murale",
     defaultSize: { width: 40, height: 40 },
-    toolbar: {
-      id: "wall-port",
-      label: "Prise",
-      title: "Ajouter Prise",
-      shortcut: "tool-wall-port",
-      icon: toolbarIcon(PlugSocketIcon),
-    },
-    shortcut: {
-      action: "tool-wall-port",
-      keys: ["8"],
-      label: "Prise",
-      description: "Ajouter une prise murale",
-    },
     nodeAdapter: WallPortNode,
   },
   "patch-panel": {
@@ -138,19 +51,6 @@ export const deviceKindRegistry = {
     label: "Panneau",
     drawerLabel: "Panneau de brassage",
     defaultSize: { width: 200, height: 40 },
-    toolbar: {
-      id: "patch-panel",
-      label: "Panneau",
-      title: "Ajouter Panneau de brassage",
-      shortcut: "tool-patch-panel",
-      icon: toolbarIcon(EthernetPortIcon),
-    },
-    shortcut: {
-      action: "tool-patch-panel",
-      keys: ["9"],
-      label: "Panneau",
-      description: "Ajouter un panneau de brassage",
-    },
     nodeAdapter: PatchPanelNode,
   },
   endpoint: {
@@ -158,20 +58,6 @@ export const deviceKindRegistry = {
     label: "Terminal",
     drawerLabel: "Terminal",
     defaultSize: { width: 80, height: 80 },
-    toolbar: {
-      id: "endpoint",
-      label: "Terminal",
-      title: "Ajouter Terminal",
-      shortcut: "tool-endpoint",
-      icon: toolbarIcon(DeviceAccessIcon),
-    },
-    shortcut: {
-      action: "tool-endpoint",
-      // "0" is the numpad's zoom reset.
-      keys: ["T"],
-      label: "Terminal",
-      description: "Ajouter un terminal (imprimante, téléphone, serveur…)",
-    },
     nodeAdapter: EndpointNode,
   },
 } satisfies { [TType in DeviceType]: DeviceKind<TType> };
@@ -179,10 +65,6 @@ export const deviceKindRegistry = {
 export const deviceTypes = Object.keys(deviceKindRegistry) as Array<DeviceType>;
 
 export const deviceKinds = deviceTypes.map((type) => deviceKindRegistry[type]);
-
-export const deviceToolShortcutActions = deviceKinds.map(
-  (kind) => kind.shortcut.action,
-);
 
 export const getDeviceKind = (type: DeviceType): DeviceKind => {
   return deviceKindRegistry[type];

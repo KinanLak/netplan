@@ -1,4 +1,3 @@
-import { deviceToolShortcutActions } from "@/devices/deviceKindRegistry";
 import { isMac, shortcuts } from "@/lib/shortcuts";
 import type { ShortcutAction, ShortcutScope } from "@/lib/shortcuts";
 import type { ShortcutKeyBinding } from "@/lib/shortcut-types";
@@ -47,10 +46,6 @@ type ShortcutModifiers = {
   shift?: boolean;
 };
 
-const deviceToolShortcutActionSet = new Set<ShortcutAction>(
-  deviceToolShortcutActions,
-);
-
 const shortcutRoutingPriority: Array<ShortcutAction> = [
   "close-drawer",
   "delete-device",
@@ -84,14 +79,13 @@ const shortcutRoutingPriority: Array<ShortcutAction> = [
   "toggle-overlay-visibility",
   "toggle-overlay-lock",
   "calibrate-overlay",
-  ...deviceToolShortcutActions,
 ];
 
 const shortcutPriority = new Map(
   shortcutRoutingPriority.map((action, index) => [action, index]),
 );
 
-const wallToolShortcutActions = new Set<ShortcutAction>([
+const toolShortcutActions = new Set<ShortcutAction>([
   "tool-wall",
   "tool-room",
   "tool-wall-brush",
@@ -229,10 +223,7 @@ const isScopeActive = (
 };
 
 const isToolShortcutAction = (action: ShortcutAction): boolean => {
-  return (
-    wallToolShortcutActions.has(action) ||
-    deviceToolShortcutActionSet.has(action)
-  );
+  return toolShortcutActions.has(action);
 };
 
 const isActionAllowedByContext = (
