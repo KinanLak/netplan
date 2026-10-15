@@ -47,6 +47,7 @@ export type ShortcutAction =
   // Calque
   | "toggle-overlay-panel"
   | "toggle-overlay-visibility"
+  | "toggle-overlay-lock"
   // Tools - Devices (number hotbar)
   | DeviceToolShortcutAction
   // Device drawer
@@ -270,6 +271,12 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
     label: "Afficher le calque",
     description: "Afficher/masquer le calque de l'étage",
     scope: "global",
+  },
+  "toggle-overlay-lock": {
+    keys: ["Shift+L"],
+    label: "Verrouiller le calque",
+    description: "Verrouiller/déverrouiller le calque (panneau ouvert)",
+    scope: "canvas",
   },
 
   // Tools - Devices (number hotbar)

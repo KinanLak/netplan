@@ -248,6 +248,24 @@ describe("shortcut intents", () => {
     ).toBe(null);
   });
 
+  it("locks the calque with Shift+L, apart from the room tool's L, and only in edit mode", () => {
+    const actions: Array<ShortcutAction> = ["tool-room", "toggle-overlay-lock"];
+    const l = keyEvent({ code: "KeyL", key: "l" });
+    const shiftL = keyEvent({ code: "KeyL", key: "L", shiftKey: true });
+
+    expect(resolveAction({ actions, event: l })).toBe("tool-room");
+    expect(resolveAction({ actions, event: shiftL })).toBe(
+      "toggle-overlay-lock",
+    );
+    expect(
+      resolveAction({
+        actions,
+        event: shiftL,
+        runtime: { ...baseRuntime, isEditMode: false },
+      }),
+    ).toBe(null);
+  });
+
   it("routes every device tool shortcut from registry metadata", () => {
     deviceKinds.forEach((kind) => {
       const key = kind.shortcut.keys[0];

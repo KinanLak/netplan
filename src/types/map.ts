@@ -227,7 +227,13 @@ export interface MapInteractionState {
   isOverlayPanelOpen: boolean;
   /** Personal and per session: hiding the calque changes nothing for others. */
   isOverlayHidden: boolean;
+  /** The calque as a gesture in progress shows it, committed on release. */
+  overlayDraft: OverlayDraft | null;
 }
+
+export type OverlayDraft = Partial<
+  Pick<FloorOverlay, "center" | "scale" | "rotation" | "opacity">
+>;
 
 export interface MapInteractionActions {
   setCurrentBuilding: (buildingId: BuildingId | null) => void;
@@ -245,6 +251,7 @@ export interface MapInteractionActions {
   setHighlightedDevices: (deviceIds: Array<DeviceId>) => void;
   setOverlayPanelOpen: (open: boolean) => void;
   toggleOverlayHidden: () => void;
+  setOverlayDraft: (draft: OverlayDraft | null) => void;
 }
 
 export type MapStore = MapInteractionState & MapInteractionActions;

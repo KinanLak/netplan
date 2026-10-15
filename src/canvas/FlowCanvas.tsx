@@ -32,6 +32,7 @@ import { useCanvasDeviceNodes } from "@/canvas/hooks/useCanvasDeviceNodes";
 import { useCanvasDragState } from "@/canvas/hooks/useCanvasDragState";
 import { useCanvasKeyboardShortcuts } from "@/canvas/hooks/useCanvasKeyboardShortcuts";
 import { FloorOverlayLayer } from "@/overlay/FloorOverlayLayer";
+import { OverlayGizmo } from "@/overlay/OverlayGizmo";
 import { OverlayPanel } from "@/overlay/OverlayPanel";
 import { OverlayVisibilityButton } from "@/overlay/OverlayVisibilityButton";
 import {
@@ -382,6 +383,7 @@ export default function FlowCanvas() {
           >
             <FlowCanvasBackground />
             <FloorOverlayLayer />
+            <OverlayGizmo />
 
             <WallInteractionLayer bridge={paneBridge} floorWalls={floorWalls} />
           </ReactFlow>
