@@ -253,6 +253,19 @@ jobs:
           echo
           curl --fail --silent --show-error --output /dev/null http://127.0.0.1:3000/
 
+      # The image builds without .gitignore; the server must still link the
+      # stylesheets the client build emitted.
+      - name: Server-rendered stylesheets are served
+        run: |
+          hrefs="$(curl --fail --silent --show-error http://127.0.0.1:3000/ \
+            | grep --only-matching '<link rel="stylesheet" href="[^"]*"' \
+            | sed 's/.*href="//; s/"$//')"
+          test -n "$hrefs"
+          for href in $hrefs; do
+            echo "$href"
+            curl --fail --silent --show-error --output /dev/null "http://127.0.0.1:3000$href"
+          done
+
       - name: App logs
         if: always()
         run: docker logs netplan-app || true
