@@ -115,6 +115,16 @@ export const availableDevicesCatalog: Record<
       },
     },
   ],
+  "patch-panel": [
+    {
+      id: "catalog-patch-panel-1",
+      type: "patch-panel",
+      name: "Panneau 24 ports Cat6",
+      model: "Patch panel 24 x RJ45 Cat6",
+      size: { width: 200, height: 40 },
+      metadata: { model: "Patch panel 24 x RJ45 Cat6" },
+    },
+  ],
   pc: [
     {
       id: "catalog-pc-1",
@@ -155,6 +165,29 @@ export const availableDevicesCatalog: Record<
       ip: "192.168.1.x",
       size: { width: 80, height: 80 },
       metadata: { model: 'iMac 24" M1', status: "unknown" },
+    },
+  ],
+  endpoint: [
+    {
+      id: "catalog-endpoint-1",
+      type: "endpoint",
+      name: "Terminal",
+      size: { width: 80, height: 80 },
+      metadata: { status: "unknown" },
+    },
+    {
+      id: "catalog-endpoint-2",
+      type: "endpoint",
+      name: "Imprimante réseau",
+      size: { width: 80, height: 80 },
+      metadata: { status: "unknown" },
+    },
+    {
+      id: "catalog-endpoint-3",
+      type: "endpoint",
+      name: "Téléphone IP",
+      size: { width: 80, height: 80 },
+      metadata: { status: "unknown" },
     },
   ],
   "wall-port": [

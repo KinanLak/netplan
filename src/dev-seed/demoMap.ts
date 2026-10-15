@@ -150,6 +150,39 @@ const createFloorBuilder = (floorId: FloorId, slug: string) => {
       });
     },
 
+    patchPanel(key: string, name: string, position: Position) {
+      return addDevice({
+        key,
+        type: "patch-panel",
+        name,
+        position,
+        size: { width: 200, height: 40 },
+        metadata: { model: "Panneau 24 ports Cat6" },
+      });
+    },
+
+    endpoint(
+      key: string,
+      name: string,
+      position: Position,
+      options: { model: string; ip: string; mac: string },
+    ) {
+      return addDevice({
+        key,
+        type: "endpoint",
+        name,
+        hostname: `demo-${key}`,
+        position,
+        size: { width: 80, height: 80 },
+        metadata: {
+          model: options.model,
+          ip: options.ip,
+          macs: [options.mac],
+          status: "up",
+        },
+      });
+    },
+
     pc(input: PcInput, ipPrefix: string, macPrefix: string) {
       hostCount += 1;
       const suffix = hostCount.toString(16).padStart(2, "0");
@@ -230,10 +263,11 @@ const groundFloor = (floorId: FloorId): Array<BatchSubOperation> => {
       model: "Cisco Catalyst 9200-48",
       ip: "192.0.2.11",
       portCount: 48,
-      activePorts: 9,
+      activePorts: 10,
     },
   );
   floor.link(core, access, { from: "port-1", to: "port-48", label: "Uplink" });
+  floor.patchPanel("brassage-a", "Brassage A", { x: 260, y: 260 });
 
   floor.room({ x: 530, y: 10 }, { x: 1130, y: 410 }, "sand", [
     { x: 530, y: 350 },
@@ -302,6 +336,22 @@ const groundFloor = (floorId: FloorId): Array<BatchSubOperation> => {
   });
   floor.link(access, meetingSocket, { from: "port-9" });
   floor.link(meetingSocket, meetingPc);
+  const printerSocket = floor.socket("prise-imprimante", "Prise Imprimante", {
+    x: 60,
+    y: 600,
+  });
+  const printer = floor.endpoint(
+    "imprimante",
+    "Imprimante",
+    { x: 40, y: 500 },
+    {
+      model: "Brother HL-L6210DW",
+      ip: "198.51.100.40",
+      mac: "02:6e:70:00:03:01",
+    },
+  );
+  floor.link(access, printerSocket, { from: "port-10" });
+  floor.link(printerSocket, printer);
 
   return floor.operations();
 };

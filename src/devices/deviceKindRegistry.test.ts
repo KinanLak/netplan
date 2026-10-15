@@ -97,6 +97,8 @@ describe("device kind registry", () => {
       rack: deviceKindRegistry.rack.label,
       switch: deviceKindRegistry.switch.label,
       "wall-port": deviceKindRegistry["wall-port"].label,
+      "patch-panel": deviceKindRegistry["patch-panel"].label,
+      endpoint: deviceKindRegistry.endpoint.label,
     });
   });
 });

@@ -24,7 +24,13 @@ export type ObjectKind = "building" | "floor" | "device" | "wall" | "link";
 
 // ── Domain enums ─────────────────────────────────────────────────────────────
 
-export type DeviceType = "rack" | "switch" | "pc" | "wall-port";
+export type DeviceType =
+  | "rack"
+  | "switch"
+  | "patch-panel"
+  | "pc"
+  | "endpoint"
+  | "wall-port";
 export type DrawTool = "device" | "wall" | "wall-brush" | "wall-erase" | "room";
 export type WallColor = "sand" | "concrete" | "slate";
 export type DeviceStatus = "up" | "down" | "unknown";
