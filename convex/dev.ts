@@ -36,6 +36,16 @@ export const assertSeedable = () => {
   }
 };
 
+// An existing demo site is kept as it is, so a user's change to it, or a new
+// version of DEMO_SITE, does not make every later start fail.
+const ensureSite = async (ctx: MutationCtx): Promise<string> => {
+  const existing = await ctx.db
+    .query("sites")
+    .withIndex("by_object_id", (q) => q.eq("objectId", DEMO_SITE.objectId))
+    .unique();
+  return existing ? existing.objectId : await insertSite(ctx, DEMO_SITE);
+};
+
 const ensureBuilding = async (ctx: MutationCtx, siteId: string) => {
   const existing = await ctx.db
     .query("buildings")
@@ -67,27 +77,57 @@ const ensureFloor = async (
   });
 };
 
+const floorIsEmpty = async (ctx: MutationCtx, floorId: string) => {
+  const [device, wall] = await Promise.all([
+    ctx.db
+      .query("devices")
+      .withIndex("by_floor", (q) => q.eq("floorId", floorId))
+      .first(),
+    ctx.db
+      .query("walls")
+      .withIndex("by_floor", (q) => q.eq("floorId", floorId))
+      .first(),
+  ]);
+  return !device && !wall;
+};
+
+const lastSeedSeq = async (ctx: MutationCtx) => {
+  const last = await ctx.db
+    .query("clientOperations")
+    .withIndex("by_client_seq", (q) => q.eq("clientId", SEED_CLIENT_ID))
+    .order("desc")
+    .first();
+  return last?.clientSeq ?? 0;
+};
+
 /**
- * Loads the demo site, building and map. The map goes through
- * `applyMapOperation`, so it obeys the same rules as a user's edits. Running
- * it again changes nothing: each floor's batch has a fixed operation id.
+ * Loads the demo site, building and map, filling only what is missing: a
+ * floor is drawn while it is empty, so a cleared map comes back and a user's
+ * edits stay. A change to the demo data reaches an existing backend through
+ * `dev:agent --reseed`. The map goes through `applyMapOperation`, so it obeys
+ * the same rules as a user's edits.
  */
 export const seed = internalMutation({
   args: {},
   returns: v.object({ buildingId: v.string(), floorIds: v.array(v.string()) }),
   handler: async (ctx) => {
     assertSeedable();
-    const siteId = await insertSite(ctx, DEMO_SITE);
+    const siteId = await ensureSite(ctx);
     await ensureBuilding(ctx, siteId);
     const floors = buildDemoFloors();
-    for (const [index, floor] of floors.entries()) {
+    // Operation ids are never reused, or a cleared floor's batch would be
+    // answered from the record of the first seed and draw nothing.
+    let seq = await lastSeedSeq(ctx);
+    for (const floor of floors) {
       await ensureFloor(ctx, floor);
+      if (!(await floorIsEmpty(ctx, floor.id))) continue;
+      seq += 1;
       const result = await applyMapOperation(ctx, {
         kind: "batch",
         meta: {
-          opId: `${SEED_CLIENT_ID}:${floor.id}`,
+          opId: `${SEED_CLIENT_ID}:${seq}`,
           clientId: SEED_CLIENT_ID,
-          clientSeq: index + 1,
+          clientSeq: seq,
           createdAt: Date.now(),
         },
         operations: floor.operations,

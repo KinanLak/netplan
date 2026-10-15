@@ -8,6 +8,7 @@ export const GENERATED_ENV_HEADER =
 /** Labels on every container and volume `dev:agent` creates. */
 export const ROLE_LABEL = "netplan.role=dev-backend";
 export const WORKTREE_LABEL = "netplan.worktree";
+export const OWNER_LABEL = "netplan.owner";
 
 // Chrome refuses to load these; 3659 is the only one in the web port range.
 const BROWSER_BLOCKED_PORTS = new Set([3659]);
@@ -62,19 +63,26 @@ export const nextBackendPorts = (
 export const isGeneratedEnvFile = (text: string): boolean =>
   text.startsWith(GENERATED_ENV_HEADER);
 
+// Single-quoted, so a shell can load the file too (`set -a; . .env.local`):
+// an admin key holds a `|`. Vite, Bun and the Convex CLI read it the same.
 export const renderEnvFile = (values: Record<string, string>): string =>
   [
     GENERATED_ENV_HEADER,
-    ...Object.entries(values).map(([name, value]) => `${name}=${value}`),
+    ...Object.entries(values).map(([name, value]) => {
+      if (value.includes("'")) throw new Error(`${name} holds a quote`);
+      return `${name}='${value}'`;
+    }),
     "",
   ].join("\n");
 
-/** `NAME=value` lines, as `convex env list` prints them. */
+/** `NAME=value` lines, as `convex env list` prints them or quoted. */
 export const parseEnvLines = (text: string): Map<string, string> => {
   const values = new Map<string, string>();
   for (const line of text.split("\n")) {
     const match = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/.exec(line.trim());
-    if (match) values.set(match[1], match[2]);
+    if (!match) continue;
+    const quoted = /^'([^']*)'$/.exec(match[2]);
+    values.set(match[1], quoted ? quoted[1] : match[2]);
   }
   return values;
 };

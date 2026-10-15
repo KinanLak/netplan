@@ -48,7 +48,8 @@ canonical change over compatibility shims.
 `bun run dev:agent` gives each checkout its own self-hosted Convex backend in
 Docker (ADR 0018), seeds a demo site, and runs Convex and Vite on ports derived
 from the worktree path. It prints a banner with the app URL; `--status`
-prints it again, `--reseed` starts from an empty backend, `--down` removes the
+prints it again, `--reseed` (app stopped) starts from an empty backend,
+`--down` removes the
 backend and its data. The skill `test-netplan-app` says how to check a change
 in a browser with it.
 
@@ -56,13 +57,14 @@ in a browser with it.
   not write. Never point `.env.local` at a shared deployment by hand.
 - The seed (`convex/dev.ts`, data in `src/dev-seed/`) runs only where
   `ALLOW_DEV_SEED=true` and goes through `applyMapOperation`, so it obeys the
-  same validation as users. A new seed function must be idempotent and is
+  same validation as users. It fills only what is missing, so a change to the
+  demo data needs `--reseed`. A new seed function must be idempotent and is
   listed in `scripts/dev-agent.ts`.
 - `src/` files imported by `convex/` use relative imports: Convex bundles
   them without the `@/` alias.
 - The backend keeps running when the command stops, so the next run is fast;
-  its container and volume are labelled `netplan.worktree=<path>` and removed
-  once that path is gone.
+  its container and volume are labelled `netplan.worktree=<path>` and
+  `netplan.owner=<uid>`, and removed once that path is gone.
 
 ## The three ways to hurt yourself
 

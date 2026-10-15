@@ -19,6 +19,7 @@ bun run dev:agent --status
 ```
 
 - `running` with an `App` line that answers: reuse it, do not start another.
+  `--status` checks that the server at that URL serves this worktree.
 - Otherwise start it in the background and wait for the banner:
 
   ```sh
@@ -29,8 +30,10 @@ bun run dev:agent --status
   only process you may stop. The banner prints the `App` and `Convex` URLs.
   The first run pulls the image and creates the backend; later runs reuse
   them.
-- `--reseed` starts again from an empty backend, for a test that changed the
-  data and must not leave it behind. `--down` removes the backend and its data.
+- Every run puts back what is missing from the seed: a cleared map, a deleted
+  floor. `--reseed` starts again from an empty backend; it refuses while the
+  app runs, so stop your process first. `--down` removes the backend and its
+  data.
 
 Expected noise: React Flow's attribution warning, React Scan's update notice
 and a software-renderer notice in a headless browser. Anything else in the
@@ -61,8 +64,8 @@ floors, and in a second tab when the change should reach other users live.
 
 ## 3. Leave it clean
 
-- Undo or `--reseed` what you broke on purpose, so the next check starts from
-  the seed.
+- Undo what you broke on purpose, or stop your process and `--reseed`, so the
+  next check starts from the seed.
 - Stop only the process you started. Never kill by name or pattern; another
   worktree's Vite and Convex look exactly like yours.
 - Leave the backend running unless asked: the next run reuses it, and

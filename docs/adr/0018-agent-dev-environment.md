@@ -24,11 +24,14 @@ ADR 0002. So every worktree gets a private backend:
   Convex URL.
 - It sets `ALLOW_DEV_SEED=true` on that backend only, pushes the functions,
   runs the seed, then runs `convex dev` and Vite and prints a banner with the
-  URLs. The seed is idempotent, so every run brings a fresh or older backend
-  up to the current fictional site; `--reseed` starts from an empty one.
-- The container is labelled `netplan.worktree=<path>` and survives the
-  command; `--down` removes it with its volume, and each run removes labelled
-  containers and volumes whose worktree no longer exists.
+  URLs. The seed fills what is missing on every run (a site, a building, an
+  empty floor) and leaves the rest alone, so a cleared map comes back and
+  edits stay; a change to the demo data reaches an existing backend through
+  `--reseed`, which starts from an empty one.
+- The container is labelled `netplan.worktree=<path>` and
+  `netplan.owner=<uid>` and survives the command; `--down` removes it with its
+  volume, and each run removes the account's labelled containers and volumes
+  whose worktree no longer exists.
 
 The seed goes through the same server validation as user edits, so it can
 never hold a map the app would reject. It invents everything: no real

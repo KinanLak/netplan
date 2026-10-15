@@ -84,4 +84,26 @@ describe("dev seed", () => {
     ).toEqual(revisionsBefore);
     expect(await t.query(api.sites.list, {})).toHaveLength(1);
   });
+
+  it("draws a cleared map again and keeps a changed demo site", async () => {
+    const t = convexTest(schema, modules);
+    process.env.ALLOW_DEV_SEED = "true";
+    const { floorIds } = await t.mutation(internal.dev.seed, {});
+    const seeded = await Promise.all(floorIds.map((id) => countFloor(t, id)));
+    await t.mutation(api.buildings.clearMap, { siteId: "site:demo" });
+    await t.mutation(internal.sites.setEnabled, {
+      siteId: "site:demo",
+      enabled: true,
+    });
+
+    await t.mutation(internal.dev.seed, {});
+
+    expect(await Promise.all(floorIds.map((id) => countFloor(t, id)))).toEqual(
+      seeded,
+    );
+    const sites = await t.query(api.sites.list, {});
+    expect(sites.map((site) => [site.id, site.enabled])).toEqual([
+      ["site:demo", true],
+    ]);
+  });
 });

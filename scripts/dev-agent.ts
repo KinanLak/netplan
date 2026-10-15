@@ -2,7 +2,7 @@
 // worktrees (ADR 0018, AGENTS.md "Local instance"):
 //   bun run dev:agent            set up if needed, then run Convex and Vite
 //   bun run dev:agent --setup    set up only
-//   bun run dev:agent --reseed   start again from an empty backend
+//   bun run dev:agent --reseed   start again from an empty backend (app stopped)
 //   bun run dev:agent --status   print this worktree's URLs
 //   bun run dev:agent --down     remove this worktree's backend and data
 // The backend is a Docker container of the pinned self-hosted image, with
@@ -10,10 +10,11 @@
 // path. It keeps running when this command stops.
 import {
   chmodSync,
-  existsSync,
   lstatSync,
   realpathSync,
   rmSync,
+  statSync,
+  writeFileSync,
 } from "node:fs";
 import { join, resolve } from "node:path";
 import type { Subprocess } from "bun";
@@ -23,6 +24,7 @@ import {
   isLoopbackUrl,
 } from "./lib/convexBackend";
 import {
+  OWNER_LABEL,
   ROLE_LABEL,
   WORKTREE_LABEL,
   isGeneratedEnvFile,
@@ -45,6 +47,9 @@ const WEB_URL_KEY = "NETPLAN_DEV_WEB_URL";
 const root = realpathSync(resolve(import.meta.dir, ".."));
 const envPath = join(root, ".env.local");
 const name = resourceName(root);
+// Docker is shared by every account on the host: orphan collection only
+// considers this account's backends.
+const owner = `${OWNER_LABEL}=${process.getuid?.() ?? "unknown"}`;
 const flags = new Set(Bun.argv.slice(2));
 const children: Array<Subprocess> = [];
 
@@ -68,6 +73,14 @@ for (const [key, value] of Object.entries(process.env)) {
   if (key.startsWith("CONVEX_") || key.startsWith("VITE_CONVEX_")) continue;
   baseEnv[key] = value;
 }
+// The Convex CLI also reads `.env` itself, where a deploy key would win over
+// the self-hosted URL and send the push and the seed to a real deployment.
+// It treats an empty value as unset, and dotenv never overrides one.
+const convexIsolation = {
+  CONVEX_DEPLOY_KEY: "",
+  CONVEX_DEPLOYMENT_TOKEN: "",
+  CONVEX_DEPLOYMENT: "",
+};
 
 const run = async (
   command: Array<string>,
@@ -135,7 +148,18 @@ const removeBackend = async (target: string) => {
   await docker("volume", "rm", "--force", target);
 };
 
-/** Removes the backends of worktrees that no longer exist. */
+// Only a path that is certainly gone: another account's worktree is
+// unreadable, not missing.
+const isGone = (path: string) => {
+  try {
+    statSync(path);
+    return false;
+  } catch (error) {
+    return (error as { code?: string }).code === "ENOENT";
+  }
+};
+
+/** Removes this account's backends whose worktree no longer exists. */
 const collectOrphans = async () => {
   const listed = await Promise.all(
     (["container", "volume"] as const).map((kind) =>
@@ -145,6 +169,8 @@ const collectOrphans = async () => {
         ...(kind === "container" ? ["--all"] : []),
         "--filter",
         `label=${ROLE_LABEL}`,
+        "--filter",
+        `label=${owner}`,
         "--format",
         `${kind === "container" ? "{{.Names}}" : "{{.Name}}"}\t{{.Label "${WORKTREE_LABEL}"}}`,
       ),
@@ -154,7 +180,7 @@ const collectOrphans = async () => {
   for (const { out } of listed) {
     for (const line of out.split("\n").filter(Boolean)) {
       const [resource, worktree] = line.split("\t");
-      if (resource && worktree && !existsSync(worktree)) orphans.add(resource);
+      if (resource && worktree && isGone(worktree)) orphans.add(resource);
     }
   }
   for (const orphan of orphans) {
@@ -180,6 +206,8 @@ const createContainer = async (backendPort: number) => {
     ROLE_LABEL,
     "--label",
     `${WORKTREE_LABEL}=${root}`,
+    "--label",
+    owner,
   ];
   await must(
     docker("volume", "create", ...labels, name),
@@ -263,8 +291,8 @@ const readOwnEnvFile = async (): Promise<string | undefined> => {
 const writeEnvFile = async (values: Record<string, string>) => {
   const text = renderEnvFile(values);
   if ((await readOwnEnvFile()) === text) return;
-  await Bun.write(envPath, text);
-  // It holds the admin key.
+  // It holds the admin key: never readable by others, even briefly.
+  writeFileSync(envPath, text, { mode: 0o600 });
   chmodSync(envPath, 0o600);
 };
 
@@ -273,6 +301,11 @@ const webAnswers = (url: string) =>
     (response) => response.ok,
     () => false,
   );
+
+// A recorded URL may since belong to another checkout's server. Vite serves
+// files of its own workspace by absolute path and refuses any other.
+const servesThisWorktree = (url: string) =>
+  webAnswers(`${url}/@fs${root}/package.json`);
 
 // ── Commands ─────────────────────────────────────────────────────────────────
 
@@ -303,16 +336,22 @@ if (flags.has("--status")) {
     `${name}: ${container.running ? "running" : "stopped"}\n` +
       `  Convex   ${convex}${silent(await backendAnswers(convex))}`,
   );
-  if (web) console.log(`  App      ${web}${silent(await webAnswers(web))}`);
+  if (web) {
+    console.log(`  App      ${web}${silent(await servesThisWorktree(web))}`);
+  }
   process.exit(0);
 }
 
 if (!(await docker("version", "--format", "{{.Server.Version}}")).ok) {
   fail("Docker is not available; the local backend runs in a container.");
 }
-await readOwnEnvFile();
+const recorded = parseEnvLines((await readOwnEnvFile()) ?? "").get(WEB_URL_KEY);
 await collectOrphans();
 if (flags.has("--reseed")) {
+  // Its `convex dev` would keep pushing with the removed backend's key.
+  if (recorded && (await servesThisWorktree(recorded))) {
+    fail(`the app is running at ${recorded}; stop it before --reseed.`);
+  }
   console.log(`dev:agent: removing ${name} to start from an empty backend.`);
   await removeBackend(name);
 }
@@ -327,6 +366,7 @@ if (!isLoopbackUrl(convexUrl)) fail(`${convexUrl} is not on this machine.`);
 const convexCliWith = (env: Record<string, string>, args: Array<string>) =>
   run([join(root, "node_modules/.bin/convex"), ...args], {
     ...baseEnv,
+    ...convexIsolation,
     ...env,
   });
 
@@ -378,7 +418,7 @@ const servedUrl = flags.has("--setup") ? previous.get(WEB_URL_KEY) : webUrl;
 await writeEnvFile(
   servedUrl ? { ...convexValues, [WEB_URL_KEY]: servedUrl } : convexValues,
 );
-const childEnv = { ...baseEnv, ...convexValues };
+const childEnv = { ...baseEnv, ...convexIsolation, ...convexValues };
 const convexCli = (...args: Array<string>) => convexCliWith(convexValues, args);
 
 const watch = (child: Subprocess) => {

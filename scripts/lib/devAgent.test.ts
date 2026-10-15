@@ -70,6 +70,21 @@ describe("env files", () => {
     );
   });
 
+  it("writes values a shell loads unchanged", async () => {
+    const value = "local|0a1b2c"; // gitleaks:allow
+    const file = `${process.env.TMPDIR ?? "/tmp"}/netplan-env-${Bun.hash(value)}`;
+    await Bun.write(file, renderEnvFile({ KEY: value }));
+    const shell = Bun.spawnSync([
+      "sh",
+      "-c",
+      'set -a; . "$0"; set +a; printf %s "$KEY"',
+      file,
+    ]);
+    await Bun.file(file).delete();
+    expect(shell.stdout.toString()).toBe(value);
+    expect(parseEnvLines(renderEnvFile({ KEY: value })).get("KEY")).toBe(value);
+  });
+
   it("parses `convex env list` lines, keeping `=` inside values", () => {
     expect(parseEnvLines("ALLOW_DEV_SEED=true\nTOKEN=a=b\n\nnoise\n")).toEqual(
       new Map([
