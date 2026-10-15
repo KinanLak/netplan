@@ -1,4 +1,4 @@
-import { describe, expect, it, spyOn } from "bun:test";
+import { describe, expect, it, jest } from "bun:test";
 import { convexTest } from "convex-test";
 import type { Infer } from "convex/values";
 import schema from "./schema";
@@ -847,12 +847,21 @@ describe("site-scoped integration foundations", () => {
   });
 
   it("publishes explicit resolved, missing, and offline computer states", async () => {
-    // convex-test runs scheduled functions on real timers. Hold the projection
-    // worker so the queued states asserted below cannot race with it.
-    using _heldScheduler = spyOn(globalThis, "setTimeout").mockReturnValue(
-      0 as unknown as ReturnType<typeof setTimeout>,
-    );
+    // convex-test runs scheduled functions on timers. Fake them so the
+    // projection worker stays queued while the states below are asserted,
+    // then drain it: Bun breaks later zero-delay timers if a pending fake
+    // timer is dropped instead of run.
+    jest.useFakeTimers();
     const t = convexTest(schema, modules);
+    await using _drainedScheduler = {
+      [Symbol.asyncDispose]: async () => {
+        try {
+          await t.finishAllScheduledFunctions(() => jest.runAllTimers());
+        } finally {
+          jest.useRealTimers();
+        }
+      },
+    };
     const siteId = await createSite(t, "computer-states");
     const generation = await publishNetBox(t, siteId, "computer-states");
     await t.run(async (ctx) => {
