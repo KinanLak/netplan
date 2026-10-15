@@ -8,3 +8,28 @@ export const siteCadence = v.object({
   businessEndMinute: v.number(),
   businessDays: v.array(v.number()),
 });
+
+/** `IntegrationKind` from `src/sites/integrations.ts`. */
+export const integrationKind = v.union(
+  v.literal("netbox"),
+  v.literal("librenms"),
+);
+
+/** `EncryptedSecret` from `convex/lib/secrets.ts`. */
+export const encryptedSecret = v.object({
+  keyId: v.string(),
+  iv: v.string(),
+  ciphertext: v.string(),
+});
+
+/** What "Tester la connexion" answered. */
+export const connectionResult = v.object({
+  ok: v.boolean(),
+  message: v.string(),
+});
+
+export const connectionCheck = v.object({
+  ok: v.boolean(),
+  message: v.string(),
+  at: v.number(),
+});

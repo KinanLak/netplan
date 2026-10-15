@@ -17,3 +17,7 @@ SMTP_SECURE
 SMTP_USER
 SMTP_PASSWORD
 SMTP_FROM
+# Integration tokens (ADR 0023): base64 of 32 random bytes. The previous key
+# only decrypts, during a rotation.
+NETPLAN_SECRET_KEY
+NETPLAN_SECRET_KEY_PREVIOUS

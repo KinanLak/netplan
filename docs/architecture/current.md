@@ -68,7 +68,10 @@ holds its name, unique ignoring case, its time zone and the cadence its
 collection cycle will follow; `src/sites/settings.ts` holds the rules both the
 form and the server apply. A site with a building cannot be removed. The map
 shows the site the `?site=` parameter names, the first one by name otherwise,
-and the sidebar switches between them. No site has an integration yet. The
+and the sidebar switches between them. A site may connect one NetBox and one
+LibreNMS: the admin enters an address and a token, which actions encrypt with
+`NETPLAN_SECRET_KEY` before storing and no function returns, and the page tests
+the connection. Nothing collects from them yet. The
 plan of the deleted localization pipeline is frozen in
 [`docs/history/2026-07-computer-location-refresh/`](../history/2026-07-computer-location-refresh/README.md).
 

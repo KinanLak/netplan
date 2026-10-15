@@ -3,6 +3,10 @@
 //   bun run dev:agent            set up if needed, then run Convex and Vite
 //   bun run dev:agent --setup    set up only
 //   bun run dev:agent --reseed   start again from an empty backend (app stopped)
+//   bun run dev:agent --integrations
+//                                also connect the demo site to the NetBox and
+//                                LibreNMS named by NETBOX_URL/TOKEN and
+//                                LIBRENMS_URL/TOKEN in this environment
 //   bun run dev:agent --status   print this worktree's URLs
 //   bun run dev:agent --down     remove this worktree's backend and data
 // The backend is a Docker container of the pinned self-hosted image, with
@@ -31,6 +35,7 @@ import {
   ROLE_LABEL,
   WORKTREE_LABEL,
   backendOf,
+  integrationSeedArgs,
   isGeneratedEnvFile,
   mailName,
   nextBackendPorts,
@@ -364,6 +369,46 @@ const ensureMail = async (): Promise<number> => {
   return port;
 };
 
+// ── Integrations ─────────────────────────────────────────────────────────────
+
+// The tokens go in a request body with the admin key, never on a command
+// line, where the process list would show them.
+async function seedIntegrations(convexUrl: string, adminKey: string) {
+  const { args, missing } = integrationSeedArgs(process.env);
+  if (missing.length > 0) {
+    console.log(`dev:agent: --integrations: ${missing.join(", ")} not set.`);
+  }
+  if (!args.netbox && !args.librenms) return;
+  const response = await fetch(`${convexUrl}/api/function`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Convex ${adminKey}`,
+    },
+    body: JSON.stringify({
+      path: "dev:seedIntegrations",
+      format: "convex_encoded_json",
+      args,
+    }),
+  });
+  const result = (await response.json().catch(() => null)) as {
+    status?: string;
+    value?: Array<string>;
+    errorMessage?: string;
+  } | null;
+  if (result?.status !== "success") {
+    fail(
+      `dev:seedIntegrations failed: ${result?.errorMessage ?? `HTTP ${response.status}`}`,
+    );
+  }
+  const created = result?.value ?? [];
+  console.log(
+    created.length > 0
+      ? `dev:agent: connected the demo site to ${created.join(" and ")}.`
+      : "dev:agent: the demo site already has its integrations.",
+  );
+}
+
 // ── .env.local ───────────────────────────────────────────────────────────────
 
 const readOwnEnvFile = async (): Promise<string | undefined> => {
@@ -563,6 +608,11 @@ const authEnv: Record<string, string> = {
 if (!variables.get("BETTER_AUTH_SECRET")) {
   authEnv.BETTER_AUTH_SECRET = randomBytes(32).toString("base64url");
 }
+// The same for the key that encrypts integration tokens: a new one would
+// leave the stored tokens unreadable.
+if (!variables.get("NETPLAN_SECRET_KEY")) {
+  authEnv.NETPLAN_SECRET_KEY = randomBytes(32).toString("base64");
+}
 for (const [key, value] of Object.entries(authEnv)) {
   if (variables.get(key) === value) continue;
   // Through stdin, so a secret never reaches a process list.
@@ -589,6 +639,9 @@ await must(
 );
 for (const seed of SEED_FUNCTIONS) {
   await must(convexCli("run", seed), `convex run ${seed}`);
+}
+if (flags.has("--integrations")) {
+  await seedIntegrations(convexUrl, adminKey ?? "");
 }
 
 if (flags.has("--setup")) {

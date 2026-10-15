@@ -2,14 +2,16 @@
 // sets ALLOW_DEV_SEED=true, which `bun run dev:agent` and the CI end-to-end
 // job do and no real installation does (ADR 0018).
 import { ConvexError, v } from "convex/values";
-import { components } from "./_generated/api";
+import { components, internal } from "./_generated/api";
 import { internalAction, internalMutation } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
 import { applyMapOperation } from "./mapOperations";
 import { insertSite } from "./sites";
+import { seedConnection } from "./integrations";
 import { createAuth } from "./auth";
 import { DEV_ACCOUNTS, DEV_PASSWORD } from "../src/dev-seed/accounts";
 import { DEMO_BUILDING, buildDemoFloors } from "../src/dev-seed/demoMap";
+import { INTEGRATION_KINDS } from "../src/sites/integrations";
 
 const SEED_CLIENT_ID = "dev-seed";
 
@@ -163,6 +165,41 @@ export const seedAccounts = internalAction({
         },
       });
       created.push(account.username);
+    }
+    return created;
+  },
+});
+
+const seedConnectionArgs = v.optional(
+  v.object({ url: v.string(), token: v.string() }),
+);
+
+/**
+ * Connects the demo site to real tools, for `dev:agent --integrations`,
+ * which passes what it read from its own environment. A connection the demo
+ * site already has is left as it is.
+ */
+export const seedIntegrations = internalAction({
+  args: { netbox: seedConnectionArgs, librenms: seedConnectionArgs },
+  returns: v.array(v.string()),
+  handler: async (ctx, args) => {
+    assertSeedable();
+    const created: Array<string> = [];
+    for (const kind of INTEGRATION_KINDS) {
+      const connection = args[kind];
+      if (!connection) continue;
+      const existing = await ctx.runQuery(internal.integrations.credentials, {
+        siteId: DEMO_SITE.objectId,
+        kind,
+      });
+      if (existing) continue;
+      await seedConnection(ctx, {
+        siteId: DEMO_SITE.objectId,
+        kind,
+        baseUrl: connection.url,
+        token: connection.token,
+      });
+      created.push(kind);
     }
     return created;
   },
