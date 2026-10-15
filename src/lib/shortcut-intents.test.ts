@@ -17,6 +17,7 @@ const did = (s: string) => s as DeviceId;
 
 const baseRuntime: ShortcutIntentRuntime = {
   activeDrawTool: "device",
+  canEdit: true,
   currentFloorId: "floor-1",
   isEditMode: true,
   isInputFocused: false,
@@ -85,6 +86,29 @@ describe("shortcut intents", () => {
     ).toBe("cancel-wall-tool");
 
     expect(resolveAction({ actions, event: escape })).toBe("escape");
+  });
+
+  it("gives a reader no way into edit mode or its actions", () => {
+    const reader = { ...baseRuntime, canEdit: false, isEditMode: false };
+    const toggle = keyEvent({ code: "KeyE", key: "e" });
+
+    expect(
+      resolveAction({ actions: ["toggle-edit-mode"], event: toggle }),
+    ).toBe("toggle-edit-mode");
+    expect(
+      resolveAction({
+        actions: ["toggle-edit-mode"],
+        event: toggle,
+        runtime: reader,
+      }),
+    ).toBe(null);
+    expect(
+      resolveAction({
+        actions: ["delete-device"],
+        event: keyEvent({ code: "Delete", key: "Delete" }),
+        runtime: { ...reader, selectedDeviceId: "device-1" },
+      }),
+    ).toBe(null);
   });
 
   it("keeps drawer and canvas scope exclusive", () => {

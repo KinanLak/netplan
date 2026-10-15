@@ -1,7 +1,12 @@
 import { describe, expect, it } from "bun:test";
 import type { DeviceId, FloorId } from "@/types/map";
 import type { MapOperation } from "@/map-engine/types";
-import { SequentialOutbox } from "./outbox";
+import { ConvexError } from "convex/values";
+import {
+  FORBIDDEN_REJECTION,
+  SequentialOutbox,
+  rejectingForbidden,
+} from "./outbox";
 import type { OutboxApplyResult } from "./outbox";
 
 const floorId = "floor:a" as FloorId;
@@ -29,6 +34,48 @@ const tick = () =>
   new Promise<void>((resolve) => queueMicrotask(() => resolve()));
 
 describe("SequentialOutbox", () => {
+  it("rejects an operation the server refuses for the user's role, without retrying", async () => {
+    const sent: Array<string> = [];
+    const rejected: Array<[string, string]> = [];
+    const failures: Array<string> = [];
+    const outbox = new SequentialOutbox({
+      send: rejectingForbidden((item) => {
+        sent.push(item.meta.opId);
+        return Promise.reject(new ConvexError({ code: "forbidden" }));
+      }),
+      onAck: () => {},
+      onReject: (item, error) => rejected.push([item.meta.opId, error]),
+      onNetworkFailure: (item) => failures.push(item.meta.opId),
+      retry: { baseDelayMs: 1, jitterRatio: 0, random: () => 0 },
+    });
+
+    outbox.enqueue(operation(1));
+    await tick();
+    await tick();
+
+    expect(sent).toEqual(["op:test:1"]);
+    expect(rejected).toEqual([["op:test:1", FORBIDDEN_REJECTION]]);
+    expect(failures).toEqual([]);
+  });
+
+  it("still retries other failures behind the role check", async () => {
+    const failures: Array<string> = [];
+    const outbox = new SequentialOutbox({
+      send: rejectingForbidden(() => Promise.reject(new Error("offline"))),
+      onAck: () => {},
+      onReject: () => {},
+      onNetworkFailure: (item) => failures.push(item.meta.opId),
+      retry: { baseDelayMs: 60_000, jitterRatio: 0, random: () => 0 },
+    });
+
+    outbox.enqueue(operation(1));
+    await tick();
+    await tick();
+
+    expect(failures).toEqual(["op:test:1"]);
+    outbox.dispose();
+  });
+
   it("flushes operations sequentially in dispatch order", async () => {
     const sent: Array<string> = [];
     const acked: Array<string> = [];

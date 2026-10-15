@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ReactFlowProvider } from "@xyflow/react";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Edit01Icon, Tick01Icon } from "@hugeicons/core-free-icons";
+import { Edit01Icon, Tick01Icon, ViewIcon } from "@hugeicons/core-free-icons";
 import { useEffect, useMemo } from "react";
 import { useQuery } from "convex/react";
 import FlowCanvas from "@/canvas/FlowCanvas";
@@ -28,6 +28,7 @@ import {
   ShortcutIntentProvider,
   useShortcutIntentEffect,
 } from "@/hooks/use-shortcuts";
+import { useCanEdit } from "@/hooks/use-current-user";
 import { ShortcutsDialog } from "@/components/shortcuts-dialog";
 import { ShortcutHintAbsolute } from "@/components/ui/shortcut-hint";
 import { getNextConnectionHighlightIds } from "@/lib/shortcut-intents";
@@ -116,6 +117,7 @@ function MapWorkspace({ sortedFloors }: { sortedFloors: Array<Floor> }) {
   const currentFloorId = useCurrentFloorId();
   const selectedDeviceId = useSelectedDeviceId();
   const isEditMode = useIsEditMode();
+  const canEdit = useCanEdit();
   const isReady = useMapDocumentReady();
   const { commands, undo, redo, getDocument } = useMapDocumentActions();
 
@@ -157,7 +159,7 @@ function MapWorkspace({ sortedFloors }: { sortedFloors: Array<Floor> }) {
   };
 
   const deleteSelectedDevice = () => {
-    if (!selectedDeviceId || !isReady) return;
+    if (!selectedDeviceId || !isReady || !isEditMode) return;
     commands.deleteDevice(selectedDeviceId);
     selectDevice(null);
   };
@@ -210,44 +212,59 @@ function MapWorkspace({ sortedFloors }: { sortedFloors: Array<Floor> }) {
         </ReactFlowProvider>
 
         <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
-          <button
-            onClick={toggleEditMode}
-            disabled={!currentFloorId || !isReady}
-            className={`relative flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium shadow-lg transition-all ${
-              isEditMode
-                ? "border-accent bg-accent text-accent-foreground"
-                : "border-primary bg-primary text-primary-foreground"
-            } `}
-            title={
-              isEditMode ? "Terminer les modifications" : "Modifier le plan"
-            }
-          >
-            {isEditMode ? (
-              <>
-                <HugeiconsIcon
-                  icon={Tick01Icon}
-                  size={20}
-                  color="currentColor"
-                  strokeWidth={1.5}
-                />
-                Terminer
-              </>
-            ) : (
-              <>
-                <HugeiconsIcon
-                  icon={Edit01Icon}
-                  size={20}
-                  color="currentColor"
-                  strokeWidth={1.5}
-                />
-                Modifier
-              </>
-            )}
-            <ShortcutHintAbsolute
-              action="toggle-edit-mode"
-              position="bottom-right"
-            />
-          </button>
+          {canEdit ? (
+            <button
+              onClick={toggleEditMode}
+              disabled={!currentFloorId || !isReady}
+              className={`relative flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium shadow-lg transition-all ${
+                isEditMode
+                  ? "border-accent bg-accent text-accent-foreground"
+                  : "border-primary bg-primary text-primary-foreground"
+              } `}
+              title={
+                isEditMode ? "Terminer les modifications" : "Modifier le plan"
+              }
+            >
+              {isEditMode ? (
+                <>
+                  <HugeiconsIcon
+                    icon={Tick01Icon}
+                    size={20}
+                    color="currentColor"
+                    strokeWidth={1.5}
+                  />
+                  Terminer
+                </>
+              ) : (
+                <>
+                  <HugeiconsIcon
+                    icon={Edit01Icon}
+                    size={20}
+                    color="currentColor"
+                    strokeWidth={1.5}
+                  />
+                  Modifier
+                </>
+              )}
+              <ShortcutHintAbsolute
+                action="toggle-edit-mode"
+                position="bottom-right"
+              />
+            </button>
+          ) : (
+            <div
+              className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-muted-foreground shadow-lg"
+              title="Votre rôle permet de consulter le plan, pas de le modifier"
+            >
+              <HugeiconsIcon
+                icon={ViewIcon}
+                size={20}
+                color="currentColor"
+                strokeWidth={1.5}
+              />
+              Lecture seule
+            </div>
+          )}
         </div>
 
         <ShortcutsDialog hasRightDrawerOpen={Boolean(selectedDeviceId)} />

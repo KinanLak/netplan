@@ -8,6 +8,7 @@ import {
   useShortcutIntentEffects,
 } from "@/hooks/use-shortcuts";
 import type { DeviceId, FloorId } from "@/types/map";
+import { SignedInAs, SignedInEditor } from "../../test/currentUser";
 import { seedMapStore } from "../../test/storeHarness";
 
 const did = (s: string) => s as DeviceId;
@@ -49,6 +50,7 @@ describe("ShortcutIntentProvider", () => {
       <ShortcutIntentProvider>
         <RegisterTool action="tool-wall" run={onWall} />
       </ShortcutIntentProvider>,
+      { wrapper: SignedInEditor },
     );
 
     dispatchKeyDown({ key: "1", code: "Digit1" });
@@ -70,6 +72,7 @@ describe("ShortcutIntentProvider", () => {
       <ShortcutIntentProvider>
         <RegisterTool action="tool-wall" run={onWall} />
       </ShortcutIntentProvider>,
+      { wrapper: SignedInEditor },
     );
 
     dispatchKeyDown({ key: "1", code: "Digit1" });
@@ -91,11 +94,35 @@ describe("ShortcutIntentProvider", () => {
       <ShortcutIntentProvider>
         <RegisterTool action="tool-pc" run={onPc} />
       </ShortcutIntentProvider>,
+      { wrapper: SignedInEditor },
     );
 
     dispatchKeyDown({ key: "7", code: "Digit7" });
 
     expect(onPc.mock.calls.length).toBe(0);
+  });
+
+  it("gives a reader no tool shortcut even with edit mode stored on", () => {
+    seedMapStore({
+      activeDrawTool: "device",
+      currentFloorId: fid("floor-1"),
+      isEditMode: true,
+      selectedDeviceId: null,
+    });
+
+    const onWall = mock(() => {});
+
+    render(
+      <SignedInAs role="reader">
+        <ShortcutIntentProvider>
+          <RegisterTool action="tool-wall" run={onWall} />
+        </ShortcutIntentProvider>
+      </SignedInAs>,
+    );
+
+    dispatchKeyDown({ key: "1", code: "Digit1" });
+
+    expect(onWall.mock.calls.length).toBe(0);
   });
 
   it("ignores keydown events whose default has already been prevented", () => {
@@ -112,6 +139,7 @@ describe("ShortcutIntentProvider", () => {
       <ShortcutIntentProvider>
         <RegisterTool action="tool-wall" run={onWall} />
       </ShortcutIntentProvider>,
+      { wrapper: SignedInEditor },
     );
 
     const event = new KeyboardEvent("keydown", {
@@ -145,6 +173,7 @@ describe("ShortcutIntentProvider", () => {
       <ShortcutIntentProvider>
         <DisabledTool run={onWall} />
       </ShortcutIntentProvider>,
+      { wrapper: SignedInEditor },
     );
 
     dispatchKeyDown({ key: "1", code: "Digit1" });
@@ -185,6 +214,7 @@ describe("useShortcutIntentEffects", () => {
       <ShortcutIntentProvider>
         <Bundle />
       </ShortcutIntentProvider>,
+      { wrapper: SignedInEditor },
     );
 
     dispatchKeyDown({ key: "1", code: "Digit1" });

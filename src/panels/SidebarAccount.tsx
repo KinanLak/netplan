@@ -1,14 +1,14 @@
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Logout01Icon } from "@hugeicons/core-free-icons";
-import { useQuery } from "convex/react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { authClient } from "@/lib/auth-client";
+import { useCurrentUser } from "@/hooks/use-current-user";
 import { ROLE_LABELS } from "@/lib/roles";
-import { api } from "../../convex/_generated/api";
+import { roleOf } from "../../convex/lib/roles";
 
 export function SidebarAccount() {
-  const me = useQuery(api.users.me);
+  const me = useCurrentUser();
   const [signingOut, setSigningOut] = useState(false);
 
   const signOut = async () => {
@@ -22,7 +22,7 @@ export function SidebarAccount() {
       <div className="min-w-0">
         <div className="truncate text-sm font-medium">{me?.name ?? "…"}</div>
         <div className="text-xs text-muted-foreground">
-          {me ? ROLE_LABELS[me.role] : " "}
+          {me ? ROLE_LABELS[roleOf(me.role)] : " "}
         </div>
       </div>
       <Button

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "bun:test";
 import { cleanup, render, screen } from "@testing-library/react";
 import NetworkNode from "./NetworkNode";
 import type { DeviceId } from "@/types/map";
+import { SignedInEditor } from "../../../test/currentUser";
 import { seedMapStore } from "../../../test/storeHarness";
 
 afterEach(() => {
@@ -21,6 +22,7 @@ describe("NetworkNode wrapper", () => {
       <NetworkNode id="device-1" status="up" width={80} height={120}>
         <span>child</span>
       </NetworkNode>,
+      { wrapper: SignedInEditor },
     );
 
     const child = screen.getByText("child");
@@ -42,6 +44,7 @@ describe("NetworkNode wrapper", () => {
       <NetworkNode id="device-1" status="down" width={80} height={80}>
         <span>selected</span>
       </NetworkNode>,
+      { wrapper: SignedInEditor },
     );
 
     const wrapper = screen.getByText("selected").parentElement;
@@ -60,6 +63,7 @@ describe("NetworkNode wrapper", () => {
       <NetworkNode id="device-1" status="up" width={80} height={80}>
         <span>label</span>
       </NetworkNode>,
+      { wrapper: SignedInEditor },
     );
     expect(
       container.firstElementChild?.className.includes("cursor-pointer"),
