@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import { ConvexError } from "convex/values";
 import { api, internal } from "./_generated/api";
 import { createTestSite, signedInTest } from "./_test/auth.setup";
+import { reencryptInPasses } from "./integrations";
 import { stubFetch } from "./_test/fetch";
 import type { TestClient } from "./_test/auth.setup";
 
@@ -155,7 +156,7 @@ describe("integrations", () => {
     process.env.NETPLAN_SECRET_KEY = newKey();
     expect(
       await admin.action(internal.integrations.reencryptTokens, {}),
-    ).toEqual({ reencrypted: 1, current: 0, unreadable: [] });
+    ).toEqual({ reencrypted: 1, current: 0, unreadable: [], pending: [] });
 
     const [after] = await stored(admin);
     expect(after.token.keyId).not.toBe(before.token.keyId);
@@ -168,6 +169,54 @@ describe("integrations", () => {
     expect(new Headers(init?.headers).get("Authorization")).toBe(
       `Token ${TOKEN}`,
     );
+  });
+
+  it("re-reads a token saved with the previous key while the rotation ran", async () => {
+    const token = (keyId: string) => ({ keyId, iv: "iv", ciphertext: "c" });
+    let row = {
+      siteId: "s",
+      kind: "netbox" as const,
+      baseUrl: "u",
+      token: token("old"),
+    };
+    let saves = 0;
+    const result = await reencryptInPasses("new", {
+      read: () => Promise.resolve([row]),
+      reencrypt: () => {
+        // The first replacement meets a save made with the old key.
+        if (saves++ === 0) return Promise.resolve("saved-meanwhile");
+        row = { ...row, token: token("new") };
+        return Promise.resolve("replaced");
+      },
+    });
+
+    expect(result).toEqual({
+      reencrypted: 1,
+      current: 0,
+      unreadable: [],
+      pending: [],
+    });
+    expect(row.token.keyId).toBe("new");
+  });
+
+  it("reports a token still pending once the passes run out", async () => {
+    const row = {
+      siteId: "s",
+      kind: "netbox" as const,
+      baseUrl: "u",
+      token: { keyId: "old", iv: "iv", ciphertext: "c" },
+    };
+    expect(
+      await reencryptInPasses("new", {
+        read: () => Promise.resolve([row]),
+        reencrypt: () => Promise.resolve("saved-meanwhile"),
+      }),
+    ).toEqual({
+      reencrypted: 0,
+      current: 0,
+      unreadable: [],
+      pending: ["s netbox"],
+    });
   });
 
   it("keeps a token saved while the rotation re-encrypted the older one", async () => {

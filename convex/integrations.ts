@@ -320,42 +320,86 @@ export const reencryptTokens = internalAction({
     reencrypted: v.number(),
     current: v.number(),
     unreadable: v.array(v.string()),
+    /** Saved with an older key during every pass: run it again. */
+    pending: v.array(v.string()),
   }),
-  handler: async (ctx) => {
+  handler: async (ctx): Promise<ReencryptResult> => {
     const { current } = await keys();
-    const rows = await ctx.runQuery(internal.integrations.allTokens, {});
-    let reencrypted = 0;
-    let alreadyCurrent = 0;
-    const unreadable: Array<string> = [];
-    for (const row of rows) {
-      if (row.token.keyId === current.id) {
-        alreadyCurrent += 1;
-        continue;
-      }
-      const plaintext = await decryptStored(row, row.token);
-      if (plaintext === null) {
-        unreadable.push(`${row.siteId} ${row.kind}`);
-        continue;
-      }
-      const replaced = await ctx.runMutation(
-        internal.integrations.replaceToken,
-        {
-          siteId: row.siteId,
-          kind: row.kind,
-          baseUrl: row.baseUrl,
-          previous: row.token,
-          token: await encryptSecret(
-            current,
-            plaintext,
-            boundTo(row.siteId, row.kind, row.baseUrl),
-          ),
-        },
-      );
-      if (replaced) reencrypted += 1;
-    }
-    return { reencrypted, current: alreadyCurrent, unreadable };
+    return await reencryptInPasses(current.id, {
+      read: async (): Promise<Array<StoredToken>> =>
+        await ctx.runQuery(internal.integrations.allTokens, {}),
+      reencrypt: async (row): Promise<ReencryptOutcome> => {
+        const plaintext = await decryptStored(row, row.token);
+        if (plaintext === null) return "unreadable";
+        const replaced: boolean = await ctx.runMutation(
+          internal.integrations.replaceToken,
+          {
+            siteId: row.siteId,
+            kind: row.kind,
+            baseUrl: row.baseUrl,
+            previous: row.token,
+            token: await encryptSecret(
+              current,
+              plaintext,
+              boundTo(row.siteId, row.kind, row.baseUrl),
+            ),
+          },
+        );
+        return replaced ? "replaced" : "saved-meanwhile";
+      },
+    });
   },
 });
+
+type StoredToken = {
+  siteId: string;
+  kind: IntegrationKind;
+  baseUrl: string;
+  token: EncryptedSecret;
+};
+
+type ReencryptOutcome = "replaced" | "unreadable" | "saved-meanwhile";
+
+type ReencryptResult = {
+  reencrypted: number;
+  current: number;
+  unreadable: Array<string>;
+  pending: Array<string>;
+};
+
+const REENCRYPT_PASSES = 3;
+
+// A save still encrypting with the previous key can land between a pass's
+// read and its replacement; the replacement yields to it, and the next pass
+// reads it again.
+export const reencryptInPasses = async (
+  currentKeyId: string,
+  io: {
+    read: () => Promise<Array<StoredToken>>;
+    reencrypt: (row: StoredToken) => Promise<ReencryptOutcome>;
+  },
+): Promise<ReencryptResult> => {
+  let reencrypted = 0;
+  let alreadyCurrent: number | null = null;
+  for (let pass = 1; ; pass += 1) {
+    const rows = await io.read();
+    const stale = rows.filter((row) => row.token.keyId !== currentKeyId);
+    alreadyCurrent ??= rows.length - stale.length;
+    const unreadable: Array<string> = [];
+    const pending: Array<string> = [];
+    for (const row of stale) {
+      const outcome = await io.reencrypt(row);
+      if (outcome === "replaced") reencrypted += 1;
+      else
+        (outcome === "unreadable" ? unreadable : pending).push(
+          `${row.siteId} ${row.kind}`,
+        );
+    }
+    if (pending.length === 0 || pass >= REENCRYPT_PASSES) {
+      return { reencrypted, current: alreadyCurrent, unreadable, pending };
+    }
+  }
+};
 
 /** Stores a connection for the dev seed, which runs with the admin key. */
 export const seedConnection = async (

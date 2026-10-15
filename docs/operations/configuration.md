@@ -65,8 +65,9 @@ test fails. To rotate it:
 1. Set `NETPLAN_SECRET_KEY_PREVIOUS` to the current key and
    `NETPLAN_SECRET_KEY` to a new one, then `docker compose up -d`.
 2. Run `bun x convex run integrations:reencryptTokens` against the
-   deployment. It answers how many tokens it re-encrypted and lists any it
-   could not read.
+   deployment. It answers how many tokens it re-encrypted, lists any it
+   could not read, and under `pending` any saved again with the previous key
+   while it ran: run it again until `pending` is empty.
 3. Remove the previous key from the deployment
    (`bun x convex env remove NETPLAN_SECRET_KEY_PREVIOUS`) and empty it in
    `.env`; an empty value alone leaves it set.
