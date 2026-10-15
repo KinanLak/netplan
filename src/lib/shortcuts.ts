@@ -51,6 +51,7 @@ export type ShortcutAction =
   | "close-drawer"
   | "delete-device"
   | "edit-device-identity"
+  | "unplace-device"
   | "highlight-connections";
 
 export type ShortcutConfig = {
@@ -288,6 +289,13 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
     keys: ["I"],
     label: "Identité",
     description: "Modifier le nom, les adresses et les notes de l'appareil",
+    scope: "drawer",
+  },
+  "unplace-device": {
+    keys: ["U"],
+    label: "Retirer du plan",
+    description:
+      "Retirer l'appareil du plan ; il reste dans l'inventaire du site",
     scope: "drawer",
   },
   "highlight-connections": {

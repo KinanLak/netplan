@@ -126,6 +126,46 @@ describe("applyOperation", () => {
     expect(result.snapshot).toBe(snapshot);
   });
 
+  it("unplacing a device takes its links off too, even for a sourced one", () => {
+    const a: Device = {
+      ...device(deviceId("device:a")),
+      source: { integration: "netbox", externalId: "42", syncedAt: 1 },
+    };
+    const b = device(deviceId("device:b"), 200);
+    const link = {
+      id: linkId("link:a"),
+      floorId,
+      fromDeviceId: a.id,
+      toDeviceId: b.id,
+    };
+
+    const result = applyOperation(
+      { ...emptySnapshot, devices: [a, b], links: [link] },
+      { kind: "device.unplace", meta: meta(2), deviceId: a.id },
+    );
+
+    expect(result.snapshot.devices).toEqual([b]);
+    expect(result.snapshot.links).toEqual([]);
+  });
+
+  it("placing a device already where it stands is a no-op, elsewhere a conflict", () => {
+    const placed = device(deviceId("device:a"));
+    const snapshot = { ...emptySnapshot, devices: [placed] };
+    const placeAt = (x: number): MapOperation => ({
+      kind: "device.place",
+      meta: meta(3),
+      device: { ...device(placed.id, x), name: "Renamed" },
+    });
+
+    const same = applyOperation(snapshot, placeAt(0));
+    const elsewhere = applyOperation(snapshot, placeAt(200));
+    const fresh = applyOperation(emptySnapshot, placeAt(0));
+
+    expect(same.reason).toBe("already-exists");
+    expect(elsewhere.reason).toBe("conflict");
+    expect(fresh.snapshot.devices.map((item) => item.id)).toEqual([placed.id]);
+  });
+
   it("link.create requires both endpoints", () => {
     const a = device(deviceId("device:a"));
     const result = applyOperation(

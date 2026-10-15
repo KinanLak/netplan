@@ -1079,4 +1079,214 @@ describe("mapOperations.apply on the site inventory", () => {
       error: "Device not found",
     });
   });
+  const unplace = (t: TestClient, seq: number, deviceId: string) =>
+    t.mutation(api.mapOperations.apply, {
+      operation: { kind: "device.unplace", meta: meta(seq), deviceId },
+    });
+
+  const place = (t: TestClient, seq: number, item: ReturnType<typeof device>) =>
+    t.mutation(api.mapOperations.apply, {
+      operation: { kind: "device.place", meta: meta(seq), device: item },
+    });
+
+  const deviceRow = (t: TestClient, objectId: string) =>
+    t.run((ctx) =>
+      ctx.db
+        .query("devices")
+        .withIndex("by_object_id", (q) => q.eq("objectId", objectId))
+        .unique(),
+    );
+
+  it("takes a device off its floor with its links, and keeps it in the inventory", async () => {
+    const t = await signedInTest();
+    const floorId = await freshFloor(t);
+    await t.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "batch",
+        meta: meta(1),
+        operations: [
+          {
+            kind: "device.create",
+            device: device("device:kept", floorId, 0, 0, [MAC]),
+          },
+          {
+            kind: "device.create",
+            device: device("device:peer", floorId, 200),
+          },
+          {
+            kind: "link.create",
+            link: {
+              id: "link:kept",
+              floorId,
+              fromDeviceId: "device:kept",
+              toDeviceId: "device:peer",
+            },
+          },
+        ],
+      },
+    });
+    const before = await getFloorDocument(t, floorId);
+
+    const result = await unplace(t, 2, "device:kept");
+
+    expect(result.status).toBe("applied");
+    const after = await getFloorDocument(t, floorId);
+    expect(after.revision).toBeGreaterThan(before.revision);
+    expect(after.devices.map((item) => item.id)).toEqual(["device:peer"]);
+    expect(after.links).toEqual([]);
+    const row = await deviceRow(t, "device:kept");
+    expect(row?.placement).toBeUndefined();
+    expect(row?.macs).toEqual([MAC]);
+    const macs = await t.run((ctx) => ctx.db.query("deviceMacs").collect());
+    expect(macs.map((item) => item.deviceId)).toEqual(["device:kept"]);
+  });
+
+  it("puts an unplaced device back, and its links with it as undo does", async () => {
+    const t = await signedInTest();
+    const floorId = await freshFloor(t);
+    await create(t, 1, device("device:back", floorId, 0));
+    await create(t, 2, device("device:other", floorId, 200));
+    await t.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "link.create",
+        meta: meta(3),
+        link: {
+          id: "link:back",
+          floorId,
+          fromDeviceId: "device:back",
+          toDeviceId: "device:other",
+        },
+      },
+    });
+    await unplace(t, 4, "device:back");
+
+    const result = await t.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "batch",
+        meta: meta(5),
+        operations: [
+          {
+            kind: "device.place",
+            device: device("device:back", floorId, 0),
+          },
+          {
+            kind: "link.create",
+            link: {
+              id: "link:back",
+              floorId,
+              fromDeviceId: "device:back",
+              toDeviceId: "device:other",
+            },
+          },
+        ],
+      },
+    });
+
+    expect(result.status).toBe("applied");
+    const document = await getFloorDocument(t, floorId);
+    expect(document.devices.map((item) => item.id).sort()).toEqual([
+      "device:back",
+      "device:other",
+    ]);
+    expect(document.links.map((item) => item.id)).toEqual(["link:back"]);
+  });
+
+  it("takes only where a placed device stands, never its identity", async () => {
+    const t = await signedInTest();
+    const floorId = await freshFloor(t);
+    await create(t, 1, device("device:identity", floorId, 0, 0, [MAC]));
+    await unplace(t, 2, "device:identity");
+
+    const result = await place(t, 3, {
+      ...device("device:identity", floorId, 100, 40),
+      name: "Renamed",
+    });
+
+    expect(result.status).toBe("applied");
+    const row = await deviceRow(t, "device:identity");
+    expect(row).toMatchObject({
+      name: "device:identity",
+      macs: [MAC],
+      placement: { floorId, position: { x: 100, y: 40 } },
+    });
+  });
+
+  it("accepts placing a device again where it stands, and refuses elsewhere", async () => {
+    const t = await signedInTest();
+    const floorId = await freshFloor(t);
+    await create(t, 1, device("device:twice", floorId, 0));
+
+    const same = await place(t, 2, device("device:twice", floorId, 0));
+    const elsewhere = await place(t, 3, device("device:twice", floorId, 200));
+
+    expect(same.status).toBe("applied");
+    expect(elsewhere).toMatchObject({
+      status: "rejected",
+      error: "Device is already placed",
+    });
+  });
+
+  it("refuses to place a device of another site or one it does not know", async () => {
+    const t = await signedInTest();
+    const floorId = await freshFloor(t);
+    const otherFloor = await freshFloor(t);
+    await create(t, 1, device("device:foreign", otherFloor, 0));
+    await unplace(t, 2, "device:foreign");
+
+    const foreign = await place(t, 3, device("device:foreign", floorId, 0));
+    const unknown = await place(t, 4, device("device:unknown", floorId, 0));
+
+    expect(foreign).toMatchObject({
+      status: "rejected",
+      error: "Device belongs to another site",
+    });
+    expect(unknown).toMatchObject({
+      status: "rejected",
+      error: "Device not found",
+    });
+  });
+
+  it("refuses to place a device over another", async () => {
+    const t = await signedInTest();
+    const floorId = await freshFloor(t);
+    await create(t, 1, device("device:moved", floorId, 0));
+    await create(t, 2, device("device:there", floorId, 300));
+    await unplace(t, 3, "device:moved");
+
+    const result = await place(t, 4, device("device:moved", floorId, 300));
+
+    expect(result.status).toBe("rejected");
+    expect((await deviceRow(t, "device:moved"))?.placement).toBeUndefined();
+  });
+
+  it("takes a device its integration owns off the map", async () => {
+    const t = await signedInTest();
+    const siteId = await createTestSite(t);
+    const floorId = await freshFloor(t, siteId);
+    await t.run(async (ctx) => {
+      await ctx.db.insert("devices", {
+        objectId: "device:sourced-off",
+        siteId,
+        type: "switch",
+        name: "sw-2",
+        macs: [],
+        placement: {
+          floorId,
+          position: { x: 0, y: 0 },
+          size: { width: 80, height: 80 },
+        },
+        source: { integration: "netbox", externalId: "8", syncedAt: 1 },
+        metadata: {},
+        updatedAt: 1,
+        updatedBy: "sync",
+      });
+    });
+
+    const result = await unplace(t, 1, "device:sourced-off");
+
+    expect(result.status).toBe("applied");
+    const row = await deviceRow(t, "device:sourced-off");
+    expect(row?.placement).toBeUndefined();
+    expect(row?.source?.externalId).toBe("8");
+  });
 });

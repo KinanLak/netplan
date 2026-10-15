@@ -56,6 +56,10 @@ export const withOperationMeta = (
       return { ...operation, meta };
     case "device.delete":
       return { ...operation, meta };
+    case "device.place":
+      return { ...operation, meta };
+    case "device.unplace":
+      return { ...operation, meta };
     case "link.create":
       return { ...operation, meta };
     case "link.delete":

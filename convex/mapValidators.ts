@@ -143,6 +143,16 @@ export const mapOperation = v.union(
     meta: operationMeta,
     deviceId: v.string(),
   }),
+  v.object({
+    kind: v.literal("device.place"),
+    meta: operationMeta,
+    device: placedDevice,
+  }),
+  v.object({
+    kind: v.literal("device.unplace"),
+    meta: operationMeta,
+    deviceId: v.string(),
+  }),
   v.object({ kind: v.literal("link.create"), meta: operationMeta, link }),
   v.object({
     kind: v.literal("link.delete"),
@@ -187,6 +197,14 @@ export const mapOperation = v.union(
         }),
         v.object({
           kind: v.literal("device.delete"),
+          deviceId: v.string(),
+        }),
+        v.object({
+          kind: v.literal("device.place"),
+          device: placedDevice,
+        }),
+        v.object({
+          kind: v.literal("device.unplace"),
           deviceId: v.string(),
         }),
         v.object({ kind: v.literal("link.create"), link }),

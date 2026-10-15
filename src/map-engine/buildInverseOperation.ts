@@ -35,6 +35,37 @@ const invertDevicePatch = (
   };
 };
 
+/** Brings a removed device back, then the links it lost with it. */
+const restoreDevice = (
+  snapshot: MapDocumentSnapshot,
+  operation: Extract<
+    MapOperation,
+    { kind: "device.delete" } | { kind: "device.unplace" }
+  >,
+  restore: Extract<
+    BatchSubOperation,
+    { kind: "device.create" } | { kind: "device.place" }
+  >,
+): MapOperation => {
+  const links = snapshot.links.filter(
+    (link) =>
+      link.fromDeviceId === operation.deviceId ||
+      link.toDeviceId === operation.deviceId,
+  );
+  if (links.length === 0) return withMeta(restore, operation.meta);
+  return {
+    kind: "batch",
+    meta: operation.meta,
+    operations: [
+      restore,
+      ...links.map((link): BatchSubOperation => ({
+        kind: "link.create",
+        link,
+      })),
+    ],
+  };
+};
+
 const invertOverlayPatch = (
   snapshot: MapDocumentSnapshot,
   operation: Extract<MapOperation, { kind: "overlay.patch" }>,
@@ -78,26 +109,28 @@ export function buildInverseOperation(
       );
       // A sourced device is never deleted, so there is nothing to restore.
       if (!device || device.source) return null;
-      const links = snapshotBeforeOperation.links.filter(
-        (link) =>
-          link.fromDeviceId === operation.deviceId ||
-          link.toDeviceId === operation.deviceId,
+      return restoreDevice(snapshotBeforeOperation, operation, {
+        kind: "device.create",
+        device,
+      });
+    }
+
+    case "device.place":
+      return {
+        kind: "device.unplace",
+        meta: operation.meta,
+        deviceId: operation.device.id,
+      };
+
+    case "device.unplace": {
+      const device = snapshotBeforeOperation.devices.find(
+        (item) => item.id === operation.deviceId,
       );
-      const operations: Array<MapOperation> = [
-        { kind: "device.create", meta: operation.meta, device },
-        ...links.map((link): MapOperation => ({
-          kind: "link.create",
-          meta: operation.meta,
-          link,
-        })),
-      ];
-      return operations.length === 1
-        ? operations[0]
-        : {
-            kind: "batch",
-            meta: operation.meta,
-            operations: operations.flatMap(batchOperations),
-          };
+      if (!device) return null;
+      return restoreDevice(snapshotBeforeOperation, operation, {
+        kind: "device.place",
+        device,
+      });
     }
 
     case "link.create":

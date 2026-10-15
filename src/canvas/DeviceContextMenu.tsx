@@ -1,5 +1,5 @@
 import { HugeiconsIcon } from "@hugeicons/react";
-import { WasteIcon } from "@hugeicons/core-free-icons";
+import { LocationRemove01Icon, WasteIcon } from "@hugeicons/core-free-icons";
 import { useReactFlow } from "@xyflow/react";
 import {
   ContextMenuContent,
@@ -46,6 +46,11 @@ export function DeviceContextMenu({ deviceId }: { deviceId: DeviceId }) {
     selectDevice(null);
   };
 
+  const unplaceDevice = () => {
+    commands.unplaceDevice(device.id);
+    selectDevice(null);
+  };
+
   return (
     <ContextMenuContent className="min-w-56">
       <ContextMenuGroup>
@@ -56,10 +61,17 @@ export function DeviceContextMenu({ deviceId }: { deviceId: DeviceId }) {
         <>
           <ContextMenuSeparator />
           <ContextMenuGroup>
-            <ContextMenuItem variant="destructive" onClick={deleteDevice}>
-              <HugeiconsIcon icon={WasteIcon} />
-              Supprimer de la carte
+            <ContextMenuItem onClick={unplaceDevice}>
+              <HugeiconsIcon icon={LocationRemove01Icon} />
+              Retirer du plan
             </ContextMenuItem>
+            {/* A sourced device comes back at each sync, so it is never deleted. */}
+            {device.source ? null : (
+              <ContextMenuItem variant="destructive" onClick={deleteDevice}>
+                <HugeiconsIcon icon={WasteIcon} />
+                Supprimer
+              </ContextMenuItem>
+            )}
           </ContextMenuGroup>
         </>
       ) : null}

@@ -37,6 +37,21 @@ export type AtomicMapOperation =
       patch: DevicePatch;
     }
   | { kind: "device.delete"; meta: OperationMeta; deviceId: DeviceId }
+  | {
+      /**
+       * Puts an inventory device on a floor. It carries the whole device so
+       * the map can show it at once; the server takes only where it stands.
+       */
+      kind: "device.place";
+      meta: OperationMeta;
+      device: Device;
+    }
+  | {
+      /** Takes a device off its floor, with its links; it stays in the inventory. */
+      kind: "device.unplace";
+      meta: OperationMeta;
+      deviceId: DeviceId;
+    }
   | { kind: "link.create"; meta: OperationMeta; link: LinkDoc }
   | { kind: "link.delete"; meta: OperationMeta; linkId: LinkId }
   | { kind: "walls.add"; meta: OperationMeta; walls: Array<WallSegment> }

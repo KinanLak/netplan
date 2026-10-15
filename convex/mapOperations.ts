@@ -22,6 +22,11 @@ export type OperationInput = Infer<typeof mapOperation>;
 type DeviceCreateOperation = Extract<OperationInput, { kind: "device.create" }>;
 type DevicePatchOperation = Extract<OperationInput, { kind: "device.patch" }>;
 type DeviceDeleteOperation = Extract<OperationInput, { kind: "device.delete" }>;
+type DevicePlaceOperation = Extract<OperationInput, { kind: "device.place" }>;
+type DeviceUnplaceOperation = Extract<
+  OperationInput,
+  { kind: "device.unplace" }
+>;
 type WallAddOperation = Extract<OperationInput, { kind: "walls.add" }>;
 type WallDeleteOperation = Extract<OperationInput, { kind: "walls.delete" }>;
 type LinkCreateOperation = Extract<OperationInput, { kind: "link.create" }>;
@@ -43,6 +48,7 @@ type OverlayValue = Omit<Doc<"floorOverlays">, "_id" | "_creationTime">;
 
 type DevicePatch = Pick<DeviceRow, "placement" | "updatedAt" | "updatedBy">;
 type PlannedDevice = DeviceInsert & { rowId?: Id<"devices"> };
+type UnplacedDevice = Omit<DeviceRow, "placement"> & { rowId: Id<"devices"> };
 type PlannedWall = WallInsert & { rowId?: Id<"walls"> };
 type PlannedLink = LinkInsert & { rowId?: Id<"links"> };
 
@@ -67,7 +73,7 @@ interface PlanningState {
   floorSites: Map<string, string>;
   devices: Map<string, PlannedDevice>;
   /** Referenced devices that exist in the inventory but on no floor. */
-  unplacedDeviceIds: Set<string>;
+  unplacedDevices: Map<string, UnplacedDevice>;
   /** The device owning each loaded MAC address, keyed by `macKey`. */
   macOwners: Map<string, string>;
   walls: Map<string, PlannedWall>;
@@ -320,7 +326,12 @@ const collectOperationScope = (
       scope.deviceIds.add(operation.deviceId);
       break;
     case "device.delete":
+    case "device.unplace":
       scope.deviceIds.add(operation.deviceId);
+      break;
+    case "device.place":
+      scope.floorIds.add(operation.device.floorId);
+      scope.deviceIds.add(operation.device.id);
       break;
     case "link.create":
       scope.floorIds.add(operation.link.floorId);
@@ -428,11 +439,12 @@ const buildPlanningState = async (
   ]);
 
   const floorIds = new Set(scope.floorIds);
-  const unplacedDeviceIds = new Set<string>();
+  const unplacedDevices = new Map<string, UnplacedDevice>();
   for (const row of deviceRefs) {
     if (!row) continue;
-    if (row.placement) floorIds.add(row.placement.floorId);
-    else unplacedDeviceIds.add(row.objectId);
+    const { _id, _creationTime, placement, ...device } = row;
+    if (placement) floorIds.add(placement.floorId);
+    else unplacedDevices.set(row.objectId, { ...device, rowId: _id });
   }
   for (const row of [...wallRefs, ...linkRefs]) {
     if (row) floorIds.add(row.floorId);
@@ -517,7 +529,7 @@ const buildPlanningState = async (
           : [],
       ),
     ),
-    unplacedDeviceIds,
+    unplacedDevices,
     macOwners: new Map(
       macOwnerRows.flatMap((row) =>
         row ? [[macKey(row.siteId, row.mac), row.deviceId] as const] : [],
@@ -707,7 +719,7 @@ const planDeviceCreate = (
   if (!siteId) return "Floor not found";
   const shapeError = validateDeviceShape(operation.device);
   if (shapeError) return shapeError;
-  if (state.unplacedDeviceIds.has(operation.device.id)) {
+  if (state.unplacedDevices.has(operation.device.id)) {
     return "Device object id already exists with different payload";
   }
 
@@ -838,6 +850,99 @@ const planDeviceDelete = (
   } else {
     removePlannedInsert(state, "insertDevice", operation.deviceId);
   }
+  return null;
+};
+
+const planDevicePlace = (
+  state: PlanningState,
+  operation: DevicePlaceOperation,
+): string | null => {
+  const { id, floorId, position, size } = operation.device;
+  const siteId = state.floorSites.get(floorId);
+  if (!siteId) return "Floor not found";
+  const shapeError = validateDeviceShape(operation.device);
+  if (shapeError) return shapeError;
+
+  const placed = state.devices.get(id);
+  if (placed) {
+    markAffectedFloor(state, placed.floorId);
+    return sameJson(
+      { floorId: placed.floorId, position: placed.position, size: placed.size },
+      { floorId, position, size },
+    )
+      ? null
+      : "Device is already placed";
+  }
+  const existing = state.unplacedDevices.get(id);
+  if (!existing) return "Device not found";
+  if (existing.siteId !== siteId) return "Device belongs to another site";
+
+  const placementError = validateDevicePlacement(state, {
+    objectId: id,
+    floorId,
+    position,
+    size,
+  });
+  if (placementError) return placementError;
+
+  // Only where it stands comes from the operation; the identity stays the
+  // inventory's.
+  const value: PlannedDevice = {
+    ...existing,
+    floorId,
+    position,
+    size,
+    updatedAt: operation.meta.createdAt,
+    updatedBy: operation.meta.clientId,
+  };
+  state.unplacedDevices.delete(id);
+  state.devices.set(id, value);
+  markAffectedFloor(state, floorId);
+  state.plan.push({
+    kind: "patchDevice",
+    rowId: existing.rowId,
+    value: {
+      placement: { floorId, position, size },
+      updatedAt: value.updatedAt,
+      updatedBy: value.updatedBy,
+    },
+  });
+  return null;
+};
+
+const planDeviceUnplace = (
+  state: PlanningState,
+  operation: DeviceUnplaceOperation,
+): string | null => {
+  const existing = state.devices.get(operation.deviceId);
+  // A device created by the same batch has no row to keep yet.
+  if (!existing?.rowId) return "Device not found";
+
+  for (const link of [...state.links.values()]) {
+    if (
+      link.fromDeviceId === operation.deviceId ||
+      link.toDeviceId === operation.deviceId
+    ) {
+      planLinkDeleteById(state, link.objectId);
+    }
+  }
+
+  const { floorId, position: _position, size: _size, ...device } = existing;
+  const updatedAt = operation.meta.createdAt;
+  const updatedBy = operation.meta.clientId;
+  state.devices.delete(operation.deviceId);
+  state.unplacedDevices.set(operation.deviceId, {
+    ...device,
+    rowId: existing.rowId,
+    updatedAt,
+    updatedBy,
+  });
+  markAffectedFloor(state, floorId);
+  state.plan.push({
+    kind: "patchDevice",
+    rowId: existing.rowId,
+    value: { placement: undefined, updatedAt, updatedBy },
+  });
   return null;
 };
 
@@ -1090,6 +1195,10 @@ const planOperation = (
       return planDevicePatch(state, operation);
     case "device.delete":
       return planDeviceDelete(state, operation);
+    case "device.place":
+      return planDevicePlace(state, operation);
+    case "device.unplace":
+      return planDeviceUnplace(state, operation);
     case "link.create":
       return planLinkCreate(state, operation);
     case "link.delete":
@@ -1192,6 +1301,7 @@ const executePlan = async (ctx: MutationCtx, plan: WritePlan) => {
 const operationFloorId = (operation: OperationInput): string | undefined => {
   switch (operation.kind) {
     case "device.create":
+    case "device.place":
       return operation.device.floorId;
     case "link.create":
       return operation.link.floorId;
@@ -1209,6 +1319,7 @@ const operationFloorId = (operation: OperationInput): string | undefined => {
         : undefined;
     case "device.patch":
     case "device.delete":
+    case "device.unplace":
     case "link.delete":
     case "walls.delete":
       return undefined;

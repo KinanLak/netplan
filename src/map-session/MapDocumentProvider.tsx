@@ -86,6 +86,8 @@ export interface MapDocumentCommands {
   updateDevicePosition: (deviceId: DeviceId, position: Position) => void;
   updateDevicePositions: (updates: Array<DevicePositionUpdate>) => void;
   deleteDevice: (deviceId: DeviceId) => void;
+  /** Takes a device off the map; it stays in the site inventory. */
+  unplaceDevice: (deviceId: DeviceId) => void;
   createLink: (link: Omit<LinkDoc, "id">) => LinkId | null;
   deleteLink: (linkId: LinkId) => void;
   checkCollision: (
@@ -213,6 +215,7 @@ const operationFloorId = (
 ): FloorId => {
   switch (operation.kind) {
     case "device.create":
+    case "device.place":
       return operation.device.floorId;
     case "link.create":
       return operation.link.floorId;
@@ -224,7 +227,8 @@ const operationFloorId = (
     case "batch": {
       if (operation.operations.length === 0) return fallbackFloorId;
       const first = operation.operations[0];
-      if (first.kind === "device.create") return first.device.floorId;
+      if (first.kind === "device.create" || first.kind === "device.place")
+        return first.device.floorId;
       if (first.kind === "link.create") return first.link.floorId;
       if (first.kind === "walls.add")
         return first.walls[0]?.floorId ?? fallbackFloorId;
@@ -234,6 +238,7 @@ const operationFloorId = (
     }
     case "device.patch":
     case "device.delete":
+    case "device.unplace":
     case "link.delete":
     case "walls.delete":
       return fallbackFloorId;
@@ -448,6 +453,16 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
     const meta = freshMeta();
     if (!meta) return;
     dispatchOperation({ kind: "device.delete", meta, deviceId });
+  };
+
+  const unplaceDevice = (deviceId: DeviceId) => {
+    if (!isReadyRef.current) return;
+    if (!documentRef.current.devices.some((item) => item.id === deviceId)) {
+      return;
+    }
+    const meta = freshMeta();
+    if (!meta) return;
+    dispatchOperation({ kind: "device.unplace", meta, deviceId });
   };
 
   const createLink = (linkWithoutId: Omit<LinkDoc, "id">): LinkId | null => {
@@ -785,6 +800,7 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
       updateDevicePosition,
       updateDevicePositions,
       deleteDevice,
+      unplaceDevice,
       createLink,
       deleteLink,
       checkCollision,

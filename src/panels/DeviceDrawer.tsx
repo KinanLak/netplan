@@ -4,6 +4,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import {
   Cancel01Icon,
   Edit02Icon,
+  LocationRemove01Icon,
   UserIcon,
   WasteIcon,
 } from "@hugeicons/core-free-icons";
@@ -51,7 +52,7 @@ export default function DeviceDrawer() {
   const { document } = useMapDocumentData();
   const { commands } = useMapDocumentActions();
   const { devices, links } = document;
-  const { deleteDevice } = commands;
+  const { deleteDevice, unplaceDevice } = commands;
 
   const reactFlow = useReactFlow();
   // Held by device, so the dialog never reopens on another one.
@@ -348,6 +349,23 @@ export default function DeviceDrawer() {
             />
             Modifier l'identité
             <ShortcutHintInline action="edit-device-identity" />
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              unplaceDevice(device.id);
+              selectDevice(null);
+            }}
+            className="w-full gap-2"
+          >
+            <HugeiconsIcon
+              icon={LocationRemove01Icon}
+              size={16}
+              color="currentColor"
+              strokeWidth={1.5}
+            />
+            Retirer du plan
+            <ShortcutHintInline action="unplace-device" />
           </Button>
           {/* A sourced device comes back at each sync, so it is never deleted. */}
           {device.source ? null : (
