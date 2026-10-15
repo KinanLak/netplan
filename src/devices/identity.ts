@@ -1,0 +1,121 @@
+// A device's identity (ADR 0022): the rules the drawer form and the server
+// share. Imported by `convex/`, so relative imports only.
+
+import { isCanonicalMac } from "./mac";
+import type { IntegrationKind } from "../sites/integrations";
+
+export type IdentityTextField = "name" | "hostname" | "serial" | "model" | "ip";
+export type IdentityField = IdentityTextField | "type" | "macs" | "notes";
+
+/**
+ * The fields an integration owns on the devices it brings: the drawer shows
+ * them read-only and the server refuses to change them. LibreNMS brings no
+ * device yet; it would own what NetBox owns.
+ */
+export const SOURCE_OWNED_FIELDS: Record<
+  IntegrationKind,
+  ReadonlyArray<IdentityField>
+> = {
+  netbox: ["name", "type", "serial", "macs", "model", "ip"],
+  librenms: ["name", "type", "serial", "macs", "model", "ip"],
+};
+
+export const isSourceOwned = (
+  source: { integration: IntegrationKind } | undefined,
+  field: IdentityField,
+): boolean =>
+  source !== undefined &&
+  SOURCE_OWNED_FIELDS[source.integration].includes(field);
+
+export const IDENTITY_TEXT_LIMITS: Record<IdentityTextField | "notes", number> =
+  {
+    name: 120,
+    // The longest DNS name.
+    hostname: 253,
+    serial: 120,
+    model: 120,
+    // The longest textual IPv6 address.
+    ip: 45,
+    notes: 2000,
+  };
+
+export const MAX_MACS_PER_DEVICE = 32;
+
+export type MacListProblem = "too-many" | "duplicate" | "invalid";
+
+export function macListProblem(
+  macs: ReadonlyArray<string>,
+): MacListProblem | null {
+  if (macs.length > MAX_MACS_PER_DEVICE) return "too-many";
+  if (new Set(macs).size !== macs.length) return "duplicate";
+  if (!macs.every(isCanonicalMac)) return "invalid";
+  return null;
+}
+
+/** How the drawer names each field, lowercase for use within a sentence. */
+export const IDENTITY_FIELD_NAMES: Record<IdentityField, string> = {
+  name: "nom",
+  type: "type",
+  hostname: "hostname",
+  serial: "numéro de série",
+  macs: "adresses MAC",
+  model: "modèle",
+  ip: "adresse IP",
+  notes: "notes",
+};
+
+const MAC_PROBLEMS: Record<MacListProblem, string> = {
+  "too-many": `Un équipement porte au plus ${MAX_MACS_PER_DEVICE} adresses MAC.`,
+  duplicate: "Une adresse MAC est en double.",
+  invalid: "Une adresse MAC n'est pas valide.",
+};
+
+export interface IdentityEdit {
+  name?: string;
+  hostname?: string | null;
+  serial?: string | null;
+  macs?: Array<string>;
+  model?: string | null;
+  ip?: string | null;
+  notes?: string | null;
+}
+
+const OPTIONAL_TEXT_FIELDS = [
+  "hostname",
+  "serial",
+  "model",
+  "ip",
+  "notes",
+] as const;
+
+/** Trims text; an emptied optional field is removed (`null`). */
+export function normalizeIdentityEdit(edit: IdentityEdit): IdentityEdit {
+  const normalized: IdentityEdit = { ...edit };
+  if (edit.name !== undefined) normalized.name = edit.name.trim();
+  for (const field of OPTIONAL_TEXT_FIELDS) {
+    const value = edit[field];
+    if (typeof value === "string") normalized[field] = value.trim() || null;
+  }
+  return normalized;
+}
+
+/** A French reason a normalized identity edit is refused, or null. */
+export function identityEditError(edit: IdentityEdit): string | null {
+  if (edit.name !== undefined && edit.name.trim() === "") {
+    return "Le nom est obligatoire.";
+  }
+  for (const field of Object.keys(IDENTITY_TEXT_LIMITS) as Array<
+    keyof typeof IDENTITY_TEXT_LIMITS
+  >) {
+    const value = edit[field];
+    const limit = IDENTITY_TEXT_LIMITS[field];
+    if (typeof value === "string" && value.length > limit) {
+      return `Trop long : ${IDENTITY_FIELD_NAMES[field]} (${limit} caractères au plus).`;
+    }
+  }
+  if (edit.macs) {
+    const problem = macListProblem(edit.macs);
+    if (problem) return MAC_PROBLEMS[problem];
+  }
+  return null;
+}

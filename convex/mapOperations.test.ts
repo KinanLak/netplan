@@ -973,6 +973,18 @@ describe("mapOperations.apply on the site inventory", () => {
     expect(uppercase.error).toBe("Invalid MAC address");
   });
 
+  it("rejects a device whose identity breaks the drawer's limits", async () => {
+    const t = await signedInTest();
+    const floorId = await freshFloor(t);
+
+    const longName = await create(t, 1, {
+      ...device("device:long", floorId, 0, 0),
+      name: "x".repeat(121),
+    });
+
+    expect(longName.error).toBe("Invalid device identity");
+  });
+
   it("frees the MAC addresses of a deleted device, within one batch too", async () => {
     const t = await signedInTest();
     const floorId = await freshFloor(t);

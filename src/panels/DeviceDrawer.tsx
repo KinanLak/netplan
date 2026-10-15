@@ -1,6 +1,12 @@
 import { useReactFlow } from "@xyflow/react";
+import { useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Cancel01Icon, UserIcon, WasteIcon } from "@hugeicons/core-free-icons";
+import {
+  Cancel01Icon,
+  Edit02Icon,
+  UserIcon,
+  WasteIcon,
+} from "@hugeicons/core-free-icons";
 import type { DeviceId, DeviceStatus } from "@/types/map";
 import { useMapStore } from "@/store/useMapStore";
 import {
@@ -12,6 +18,7 @@ import {
   useIsEditMode,
   useSelectedDeviceId,
 } from "@/store/selectors";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -23,6 +30,9 @@ import { cn } from "@/lib/utils";
 import { DrawerConnectionsSection } from "@/panels/drawer/DrawerConnectionsSection";
 import type { ConnectedDeviceSummary } from "@/panels/drawer/DrawerConnectionsSection";
 import { DrawerPortsSection } from "@/panels/drawer/DrawerPortsSection";
+import { DeviceIdentityDialog } from "@/panels/drawer/DeviceIdentityDialog";
+import { useShortcutIntentEffect } from "@/hooks/use-shortcuts";
+import { INTEGRATION_LABELS } from "@/sites/integrations";
 
 const statusLabels: Record<DeviceStatus, string> = {
   up: "En ligne",
@@ -44,6 +54,13 @@ export default function DeviceDrawer() {
   const { deleteDevice } = commands;
 
   const reactFlow = useReactFlow();
+  // Held by device, so the dialog never reopens on another one.
+  const [identityDeviceId, setIdentityDeviceId] = useState<DeviceId | null>(
+    null,
+  );
+  useShortcutIntentEffect("edit-device-identity", () =>
+    setIdentityDeviceId(selectedDeviceId),
+  );
 
   const deviceById = new Map(devices.map((item) => [item.id, item]));
   const device = selectedDeviceId
@@ -136,8 +153,25 @@ export default function DeviceDrawer() {
             <h2 className="truncate text-lg font-semibold text-foreground">
               {device.name}
             </h2>
-            <p className="text-sm text-muted-foreground">
+            <p className="flex items-center gap-2 text-sm text-muted-foreground">
               {getDeviceKindLabel(device.type)}
+              {device.source ? (
+                <Badge
+                  variant="outline"
+                  render={
+                    device.source.url ? (
+                      <a
+                        href={device.source.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        title={`Ouvrir dans ${INTEGRATION_LABELS[device.source.integration]}`}
+                      />
+                    ) : undefined
+                  }
+                >
+                  {INTEGRATION_LABELS[device.source.integration]}
+                </Badge>
+              ) : null}
             </p>
           </div>
           <div className="flex items-center gap-1">
@@ -299,25 +333,46 @@ export default function DeviceDrawer() {
         </div>
       </ScrollArea>
 
-      {/* A sourced device comes back at each sync, so it is never deleted. */}
-      {isEditMode && !device.source ? (
+      {isEditMode ? (
         <footer className="space-y-2 border-t border-border bg-muted p-4">
           <Button
-            variant="destructive"
-            onClick={handleDeleteDevice}
+            variant="outline"
+            onClick={() => setIdentityDeviceId(device.id)}
             className="w-full gap-2"
           >
             <HugeiconsIcon
-              icon={WasteIcon}
+              icon={Edit02Icon}
               size={16}
               color="currentColor"
               strokeWidth={1.5}
             />
-            Supprimer
-            <ShortcutHintInline action="delete-device" />
+            Modifier l'identité
+            <ShortcutHintInline action="edit-device-identity" />
           </Button>
+          {/* A sourced device comes back at each sync, so it is never deleted. */}
+          {device.source ? null : (
+            <Button
+              variant="destructive"
+              onClick={handleDeleteDevice}
+              className="w-full gap-2"
+            >
+              <HugeiconsIcon
+                icon={WasteIcon}
+                size={16}
+                color="currentColor"
+                strokeWidth={1.5}
+              />
+              Supprimer
+              <ShortcutHintInline action="delete-device" />
+            </Button>
+          )}
         </footer>
       ) : null}
+      <DeviceIdentityDialog
+        device={device}
+        open={isEditMode && identityDeviceId === device.id}
+        onOpenChange={(open) => setIdentityDeviceId(open ? device.id : null)}
+      />
     </aside>
   );
 }
