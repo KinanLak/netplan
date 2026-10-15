@@ -5,35 +5,21 @@ import {
   Eraser01Icon,
   PaintBrush03Icon,
 } from "@hugeicons/core-free-icons";
-import { deviceKinds } from "@/devices/deviceKindRegistry";
-import type { DeviceType, DrawTool } from "@/types/map";
+import type { DrawTool } from "@/types/map";
 import type { ShortcutAction } from "@/lib/shortcuts";
 import { TOOLBAR_ICON_SIZE_CLASS } from "@/lib/constants";
 
-interface ToolbarActionBase {
-  group: "draw" | "device";
+export interface DrawToolbarAction {
   id: string;
   label: string;
   icon: React.ReactNode;
   shortcut: ShortcutAction;
   title: string;
-}
-
-export interface DeviceToolbarAction extends ToolbarActionBase {
-  group: "device";
-  type: DeviceType;
-}
-
-export interface DrawToolbarAction extends ToolbarActionBase {
-  group: "draw";
   tool: Extract<DrawTool, "wall" | "wall-brush" | "wall-erase" | "room">;
 }
 
-export type ToolbarAction = DeviceToolbarAction | DrawToolbarAction;
-
-export const toolbarActions: Array<ToolbarAction> = [
+export const drawToolbarActions: Array<DrawToolbarAction> = [
   {
-    group: "draw",
     id: "wall",
     tool: "wall",
     label: "Mur",
@@ -49,7 +35,6 @@ export const toolbarActions: Array<ToolbarAction> = [
     ),
   },
   {
-    group: "draw",
     id: "room",
     tool: "room",
     label: "Salle",
@@ -65,7 +50,6 @@ export const toolbarActions: Array<ToolbarAction> = [
     ),
   },
   {
-    group: "draw",
     id: "wall-brush",
     tool: "wall-brush",
     label: "Pinceau",
@@ -81,7 +65,6 @@ export const toolbarActions: Array<ToolbarAction> = [
     ),
   },
   {
-    group: "draw",
     id: "wall-erase",
     tool: "wall-erase",
     label: "Supprimer",
@@ -96,23 +79,4 @@ export const toolbarActions: Array<ToolbarAction> = [
       />
     ),
   },
-  ...deviceKinds.map((kind): DeviceToolbarAction => {
-    return {
-      group: "device",
-      id: kind.toolbar.id,
-      type: kind.type,
-      label: kind.toolbar.label,
-      shortcut: kind.toolbar.shortcut,
-      title: kind.toolbar.title,
-      icon: kind.toolbar.icon,
-    };
-  }),
 ];
-
-export const drawToolbarActions = toolbarActions.filter(
-  (action): action is DrawToolbarAction => action.group === "draw",
-);
-
-export const deviceToolbarActions = toolbarActions.filter(
-  (action): action is DeviceToolbarAction => action.group === "device",
-);

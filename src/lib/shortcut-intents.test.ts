@@ -1,5 +1,4 @@
 import { describe, expect, it } from "bun:test";
-import { deviceKinds } from "@/devices/deviceKindRegistry";
 import {
   getNextConnectionHighlightIds,
   matchesShortcutBinding,
@@ -164,15 +163,15 @@ describe("shortcut intents", () => {
 
     expect(
       resolveAction({
-        actions: ["tool-rack"],
-        event: keyEvent({ code: "Digit5", key: "(" }),
+        actions: ["tool-wall"],
+        event: keyEvent({ code: "Digit1", key: "&" }),
       }),
-    ).toBe("tool-rack");
+    ).toBe("tool-wall");
 
     expect(
       resolveAction({
-        actions: ["tool-rack"],
-        event: keyEvent({ code: "Digit5", ctrlKey: true, key: "5" }),
+        actions: ["tool-wall"],
+        event: keyEvent({ code: "Digit1", ctrlKey: true, key: "1" }),
       }),
     ).toBe(null);
   });
@@ -283,22 +282,6 @@ describe("shortcut intents", () => {
         runtime: { ...baseRuntime, isEditMode: false },
       }),
     ).toBe(null);
-  });
-
-  it("routes every device tool shortcut from registry metadata", () => {
-    deviceKinds.forEach((kind) => {
-      const key = kind.shortcut.keys[0];
-      if (typeof key !== "string") {
-        throw new TypeError("Device tool shortcut test expects string hotkeys");
-      }
-
-      expect(
-        resolveAction({
-          actions: [kind.shortcut.action],
-          event: keyEvent({ code: `Digit${key}`, key }),
-        }),
-      ).toBe(kind.shortcut.action);
-    });
   });
 
   it("computes connection highlights for selected and hovered devices", () => {

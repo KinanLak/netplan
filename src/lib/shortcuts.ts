@@ -6,11 +6,9 @@
  * - Combine with '+': 'Mod+Z', 'Mod+Shift+Z'
  * - Keys use event.key names: 'Escape', 'ArrowUp', 'Delete', 'Backspace'
  * - Single character keys also match physical event.code for letters, digits,
- *   and numpad digits so hotbar shortcuts survive layout changes.
+ *   and numpad digits so tool shortcuts survive layout changes.
  */
 
-import { deviceKinds } from "@/devices/deviceKindRegistry";
-import type { DeviceToolShortcutAction } from "@/devices/deviceKindRegistry";
 import type { ShortcutKeyBinding } from "@/lib/shortcut-types";
 
 export type ShortcutScope = "global" | "canvas" | "drawer";
@@ -49,8 +47,6 @@ export type ShortcutAction =
   | "toggle-overlay-visibility"
   | "toggle-overlay-lock"
   | "calibrate-overlay"
-  // Tools - Devices (number hotbar)
-  | DeviceToolShortcutAction
   // Device drawer
   | "close-drawer"
   | "delete-device"
@@ -66,19 +62,6 @@ export type ShortcutConfig = {
   /** Logical scope (used for enabled conditions) */
   scope: ShortcutScope;
 };
-
-const deviceToolShortcuts = deviceKinds.reduce(
-  (acc, kind) => {
-    acc[kind.shortcut.action] = {
-      keys: kind.shortcut.keys,
-      label: kind.shortcut.label,
-      description: kind.shortcut.description,
-      scope: "canvas",
-    };
-    return acc;
-  },
-  {} as Record<DeviceToolShortcutAction, ShortcutConfig>,
-);
 
 export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
   // Global actions
@@ -203,7 +186,7 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
     scope: "canvas",
   },
 
-  // Tools - Walls & Rooms (hotbar numbers + letter aliases)
+  // Tools - Walls & Rooms (numbers + letter aliases)
   "tool-wall": {
     keys: ["1", "W"],
     label: "Mur",
@@ -286,9 +269,6 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
       "Mettre le calque à l'échelle par deux points (panneau ouvert)",
     scope: "canvas",
   },
-
-  // Tools - Devices (number hotbar)
-  ...deviceToolShortcuts,
 
   // Device drawer
   "close-drawer": {

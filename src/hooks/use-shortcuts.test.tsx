@@ -24,7 +24,7 @@ const RegisterTool = ({
   action,
   run,
 }: {
-  action: "tool-wall" | "tool-pc";
+  action: "tool-wall" | "tool-room";
   run: () => void;
 }) => {
   useShortcutIntentEffect(action, run);
@@ -88,18 +88,18 @@ describe("ShortcutIntentProvider", () => {
       selectedDeviceId: null,
     });
 
-    const onPc = mock(() => {});
+    const onRoom = mock(() => {});
 
     render(
       <ShortcutIntentProvider>
-        <RegisterTool action="tool-pc" run={onPc} />
+        <RegisterTool action="tool-room" run={onRoom} />
       </ShortcutIntentProvider>,
       { wrapper: SignedInEditor },
     );
 
-    dispatchKeyDown({ key: "7", code: "Digit7" });
+    dispatchKeyDown({ key: "2", code: "Digit2" });
 
-    expect(onPc.mock.calls.length).toBe(0);
+    expect(onRoom.mock.calls.length).toBe(0);
   });
 
   it("gives a reader no tool shortcut even with edit mode stored on", () => {

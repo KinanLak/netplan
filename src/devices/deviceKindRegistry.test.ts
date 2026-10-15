@@ -1,11 +1,8 @@
 import { describe, expect, it } from "bun:test";
-import { deviceToolbarActions } from "@/panels/toolbar-actions";
 import { availableDevicesCatalog } from "@/devices/deviceCatalog";
-import { shortcuts } from "@/lib/shortcuts";
 import {
   createDeviceKindRecord,
   deviceKindRegistry,
-  deviceToolShortcutActions,
   deviceTypes,
   getDeviceKind,
   getDeviceKindLabel,
@@ -20,16 +17,9 @@ describe("device kind registry", () => {
   it("registers every catalog device type at every device-kind seam", () => {
     const registryTypes = sorted(deviceTypes);
     const catalogTypes = sorted(Object.keys(availableDevicesCatalog));
-    const toolbarTypes = sorted(
-      deviceToolbarActions.map((action) => action.type),
-    );
 
     expect(registryTypes).toEqual(catalogTypes);
-    expect(toolbarTypes).toEqual(registryTypes);
     expect(sorted(Object.keys(deviceNodeTypes))).toEqual(registryTypes);
-    expect(sorted(deviceToolShortcutActions)).toEqual(
-      sorted(deviceToolbarActions.map((action) => action.shortcut)),
-    );
 
     deviceTypes.forEach((type) => {
       const kind = deviceKindRegistry[type];
@@ -37,15 +27,7 @@ describe("device kind registry", () => {
       expect(kind.type).toBe(type);
       expect(kind.label.length > 0).toBe(true);
       expect(kind.drawerLabel.length > 0).toBe(true);
-      expect(kind.toolbar.id).toBe(type);
-      expect(kind.toolbar.shortcut).toBe(kind.shortcut.action);
       expect(deviceNodeTypes[type]).toBe(kind.nodeAdapter);
-      expect(shortcuts[kind.shortcut.action]).toEqual({
-        keys: kind.shortcut.keys,
-        label: kind.shortcut.label,
-        description: kind.shortcut.description,
-        scope: "canvas",
-      });
       expect(availableDevicesCatalog[type].length > 0).toBe(true);
       expect(
         availableDevicesCatalog[type].every((device) => device.type === type),

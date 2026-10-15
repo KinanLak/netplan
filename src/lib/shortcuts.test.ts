@@ -1,7 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { ShortcutAction } from "@/lib/shortcuts";
 import { formatHotkey, getShortcutDisplay, shortcuts } from "@/lib/shortcuts";
-import { deviceToolShortcutActions } from "@/devices/deviceKindRegistry";
 
 describe("shortcut formatting", () => {
   it("splits a combo string into platform symbols", () => {
@@ -54,15 +53,6 @@ describe("shortcut display", () => {
 });
 
 describe("shortcut registry coverage", () => {
-  it("registers every device tool action exactly once at canvas scope", () => {
-    deviceToolShortcutActions.forEach((action) => {
-      const config = shortcuts[action];
-      expect(config).toBeDefined();
-      expect(config.scope).toBe("canvas");
-      expect(config.keys.length).toBeGreaterThan(0);
-    });
-  });
-
   it("never reuses the same key combo within a single scope", () => {
     const collisions: Array<string> = [];
     const seen = new Map<string, ShortcutAction>();
