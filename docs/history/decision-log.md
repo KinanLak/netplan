@@ -819,17 +819,17 @@ Questions of 2026-10-15, in the order they came up.
 - Why: keeps one set of URLs and Bun as the runtime (vs an internal-URL split or running the image on Node); in production the hosts are real DNS names and both paths reach the edge anyway. Verified: `/health` 200, browser end to end, Convex action reaching Keycloak and convex-site via public URLs.
 - Who: agent (judgement call)
 
-#### SSR stylesheet 404 (pre-existing)
+#### SSR stylesheet 404
 
 - Context: the SSR bundle links `styles-<hash>.css` from its own build, the client build emits a different hash; the link 404s but the client manifest CSS still styles the page.
-- Decision: out of L0 scope; record as a leftover for the owner.
-- Who: agent (obvious)
+- Decision: first recorded as a leftover for the owner; the orchestrator asked the lot to fix it, and the root cause turned out to be the image build (below).
+- Who: orchestrator
 
 #### What goes in the functions image?
 
 - Context: `convex deploy` bundles `convex/` (and the `src/` files it imports) at deploy time, so the image needs their packages; the functions only import `convex`, but `package.json` lists build tools (vite, tanstack, hugeicons) under `dependencies`.
 - Decision: the backend image plus `bun install --production --frozen-lockfile` node_modules (~360 MB over the shared 582 MB base). A test keeps `deploy/convex-env.txt` equal to the `process.env` names the functions read.
-- Why: correct by construction from the lockfile; a hand-picked `convex` closure breaks silently when a dependency changes. Moving build tools to `devDependencies` would trim it: leftover for the owner.
+- Why: correct by construction from the lockfile; a hand-picked `convex` closure breaks silently when a dependency changes. Moving build tools to `devDependencies` would trim it: done later in the lot (below).
 - Who: agent (judgement call)
 
 #### Does an empty `.env` value clear a Convex variable?
@@ -858,4 +858,18 @@ Questions of 2026-10-15, in the order they came up.
 - Context: the brief asks for Postgres plus Convex storage; upstream recommends `convex export` for upgrades.
 - Decision: both: A, `convex export --include-file-storage` (online, portable across versions); B, `pg_dump` plus a tar of the `convex-data` volume with the backend stopped (exact, same version). Both verified by a round trip through `down -v` with identical document counts.
 - Why: A is the safe default and the upgrade fallback; B is the fast one for large data and the only one that keeps the backend's internal state as is.
+- Who: agent (judgement call)
+
+#### Why did the image's server-rendered page link a missing stylesheet?
+
+- Context: the page served by the image linked `styles-<hash>.css`, which answered 404, while builds from a checkout were fine. Tailwind's automatic source detection scans the working directory, skipping what `.gitignore` lists; the image's build context has no `.gitignore`, so the server build, which runs after the client build, also scanned `.output/` and generated a different stylesheet with a different hash.
+- Decision: `@import "tailwindcss" source(".")` limits detection to `src/`. The end-to-end test and the CI image job check that every stylesheet the server renders answers 200.
+- Why: the build's output must not depend on which files sit next to it. Scanning only `src/` dropped nothing the UI uses, only stray candidates found in the docs.
+- Who: agent (obvious)
+
+#### What goes in `dependencies`?
+
+- Context: the functions image installs `dependencies` (361 MB, mostly icons and build tools), yet the app ships as a self-contained Nitro bundle and the functions import only `convex`.
+- Decision: `dependencies` is `convex` alone; everything else is a dev dependency. A test fails if `dependencies` lists a package `convex/` does not import. The functions image drops from 944 MB to 636 MB; the app image is unchanged at 98.5 MB.
+- Why: "runtime" for a bundled app is the bundle; only the functions deploy installs packages.
 - Who: agent (judgement call)
