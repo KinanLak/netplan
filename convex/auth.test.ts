@@ -1,78 +1,22 @@
-import {
-  afterAll,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  mock,
-} from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { components, internal } from "./_generated/api";
-import { createSignedInUser, testBackend } from "./_test/auth.setup";
+import { createSignedInUser } from "./_test/auth.setup";
 import type { TestBackend } from "./_test/auth.setup";
+import {
+  outbox,
+  post,
+  tokenFromLink,
+  withMailRelay,
+  withMail,
+} from "./_test/mail.setup";
 
-const SITE = "http://netplan.test";
 const PASSWORD = "first-password-1"; // gitleaks:allow
 const NEW_PASSWORD = "second-password-2"; // gitleaks:allow
 
-interface SentMail {
-  to: string;
-  subject: string;
-  text: string;
-}
-
-// The relay `mail.send` talks to: it records instead of connecting.
-const sent: Array<SentMail> = [];
-void mock.module("nodemailer", () => ({
-  default: {
-    createTransport: () => ({
-      sendMail: (mail: SentMail) => {
-        sent.push(mail);
-        return Promise.resolve({});
-      },
-      close: () => {},
-    }),
-  },
-}));
-
-const env = {
-  SITE_URL: SITE,
-  BETTER_AUTH_SECRET: "test-secret-for-better-auth-only-0123456789", // gitleaks:allow
-  SMTP_HOST: "relay.test",
-  SMTP_FROM: "Netplan <netplan@example.test>",
-};
-const saved = { ...process.env };
-beforeAll(() => {
-  Object.assign(process.env, env);
-});
-afterAll(() => {
-  for (const key of Object.keys(env)) {
-    if (saved[key] === undefined) delete process.env[key];
-    else process.env[key] = saved[key];
-  }
-});
-beforeEach(() => {
-  sent.length = 0;
-});
-
-const withMail = () => testBackend({ "./mail.ts": () => import("./mail") });
-
-const post = (t: TestBackend, path: string, body: unknown) =>
-  t.fetch(`/api/auth${path}`, {
-    method: "POST",
-    headers: { "content-type": "application/json", origin: SITE },
-    body: JSON.stringify(body),
-  });
+withMailRelay();
 
 const requestReset = (t: TestBackend, email: string) =>
   post(t, "/request-password-reset", { email, redirectTo: "/reset-password" });
-
-/** The mails the relay received once every scheduled send has run. */
-const outbox = async (t: TestBackend) => {
-  // Real timers: this only yields until the scheduled sends have run.
-  await t.finishAllScheduledFunctions(() => {});
-  return sent;
-};
 
 async function userWithPassword(t: TestBackend) {
   await t.action(internal.bootstrap.ensureFirstAdmin, {
@@ -105,16 +49,8 @@ describe("forgotten password", () => {
     const [mail] = await outbox(t);
     expect(mail.to).toBe(email);
     expect(mail.text).toContain("Bonjour Owner");
-    const link = /https?:\/\/\S+/.exec(mail.text)?.[0] ?? "";
-    expect(link.startsWith(`${SITE}/api/auth/reset-password/`)).toBe(true);
-
-    // The link checks the token and lands on the app's page with it.
-    const landing = await t.fetch(link.slice(SITE.length), {
-      redirect: "manual",
-    });
-    const page = new URL(landing.headers.get("location") ?? "");
-    expect(page.pathname).toBe("/reset-password");
-    const token = page.searchParams.get("token");
+    const { path, token } = await tokenFromLink(t, mail);
+    expect(path).toBe("/reset-password");
     expect(token).toBeTruthy();
 
     expect(

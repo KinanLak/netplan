@@ -18,6 +18,7 @@ import { Route as AuthedIndexRouteImport } from './routes/_authed/index'
 import { Route as AuthedAdminRouteImport } from './routes/_authed/admin'
 import { Route as AuthedLogoRouteImport } from './routes/_authed/logo'
 import { Route as AuthedAdminIndexRouteImport } from './routes/_authed/admin/index'
+import { Route as AuthedAdminUsersRouteImport } from './routes/_authed/admin/users'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as AuthedAdminSitesIndexRouteImport } from './routes/_authed/admin/sites/index'
 import { Route as AuthedAdminSitesSiteIdRouteImport } from './routes/_authed/admin/sites/$siteId'
@@ -66,6 +67,11 @@ const AuthedAdminIndexRoute = AuthedAdminIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthedAdminRoute,
 } as any)
+const AuthedAdminUsersRoute = AuthedAdminUsersRouteImport.update({
+  id: '/users',
+  path: '/users',
+  getParentRoute: () => AuthedAdminRoute,
+} as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
@@ -90,6 +96,7 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/admin': typeof AuthedAdminRouteWithChildren
   '/logo': typeof AuthedLogoRoute
+  '/admin/users': typeof AuthedAdminUsersRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/admin/': typeof AuthedAdminIndexRoute
   '/admin/sites/$siteId': typeof AuthedAdminSitesSiteIdRoute
@@ -102,6 +109,7 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/logo': typeof AuthedLogoRoute
   '/': typeof AuthedIndexRoute
+  '/admin/users': typeof AuthedAdminUsersRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/admin': typeof AuthedAdminIndexRoute
   '/admin/sites/$siteId': typeof AuthedAdminSitesSiteIdRoute
@@ -117,6 +125,7 @@ export interface FileRoutesById {
   '/_authed/admin': typeof AuthedAdminRouteWithChildren
   '/_authed/logo': typeof AuthedLogoRoute
   '/_authed/': typeof AuthedIndexRoute
+  '/_authed/admin/users': typeof AuthedAdminUsersRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/_authed/admin/': typeof AuthedAdminIndexRoute
   '/_authed/admin/sites/$siteId': typeof AuthedAdminSitesSiteIdRoute
@@ -132,6 +141,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/admin'
     | '/logo'
+    | '/admin/users'
     | '/api/auth/$'
     | '/admin/'
     | '/admin/sites/$siteId'
@@ -144,6 +154,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/logo'
     | '/'
+    | '/admin/users'
     | '/api/auth/$'
     | '/admin'
     | '/admin/sites/$siteId'
@@ -158,6 +169,7 @@ export interface FileRouteTypes {
     | '/_authed/admin'
     | '/_authed/logo'
     | '/_authed/'
+    | '/_authed/admin/users'
     | '/api/auth/$'
     | '/_authed/admin/'
     | '/_authed/admin/sites/$siteId'
@@ -238,6 +250,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedAdminIndexRouteImport
       parentRoute: typeof AuthedAdminRoute
     }
+    '/_authed/admin/users': {
+      id: '/_authed/admin/users'
+      path: '/users'
+      fullPath: '/admin/users'
+      preLoaderRoute: typeof AuthedAdminUsersRouteImport
+      parentRoute: typeof AuthedAdminRoute
+    }
     '/api/auth/$': {
       id: '/api/auth/$'
       path: '/api/auth/$'
@@ -263,12 +282,14 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthedAdminRouteChildren {
+  AuthedAdminUsersRoute: typeof AuthedAdminUsersRoute
   AuthedAdminIndexRoute: typeof AuthedAdminIndexRoute
   AuthedAdminSitesSiteIdRoute: typeof AuthedAdminSitesSiteIdRoute
   AuthedAdminSitesIndexRoute: typeof AuthedAdminSitesIndexRoute
 }
 
 const AuthedAdminRouteChildren: AuthedAdminRouteChildren = {
+  AuthedAdminUsersRoute: AuthedAdminUsersRoute,
   AuthedAdminIndexRoute: AuthedAdminIndexRoute,
   AuthedAdminSitesSiteIdRoute: AuthedAdminSitesSiteIdRoute,
   AuthedAdminSitesIndexRoute: AuthedAdminSitesIndexRoute,

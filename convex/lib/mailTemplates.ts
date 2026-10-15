@@ -27,3 +27,40 @@ export function resetPasswordMail({
     ].join("\n"),
   };
 }
+
+export function invitationMail({
+  name,
+  invitedBy,
+  url,
+}: {
+  name: string;
+  invitedBy: string;
+  url: string;
+}): Mail {
+  return {
+    subject: "Netplan : votre invitation",
+    text: [
+      `Bonjour ${name},`,
+      "",
+      `${invitedBy} vous a créé un compte sur Netplan, le plan du réseau.`,
+      "Choisissez votre mot de passe avec ce lien, valable sept jours :",
+      "",
+      url,
+      "",
+      "Passé ce délai, demandez à un administrateur de vous renvoyer",
+      "l'invitation.",
+    ].join("\n"),
+  };
+}
+
+export function testMail({ name }: { name: string }): Mail {
+  return {
+    subject: "Netplan : e-mail de test",
+    text: [
+      `Bonjour ${name},`,
+      "",
+      "Cet e-mail confirme que Netplan peut envoyer les invitations et les",
+      "liens de réinitialisation de mot de passe.",
+    ].join("\n"),
+  };
+}

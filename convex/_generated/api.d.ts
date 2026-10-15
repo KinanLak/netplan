@@ -31,6 +31,7 @@ import type * as lib_presence from "../lib/presence.js";
 import type * as lib_roles from "../lib/roles.js";
 import type * as lib_secrets from "../lib/secrets.js";
 import type * as lib_smtp from "../lib/smtp.js";
+import type * as lib_userAccounts from "../lib/userAccounts.js";
 import type * as links from "../links.js";
 import type * as mail from "../mail.js";
 import type * as mapDocument from "../mapDocument.js";
@@ -72,6 +73,7 @@ declare const fullApi: ApiFromModules<{
   "lib/roles": typeof lib_roles;
   "lib/secrets": typeof lib_secrets;
   "lib/smtp": typeof lib_smtp;
+  "lib/userAccounts": typeof lib_userAccounts;
   links: typeof links;
   mail: typeof mail;
   mapDocument: typeof mapDocument;
