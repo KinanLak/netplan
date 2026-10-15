@@ -1,6 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import {
+  backendOf,
   isGeneratedEnvFile,
+  mailName,
   nextBackendPorts,
   nextWebPort,
   parseEnvLines,
@@ -22,17 +24,26 @@ describe("resourceName", () => {
   it("differs for two worktrees with the same directory name", () => {
     expect(resourceName("/a/netplan")).not.toBe(resourceName("/b/netplan"));
   });
+
+  it("ties the Mailpit container back to its backend", () => {
+    const name = resourceName("/home/me/netplan");
+    expect(mailName(name)).not.toBe(name);
+    expect(backendOf(mailName(name))).toBe(name);
+    expect(backendOf(name)).toBe(name);
+  });
 });
 
 describe("ports", () => {
   it("starts each worktree in its ranges, with an even backend pair", () => {
     for (const path of ["/a", "/b/c", "/home/me/netplan"]) {
-      const { backend, web } = preferredPorts(path);
+      const { backend, web, mail } = preferredPorts(path);
       expect(backend).toBeGreaterThanOrEqual(13200);
       expect(backend + 1).toBeLessThan(14000);
       expect(backend % 2).toBe(0);
       expect(web).toBeGreaterThanOrEqual(3100);
       expect(web).toBeLessThan(4000);
+      expect(mail).toBeGreaterThanOrEqual(14000);
+      expect(mail).toBeLessThan(14900);
     }
   });
 

@@ -18,9 +18,14 @@ const authModules: Record<string, () => Promise<Record<string, unknown>>> = {
 
 export type TestBackend = TestConvex<typeof schema>;
 
-/** A backend with the better-auth component and no signed-in caller. */
-export function testBackend(): TestBackend {
-  const t = convexTest(schema, modules);
+/**
+ * A backend with the better-auth component and no signed-in caller; `extra`
+ * adds modules `./modules` leaves out, such as Node actions.
+ */
+export function testBackend(
+  extra: Record<string, () => Promise<Record<string, unknown>>> = {},
+): TestBackend {
+  const t = convexTest(schema, { ...modules, ...extra });
   t.registerComponent("betterAuth", authSchema, authModules);
   return t;
 }

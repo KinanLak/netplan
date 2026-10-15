@@ -5,7 +5,7 @@ import { basename } from "node:path";
 export const GENERATED_ENV_HEADER =
   "# Written by `bun run dev:agent`; delete to regenerate.";
 
-/** Labels on every container and volume `dev:agent` creates. */
+/** Labels on every container, volume and network `dev:agent` creates. */
 export const ROLE_LABEL = "netplan.role=dev-backend";
 export const WORKTREE_LABEL = "netplan.worktree";
 export const OWNER_LABEL = "netplan.owner";
@@ -30,16 +30,35 @@ export const resourceName = (worktree: string): string => {
   return `netplan-cvx-${slug}-${digest(worktree).slice(0, 6)}`;
 };
 
+/** Mailpit, as the `local` compose profile runs it. */
+export const MAILPIT_IMAGE = "axllent/mailpit:v1.31.6";
+
+const MAIL_SUFFIX = "-mail";
+
+/** The worktree's Mailpit container, next to its backend. */
+export const mailName = (backend: string): string => `${backend}${MAIL_SUFFIX}`;
+
+/** The backend a `dev:agent` container, volume or network belongs to. */
+export const backendOf = (resource: string): string =>
+  resource.endsWith(MAIL_SUFFIX)
+    ? resource.slice(0, -MAIL_SUFFIX.length)
+    : resource;
+
 /**
  * Where the worktree's ports start: a backend pair (API, then site) in
- * 13200-13999 and a web port in 3100-3999. The caller walks up from there
- * while a port is taken, so the same worktree usually gets the same ports.
+ * 13200-13999, a web port in 3100-3999 and Mailpit's inbox in 14000-14899.
+ * The caller walks up from there while a port is taken, so the same worktree
+ * usually gets the same ports.
  */
 export const preferredPorts = (
   worktree: string,
-): { backend: number; web: number } => {
+): { backend: number; web: number; mail: number } => {
   const value = Number.parseInt(digest(worktree).slice(0, 8), 16);
-  return { backend: 13200 + (value % 400) * 2, web: 3100 + (value % 900) };
+  return {
+    backend: 13200 + (value % 400) * 2,
+    web: 3100 + (value % 900),
+    mail: 14000 + (value % 900),
+  };
 };
 
 export const nextWebPort = (
