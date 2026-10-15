@@ -170,6 +170,24 @@ describe("integrations", () => {
     );
   });
 
+  it("drops a test result when the connection was saved again meanwhile", async () => {
+    const admin = await signedInTest("admin");
+    const siteId = await createTestSite(admin);
+    await saveNetBox(admin, siteId);
+    const [tested] = await stored(admin);
+    await saveNetBox(admin, siteId, { token: "another-token-for-tests" }); // gitleaks:allow
+
+    await admin.mutation(internal.integrations.recordCheck, {
+      siteId,
+      kind: "netbox",
+      testedVersion: tested.updatedAt,
+      check: { ok: false, message: "NetBox refuse ce jeton (403).", at: 0 },
+    });
+
+    const [row] = await stored(admin);
+    expect(row.lastCheck?.message).toBe("Connexion réussie : NetBox 4.6.10.");
+  });
+
   it("removes a site's integrations with the site", async () => {
     const admin = await signedInTest("admin");
     const siteId = await createTestSite(admin);

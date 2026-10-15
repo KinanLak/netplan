@@ -153,7 +153,7 @@ const runCheck = async (
   await ctx.runMutation(internal.integrations.recordCheck, {
     siteId,
     kind,
-    baseUrl: stored.baseUrl,
+    testedVersion: stored.updatedAt,
     check: { ...result, at: Date.now() },
   });
   return result;
@@ -206,7 +206,9 @@ export const store = internalMutation({
       ...(token ? { token } : {}),
       // The last check described the old connection.
       ...(changed ? { lastCheck: undefined } : {}),
-      updatedAt,
+      // Strictly later, even within a millisecond: a test result is recorded
+      // only if no save came after the one it tested.
+      updatedAt: Math.max(updatedAt, existing.updatedAt + 1),
     });
     return null;
   },
@@ -223,6 +225,7 @@ export const credentials = internalQuery({
       baseUrl: v.string(),
       enabled: v.boolean(),
       token: encryptedSecret,
+      updatedAt: v.number(),
     }),
   ),
   handler: async (ctx, { siteId, kind }) => {
@@ -234,6 +237,7 @@ export const credentials = internalQuery({
           baseUrl: row.baseUrl,
           enabled: row.enabled,
           token: row.token,
+          updatedAt: row.updatedAt,
         }
       : null;
   },
@@ -243,14 +247,16 @@ export const recordCheck = internalMutation({
   args: {
     siteId: v.string(),
     kind: integrationKind,
-    baseUrl: v.string(),
+    /** The `updatedAt` of the connection that was tested. */
+    testedVersion: v.number(),
     check: connectionCheck,
   },
   returns: v.null(),
-  handler: async (ctx, { siteId, kind, baseUrl, check }) => {
+  handler: async (ctx, { siteId, kind, testedVersion, check }) => {
     const row = await find(ctx, siteId, kind);
-    // Saved again while the test ran: the result is about the old address.
-    if (!row || row.baseUrl !== baseUrl) return null;
+    // Saved again while the test ran: the result is about the old address
+    // or token.
+    if (!row || row.updatedAt !== testedVersion) return null;
     await ctx.db.patch(row._id, { lastCheck: check });
     return null;
   },
