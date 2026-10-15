@@ -1,5 +1,5 @@
 import { PLAN_UNITS_PER_METRE } from "@/lib/grid";
-import { OVERLAY_MAX_SCALE, OVERLAY_MIN_SCALE } from "@/map-engine/overlay";
+import { applyOverlayPatch, overlayError } from "@/map-engine/overlay";
 import type { OverlayPatch } from "@/map-engine/types";
 import type { FloorOverlay, Position } from "@/types/map";
 import { rotate } from "./gesture";
@@ -79,23 +79,19 @@ export function calibrationPatch(
     return { ok: false, reason: "points-too-close" };
   }
   const scale = (metres * PLAN_UNITS_PER_METRE) / pixelDistance(a, b);
-  if (
-    !Number.isFinite(scale) ||
-    scale < OVERLAY_MIN_SCALE ||
-    scale > OVERLAY_MAX_SCALE
-  ) {
-    return { ok: false, reason: "invalid-distance" };
-  }
   const anchor = imageToPlan(overlay, a);
   const factor = scale / overlay.scale;
-  return {
-    ok: true,
-    patch: {
-      scale,
-      center: {
-        x: anchor.x + (overlay.center.x - anchor.x) * factor,
-        y: anchor.y + (overlay.center.y - anchor.y) * factor,
-      },
+  const patch = {
+    scale,
+    center: {
+      x: anchor.x + (overlay.center.x - anchor.x) * factor,
+      y: anchor.y + (overlay.center.y - anchor.y) * factor,
     },
   };
+  // Growing about a point far from the centre can push the centre out of the
+  // plan even with a scale in bounds; the engine would refuse either.
+  if (overlayError(applyOverlayPatch(overlay, patch)) !== null) {
+    return { ok: false, reason: "invalid-distance" };
+  }
+  return { ok: true, patch };
 }

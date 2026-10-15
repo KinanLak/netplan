@@ -46,8 +46,9 @@ export function OverlayCalibrationStep({
           tooClose={arePointsTooClose(a, b)}
           onApply={(metres) => {
             const result = calibrationPatch(overlay, a, b, metres);
-            if (!result.ok) return false;
-            commands.patchOverlay(result.patch);
+            if (!result.ok || !commands.patchOverlay(result.patch)) {
+              return false;
+            }
             setOverlayCalibration(null);
             return true;
           }}

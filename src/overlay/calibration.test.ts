@@ -100,4 +100,16 @@ describe("calibrationPatch", () => {
       });
     }
   });
+
+  it("refuses a scale in bounds that moves the calque off the plan", () => {
+    // Grown 500 times about its left edge, the centre lands 2 km away.
+    const wide = overlay({
+      imageWidth: 8192,
+      center: { x: 0, y: 0 },
+      scale: 1,
+    });
+    expect(
+      calibrationPatch(wide, { x: 10, y: 100 }, { x: 30, y: 100 }, 100),
+    ).toEqual({ ok: false, reason: "invalid-distance" });
+  });
 });
