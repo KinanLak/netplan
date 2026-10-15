@@ -1,7 +1,9 @@
 import { ViewportPortal } from "@xyflow/react";
 import { useQuery } from "convex/react";
+import { applyOverlayPatch } from "@/map-engine/overlay";
 import { useMapDocumentData } from "@/map-session/useMapDocument";
 import { useIsOverlayHidden } from "@/store/selectors";
+import { useMapStore } from "@/store/useMapStore";
 import { api } from "../../convex/_generated/api";
 
 /**
@@ -11,6 +13,7 @@ import { api } from "../../convex/_generated/api";
 export function FloorOverlayLayer() {
   const { document } = useMapDocumentData();
   const isHidden = useIsOverlayHidden();
+  const draft = useMapStore((s) => s.overlayDraft);
   const overlay =
     document.overlay?.floorId === document.floorId ? document.overlay : null;
   const image = useQuery(
@@ -20,7 +23,9 @@ export function FloorOverlayLayer() {
 
   if (!overlay || !image || isHidden) return null;
 
-  const { center, scale, rotation } = overlay;
+  const { center, scale, rotation, opacity } = draft
+    ? applyOverlayPatch(overlay, draft)
+    : overlay;
   return (
     <ViewportPortal>
       <img
@@ -33,7 +38,7 @@ export function FloorOverlayLayer() {
         style={{
           width: overlay.imageWidth,
           height: overlay.imageHeight,
-          opacity: overlay.opacity,
+          opacity,
           // The viewport is a stacking context: -1 paints under nodes and walls.
           zIndex: -1,
           transformOrigin: "0 0",

@@ -16,6 +16,7 @@ import {
 import { useIsEditMode, useIsOverlayPanelOpen } from "@/store/selectors";
 import { useMapStore } from "@/store/useMapStore";
 import { api } from "../../convex/_generated/api";
+import { OverlayControls } from "./OverlayControls";
 import { PdfPageDialog } from "./PdfPageDialog";
 import { OVERLAY_FILE_ACCEPT } from "./rasterize";
 import { useOverlayImport } from "./useOverlayImport";
@@ -126,10 +127,13 @@ function OverlayPanelContent() {
         ) : null}
       </div>
 
-      {overlay?.locked ? (
+      {overlay ? <OverlayControls overlay={overlay} isReady={isReady} /> : null}
+
+      {overlay ? (
         <p className="text-xs text-muted-foreground">
-          Calque verrouillé : déverrouillez-le pour le remplacer ou le
-          supprimer.
+          {overlay.locked
+            ? "Calque verrouillé : déverrouillez-le pour le déplacer, le remplacer ou le supprimer."
+            : "Faites glisser le calque pour le déplacer, un coin pour le redimensionner, la poignée du haut pour le faire pivoter."}
         </p>
       ) : null}
       {isWorking ? (

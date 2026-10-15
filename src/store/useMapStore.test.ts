@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "bun:test";
 import { useMapStore } from "@/store/useMapStore";
-import type { DeviceId } from "@/types/map";
+import type { DeviceId, FloorId } from "@/types/map";
 
 const initialState = useMapStore.getState();
 const did = (s: string) => s as DeviceId;
@@ -50,5 +50,11 @@ describe("calque panel state", () => {
     expect(useMapStore.getState().isOverlayHidden).toBe(true);
     useMapStore.getState().toggleOverlayHidden();
     expect(useMapStore.getState().isOverlayHidden).toBe(false);
+  });
+
+  it("a gesture's preview does not follow the user to another floor", () => {
+    useMapStore.getState().setOverlayDraft({ rotation: 45 });
+    useMapStore.getState().setCurrentFloor("floor:b" as FloorId);
+    expect(useMapStore.getState().overlayDraft).toBeNull();
   });
 });

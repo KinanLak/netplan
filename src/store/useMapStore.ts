@@ -48,6 +48,7 @@ export const useMapStore = create<MapStore>()((set) => ({
   wallEraserSize: WALL_ERASER_DEFAULT_SIZE,
   isOverlayPanelOpen: false,
   isOverlayHidden: false,
+  overlayDraft: null,
 
   setCurrentBuilding: (buildingId: BuildingId | null) => {
     set({
@@ -59,6 +60,7 @@ export const useMapStore = create<MapStore>()((set) => ({
       hoveredDeviceId: null,
       highlightedDeviceIds: [],
       highlightedDeviceIdSet: toHighlightedDeviceIdSet([]),
+      overlayDraft: null,
     });
   },
   setCurrentFloor: (floorId: FloorId | null) => {
@@ -70,6 +72,7 @@ export const useMapStore = create<MapStore>()((set) => ({
       hoveredDeviceId: null,
       highlightedDeviceIds: [],
       highlightedDeviceIdSet: toHighlightedDeviceIdSet([]),
+      overlayDraft: null,
     });
   },
   selectDevice: (deviceId) => {
@@ -162,6 +165,9 @@ export const useMapStore = create<MapStore>()((set) => ({
   },
   toggleOverlayHidden: () => {
     set((state) => ({ isOverlayHidden: !state.isOverlayHidden }));
+  },
+  setOverlayDraft: (draft) => {
+    set({ overlayDraft: draft });
   },
   setHighlightedDevices: (deviceIds) => {
     set((state) => {

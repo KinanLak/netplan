@@ -61,7 +61,11 @@ export const shortcutGroups: Array<ShortcutGroup> = [
     id: "overlay",
     title: "Calque",
     orderPriority: 55,
-    actions: ["toggle-overlay-panel", "toggle-overlay-visibility"],
+    actions: [
+      "toggle-overlay-panel",
+      "toggle-overlay-visibility",
+      "toggle-overlay-lock",
+    ],
   },
   {
     id: "floor-navigation",
