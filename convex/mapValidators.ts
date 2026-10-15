@@ -3,7 +3,9 @@ import { v } from "convex/values";
 export const deviceType = v.union(
   v.literal("rack"),
   v.literal("switch"),
+  v.literal("patch-panel"),
   v.literal("pc"),
+  v.literal("endpoint"),
   v.literal("wall-port"),
 );
 

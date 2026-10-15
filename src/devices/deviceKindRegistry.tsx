@@ -1,11 +1,15 @@
 import {
   ComputerIcon,
+  DeviceAccessIcon,
+  EthernetPortIcon,
   HardDriveIcon,
   PlugSocketIcon,
   ServerStack03Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { NodeTypes } from "@xyflow/react";
+import EndpointNode from "@/canvas/nodeTypes/EndpointNode";
+import PatchPanelNode from "@/canvas/nodeTypes/PatchPanelNode";
 import PcNode from "@/canvas/nodeTypes/PcNode";
 import RackNode from "@/canvas/nodeTypes/RackNode";
 import SwitchNode from "@/canvas/nodeTypes/SwitchNode";
@@ -128,6 +132,47 @@ export const deviceKindRegistry = {
       description: "Ajouter une prise murale",
     },
     nodeAdapter: WallPortNode,
+  },
+  "patch-panel": {
+    type: "patch-panel",
+    label: "Panneau",
+    drawerLabel: "Panneau de brassage",
+    defaultSize: { width: 200, height: 40 },
+    toolbar: {
+      id: "patch-panel",
+      label: "Panneau",
+      title: "Ajouter Panneau de brassage",
+      shortcut: "tool-patch-panel",
+      icon: toolbarIcon(EthernetPortIcon),
+    },
+    shortcut: {
+      action: "tool-patch-panel",
+      keys: ["9"],
+      label: "Panneau",
+      description: "Ajouter un panneau de brassage",
+    },
+    nodeAdapter: PatchPanelNode,
+  },
+  endpoint: {
+    type: "endpoint",
+    label: "Terminal",
+    drawerLabel: "Terminal",
+    defaultSize: { width: 80, height: 80 },
+    toolbar: {
+      id: "endpoint",
+      label: "Terminal",
+      title: "Ajouter Terminal",
+      shortcut: "tool-endpoint",
+      icon: toolbarIcon(DeviceAccessIcon),
+    },
+    shortcut: {
+      action: "tool-endpoint",
+      // "0" is the numpad's zoom reset.
+      keys: ["T"],
+      label: "Terminal",
+      description: "Ajouter un terminal (imprimante, téléphone, serveur…)",
+    },
+    nodeAdapter: EndpointNode,
   },
 } satisfies { [TType in DeviceType]: DeviceKind<TType> };
 
