@@ -83,6 +83,7 @@ const shortcutRoutingPriority: Array<ShortcutAction> = [
   "toggle-overlay-panel",
   "toggle-overlay-visibility",
   "toggle-overlay-lock",
+  "calibrate-overlay",
   ...deviceToolShortcutActions,
 ];
 
@@ -259,6 +260,7 @@ const isActionAllowedByContext = (
       return runtime.isEditMode;
     case "toggle-overlay-panel":
     case "toggle-overlay-lock":
+    case "calibrate-overlay":
       return runtime.isEditMode && runtime.currentFloorId !== null;
     case "toggle-overlay-visibility":
       return runtime.currentFloorId !== null;

@@ -49,6 +49,7 @@ export const useMapStore = create<MapStore>()((set) => ({
   isOverlayPanelOpen: false,
   isOverlayHidden: false,
   overlayDraft: null,
+  overlayCalibration: null,
 
   setCurrentBuilding: (buildingId: BuildingId | null) => {
     set({
@@ -61,6 +62,7 @@ export const useMapStore = create<MapStore>()((set) => ({
       highlightedDeviceIds: [],
       highlightedDeviceIdSet: toHighlightedDeviceIdSet([]),
       overlayDraft: null,
+      overlayCalibration: null,
     });
   },
   setCurrentFloor: (floorId: FloorId | null) => {
@@ -73,6 +75,7 @@ export const useMapStore = create<MapStore>()((set) => ({
       highlightedDeviceIds: [],
       highlightedDeviceIdSet: toHighlightedDeviceIdSet([]),
       overlayDraft: null,
+      overlayCalibration: null,
     });
   },
   selectDevice: (deviceId) => {
@@ -168,6 +171,9 @@ export const useMapStore = create<MapStore>()((set) => ({
   },
   setOverlayDraft: (draft) => {
     set({ overlayDraft: draft });
+  },
+  setOverlayCalibration: (calibration) => {
+    set({ overlayCalibration: calibration });
   },
   setHighlightedDevices: (deviceIds) => {
     set((state) => {

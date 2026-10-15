@@ -65,6 +65,7 @@ export const shortcutGroups: Array<ShortcutGroup> = [
       "toggle-overlay-panel",
       "toggle-overlay-visibility",
       "toggle-overlay-lock",
+      "calibrate-overlay",
     ],
   },
   {

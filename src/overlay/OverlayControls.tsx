@@ -4,6 +4,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import {
   LockKeyholeIcon,
   LockKeyholeOpenIcon,
+  RulerIcon,
 } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +14,7 @@ import { OVERLAY_MIN_OPACITY, normalizeRotation } from "@/map-engine/overlay";
 import { useMapDocumentActions } from "@/map-session/useMapDocument";
 import { useMapStore } from "@/store/useMapStore";
 import type { FloorOverlay } from "@/types/map";
+import { OverlayCalibrationStep } from "./OverlayCalibrationStep";
 import {
   formatDecimal,
   overlayWidthMetres,
@@ -25,21 +27,44 @@ interface OverlayControlsProps {
   isReady: boolean;
 }
 
-/** Opacity, angle, width and lock of the floor's calque. */
+/** Opacity, angle, width, scale calibration and lock of the floor's calque. */
 export function OverlayControls({ overlay, isReady }: OverlayControlsProps) {
   const { commands } = useMapDocumentActions();
   const draftOpacity = useMapStore((s) => s.overlayDraft?.opacity);
   const setOverlayDraft = useMapStore((s) => s.setOverlayDraft);
+  const calibration = useMapStore((s) => s.overlayCalibration);
+  const setOverlayCalibration = useMapStore((s) => s.setOverlayCalibration);
   const opacityId = useId();
   const canPlace = isReady && !overlay.locked;
+  // Points picked on a replaced image would not mean anything on the new one.
+  const activeCalibration =
+    canPlace && calibration?.fileId === overlay.fileId ? calibration : null;
 
-  useEffect(() => () => setOverlayDraft(null), [setOverlayDraft]);
+  useEffect(
+    () => () => {
+      setOverlayDraft(null);
+      setOverlayCalibration(null);
+    },
+    [setOverlayDraft, setOverlayCalibration],
+  );
 
   const toggleLock = () => {
-    if (isReady) commands.patchOverlay({ locked: !overlay.locked });
+    if (!isReady) return;
+    if (!overlay.locked) setOverlayCalibration(null);
+    commands.patchOverlay({ locked: !overlay.locked });
   };
   useShortcutIntentEffect("toggle-overlay-lock", toggleLock, {
     enabled: isReady,
+  });
+
+  const toggleCalibration = () => {
+    if (!canPlace) return;
+    setOverlayCalibration(
+      activeCalibration ? null : { fileId: overlay.fileId, points: [] },
+    );
+  };
+  useShortcutIntentEffect("calibrate-overlay", toggleCalibration, {
+    enabled: canPlace,
   });
 
   // The slider previews through the draft; letting go makes one undo step.
@@ -107,6 +132,25 @@ export function OverlayControls({ overlay, isReady }: OverlayControlsProps) {
           }}
         />
       </div>
+
+      {activeCalibration ? (
+        <OverlayCalibrationStep
+          overlay={overlay}
+          calibration={activeCalibration}
+        />
+      ) : (
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={!canPlace}
+          onClick={toggleCalibration}
+          title="Cliquer deux points du plan et saisir leur distance réelle"
+        >
+          <HugeiconsIcon icon={RulerIcon} strokeWidth={2} />
+          Étalonner l'échelle
+          <ShortcutHintInline action="calibrate-overlay" size="sm" />
+        </Button>
+      )}
 
       <Button
         variant={overlay.locked ? "secondary" : "outline"}

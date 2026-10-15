@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "bun:test";
 import { useMapStore } from "@/store/useMapStore";
-import type { DeviceId, FloorId } from "@/types/map";
+import type { DeviceId, FloorId, OverlayFileId } from "@/types/map";
 
 const initialState = useMapStore.getState();
 const did = (s: string) => s as DeviceId;
@@ -56,5 +56,14 @@ describe("calque panel state", () => {
     useMapStore.getState().setOverlayDraft({ rotation: 45 });
     useMapStore.getState().setCurrentFloor("floor:b" as FloorId);
     expect(useMapStore.getState().overlayDraft).toBeNull();
+  });
+
+  it("a calibration does not follow the user to another floor", () => {
+    useMapStore.getState().setOverlayCalibration({
+      fileId: "overlay-file:a" as OverlayFileId,
+      points: [{ x: 1, y: 2 }],
+    });
+    useMapStore.getState().setCurrentFloor("floor:b" as FloorId);
+    expect(useMapStore.getState().overlayCalibration).toBeNull();
   });
 });

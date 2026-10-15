@@ -43,6 +43,24 @@ server; `convex/authorization.test.ts` lists the level of each one. A
 Lecteur's map is read-only, and presence (`convex/presences.ts`) shows each
 signed-in user's name, one entry per user however many tabs they have open.
 
+## Floor overlay
+
+Built by lot 3a (ADR 0024, after ADR 0011). A floor may carry one calque: a
+PNG or JPEG in Convex storage, recorded in `floorOverlayFiles`, placed by its
+`floorOverlays` row and changed only through the `overlay.set` and
+`overlay.patch` map operations. The browser turns every import into a raster
+before upload: pdf.js for a PDF page, an `<img>` for an SVG. pdf.js's
+decoders, fonts and CMaps ship inside the app bundle rather than coming from
+a CDN. The plan has a fixed scale of 100 units per metre
+(`PLAN_UNITS_PER_METRE`).
+
+The canvas draws the calque under the walls in a React Flow `ViewportPortal`
+(`src/overlay/`). The move, resize and rotate gizmo and the two-point
+calibration share that portal and appear only while the Calque panel is open.
+A gesture previews through a Zustand draft and commits one patch, so it is one
+undo step. The viewport sets `pointer-events: none` and the portal inherits
+it, so anything clickable placed there needs `pointer-events-auto`.
+
 ## Sites
 
 Admins create, configure and remove sites under `/admin` (ADR 0023). A site
