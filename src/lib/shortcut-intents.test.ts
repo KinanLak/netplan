@@ -222,6 +222,32 @@ describe("shortcut intents", () => {
     ).toBe(true);
   });
 
+  it("opens the calque panel only in edit mode, but toggles its visibility when reading", () => {
+    const actions: Array<ShortcutAction> = [
+      "toggle-overlay-panel",
+      "toggle-overlay-visibility",
+    ];
+    const c = keyEvent({ code: "KeyC", key: "c" });
+    const shiftC = keyEvent({ code: "KeyC", key: "C", shiftKey: true });
+    const reading = { ...baseRuntime, isEditMode: false };
+
+    expect(resolveAction({ actions, event: c })).toBe("toggle-overlay-panel");
+    expect(resolveAction({ actions, event: shiftC })).toBe(
+      "toggle-overlay-visibility",
+    );
+    expect(resolveAction({ actions, event: c, runtime: reading })).toBe(null);
+    expect(resolveAction({ actions, event: shiftC, runtime: reading })).toBe(
+      "toggle-overlay-visibility",
+    );
+    expect(
+      resolveAction({
+        actions,
+        event: shiftC,
+        runtime: { ...baseRuntime, currentFloorId: null },
+      }),
+    ).toBe(null);
+  });
+
   it("routes every device tool shortcut from registry metadata", () => {
     deviceKinds.forEach((kind) => {
       const key = kind.shortcut.keys[0];

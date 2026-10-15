@@ -223,6 +223,10 @@ export interface MapInteractionState {
   activeDrawTool: DrawTool;
   selectedWallColor: WallColor;
   wallEraserSize: number;
+  /** The calque panel; while open, the calque is what the canvas edits. */
+  isOverlayPanelOpen: boolean;
+  /** Personal and per session: hiding the calque changes nothing for others. */
+  isOverlayHidden: boolean;
 }
 
 export interface MapInteractionActions {
@@ -239,6 +243,8 @@ export interface MapInteractionActions {
   setSelectedWallColor: (color: WallColor) => void;
   setWallEraserSize: (size: number) => void;
   setHighlightedDevices: (deviceIds: Array<DeviceId>) => void;
+  setOverlayPanelOpen: (open: boolean) => void;
+  toggleOverlayHidden: () => void;
 }
 
 export type MapStore = MapInteractionState & MapInteractionActions;

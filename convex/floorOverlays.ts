@@ -3,12 +3,14 @@ import { internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { editorAction, readerQuery } from "./lib/functions";
 import { readImageHeader } from "./lib/imageHeader";
-import { OVERLAY_MAX_IMAGE_SIDE } from "../src/map-engine/overlay";
+import {
+  OVERLAY_MAX_FILE_BYTES,
+  OVERLAY_MAX_IMAGE_SIDE,
+} from "../src/map-engine/overlay";
 
 // Calque files (ADR 0024). The browser rasterizes every import to PNG or
 // JPEG; this action checks the bytes before anything lands in storage.
 
-export const OVERLAY_MAX_FILE_BYTES = 15 * 1024 * 1024;
 const OVERLAY_FILE_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_NAME_LENGTH = 200;
 const DELETE_BATCH_SIZE = 50;

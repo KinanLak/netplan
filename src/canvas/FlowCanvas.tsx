@@ -11,6 +11,7 @@ import {
   useCurrentFloorId,
   useIsEditMode,
   useIsMultiSelectMode,
+  useIsOverlayPanelOpen,
   useSelectedDeviceId,
 } from "@/store/selectors";
 import {
@@ -30,6 +31,9 @@ import {
 import { useCanvasDeviceNodes } from "@/canvas/hooks/useCanvasDeviceNodes";
 import { useCanvasDragState } from "@/canvas/hooks/useCanvasDragState";
 import { useCanvasKeyboardShortcuts } from "@/canvas/hooks/useCanvasKeyboardShortcuts";
+import { FloorOverlayLayer } from "@/overlay/FloorOverlayLayer";
+import { OverlayPanel } from "@/overlay/OverlayPanel";
+import { OverlayVisibilityButton } from "@/overlay/OverlayVisibilityButton";
 import {
   FLOW_CANVAS_BACKGROUND_COLOR,
   FLOW_CANVAS_BACKGROUND_DOT_SIZE,
@@ -213,6 +217,7 @@ export default function FlowCanvas() {
   const isEditMode = useIsEditMode();
   const isMultiSelectMode = useIsMultiSelectMode();
   const activeDrawTool = useActiveDrawTool();
+  const isOverlayPanelOpen = useIsOverlayPanelOpen();
 
   const selectDevice = useMapStore((s) => s.selectDevice);
   const setHoveredDevice = useMapStore((s) => s.setHoveredDevice);
@@ -230,7 +235,9 @@ export default function FlowCanvas() {
   const { updateDevicePosition, updateDevicePositions, checkCollision } =
     commands;
 
-  const canEditDevices = isEditMode && activeDrawTool === "device" && isReady;
+  // While the calque panel is open, the canvas edits the calque, not devices.
+  const canEditDevices =
+    isEditMode && activeDrawTool === "device" && !isOverlayPanelOpen && isReady;
   const floorWalls = useMemo(
     () => walls.filter((wall) => wall.floorId === currentFloorId),
     [walls, currentFloorId],
@@ -374,6 +381,7 @@ export default function FlowCanvas() {
             proOptions={PRO_OPTIONS}
           >
             <FlowCanvasBackground />
+            <FloorOverlayLayer />
 
             <WallInteractionLayer bridge={paneBridge} floorWalls={floorWalls} />
           </ReactFlow>
@@ -388,6 +396,8 @@ export default function FlowCanvas() {
         onZoomOut={handleZoomOutClick}
         onCenterViewport={handleCenterViewportClick}
       />
+      <OverlayVisibilityButton />
+      <OverlayPanel />
 
       <div
         className={`pointer-events-none absolute inset-0 z-10 transition-opacity duration-300 ${

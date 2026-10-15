@@ -29,6 +29,7 @@ const withoutMultiSelect = (state: MapInteractionState) => ({
 const withoutEditTools = (state: MapInteractionState) => ({
   ...withoutMultiSelect(state),
   activeDrawTool: "device" as const,
+  isOverlayPanelOpen: false,
 });
 
 export const useMapStore = create<MapStore>()((set) => ({
@@ -45,6 +46,8 @@ export const useMapStore = create<MapStore>()((set) => ({
   activeDrawTool: "device",
   selectedWallColor: "concrete",
   wallEraserSize: WALL_ERASER_DEFAULT_SIZE,
+  isOverlayPanelOpen: false,
+  isOverlayHidden: false,
 
   setCurrentBuilding: (buildingId: BuildingId | null) => {
     set({
@@ -77,6 +80,8 @@ export const useMapStore = create<MapStore>()((set) => ({
             selectedDeviceId: deviceId,
             selectedDeviceIds: deviceId ? [deviceId] : [],
             selectedDeviceIdSet: deviceId ? new Set([deviceId]) : new Set(),
+            // The device drawer and the calque panel share the right edge.
+            isOverlayPanelOpen: deviceId === null && state.isOverlayPanelOpen,
           },
     );
   },
@@ -116,13 +121,17 @@ export const useMapStore = create<MapStore>()((set) => ({
     set((state) => ({
       isMultiSelectMode: !state.isMultiSelectMode,
       activeDrawTool: "device",
+      isOverlayPanelOpen: false,
       selectedDeviceId: null,
       selectedDeviceIds: [],
       selectedDeviceIdSet: new Set(),
     }));
   },
   setActiveDrawTool: (tool) => {
-    set({ activeDrawTool: tool });
+    set((state) => ({
+      activeDrawTool: tool,
+      isOverlayPanelOpen: tool === "device" && state.isOverlayPanelOpen,
+    }));
   },
   setSelectedWallColor: (color) => {
     set({ selectedWallColor: color });
@@ -134,6 +143,25 @@ export const useMapStore = create<MapStore>()((set) => ({
         ? state
         : { wallEraserSize: nextSize };
     });
+  },
+  setOverlayPanelOpen: (open) => {
+    set((state) =>
+      open
+        ? {
+            isOverlayPanelOpen: true,
+            isMultiSelectMode: false,
+            activeDrawTool: "device",
+            selectedDeviceId: null,
+            selectedDeviceIds: [],
+            selectedDeviceIdSet: new Set(),
+          }
+        : state.isOverlayPanelOpen
+          ? { isOverlayPanelOpen: false }
+          : state,
+    );
+  },
+  toggleOverlayHidden: () => {
+    set((state) => ({ isOverlayHidden: !state.isOverlayHidden }));
   },
   setHighlightedDevices: (deviceIds) => {
     set((state) => {

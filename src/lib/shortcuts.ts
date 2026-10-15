@@ -44,6 +44,9 @@ export type ShortcutAction =
   | "wall-eraser-size-increase"
   | "wall-eraser-size-decrease"
   | "tool-room"
+  // Calque
+  | "toggle-overlay-panel"
+  | "toggle-overlay-visibility"
   // Tools - Devices (number hotbar)
   | DeviceToolShortcutAction
   // Device drawer
@@ -253,6 +256,20 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
     label: "Gomme -",
     description: "Réduire la zone de gomme",
     scope: "canvas",
+  },
+
+  // Calque
+  "toggle-overlay-panel": {
+    keys: ["C"],
+    label: "Calque",
+    description: "Ouvrir/fermer le panneau du calque",
+    scope: "canvas",
+  },
+  "toggle-overlay-visibility": {
+    keys: ["Shift+C"],
+    label: "Afficher le calque",
+    description: "Afficher/masquer le calque de l'étage",
+    scope: "global",
   },
 
   // Tools - Devices (number hotbar)

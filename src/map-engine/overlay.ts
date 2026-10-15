@@ -17,6 +17,8 @@ type OverlayPlacement = Pick<
 >;
 
 export const OVERLAY_MAX_IMAGE_SIDE = 16_384;
+/** Under Convex's 16 MiB limit on an action's arguments. */
+export const OVERLAY_MAX_FILE_BYTES = 15 * 1024 * 1024;
 export const OVERLAY_MIN_SCALE = 0.001;
 export const OVERLAY_MAX_SCALE = 1000;
 export const OVERLAY_MIN_OPACITY = 0.05;

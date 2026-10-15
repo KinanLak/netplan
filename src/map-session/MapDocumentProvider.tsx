@@ -11,7 +11,7 @@ import { useConvexConnectionState, useMutation, useQuery } from "convex/react";
 import { applyOperation } from "@/map-engine/applyOperation";
 import { buildInverseOperation } from "@/map-engine/buildInverseOperation";
 import { materializeDocument } from "@/map-engine/materializeDocument";
-import type { MapOperation } from "@/map-engine/types";
+import type { MapOperation, OverlayPatch } from "@/map-engine/types";
 import {
   createObjectId,
   createOperationMeta,
@@ -99,6 +99,9 @@ export interface MapDocumentCommands {
   eraseWallAtPointer: (input: WallPointerInput) => WallCommandResult;
   eraseWallStroke: (input: WallStrokeInput) => WallCommandResult;
   previewEraseWallAtPointer: (input: WallPointerInput) => WallCommandResult;
+  /** Places, replaces or removes the floor's calque; false when refused. */
+  setOverlay: (overlay: FloorOverlay | null) => boolean;
+  patchOverlay: (patch: OverlayPatch) => boolean;
   beginHistoryGroup: () => void;
   endHistoryGroup: () => void;
 }
@@ -465,6 +468,37 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
     dispatchOperation({ kind: "link.delete", meta, linkId });
   };
 
+  // The engine runs first so a refused or empty change never reaches the
+  // outbox or the undo stack.
+  const dispatchOverlayOperation = (
+    build: (meta: MapOperation["meta"], floorId: FloorId) => MapOperation,
+  ): boolean => {
+    if (!isReadyRef.current) return false;
+    const meta = freshMeta();
+    if (!meta) return false;
+    const snapshot = documentRef.current;
+    const operation = build(meta, snapshot.floorId);
+    if (!applyOperation(snapshot, operation).applied) return false;
+    dispatchOperation(operation);
+    return true;
+  };
+
+  const setOverlay = (overlay: FloorOverlay | null) =>
+    dispatchOverlayOperation((meta, floorId) => ({
+      kind: "overlay.set",
+      meta,
+      floorId,
+      overlay,
+    }));
+
+  const patchOverlay = (patch: OverlayPatch) =>
+    dispatchOverlayOperation((meta, floorId) => ({
+      kind: "overlay.patch",
+      meta,
+      floorId,
+      patch,
+    }));
+
   const checkCollision = (
     targetFloorId: FloorId,
     deviceId: DeviceId,
@@ -756,6 +790,8 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
       eraseWallAtPointer,
       eraseWallStroke: eraseWallStrokeCommand,
       previewEraseWallAtPointer,
+      setOverlay,
+      patchOverlay,
       beginHistoryGroup,
       endHistoryGroup,
     },
