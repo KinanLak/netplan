@@ -1,3 +1,5 @@
+import type { IntegrationKind } from "../sites/integrations";
+
 // ── Stable application ids ───────────────────────────────────────────────────
 
 type Brand<T, TBrand extends string> = T & { readonly __brand: TBrand };
@@ -51,13 +53,19 @@ export interface PortInfo {
   status: DeviceStatus;
 }
 
+/** What the network last reported about a device, as opposed to its identity. */
 export interface DeviceMetadata {
-  ip?: string;
   status?: DeviceStatus;
-  model?: string;
   ports?: Array<PortInfo>;
   lastUser?: string;
-  macs?: Array<string>;
+}
+
+/** The integration that owns a device's identity (ADR 0022). */
+export interface DeviceSource {
+  integration: IntegrationKind;
+  externalId: string;
+  url?: string;
+  syncedAt: number;
 }
 
 // ── Domain documents ─────────────────────────────────────────────────────────
@@ -84,16 +92,30 @@ export interface Floor {
   order: number;
 }
 
+/**
+ * A site inventory device as placed on a floor. The inventory also holds
+ * devices without a placement; the map never sees those.
+ */
 export interface Device {
   id: DeviceId;
   floorId: FloorId;
   type: DeviceType;
   name: string;
   hostname?: string;
+  serial?: string;
+  /** Lowercase and colon-separated, unique within the site. */
+  macs: Array<string>;
+  model?: string;
+  ip?: string;
+  notes?: string;
+  source?: DeviceSource;
   position: Position;
   size: Size;
   metadata: DeviceMetadata;
 }
+
+/** A device as a user creates it: an integration's devices arrive by sync. */
+export type NewDevice = Omit<Device, "source">;
 
 export interface WallSegment {
   id: WallId;
@@ -153,15 +175,7 @@ export interface OperationMeta {
 
 // ── Drafts (input shapes for commands / engine) ──────────────────────────────
 
-export interface DeviceDraft {
-  floorId: FloorId;
-  type: DeviceType;
-  name: string;
-  hostname?: string;
-  position: Position;
-  size: Size;
-  metadata: DeviceMetadata;
-}
+export type DeviceDraft = Omit<NewDevice, "id">;
 
 export interface WallDraft {
   floorId: FloorId;

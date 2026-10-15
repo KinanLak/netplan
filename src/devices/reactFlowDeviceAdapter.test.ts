@@ -17,6 +17,7 @@ const createDevice = (overrides: Partial<Device> = {}): Device => ({
   floorId: fid("floor-a"),
   position: { x: 80, y: 120 },
   size: { width: 80, height: 80 },
+  macs: [],
   metadata: {},
   ...overrides,
 });

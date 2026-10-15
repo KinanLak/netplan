@@ -6,7 +6,6 @@ export interface AvailableDevice {
   name: string;
   hostname?: string;
   model?: string;
-  ip?: string;
   size: Size;
   metadata: DeviceMetadata;
 }
@@ -22,7 +21,7 @@ export const availableDevicesCatalog: Record<
       name: "Rack 42U Standard",
       model: "42U Standard Cabinet",
       size: { width: 80, height: 160 },
-      metadata: { model: "42U Standard Cabinet", status: "unknown" },
+      metadata: { status: "unknown" },
     },
     {
       id: "catalog-rack-2",
@@ -30,7 +29,7 @@ export const availableDevicesCatalog: Record<
       name: "Rack 24U Compact",
       model: "24U Compact Cabinet",
       size: { width: 80, height: 120 },
-      metadata: { model: "24U Compact Cabinet", status: "unknown" },
+      metadata: { status: "unknown" },
     },
     {
       id: "catalog-rack-3",
@@ -38,7 +37,7 @@ export const availableDevicesCatalog: Record<
       name: "Rack 12U Mini",
       model: "12U Wall Mount",
       size: { width: 80, height: 80 },
-      metadata: { model: "12U Wall Mount", status: "unknown" },
+      metadata: { status: "unknown" },
     },
   ],
   switch: [
@@ -48,10 +47,8 @@ export const availableDevicesCatalog: Record<
       name: "Cisco Catalyst 9300-24P",
       hostname: "sw-new-01",
       model: "Cisco Catalyst 9300-24P",
-      ip: "192.168.1.x",
       size: { width: 200, height: 60 },
       metadata: {
-        model: "Cisco Catalyst 9300-24P",
         status: "unknown",
         ports: Array.from({ length: 24 }, (_, i) => ({
           id: `port-${i + 1}`,
@@ -66,10 +63,8 @@ export const availableDevicesCatalog: Record<
       name: "Cisco Catalyst 9200-48",
       hostname: "sw-new-02",
       model: "Cisco Catalyst 9200-48",
-      ip: "192.168.1.x",
       size: { width: 200, height: 60 },
       metadata: {
-        model: "Cisco Catalyst 9200-48",
         status: "unknown",
         ports: Array.from({ length: 48 }, (_, i) => ({
           id: `port-${i + 1}`,
@@ -84,10 +79,8 @@ export const availableDevicesCatalog: Record<
       name: "HP ProCurve 2920-24G",
       hostname: "sw-hp-01",
       model: "HP ProCurve 2920-24G",
-      ip: "192.168.1.x",
       size: { width: 200, height: 60 },
       metadata: {
-        model: "HP ProCurve 2920-24G",
         status: "unknown",
         ports: Array.from({ length: 24 }, (_, i) => ({
           id: `port-${i + 1}`,
@@ -102,10 +95,8 @@ export const availableDevicesCatalog: Record<
       name: "Ubiquiti UniFi 8-Port",
       hostname: "sw-ubnt-01",
       model: "UniFi Switch 8",
-      ip: "192.168.1.x",
       size: { width: 160, height: 40 },
       metadata: {
-        model: "UniFi Switch 8",
         status: "unknown",
         ports: Array.from({ length: 8 }, (_, i) => ({
           id: `port-${i + 1}`,
@@ -122,7 +113,7 @@ export const availableDevicesCatalog: Record<
       name: "Panneau 24 ports Cat6",
       model: "Patch panel 24 x RJ45 Cat6",
       size: { width: 200, height: 40 },
-      metadata: { model: "Patch panel 24 x RJ45 Cat6" },
+      metadata: {},
     },
   ],
   pc: [
@@ -132,9 +123,8 @@ export const availableDevicesCatalog: Record<
       name: "Dell OptiPlex 7090",
       hostname: "pc-new-01",
       model: "Dell OptiPlex 7090",
-      ip: "192.168.1.x",
       size: { width: 80, height: 80 },
-      metadata: { model: "Dell OptiPlex 7090", status: "unknown" },
+      metadata: { status: "unknown" },
     },
     {
       id: "catalog-pc-2",
@@ -142,9 +132,8 @@ export const availableDevicesCatalog: Record<
       name: "HP EliteDesk 800 G6",
       hostname: "pc-new-02",
       model: "HP EliteDesk 800 G6",
-      ip: "192.168.1.x",
       size: { width: 80, height: 80 },
-      metadata: { model: "HP EliteDesk 800 G6", status: "unknown" },
+      metadata: { status: "unknown" },
     },
     {
       id: "catalog-pc-3",
@@ -152,9 +141,8 @@ export const availableDevicesCatalog: Record<
       name: "Lenovo ThinkCentre M720",
       hostname: "pc-new-03",
       model: "Lenovo ThinkCentre M720",
-      ip: "192.168.1.x",
       size: { width: 80, height: 80 },
-      metadata: { model: "Lenovo ThinkCentre M720", status: "unknown" },
+      metadata: { status: "unknown" },
     },
     {
       id: "catalog-pc-4",
@@ -162,9 +150,8 @@ export const availableDevicesCatalog: Record<
       name: 'iMac 24" M1',
       hostname: "mac-new-01",
       model: 'iMac 24" M1',
-      ip: "192.168.1.x",
       size: { width: 80, height: 80 },
-      metadata: { model: 'iMac 24" M1', status: "unknown" },
+      metadata: { status: "unknown" },
     },
   ],
   endpoint: [
@@ -195,22 +182,25 @@ export const availableDevicesCatalog: Record<
       id: "catalog-wp-1",
       type: "wall-port",
       name: "Prise RJ45 Cat6",
+      model: "RJ45 Cat6",
       size: { width: 40, height: 40 },
-      metadata: { model: "RJ45 Cat6", status: "unknown" },
+      metadata: { status: "unknown" },
     },
     {
       id: "catalog-wp-2",
       type: "wall-port",
       name: "Prise RJ45 Cat6a",
+      model: "RJ45 Cat6a",
       size: { width: 40, height: 40 },
-      metadata: { model: "RJ45 Cat6a", status: "unknown" },
+      metadata: { status: "unknown" },
     },
     {
       id: "catalog-wp-3",
       type: "wall-port",
       name: "Prise Double RJ45",
+      model: "Double RJ45 Cat6",
       size: { width: 40, height: 40 },
-      metadata: { model: "Double RJ45 Cat6", status: "unknown" },
+      metadata: { status: "unknown" },
     },
   ],
 };

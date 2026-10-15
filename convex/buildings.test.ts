@@ -97,7 +97,7 @@ describe("buildings", () => {
     ]);
   });
 
-  it("clearMap removes all temporary map data", async () => {
+  it("clearMap removes the map and its drawn devices, leaving sourced ones unplaced", async () => {
     const t = await signedInTest();
     await ensureSite(t);
     const buildingId = await t.mutation(api.buildings.create, {
@@ -114,22 +114,36 @@ describe("buildings", () => {
     await t.run(async (ctx) => {
       await ctx.db.insert("devices", {
         objectId: "device:clear:a",
-        floorId,
+        siteId: SITE_ID,
         type: "pc",
         name: "A",
-        position: { x: 0, y: 0 },
-        size: { width: 80, height: 80 },
+        macs: ["02:00:00:00:00:0a"],
+        placement: {
+          floorId,
+          position: { x: 0, y: 0 },
+          size: { width: 80, height: 80 },
+        },
         metadata: {},
         updatedAt: 0,
         updatedBy: "test",
       });
+      await ctx.db.insert("deviceMacs", {
+        siteId: SITE_ID,
+        mac: "02:00:00:00:00:0a",
+        deviceId: "device:clear:a",
+      });
       await ctx.db.insert("devices", {
         objectId: "device:clear:b",
-        floorId,
+        siteId: SITE_ID,
         type: "pc",
         name: "B",
-        position: { x: 200, y: 0 },
-        size: { width: 80, height: 80 },
+        macs: [],
+        source: { integration: "netbox", externalId: "7", syncedAt: 0 },
+        placement: {
+          floorId,
+          position: { x: 200, y: 0 },
+          size: { width: 80, height: 80 },
+        },
         metadata: {},
         updatedAt: 0,
         updatedBy: "test",
@@ -177,7 +191,12 @@ describe("buildings", () => {
     await t.run(async (ctx) => {
       expect(await ctx.db.query("buildings").collect()).toHaveLength(0);
       expect(await ctx.db.query("floors").collect()).toHaveLength(0);
-      expect(await ctx.db.query("devices").collect()).toHaveLength(0);
+      const devices = await ctx.db.query("devices").collect();
+      expect(devices.map((device) => device.objectId)).toEqual([
+        "device:clear:b",
+      ]);
+      expect(devices[0]?.placement).toBeUndefined();
+      expect(await ctx.db.query("deviceMacs").collect()).toHaveLength(0);
       expect(await ctx.db.query("walls").collect()).toHaveLength(0);
       expect(await ctx.db.query("links").collect()).toHaveLength(0);
       expect(await ctx.db.query("presences").collect()).toHaveLength(0);
@@ -198,7 +217,7 @@ describe("buildings", () => {
     expect(buildings[0]?.name).toBe("New");
   });
 
-  it("remove cascades floors, devices, walls, links", async () => {
+  it("remove cascades floors, walls and links and unplaces devices", async () => {
     const t = await signedInTest();
     await ensureSite(t);
     const buildingId = await t.mutation(api.buildings.create, {
@@ -215,22 +234,30 @@ describe("buildings", () => {
     await t.run(async (ctx) => {
       await ctx.db.insert("devices", {
         objectId: "device:a",
-        floorId,
+        siteId: SITE_ID,
         type: "pc",
         name: "A",
-        position: { x: 0, y: 0 },
-        size: { width: 80, height: 80 },
+        macs: ["02:00:00:00:00:0a"],
+        placement: {
+          floorId,
+          position: { x: 0, y: 0 },
+          size: { width: 80, height: 80 },
+        },
         metadata: {},
         updatedAt: 0,
         updatedBy: "test",
       });
       await ctx.db.insert("devices", {
         objectId: "device:b",
-        floorId,
+        siteId: SITE_ID,
         type: "pc",
         name: "B",
-        position: { x: 100, y: 0 },
-        size: { width: 80, height: 80 },
+        macs: [],
+        placement: {
+          floorId,
+          position: { x: 100, y: 0 },
+          size: { width: 80, height: 80 },
+        },
         metadata: {},
         updatedAt: 0,
         updatedBy: "test",
@@ -260,7 +287,13 @@ describe("buildings", () => {
     await t.run(async (ctx) => {
       expect(await ctx.db.query("buildings").collect()).toHaveLength(0);
       expect(await ctx.db.query("floors").collect()).toHaveLength(0);
-      expect(await ctx.db.query("devices").collect()).toHaveLength(0);
+      // Devices stay in the site's inventory, off the map.
+      const devices = await ctx.db.query("devices").collect();
+      expect(devices.map((device) => device.objectId)).toEqual([
+        "device:a",
+        "device:b",
+      ]);
+      expect(devices.every((device) => !device.placement)).toBe(true);
       expect(await ctx.db.query("walls").collect()).toHaveLength(0);
       expect(await ctx.db.query("links").collect()).toHaveLength(0);
     });

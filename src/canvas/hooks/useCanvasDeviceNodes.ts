@@ -67,9 +67,7 @@ const arePortsEqual = (a?: Array<PortInfo>, b?: Array<PortInfo>) => {
 
 const areMetadataEqual = (a: DeviceMetadata, b: DeviceMetadata) => {
   return (
-    a.ip === b.ip &&
     a.status === b.status &&
-    a.model === b.model &&
     a.lastUser === b.lastUser &&
     arePortsEqual(a.ports, b.ports)
   );
@@ -81,6 +79,8 @@ const areNodeDataEqual = (a: DeviceNode["data"], b: DeviceNode["data"]) => {
     a.type === b.type &&
     a.name === b.name &&
     a.hostname === b.hostname &&
+    a.model === b.model &&
+    a.ip === b.ip &&
     a.floorId === b.floorId &&
     arePositionsEqual(a.position, b.position) &&
     areSizesEqual(a.size, b.size) &&

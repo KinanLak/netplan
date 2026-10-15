@@ -33,7 +33,9 @@ export const buildBenchDevice = (
     y: Math.floor(index / 20) * GRID_SIZE * 6,
   },
   size: { width: 80, height: 80 },
-  metadata: { ip: `10.0.${index % 255}.${(index * 7) % 255}`, status: "up" },
+  macs: [],
+  ip: `10.0.${index % 255}.${(index * 7) % 255}`,
+  metadata: { status: "up" },
 });
 
 export const buildBenchWall = (

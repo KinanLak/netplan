@@ -124,16 +124,16 @@ export function applyOperation(
     }
 
     case "device.delete": {
-      const exists = snapshot.devices.some(
-        (device) => device.id === operation.deviceId,
+      const device = snapshot.devices.find(
+        (item) => item.id === operation.deviceId,
       );
-      if (!exists) return unchanged(snapshot, "missing-device");
+      if (!device) return unchanged(snapshot, "missing-device");
+      // Its integration would bring it back at the next sync.
+      if (device.source) return unchanged(snapshot, "source-owned");
 
       return changed({
         ...snapshot,
-        devices: snapshot.devices.filter(
-          (device) => device.id !== operation.deviceId,
-        ),
+        devices: snapshot.devices.filter((item) => item !== device),
         links: withoutConnectedLinks(snapshot, operation.deviceId),
       });
     }

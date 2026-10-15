@@ -7,12 +7,12 @@
 // only; the `@/` alias does not resolve there.
 import type { BatchSubOperation } from "../map-engine/types";
 import type {
-  Device,
   DeviceId,
   DeviceStatus,
   FloorId,
   LinkDoc,
   LinkId,
+  NewDevice,
   Position,
   WallColor,
   WallId,
@@ -39,18 +39,21 @@ interface PcInput {
 
 const createFloorBuilder = (floorId: FloorId, slug: string) => {
   const walls = new Map<string, WallSegment>();
-  const devices: Array<Device> = [];
+  const devices: Array<NewDevice> = [];
   const links: Array<LinkDoc> = [];
   let hostCount = 0;
 
   const deviceId = (key: string) => `device:demo:${slug}:${key}` as DeviceId;
 
   const addDevice = (
-    device: Omit<Device, "id" | "floorId"> & { key: string },
+    device: Omit<NewDevice, "id" | "floorId" | "macs"> & {
+      key: string;
+      macs?: Array<string>;
+    },
   ) => {
-    const { key, ...rest } = device;
+    const { key, macs = [], ...rest } = device;
     const id = deviceId(key);
-    devices.push({ id, floorId, ...rest });
+    devices.push({ id, floorId, macs, ...rest });
     return id;
   };
 
@@ -102,7 +105,8 @@ const createFloorBuilder = (floorId: FloorId, slug: string) => {
         name,
         position,
         size: { width: 80, height },
-        metadata: { model, status: "unknown" },
+        model,
+        metadata: { status: "unknown" },
       });
     },
 
@@ -126,9 +130,9 @@ const createFloorBuilder = (floorId: FloorId, slug: string) => {
         hostname: `sw-demo-${key}`,
         position,
         size: compact ? { width: 160, height: 40 } : { width: 200, height: 60 },
+        model: options.model,
+        ip: options.ip,
         metadata: {
-          model: options.model,
-          ip: options.ip,
           status: "up",
           ports: Array.from({ length: options.portCount }, (_, index) => ({
             id: `port-${index + 1}`,
@@ -146,7 +150,8 @@ const createFloorBuilder = (floorId: FloorId, slug: string) => {
         name,
         position,
         size: { width: 40, height: 40 },
-        metadata: { model: "RJ45 Cat6", status: "unknown" },
+        model: "RJ45 Cat6",
+        metadata: { status: "unknown" },
       });
     },
 
@@ -157,7 +162,8 @@ const createFloorBuilder = (floorId: FloorId, slug: string) => {
         name,
         position,
         size: { width: 200, height: 40 },
-        metadata: { model: "Panneau 24 ports Cat6" },
+        model: "Panneau 24 ports Cat6",
+        metadata: {},
       });
     },
 
@@ -174,12 +180,10 @@ const createFloorBuilder = (floorId: FloorId, slug: string) => {
         hostname: `demo-${key}`,
         position,
         size: { width: 80, height: 80 },
-        metadata: {
-          model: options.model,
-          ip: options.ip,
-          macs: [options.mac],
-          status: "up",
-        },
+        model: options.model,
+        ip: options.ip,
+        macs: [options.mac],
+        metadata: { status: "up" },
       });
     },
 
@@ -193,11 +197,11 @@ const createFloorBuilder = (floorId: FloorId, slug: string) => {
         hostname: `pc-demo-${input.key}`,
         position: input.position,
         size: { width: 80, height: 80 },
+        model:
+          hostCount % 2 === 0 ? "HP EliteDesk 800 G6" : "Dell OptiPlex 7090",
+        ip: `${ipPrefix}.${hostCount + 10}`,
+        macs: [`${macPrefix}:${suffix}`],
         metadata: {
-          model:
-            hostCount % 2 === 0 ? "HP EliteDesk 800 G6" : "Dell OptiPlex 7090",
-          ip: `${ipPrefix}.${hostCount + 10}`,
-          macs: [`${macPrefix}:${suffix}`],
           status: input.status,
           lastUser: input.lastUser,
         },

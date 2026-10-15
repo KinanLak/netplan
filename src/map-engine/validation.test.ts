@@ -20,6 +20,7 @@ const device = (id: DeviceId, x: number): Device => ({
   name: "PC",
   position: { x, y: 0 },
   size: { width: 80, height: 80 },
+  macs: [],
   metadata: {},
 });
 

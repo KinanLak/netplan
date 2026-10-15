@@ -24,11 +24,8 @@ const invertDevicePatch = (
   if (!device) return null;
 
   const patch: Extract<MapOperation, { kind: "device.patch" }>["patch"] = {};
-  if (operation.patch.name !== undefined) patch.name = device.name;
-  if (operation.patch.hostname !== undefined) patch.hostname = device.hostname;
   if (operation.patch.position !== undefined) patch.position = device.position;
   if (operation.patch.size !== undefined) patch.size = device.size;
-  if (operation.patch.metadata !== undefined) patch.metadata = device.metadata;
 
   return {
     kind: "device.patch",
@@ -79,7 +76,8 @@ export function buildInverseOperation(
       const device = snapshotBeforeOperation.devices.find(
         (item) => item.id === operation.deviceId,
       );
-      if (!device) return null;
+      // A sourced device is never deleted, so there is nothing to restore.
+      if (!device || device.source) return null;
       const links = snapshotBeforeOperation.links.filter(
         (link) =>
           link.fromDeviceId === operation.deviceId ||

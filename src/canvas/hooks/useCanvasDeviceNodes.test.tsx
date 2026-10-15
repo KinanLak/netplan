@@ -15,6 +15,7 @@ const device: Device = {
   floorId,
   position: { x: 0, y: 0 },
   size: { width: 80, height: 80 },
+  macs: [],
   metadata: {},
 };
 

@@ -1,21 +1,42 @@
 import { v } from "convex/values";
 import { readerQuery } from "./lib/functions";
-import { device, floorOverlay, link, wallSegment } from "./mapValidators";
+import { floorOverlay, link, placedDevice, wallSegment } from "./mapValidators";
 import type { Doc } from "./_generated/dataModel";
+import type { QueryCtx } from "./_generated/server";
 
-// MAC addresses stay server-side until the inventory decides who sees them.
-export const toPublicDevice = (row: Doc<"devices">) => {
-  const { macs: _macs, ...metadata } = row.metadata;
-  return {
-    id: row.objectId,
-    floorId: row.floorId,
-    type: row.type,
-    name: row.name,
-    hostname: row.hostname,
-    position: row.position,
-    size: row.size,
-    metadata,
-  };
+/**
+ * The map's view of a placed device. MAC addresses are shown to every
+ * signed-in role, like the rest of the inventory.
+ */
+export const toPublicDevice = (
+  row: Doc<"devices">,
+  placement: NonNullable<Doc<"devices">["placement"]>,
+) => ({
+  id: row.objectId,
+  floorId: placement.floorId,
+  type: row.type,
+  name: row.name,
+  hostname: row.hostname,
+  serial: row.serial,
+  macs: row.macs,
+  model: row.model,
+  ip: row.ip,
+  notes: row.notes,
+  source: row.source,
+  position: placement.position,
+  size: placement.size,
+  metadata: row.metadata,
+});
+
+/** The devices placed on a floor, as the map reads them. */
+export const placedDevicesOf = async (ctx: QueryCtx, floorId: string) => {
+  const rows = await ctx.db
+    .query("devices")
+    .withIndex("by_floor", (q) => q.eq("placement.floorId", floorId))
+    .collect();
+  return rows.flatMap((row) =>
+    row.placement ? [toPublicDevice(row, row.placement)] : [],
+  );
 };
 
 const toWall = (row: Doc<"walls">) => ({
@@ -44,14 +65,8 @@ const toLink = (row: Doc<"links">) => ({
 
 export const getFloorDevices = readerQuery({
   args: { floorId: v.string() },
-  returns: v.array(device),
-  handler: async (ctx, { floorId }) => {
-    const rows = await ctx.db
-      .query("devices")
-      .withIndex("by_floor", (q) => q.eq("floorId", floorId))
-      .collect();
-    return rows.map(toPublicDevice);
-  },
+  returns: v.array(placedDevice),
+  handler: async (ctx, { floorId }) => await placedDevicesOf(ctx, floorId),
 });
 
 export const getFloorWalls = readerQuery({

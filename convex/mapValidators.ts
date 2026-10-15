@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { integrationKind } from "./siteValidators";
 
 export const deviceType = v.union(
   v.literal("rack"),
@@ -31,12 +32,35 @@ export const portInfo = v.object({
 });
 
 export const deviceMetadata = v.object({
-  ip: v.optional(v.string()),
   status: v.optional(deviceStatus),
-  model: v.optional(v.string()),
   ports: v.optional(v.array(portInfo)),
   lastUser: v.optional(v.string()),
-  macs: v.optional(v.array(v.string())),
+});
+
+/** `DeviceSource` from `src/types/map.ts`. */
+export const deviceSource = v.object({
+  integration: integrationKind,
+  externalId: v.string(),
+  url: v.optional(v.string()),
+  syncedAt: v.number(),
+});
+
+/** A device's identity in the site inventory (ADR 0022). */
+export const deviceIdentityFields = {
+  type: deviceType,
+  name: v.string(),
+  hostname: v.optional(v.string()),
+  serial: v.optional(v.string()),
+  macs: v.array(v.string()),
+  model: v.optional(v.string()),
+  ip: v.optional(v.string()),
+  notes: v.optional(v.string()),
+};
+
+export const devicePlacement = v.object({
+  floorId: v.string(),
+  position,
+  size,
 });
 
 export const operationMeta = v.object({
@@ -46,23 +70,25 @@ export const operationMeta = v.object({
   createdAt: v.number(),
 });
 
+/** `NewDevice`: what `device.create` carries; a source arrives only by sync. */
 export const device = v.object({
   id: v.string(),
   floorId: v.string(),
-  type: deviceType,
-  name: v.string(),
-  hostname: v.optional(v.string()),
+  ...deviceIdentityFields,
   position,
   size,
   metadata: deviceMetadata,
 });
 
+/** `Device`: a placed device as the map reads it. */
+export const placedDevice = v.object({
+  ...device.fields,
+  source: v.optional(deviceSource),
+});
+
 export const devicePatch = v.object({
-  name: v.optional(v.string()),
-  hostname: v.optional(v.string()),
   position: v.optional(position),
   size: v.optional(size),
-  metadata: v.optional(deviceMetadata),
 });
 
 export const wallSegment = v.object({

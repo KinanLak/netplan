@@ -1,3 +1,4 @@
+import { isCanonicalMac } from "@/devices/mac";
 import { describe, expect, it } from "bun:test";
 import { applyOperation } from "@/map-engine/applyOperation";
 import { validateDevicePlacement } from "@/map-engine/validation";
@@ -113,14 +114,22 @@ describe("demo map", () => {
     const documentationRange = /^(192\.0\.2|198\.51\.100|203\.0\.113)\.\d+$/;
     for (const floor of floors) {
       for (const device of seededSnapshot(floor).snapshot.devices) {
-        if (device.metadata.ip) {
-          expect(device.metadata.ip).toMatch(documentationRange);
+        if (device.ip) {
+          expect(device.ip).toMatch(documentationRange);
         }
-        for (const mac of device.metadata.macs ?? []) {
+        for (const mac of device.macs) {
           // Bit 1 of the first octet marks a locally administered address.
           expect(Number.parseInt(mac.slice(0, 2), 16) & 0b10).toBe(0b10);
         }
       }
     }
+  });
+
+  it("gives each device of the site its own canonical MACs", () => {
+    const macs = floors.flatMap((floor) =>
+      seededSnapshot(floor).snapshot.devices.flatMap((device) => device.macs),
+    );
+    expect(macs.every(isCanonicalMac)).toBe(true);
+    expect(new Set(macs).size).toBe(macs.length);
   });
 });
