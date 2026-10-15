@@ -2,6 +2,9 @@
 // list each public Convex module explicitly. Keep this in sync when adding a
 // new file under `convex/`. The `_generated` placeholder is required so
 // convex-test can locate its modules root via `findModulesRoot`.
+// Node actions (`"use node"`) stay out: Convex bundles this file for its own
+// runtime, which cannot resolve their Node imports. A test that runs one adds
+// it to `testBackend`.
 export const modules: Record<string, () => Promise<Record<string, any>>> = {
   "./_generated/api.ts": () => import("../_generated/api.js"),
   "./auth.ts": () => import("../auth"),
@@ -13,7 +16,6 @@ export const modules: Record<string, () => Promise<Record<string, any>>> = {
   "./floors.ts": () => import("../floors"),
   "./http.ts": () => import("../http"),
   "./links.ts": () => import("../links"),
-  "./mail.ts": () => import("../mail"),
   "./mapDocument.ts": () => import("../mapDocument"),
   "./mapOperations.ts": () => import("../mapOperations"),
   "./mapValidators.ts": () => import("../mapValidators"),
