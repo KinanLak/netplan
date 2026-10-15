@@ -10,6 +10,7 @@
 !convex/
 !src/
 !public/
+!deploy/convex.sh
 !deploy/convex-deploy.sh
 !deploy/convex-env.txt
 **/*.test.ts

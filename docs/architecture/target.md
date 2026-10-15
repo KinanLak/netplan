@@ -7,16 +7,8 @@ description: The shape the rebuild lots are building towards.
 
 The rebuild replaces the current design in place, with no transitional layers
 and data restarting from zero (ADR 0001). Order: F, then lots 0 and 1 in
-parallel, then lot 2 alongside lot 3a, then 3b, 4 and 5. Lot F is done and
-described in [Current](current.md).
-
-## Infrastructure (lot 0)
-
-- One Docker image for the web app. Configuration, including the Convex URL,
-  is read at runtime, so the same image runs everywhere; `/health` reports
-  readiness.
-- A compose stack with the self-hosted Convex backend on Postgres, the Convex
-  dashboard, the app, Keycloak and Mailpit (ADR 0002).
+parallel, then lot 2 alongside lot 3a, then 3b, 4 and 5. Lots F and 0 are
+done and described in [Current](current.md).
 
 ## Accounts (lot 1)
 

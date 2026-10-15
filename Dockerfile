@@ -31,7 +31,7 @@ COPY --from=production-deps /src/node_modules ./node_modules
 COPY package.json convex.json tsconfig.json ./
 COPY convex ./convex
 COPY src ./src
-COPY deploy/convex-deploy.sh deploy/convex-env.txt ./deploy/
+COPY deploy/convex.sh deploy/convex-deploy.sh deploy/convex-env.txt ./deploy/
 ENTRYPOINT ["./deploy/convex-deploy.sh"]
 
 FROM oven/bun:${BUN_VERSION}-distroless AS app
