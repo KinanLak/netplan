@@ -28,25 +28,38 @@ is an absolute path on the host; files written there belong to root.
 
 ## A, Convex export
 
-Back up:
+Back up, into files named after the moment (the CLI refuses to overwrite an
+existing export):
 
 ```sh
+STAMP=$(date +%F-%H%M)
 docker compose run --rm -T -v "$BACKUPS":/backups --entrypoint ./deploy/convex.sh \
-  convex-deploy export --include-file-storage --path /backups/netplan.zip
+  convex-deploy export --include-file-storage --path "/backups/netplan-$STAMP.zip"
+docker compose run --rm -T -v "$BACKUPS":/backups --entrypoint sh convex-deploy \
+  -c "umask 077; ./deploy/convex.sh env list > /backups/convex-env-$STAMP.txt"
 ```
+
+The export holds the tables and files, not the function variables, so the
+second command saves those. `convex-deploy` sets the ones in `.env` on every
+start, but a variable set from the dashboard exists only in the deployment.
+The file holds secrets in clear text: it is readable by root only, keep it
+like `.env`.
 
 The export is a snapshot of one instant; writes made while it runs are not in
 it. Stop the app first (`docker compose stop app`) when that matters.
 
-Restore, into a running stack, replacing every table:
+Restore, into a running stack, replacing every table, then the variables:
 
 ```sh
 docker compose run --rm -T -v "$BACKUPS":/backups --entrypoint ./deploy/convex.sh \
-  convex-deploy import --replace-all -y /backups/netplan.zip
+  convex-deploy import --replace-all -y /backups/netplan-<stamp>.zip
+docker compose run --rm -T -v "$BACKUPS":/backups --entrypoint ./deploy/convex.sh \
+  convex-deploy env set --from-file /backups/convex-env-<stamp>.txt
 ```
 
-Function variables are not in the export; `convex-deploy` sets the ones in
-`.env` on every start.
+`env set` refuses every change if a variable already has another value, for
+example one changed in `.env` since the backup; `.env` is then the one to
+keep, so remove that line from the file and run it again.
 
 ## B, Postgres dump and storage volume
 
@@ -61,7 +74,7 @@ docker compose start convex-backend
 ```
 
 Stopping the backend makes the dump and the volume copy agree with each
-other.
+other. The function variables live in Postgres, so the dump has them.
 
 Restore, into empty volumes:
 

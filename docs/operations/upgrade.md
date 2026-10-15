@@ -39,13 +39,11 @@ docker compose logs -f convex-backend   # wait for "MigrationComplete(<n>)"
 empty database:
 
 1. Stop the traffic: `docker compose stop app`.
-2. Export with procedure A of [Backup and restore](backup.md). Function
-   variables set in `.env` come back by themselves; note any set only from
-   the dashboard (`./deploy/convex.sh env list`, run as in that page).
+2. Back up with procedure A of [Backup and restore](backup.md): the export
+   and the function variables.
 3. `docker compose down -v`, change the image tags, then
    `docker compose up -d --build --wait`.
-4. Import the export (procedure A, restore), and set the noted variables
-   again.
+4. Restore both (procedure A).
 
 The downtime is roughly the time of an export plus an import; time one on the
 running installation to know.

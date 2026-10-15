@@ -65,12 +65,16 @@ as long as `INSTANCE_SECRET` does not change.
 - Set `NETPLAN_DOMAIN` to a domain whose sub-domains listed above resolve to
   the host, and `NETPLAN_BIND_ADDRESS=0.0.0.0` to accept connections from
   the network.
-- For HTTPS, either set `NETPLAN_SCHEME=https` and `NETPLAN_PORT=443`, and
-  Caddy obtains certificates itself (the names must be public and port 443
-  reachable from the internet), or keep `http` on a private port behind your
-  own reverse proxy, which then forwards every host name above to the edge.
-  The public URLs carry the scheme and port, so the variables must describe
-  what the browser sees.
+- For HTTPS, set `NETPLAN_SCHEME=https` and `NETPLAN_PORT=443`: Caddy
+  obtains and renews certificates itself, keeping them in the `edge-data`
+  volume. The names must resolve publicly and port 443 be reachable from the
+  internet. A certificate from an internal CA needs a `tls` line in each site
+  of `deploy/Caddyfile`.
+- A reverse proxy already in front of the host must pass TLS through to the
+  edge unterminated (TCP, routed by SNI). Terminating TLS before the edge does
+  not work: the public URLs carry the scheme and port, and containers reach
+  those same URLs through the edge, so the edge must serve exactly what the
+  browser sees.
 - Keep `deploy/.env` with the [backups](backup.md): without
   `INSTANCE_SECRET`, a restored backend cannot be administered.
 
