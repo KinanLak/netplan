@@ -59,6 +59,23 @@ export function loginErrorMessage(error: {
   return "La connexion a échoué. Réessayez.";
 }
 
+/**
+ * The `error` a failed Keycloak sign-in brings back to the login page: a
+ * better-auth code, or the provider's own such as `access_denied`.
+ */
+export function keycloakErrorMessage(code: string): string {
+  if (code === "account_not_linked") {
+    return "Un compte Netplan utilise déjà l'adresse e-mail de ce compte Keycloak. Connectez-vous avec son identifiant et son mot de passe.";
+  }
+  if (code === "BANNED_USER") {
+    return loginErrorMessage({ code });
+  }
+  if (code === "access_denied") {
+    return "La connexion avec Keycloak a été annulée.";
+  }
+  return "La connexion avec Keycloak a échoué. Réessayez ou contactez un administrateur.";
+}
+
 /** better-auth's default, which Netplan keeps. */
 export const MIN_PASSWORD_LENGTH = 8;
 

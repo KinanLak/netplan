@@ -1,0 +1,93 @@
+{
+  "realm": "netplan",
+  "displayName": "Netplan (local)",
+  "enabled": true,
+  "loginWithEmailAllowed": true,
+  "registrationAllowed": false,
+  "resetPasswordAllowed": false,
+  "roles": {
+    "realm": [
+      {
+        "name": "netplan-editor",
+        "description": "Granted Éditeur once an admin maps it in Netplan."
+      },
+      {
+        "name": "netplan-admin",
+        "description": "Granted Admin once an admin maps it in Netplan."
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "netplan",
+      "name": "Netplan",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "netplan-local",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "http://netplan.localhost:8480/api/auth/oauth2/callback/keycloak",
+        "http://127.0.0.1:*",
+        "http://localhost:*"
+      ],
+      "webOrigins": ["+"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "+"
+      }
+    }
+  ],
+  "users": [
+    {
+      "username": "kc.lecteur",
+      "email": "lecteur@keycloak.test",
+      "emailVerified": true,
+      "firstName": "Lou",
+      "lastName": "Keycloak",
+      "enabled": true,
+      "credentials": [
+        { "type": "password", "value": "netplan-dev", "temporary": false }
+      ]
+    },
+    {
+      "username": "kc.editeur",
+      "email": "editeur@keycloak.test",
+      "emailVerified": true,
+      "firstName": "Eli",
+      "lastName": "Keycloak",
+      "enabled": true,
+      "realmRoles": ["netplan-editor"],
+      "credentials": [
+        { "type": "password", "value": "netplan-dev", "temporary": false }
+      ]
+    },
+    {
+      "username": "kc.admin",
+      "email": "admin@keycloak.test",
+      "emailVerified": true,
+      "firstName": "Ada",
+      "lastName": "Keycloak",
+      "enabled": true,
+      "realmRoles": ["netplan-admin", "netplan-editor"],
+      "credentials": [
+        { "type": "password", "value": "netplan-dev", "temporary": false }
+      ]
+    },
+    {
+      "username": "kc.doublon",
+      "email": "editeur@netplan.test",
+      "emailVerified": true,
+      "firstName": "Éditeur",
+      "lastName": "Doublon",
+      "enabled": true,
+      "credentials": [
+        { "type": "password", "value": "netplan-dev", "temporary": false }
+      ]
+    }
+  ]
+}

@@ -5,6 +5,7 @@ import {
   isEmail,
   isForbidden,
   isSessionLost,
+  keycloakErrorMessage,
   loginErrorMessage,
   requestFailure,
   resetPasswordErrorMessage,
@@ -109,5 +110,18 @@ describe("requestFailure", () => {
       refusal,
     );
     expect(await requestFailure(Promise.resolve({ error: null }))).toBeNull();
+  });
+});
+
+describe("keycloakErrorMessage", () => {
+  it("says why Keycloak could not sign the user in", () => {
+    expect(keycloakErrorMessage("account_not_linked")).toContain(
+      "utilise déjà l'adresse e-mail",
+    );
+    expect(keycloakErrorMessage("BANNED_USER")).toBe(
+      loginErrorMessage({ code: "BANNED_USER" }),
+    );
+    expect(keycloakErrorMessage("access_denied")).toContain("annulée");
+    expect(keycloakErrorMessage("state_mismatch")).toContain("a échoué");
   });
 });

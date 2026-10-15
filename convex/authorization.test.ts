@@ -9,6 +9,8 @@ import type { Role } from "./lib/roles";
 // ADR 0004 levels for every public function. A new public function fails the
 // first test until it is listed here with the level it needs.
 const POLICY: Record<string, Role> = {
+  "authSettings:keycloak": "admin",
+  "authSettings:setKeycloakRoleMapping": "admin",
   "buildings:clearMap": "editor",
   "buildings:create": "editor",
   "buildings:createDefaultMap": "editor",
