@@ -31,7 +31,8 @@ canonical change over compatibility shims.
 - `bun run verify` is `check` plus the production build and the route tree it
   writes. CI runs it; run it before marking a pull request ready.
 - `bun test <path>` for one file.
-- `bun run dev`: Convex dev deployment and Vite together.
+- `bun run dev:agent`: this worktree's own local instance (below). `bun run
+  dev` is for a checkout already configured against another deployment.
 - Never edit `package.json` by hand: `bun add <pkg>@latest`, `bun remove`, or
   `bun pm pkg set` for fields that are not dependencies. Dependencies stay on
   their latest version, majors included. CI fails on a high or critical
@@ -41,6 +42,29 @@ canonical change over compatibility shims.
   Never edit them by hand; commit what the tools regenerate.
 - Use Context7 (`ctx7`) or web search for library and API documentation
   rather than memory.
+
+## Local instance
+
+`bun run dev:agent` gives each checkout its own self-hosted Convex backend in
+Docker (ADR 0018), seeds a demo site, and runs Convex and Vite on ports derived
+from the worktree path. It prints a banner with the app URL; `--status`
+prints it again, `--reseed` (app stopped) starts from an empty backend,
+`--down` removes the
+backend and its data. The skill `test-netplan-app` says how to check a change
+in a browser with it.
+
+- It writes `.env.local` with a marker line and refuses to touch one it did
+  not write. Never point `.env.local` at a shared deployment by hand.
+- The seed (`convex/dev.ts`, data in `src/dev-seed/`) runs only where
+  `ALLOW_DEV_SEED=true` and goes through `applyMapOperation`, so it obeys the
+  same validation as users. It fills only what is missing, so a change to the
+  demo data needs `--reseed`. A new seed function must be idempotent and is
+  listed in `scripts/dev-agent.ts`.
+- `src/` files imported by `convex/` use relative imports: Convex bundles
+  them without the `@/` alias.
+- The backend keeps running when the command stops, so the next run is fast;
+  its container and volume are labelled `netplan.worktree=<path>` and
+  `netplan.owner=<uid>`, and removed once that path is gone.
 
 ## The three ways to hurt yourself
 

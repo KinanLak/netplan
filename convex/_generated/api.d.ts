@@ -14,6 +14,7 @@ import type * as computerPresentation from "../computerPresentation.js";
 import type * as computerProjection from "../computerProjection.js";
 import type * as connector from "../connector.js";
 import type * as crons from "../crons.js";
+import type * as dev from "../dev.js";
 import type * as devices from "../devices.js";
 import type * as floors from "../floors.js";
 import type * as integrationModel from "../integrationModel.js";
@@ -52,6 +53,7 @@ declare const fullApi: ApiFromModules<{
   computerProjection: typeof computerProjection;
   connector: typeof connector;
   crons: typeof crons;
+  dev: typeof dev;
   devices: typeof devices;
   floors: typeof floors;
   integrationModel: typeof integrationModel;

@@ -65,7 +65,7 @@ const main = async () => {
   };
 
   if (!url || !adminKey) {
-    skip("no local self-hosted backend configured");
+    skip("no local backend configured, `bun run dev:agent --setup` makes one");
     return;
   }
   if (!isLoopbackUrl(url)) {

@@ -23,11 +23,15 @@ ADR 0002. So every worktree gets a private backend:
   points somewhere real is never clobbered, and it refuses any non-loopback
   Convex URL.
 - It sets `ALLOW_DEV_SEED=true` on that backend only, pushes the functions,
-  seeds a fictional site when the backend is empty, then runs `convex dev`
-  and Vite and prints a banner with the URLs.
-- The container is labelled `netplan.worktree=<path>` and survives the
-  command; `--down` removes it with its volume, and each run removes labelled
-  containers and volumes whose worktree no longer exists.
+  runs the seed, then runs `convex dev` and Vite and prints a banner with the
+  URLs. The seed fills what is missing on every run (a site, a building, an
+  empty floor) and leaves the rest alone, so a cleared map comes back and
+  edits stay; a change to the demo data reaches an existing backend through
+  `--reseed`, which starts from an empty one.
+- The container is labelled `netplan.worktree=<path>` and
+  `netplan.owner=<uid>` and survives the command; `--down` removes it with its
+  volume, and each run removes the account's labelled containers and volumes
+  whose worktree no longer exists.
 
 The seed goes through the same server validation as user edits, so it can
 never hold a map the app would reject. It invents everything: no real
@@ -36,9 +40,8 @@ seeding function refuses to run unless `ALLOW_DEV_SEED` is `true`, which no
 real installation sets; the seeded test accounts of ADR 0003 join it in the
 auth lot.
 
-CI's end-to-end job starts the same image as a service container with a
-throwaway secret, deploys, seeds, builds the app and drives it with
-Playwright.
+CI's end-to-end job starts the same image as a service container, deploys,
+seeds, builds the app and drives it with Playwright.
 
 Per-pull-request preview deployments were considered and left out: a
 self-hosted backend per pull request needs a host to run on, and the

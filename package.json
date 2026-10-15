@@ -22,7 +22,8 @@
     "test": "bun test",
     "codegen:check": "bun scripts/codegen-check.ts",
     "fix": "bun run lint:fix && bun run format",
-    "verify": "bun run check && bun run build && git diff --exit-code -- src/routeTree.gen.ts"
+    "verify": "bun run check && bun run build && git diff --exit-code -- src/routeTree.gen.ts",
+    "dev:agent": "bun scripts/dev-agent.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",

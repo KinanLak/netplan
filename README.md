@@ -13,15 +13,16 @@ interface is in French.
 
 ## Development
 
-Requirements: [Bun](https://bun.sh).
+Requirements: [Bun](https://bun.sh) and Docker.
 
 ```sh
 bun install
-bun run dev      # Convex dev deployment + Vite
-bun run check    # typecheck, lint, format, tests
+bun run dev:agent   # local Convex backend in Docker, demo data, Vite
+bun run check       # typecheck, lint, format, tests
 ```
 
-`bun run dev` needs a Convex deployment configured in `.env.local`.
+`bun run dev:agent` prints the app's URL once it is ready. Each checkout gets
+its own backend and ports, so several can run side by side.
 
 ## Documentation
 
