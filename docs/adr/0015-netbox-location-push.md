@@ -7,7 +7,7 @@ title: The observed location is pushed one way to NetBox custom fields
 # The observed location is pushed one way to NetBox custom fields
 
 When Netplan has located a device known to NetBox, it can write the observed
-location (site, floor, socket) to custom fields of that NetBox device. The
+location (socket, room, floor, date) to custom fields of that NetBox device. The
 push is one way: Netplan never reads these fields back as a source, and it is
 the only write Netplan makes to NetBox (ADR 0007).
 
@@ -22,4 +22,5 @@ localization is validated.
 
 ## Source
 
-[Decision log](../history/decision-log.md): Q26.
+[Decision log](../history/decision-log.md): Q26, orchestrator journal "Where
+does the NetBox location push write during tests?".

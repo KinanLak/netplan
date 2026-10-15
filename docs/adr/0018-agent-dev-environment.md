@@ -57,4 +57,4 @@ per-worktree backend already gives each agent an isolated live app.
 ## Source
 
 [Decision log](../history/decision-log.md): Q40, orchestrator journal
-"Per-worktree dev backend storage?".
+"Per-worktree dev backend storage?", and the F — Foundations journal.

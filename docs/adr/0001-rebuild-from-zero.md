@@ -23,11 +23,10 @@ Dependencies stay on their latest release, majors included.
 - A change takes the canonical shape of the target, even when that breaks the
   current app's behaviour; no transitional layer, flag or legacy code path is
   kept "just in case".
-- Schema changes need no backfill or migration while this ADR stands. The
-  first real installation ends it: a later ADR will say how data is migrated
-  from then on.
+- Schema changes need no backfill or migration while nothing is in
+  production.
 - `bun add <pkg>@latest` is the default for every dependency change.
 
 ## Source
 
-[Decision log](../history/decision-log.md): Q22bis, Q35.
+[Decision log](../history/decision-log.md): Q22bis, Q35, Q37.

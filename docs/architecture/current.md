@@ -52,12 +52,13 @@ cable → wall socket → socket placed on the map → PC position:
 - `convex/localization*.ts` and `computerLocations` resolve each MAC to a
   socket; `convex/computerProjection.ts` moves the PC on the map through the
   same map operations as a user.
-- `convex/integrationOrchestration.ts` schedules cycles from a cron, behind
+- `convex/integrationOrchestration.ts` reserves cycles from a cron, behind
   the `INTEGRATION_SCHEDULER_ENABLED` and
-  `INTEGRATION_MANUAL_REFRESH_ENABLED` switches.
+  `INTEGRATION_MANUAL_REFRESH_ENABLED` switches. It only records attempts and
+  per-switch states: nothing inside Convex runs the collection yet.
 
-Because Convex Cloud cannot reach LibreNMS on the internal network, an
-external agent (`scripts/sync-integrations.ts`, `scripts/librenms-agent.ts`,
+Because Convex Cloud cannot reach LibreNMS on the internal network, the real
+work is done by an external agent (`scripts/sync-integrations.ts`, `scripts/librenms-agent.ts`,
 `ops/systemd/`) runs on a workstation, reads both tools and pushes results
 through `convex/connector.ts`, authenticated by `NETPLAN_CONNECTOR_SECRET`.
 

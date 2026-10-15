@@ -52,13 +52,13 @@ canonical change over compatibility shims.
    five minutes per site.
 3. **Leaking secrets.** Never print, log, commit or paste a secret value, not
    even in a PR body or a test fixture. Load them inside the command
-   (`set -a; . file; set +a`). gitleaks scans every pull request.
+   (`set -a; . file; set +a`).
 
 ## Map domain
 
-- UI code dispatches durable map changes through `useMapDocument()` from
-  `src/map-session/MapDocumentProvider.tsx`; never call Convex map mutations
-  directly from components.
+- UI code dispatches durable map changes through `useMapDocumentActions()`
+  (`src/map-session/useMapDocument.ts`, provided by `MapDocumentProvider`);
+  never call Convex map mutations directly from components.
 - Durable changes are `MapOperation`s (`src/map-engine/types.ts`), applied
   locally by `src/map-engine/` and on the server by `api.mapOperations.apply`.
 - Server validation is authoritative for floors, object ids, collisions,
@@ -107,7 +107,7 @@ in the PR which entries applied:
   assert props, or write tests that mirror the implementation.
 - Never wait on sleeps in a test. A test that needs a timeout to pass is wrong.
 - An empty database is a bad test of the UI. Verify a user-visible change in a
-  real browser against your own backend, never against a shared or real one.
+  real browser, never against a deployment other people use.
 
 ## Code
 

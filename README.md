@@ -13,7 +13,7 @@ interface is in French.
 
 ## Development
 
-Requirements: [Bun](https://bun.sh) and, for a local backend, Docker.
+Requirements: [Bun](https://bun.sh).
 
 ```sh
 bun install

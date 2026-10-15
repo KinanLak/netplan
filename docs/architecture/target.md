@@ -6,8 +6,8 @@ description: The shape the rebuild lots are building towards.
 # Target architecture
 
 The rebuild replaces the current design in place, with no transitional layers
-and data restarting from zero (ADR 0001). Lots are listed in the order they
-land.
+and data restarting from zero (ADR 0001). Order: F, then lots 0 and 1 in
+parallel, then lot 2 alongside lot 3a, then 3b, 4 and 5.
 
 ## Foundations (lot F)
 
@@ -52,11 +52,14 @@ land.
   at a per-site cadence (ADR 0010, ADR 0012); the external agent, connector
   and systemd units are deleted.
 
-## Map (lot 3)
+## Floor overlay (lot 3a, alongside lot 2)
 
-- A calibrated background "calque" per floor (ADR 0011).
-- Real switch ports coloured by observation, status dots, and cables shown
-  only on demand (ADR 0009).
+A calibrated background "calque" per floor (ADR 0011).
+
+## Map (lot 3b, after lot 2)
+
+Real switch ports coloured by observation, status dots, cables shown only on
+demand, and hybrid cable editing (ADR 0009).
 
 ## Experience (lot 4)
 

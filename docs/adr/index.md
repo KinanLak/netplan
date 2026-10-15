@@ -7,8 +7,9 @@ description: Numbered records of choices that are expensive to revisit.
 
 Each record states a decision, why it was taken, and what follows from it.
 A record is not edited to reflect a later change of mind: a new record
-supersedes it and says so in its frontmatter (`supersedes: NNNN`). The
-reasoning behind 0001–0019 is in the [decision log](../history/decision-log.md).
+supersedes it and says so in its frontmatter (`supersedes: NNNN`). Each
+record's Source section points to its questions in the
+[decision log](../history/decision-log.md).
 
 - **[0001 — Rebuild the target architecture now, with data restarting from zero](0001-rebuild-from-zero.md)**
 - **[0002 — Fully self-hosted in Docker; Vercel and the desktop app are dropped](0002-self-hosted-only.md)**

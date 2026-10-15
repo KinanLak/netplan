@@ -28,12 +28,17 @@ providers (user data outside the installation, contrary to ADR 0002).
 - Every public Convex function checks the caller's session and role on the
   server (ADR 0004). The random pseudonym stored in `netplan-identity` is
   replaced by the signed-in user, and presence shows real names.
-- The better-auth version is pinned to what the component supports; an
-  upgrade that changes the OIDC callback path is planned work, because the
-  redirect URI registered in Keycloak changes with it.
-- Development and CI run a local Keycloak realm and Mailpit; seeded test
-  accounts exist only where `ALLOW_DEV_SEED` is set (ADR 0018).
+- better-auth follows ADR 0001 and stays on the latest version
+  `@convex-dev/better-auth` supports. An upgrade that changes the OIDC
+  callback path is planned work, because the redirect URI registered in
+  Keycloak changes with it.
+- The first admin is created at first start, by a command or an environment
+  variable.
+- Development runs a local Keycloak realm and Mailpit; seeded test accounts
+  exist only where `ALLOW_DEV_SEED` is set (ADR 0018).
 
 ## Source
 
-[Decision log](../history/decision-log.md): Q2, Q3, Q6, Q10, Q15, Q24.
+[Decision log](../history/decision-log.md): Q2, Q3, Q6, Q10, Q15, Q24, Q37,
+orchestrator journal "Which Keycloak for SSO tests?" and "Which SMTP for
+local tests?".

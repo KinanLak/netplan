@@ -18,9 +18,12 @@ every hour otherwise. There is no holiday calendar.
 
 - The scheduler runs inside Convex (ADR 0012) and reads the cadence from the
   site.
+- An Admin can turn automatic cycles and manual refresh off per site; the
+  environment kill switches stay as a fallback.
 - Agents and tests trigger at most one cycle per 5 minutes per site against
   the real LibreNMS.
 
 ## Source
 
-[Decision log](../history/decision-log.md): Q34, Q34bis.
+[Decision log](../history/decision-log.md): Q19, Q34, Q34bis, orchestrator journal
+"Can agents trigger LibreNMS discoveries?".

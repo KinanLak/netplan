@@ -12,7 +12,7 @@ planning with no integration at all, and integrations enrich it.
 
 - Netplan owns its inventory and the identity of each device: MAC addresses,
   hostname, serial number. A device can exist without being placed on a map.
-- Sites, buildings and floors are data, created in the admin UI; nothing about
+- Sites and their integrations are configured in the admin UI; nothing about
   a site or a switch is hard-coded.
 - NetBox and LibreNMS are integrations configured per site in the admin UI
   (URL, token, options). A site may use both, one or none.

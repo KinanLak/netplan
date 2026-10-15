@@ -20,4 +20,6 @@ History reveals when people's machines move and when they are online, so only
 
 ## Source
 
-[Decision log](../history/decision-log.md): Q18.
+[Decision log](../history/decision-log.md): Q18; retention and snapshot hours
+from the frozen plan
+[`04-historique-et-retention.md`](../history/2026-07-computer-location-refresh/04-historique-et-retention.md).

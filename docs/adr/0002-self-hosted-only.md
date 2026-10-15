@@ -21,12 +21,15 @@ its own SSO redirect URI and cookie rules (ADR 0003) for no user need.
 
 - No Convex URL or other origin is baked into the bundle at build time; the
   client reads it from runtime configuration.
-- The app image exposes `/health` for orchestrators.
+- The app image exposes a `/health` route that existing monitoring (Zabbix,
+  Uptime Kuma) can poll.
 - Agents and CI run the same convex-backend image as production
-  (ADR 0018); `convex dev --local` is not used.
+  (ADR 0018); `convex dev --local` is not used. CI itself runs on
+  GitHub-hosted runners: it sees neither production data nor production
+  secrets.
 - The connector secret, the systemd units and the Vercel build command go
   away with the external agent (ADR 0012) and the Vercel config.
 
 ## Source
 
-[Decision log](../history/decision-log.md): Q7, Q11, Q21, Q41.
+[Decision log](../history/decision-log.md): Q7, Q8, Q11, Q21, Q41.
