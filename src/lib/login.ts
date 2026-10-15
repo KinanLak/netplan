@@ -23,6 +23,23 @@ export function isEmail(identifier: string): boolean {
   return identifier.includes("@");
 }
 
+type AuthFailure = { status?: number; code?: string };
+
+/**
+ * The failure of an auth client request, or null once it succeeded. The client
+ * rejects when the connection drops instead of returning an `error`, which
+ * would leave a form pending with no message, so that counts as a failure too.
+ */
+export async function requestFailure<E extends AuthFailure>(
+  request: Promise<{ error: E | null }>,
+): Promise<E | AuthFailure | null> {
+  try {
+    return (await request).error;
+  } catch {
+    return { status: 0 };
+  }
+}
+
 export function loginErrorMessage(error: {
   status?: number;
   code?: string;

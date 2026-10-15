@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
-import { forgotPasswordErrorMessage } from "@/lib/login";
+import { forgotPasswordErrorMessage, requestFailure } from "@/lib/login";
 
 export const Route = createFileRoute("/forgot-password")({
   head: () => ({ meta: [{ title: "Mot de passe oublié · Netplan" }] }),
@@ -29,10 +29,12 @@ function ForgotPasswordPage() {
     event.preventDefault();
     setPending(true);
     setError(null);
-    const { error: failure } = await authClient.requestPasswordReset({
-      email: email.trim(),
-      redirectTo: "/reset-password",
-    });
+    const failure = await requestFailure(
+      authClient.requestPasswordReset({
+        email: email.trim(),
+        redirectTo: "/reset-password",
+      }),
+    );
     setPending(false);
     if (failure) {
       setError(forgotPasswordErrorMessage(failure));

@@ -12,7 +12,12 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
-import { isEmail, loginErrorMessage, safeRedirect } from "@/lib/login";
+import {
+  isEmail,
+  loginErrorMessage,
+  requestFailure,
+  safeRedirect,
+} from "@/lib/login";
 
 export const Route = createFileRoute("/login")({
   validateSearch: (search: Record<string, unknown>): { redirect?: string } => ({
@@ -37,9 +42,11 @@ function LoginPage() {
     setPending(true);
     setError(null);
     const login = identifier.trim();
-    const { error: failure } = isEmail(login)
-      ? await authClient.signIn.email({ email: login, password })
-      : await authClient.signIn.username({ username: login, password });
+    const failure = await requestFailure(
+      isEmail(login)
+        ? authClient.signIn.email({ email: login, password })
+        : authClient.signIn.username({ username: login, password }),
+    );
     if (failure) {
       setError(loginErrorMessage(failure));
       setPending(false);

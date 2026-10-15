@@ -6,6 +6,7 @@ import {
   isForbidden,
   isSessionLost,
   loginErrorMessage,
+  requestFailure,
   resetPasswordErrorMessage,
   safeRedirect,
 } from "./login";
@@ -93,5 +94,20 @@ describe("password reset messages", () => {
     expect(
       resetPasswordErrorMessage({ status: 400, code: "PASSWORD_TOO_LONG" }),
     ).toContain("trop long");
+  });
+});
+
+describe("requestFailure", () => {
+  it("reads a dropped connection as a failure the form can show", async () => {
+    const dropped = Promise.reject(new TypeError("Failed to fetch"));
+    expect(await requestFailure(dropped)).toEqual({ status: 0 });
+  });
+
+  it("passes a refusal through and is null on success", async () => {
+    const refusal = { status: 429, code: "TOO_MANY_REQUESTS" };
+    expect(await requestFailure(Promise.resolve({ error: refusal }))).toBe(
+      refusal,
+    );
+    expect(await requestFailure(Promise.resolve({ error: null }))).toBeNull();
   });
 });

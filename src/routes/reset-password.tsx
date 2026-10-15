@@ -12,7 +12,11 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
-import { MIN_PASSWORD_LENGTH, resetPasswordErrorMessage } from "@/lib/login";
+import {
+  MIN_PASSWORD_LENGTH,
+  requestFailure,
+  resetPasswordErrorMessage,
+} from "@/lib/login";
 
 // The mailed link goes through better-auth, which checks the token and lands
 // here with `?token=` or, once it has expired, `?error=INVALID_TOKEN`.
@@ -71,10 +75,9 @@ function ResetPasswordPage() {
     }
     setPending(true);
     setError(null);
-    const { error: failure } = await authClient.resetPassword({
-      newPassword: password,
-      token,
-    });
+    const failure = await requestFailure(
+      authClient.resetPassword({ newPassword: password, token }),
+    );
     setPending(false);
     if (failure?.code === "INVALID_TOKEN") {
       setExpired(true);
