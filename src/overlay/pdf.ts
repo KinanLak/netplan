@@ -23,12 +23,54 @@ const loadPdfJs = async () => {
   return pdfjs;
 };
 
+// pdf.js asks for its image decoders (JPEG 2000, JBIG2), standard fonts and
+// CMaps only when a document needs them, so each is a lazy import resolving to
+// a URL. Fonts and CMaps are inlined as data URLs: the dev server cannot serve
+// `.pfb` or `.bcmap` files by URL, and Rolldown cannot inline `.wasm`.
+const PDFJS_DIR = "/node_modules/pdfjs-dist";
+const pdfAssets = {
+  ...import.meta.glob<string>("/node_modules/pdfjs-dist/wasm/*.wasm", {
+    query: "?url&no-inline",
+    import: "default",
+  }),
+  ...import.meta.glob<string>(
+    [
+      "/node_modules/pdfjs-dist/standard_fonts/*.{pfb,ttf}",
+      "/node_modules/pdfjs-dist/cmaps/*.bcmap",
+    ],
+    { query: "?inline", import: "default" },
+  ),
+};
+const pdfAssetDirs: Record<string, string> = {
+  wasmUrl: "wasm",
+  standardFontDataUrl: "standard_fonts",
+  cMapUrl: "cmaps",
+};
+
+class BundledPdfAssets {
+  async fetch({ kind, filename }: { kind: string; filename: string }) {
+    const path = `${PDFJS_DIR}/${pdfAssetDirs[kind]}/${filename}`;
+    if (!Object.hasOwn(pdfAssets, path)) {
+      throw new Error(`pdf.js asset not bundled: ${kind} ${filename}`);
+    }
+    const response = await fetch(await pdfAssets[path]());
+    if (!response.ok) throw new Error(`pdf.js asset not loaded: ${path}`);
+    return new Uint8Array(await response.arrayBuffer());
+  }
+}
+
 export async function openPdf(file: File): Promise<PdfDocument> {
   const pdfjs = await loadPdfJs();
   const data = new Uint8Array(await file.arrayBuffer());
+  const loadingTask = pdfjs.getDocument({
+    data,
+    BinaryDataFactory: BundledPdfAssets,
+  });
   try {
-    return await pdfjs.getDocument({ data }).promise;
+    return await loadingTask.promise;
   } catch (error) {
+    // A refused document keeps its worker until destroyed.
+    void loadingTask.destroy();
     throw new OverlayImportError(
       error instanceof pdfjs.PasswordException
         ? "pdf-password"

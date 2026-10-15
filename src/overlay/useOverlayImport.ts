@@ -36,13 +36,32 @@ export function useOverlayImport() {
   const openPdfRef = useRef<PdfDocument | null>(null);
   // The floor the import started on; a floor switch meanwhile cancels it.
   const floorIdRef = useRef<FloorId | null>(null);
+  // Bumped by each new import and by closing the panel: an older import then
+  // stops at its next step, so it never places a calque over a newer one.
+  const importIdRef = useRef(0);
 
   const closePdf = () => {
     if (openPdfRef.current) destroyPdf(openPdfRef.current);
     openPdfRef.current = null;
   };
 
-  useEffect(() => closePdf, []);
+  const releasePdf = (pdf: PdfDocument) => {
+    destroyPdf(pdf);
+    if (openPdfRef.current === pdf) openPdfRef.current = null;
+  };
+
+  const currentImport = () => {
+    const importId = importIdRef.current;
+    return () => importId === importIdRef.current;
+  };
+
+  useEffect(
+    () => () => {
+      importIdRef.current += 1;
+      closePdf();
+    },
+    [],
+  );
 
   const visiblePlan = (): PlanRect => {
     const { width, height, transform } = flowStore.getState();
@@ -60,9 +79,16 @@ export function useOverlayImport() {
     setState({ status: "error", message: overlayImportMessage(error) });
   };
 
-  const place = async (raster: RasterOverlay, fileName: string) => {
+  const place = async (
+    raster: RasterOverlay,
+    fileName: string,
+    isCurrent: () => boolean,
+  ) => {
+    if (!isCurrent()) return;
     setState({ status: "working", step: "uploading" });
     const uploaded = await upload({ bytes: raster.bytes, name: fileName });
+    // An unplaced file stays released, and the daily cleanup deletes it.
+    if (!isCurrent()) return;
     const file = { ...uploaded, fileId: uploaded.fileId as OverlayFileId };
     const document = getDocument();
     if (document.floorId !== floorIdRef.current) {
@@ -88,43 +114,54 @@ export function useOverlayImport() {
 
   const importFile = async (file: File) => {
     closePdf();
+    importIdRef.current += 1;
+    const isCurrent = currentImport();
     floorIdRef.current = getDocument().floorId;
     const kind = overlaySourceKind(file);
     try {
       if (!kind) throw new OverlayImportError("unsupported-file");
       setState({ status: "working", step: "reading" });
       if (kind !== "pdf") {
-        await place(await rasterizeImageFile(file, kind), file.name);
+        await place(await rasterizeImageFile(file, kind), file.name, isCurrent);
         return;
       }
       const pdf = await openPdf(file);
+      if (!isCurrent()) {
+        destroyPdf(pdf);
+        return;
+      }
       openPdfRef.current = pdf;
       if (pdf.numPages === 1) {
-        await place(await rasterizePdfPage(pdf, 1), file.name);
-        closePdf();
+        try {
+          await place(await rasterizePdfPage(pdf, 1), file.name, isCurrent);
+        } finally {
+          releasePdf(pdf);
+        }
         return;
       }
       setState({ status: "choosing-page", pdf, fileName: file.name });
     } catch (error) {
-      fail(error);
+      if (isCurrent()) fail(error);
     }
   };
 
   const choosePage = async (pageNumber: number) => {
     const pdf = openPdfRef.current;
     if (state.status !== "choosing-page" || !pdf) return;
+    const isCurrent = currentImport();
     const name = `${state.fileName} (page ${pageNumber})`;
     try {
       setState({ status: "working", step: "reading" });
-      await place(await rasterizePdfPage(pdf, pageNumber), name);
+      await place(await rasterizePdfPage(pdf, pageNumber), name, isCurrent);
     } catch (error) {
-      fail(error);
+      if (isCurrent()) fail(error);
     } finally {
-      closePdf();
+      releasePdf(pdf);
     }
   };
 
   const reset = () => {
+    importIdRef.current += 1;
     closePdf();
     setState(IDLE);
   };
