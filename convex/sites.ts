@@ -29,7 +29,7 @@ const siteConfiguration = {
 };
 
 const siteInput = v.object(siteConfiguration);
-type SiteInput = Infer<typeof siteInput>;
+export type SiteInput = Infer<typeof siteInput>;
 const siteOutput = v.object({
   id: v.string(),
   ...siteConfiguration,
@@ -182,7 +182,7 @@ export const requireSite = async (ctx: MutationCtx, siteId: string) => {
   return site;
 };
 
-const insertSite = async (
+export const insertSite = async (
   ctx: MutationCtx,
   input: SiteInput,
 ): Promise<string> => {

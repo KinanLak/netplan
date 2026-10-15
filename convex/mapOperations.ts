@@ -15,7 +15,7 @@ import type {
   WallId,
 } from "../src/types/map";
 
-type OperationInput = Infer<typeof mapOperation>;
+export type OperationInput = Infer<typeof mapOperation>;
 type DeviceCreateOperation = Extract<OperationInput, { kind: "device.create" }>;
 type DevicePatchOperation = Extract<OperationInput, { kind: "device.patch" }>;
 type DeviceDeleteOperation = Extract<OperationInput, { kind: "device.delete" }>;
@@ -1618,65 +1618,75 @@ export const observePending = query({
   },
 });
 
+/**
+ * Validates and applies one operation exactly as `apply` does, for server code
+ * that writes map content (the dev seed) and must obey the same rules.
+ */
+export const applyMapOperation = async (
+  ctx: MutationCtx,
+  operation: OperationInput,
+): Promise<Infer<typeof mapOperationResult>> => {
+  const existing = await ctx.db
+    .query("clientOperations")
+    .withIndex("by_op_id", (q) => q.eq("opId", operation.meta.opId))
+    .unique();
+  if (existing) {
+    return {
+      status: existing.status,
+      opId: existing.opId,
+      appliedRevision: existing.appliedRevision,
+      floorId: existing.floorId,
+      error: existing.error,
+    };
+  }
+
+  const now = Date.now();
+  const planningOperation = {
+    ...operation,
+    meta: { ...operation.meta, createdAt: now },
+  };
+  const state = await buildPlanningState(ctx, planningOperation);
+  const planningError = planOperation(state, planningOperation);
+  const error = planningError ?? validateSingleAffectedFloor(state);
+  const status: "applied" | "rejected" = error ? "rejected" : "applied";
+  let appliedRevision: number | undefined;
+  let floorId = singleAffectedFloorId(state) ?? operationFloorId(operation);
+  if (!error) {
+    await executePlan(ctx, state.plan);
+    const revisions = await bumpDocumentRevisions(
+      ctx,
+      state.affectedFloorIds,
+      now,
+    );
+    floorId = singleAffectedFloorId(state);
+    appliedRevision = floorId ? revisions.get(floorId) : 0;
+  }
+
+  await ctx.db.insert("clientOperations", {
+    opId: operation.meta.opId,
+    clientId: operation.meta.clientId,
+    clientSeq: operation.meta.clientSeq,
+    floorId,
+    kind: operation.kind,
+    status,
+    error: error ?? undefined,
+    appliedRevision,
+    createdAt: operation.meta.createdAt,
+    appliedAt: now,
+  });
+
+  return {
+    status,
+    opId: operation.meta.opId,
+    appliedRevision,
+    floorId,
+    error: error ?? undefined,
+  };
+};
+
 export const apply = mutation({
   args: { operation: mapOperation },
   returns: mapOperationResult,
-  handler: async (ctx, { operation }) => {
-    const existing = await ctx.db
-      .query("clientOperations")
-      .withIndex("by_op_id", (q) => q.eq("opId", operation.meta.opId))
-      .unique();
-    if (existing) {
-      return {
-        status: existing.status,
-        opId: existing.opId,
-        appliedRevision: existing.appliedRevision,
-        floorId: existing.floorId,
-        error: existing.error,
-      };
-    }
-
-    const now = Date.now();
-    const planningOperation = {
-      ...operation,
-      meta: { ...operation.meta, createdAt: now },
-    };
-    const state = await buildPlanningState(ctx, planningOperation);
-    const planningError = planOperation(state, planningOperation);
-    const error = planningError ?? validateSingleAffectedFloor(state);
-    const status: "applied" | "rejected" = error ? "rejected" : "applied";
-    let appliedRevision: number | undefined;
-    let floorId = singleAffectedFloorId(state) ?? operationFloorId(operation);
-    if (!error) {
-      await executePlan(ctx, state.plan);
-      const revisions = await bumpDocumentRevisions(
-        ctx,
-        state.affectedFloorIds,
-        now,
-      );
-      floorId = singleAffectedFloorId(state);
-      appliedRevision = floorId ? revisions.get(floorId) : 0;
-    }
-
-    await ctx.db.insert("clientOperations", {
-      opId: operation.meta.opId,
-      clientId: operation.meta.clientId,
-      clientSeq: operation.meta.clientSeq,
-      floorId,
-      kind: operation.kind,
-      status,
-      error: error ?? undefined,
-      appliedRevision,
-      createdAt: operation.meta.createdAt,
-      appliedAt: now,
-    });
-
-    return {
-      status,
-      opId: operation.meta.opId,
-      appliedRevision,
-      floorId,
-      error: error ?? undefined,
-    };
-  },
+  handler: async (ctx, { operation }) =>
+    await applyMapOperation(ctx, operation),
 });
