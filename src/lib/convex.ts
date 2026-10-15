@@ -1,11 +1,14 @@
 import { ConvexReactClient } from "convex/react";
 
-const convexUrl = import.meta.env.VITE_CONVEX_URL;
+let client: ConvexReactClient | undefined;
 
-if (!convexUrl) {
-  throw new Error(
-    "VITE_CONVEX_URL is not set. Run `bunx convex dev` to provision the deployment.",
-  );
+/**
+ * One client per page for the URL the server handed over. The client opens
+ * its connection on first use, so creating it during SSR costs nothing.
+ */
+export function getConvexClient(url: string): ConvexReactClient {
+  if (client?.url !== url) {
+    client = new ConvexReactClient(url);
+  }
+  return client;
 }
-
-export const convexClient = new ConvexReactClient(convexUrl);

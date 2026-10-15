@@ -426,8 +426,8 @@ const webUrl = urls(backendPort, webPort).web ?? "";
 const convexValues = {
   CONVEX_SELF_HOSTED_URL: convexUrl,
   CONVEX_SELF_HOSTED_ADMIN_KEY: adminKey ?? "",
-  VITE_CONVEX_URL: convexUrl,
-  VITE_CONVEX_SITE_URL: siteUrl,
+  CONVEX_URL: convexUrl,
+  CONVEX_SITE_URL: siteUrl,
 };
 // Written before Vite starts: Vite restarts when an env file changes.
 // `--setup` keeps the URL of a run that may still be serving.

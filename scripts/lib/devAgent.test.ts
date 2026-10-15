@@ -60,13 +60,11 @@ describe("ports", () => {
 
 describe("env files", () => {
   it("recognises only files it wrote", () => {
-    const text = renderEnvFile({ VITE_CONVEX_URL: "http://127.0.0.1:13380" });
+    const text = renderEnvFile({ CONVEX_URL: "http://127.0.0.1:13380" });
     expect(isGeneratedEnvFile(text)).toBe(true);
-    expect(isGeneratedEnvFile("VITE_CONVEX_URL=https://x.example\n")).toBe(
-      false,
-    );
+    expect(isGeneratedEnvFile("CONVEX_URL=https://x.example\n")).toBe(false);
     expect(parseEnvLines(text)).toEqual(
-      new Map([["VITE_CONVEX_URL", "http://127.0.0.1:13380"]]),
+      new Map([["CONVEX_URL", "http://127.0.0.1:13380"]]),
     );
   });
 
