@@ -77,7 +77,10 @@ afterAll(() => {
   for (const key of Object.keys(KEYCLOAK_ENV)) delete process.env[key];
 });
 
-/** Signs in through Keycloak as the login page does; answers the redirect. */
+/**
+ * Signs in through Keycloak as the login page does; answers the redirect and
+ * the session cookie it sets.
+ */
 async function keycloakLogin(t: TestBackend, login: typeof nextLogin) {
   nextLogin = login;
   const start = await post(t, "/sign-in/oauth2", {
@@ -87,16 +90,21 @@ async function keycloakLogin(t: TestBackend, login: typeof nextLogin) {
   });
   const { url } = (await start.json()) as { url: string };
   const state = new URL(url).searchParams.get("state") ?? "";
-  const cookie = start.headers
+  const callback = await t.fetch(
+    `/api/auth/oauth2/callback/keycloak?${new URLSearchParams({ code: "code", state, iss: ISSUER })}`,
+    { headers: { cookie: cookieOf(start) }, redirect: "manual" },
+  );
+  return {
+    location: callback.headers.get("location") ?? "",
+    cookie: cookieOf(callback),
+  };
+}
+
+const cookieOf = (response: Response) =>
+  response.headers
     .getSetCookie()
     .map((value) => value.split(";")[0])
     .join("; ");
-  const callback = await t.fetch(
-    `/api/auth/oauth2/callback/keycloak?${new URLSearchParams({ code: "code", state, iss: ISSUER })}`,
-    { headers: { cookie }, redirect: "manual" },
-  );
-  return callback.headers.get("location") ?? "";
-}
 
 const userByEmail = (t: TestBackend, email: string) =>
   t.run(
@@ -124,7 +132,8 @@ describe("Keycloak sign-in", () => {
     const admin = await asAdmin(t);
 
     expect(
-      await keycloakLogin(t, { ...camille, roles: ["netplan-editor"] }),
+      (await keycloakLogin(t, { ...camille, roles: ["netplan-editor"] }))
+        .location,
     ).toBe("/");
     const created = await userByEmail(t, camille.email);
     expect(created).toMatchObject({ name: "Camille Keycloak", role: "reader" });
@@ -158,7 +167,11 @@ describe("Keycloak sign-in", () => {
       )) as { email: string }
     ).email;
 
-    const location = await keycloakLogin(t, { ...camille, email, roles: [] });
+    const { location } = await keycloakLogin(t, {
+      ...camille,
+      email,
+      roles: [],
+    });
     expect(new URL(location, SITE).searchParams.get("error")).toBe(
       "account_not_linked",
     );
@@ -182,7 +195,7 @@ describe("Keycloak sign-in", () => {
       disabled: true,
     });
 
-    const location = await keycloakLogin(t, { ...camille, roles: [] });
+    const { location } = await keycloakLogin(t, { ...camille, roles: [] });
     expect(new URL(location, SITE).searchParams.get("error")).toBe(
       "BANNED_USER",
     );
@@ -192,14 +205,31 @@ describe("Keycloak sign-in", () => {
     const t = withMail();
     const options = await t.fetch("/api/auth/sign-in-options");
     expect(await options.json()).toEqual({ keycloak: true });
-    expect(
-      (
-        await post(t, "/oauth2/link", {
-          providerId: "keycloak",
-          callbackURL: "/",
-        })
-      ).status,
-    ).toBe(404);
+    // Signed in, as linking requires: a local account linking a Keycloak
+    // identity would keep its role at password logins.
+    const { cookie } = await keycloakLogin(t, { ...camille, roles: [] });
+    for (const [path, body] of [
+      ["/oauth2/link", { providerId: "keycloak", callbackURL: "/" }],
+      ["/link-social", { provider: "keycloak", callbackURL: "/" }],
+    ] as const) {
+      const response = await t.fetch(`/api/auth${path}`, {
+        method: "POST",
+        headers: { "content-type": "application/json", origin: SITE, cookie },
+        body: JSON.stringify(body),
+      });
+      expect(response.status).toBe(404);
+    }
+  });
+
+  it("sends a login cancelled in Keycloak back to the login page", async () => {
+    const t = withMail();
+    const callback = await t.fetch(
+      "/api/auth/oauth2/callback/keycloak?error=access_denied",
+      { redirect: "manual" },
+    );
+    expect(callback.headers.get("location")).toStartWith(
+      `${SITE}/login?error=access_denied`,
+    );
   });
 
   it("is off without a client secret", async () => {

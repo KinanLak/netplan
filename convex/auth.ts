@@ -148,8 +148,17 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
       // its admin created with a password, under that account's role.
       accountLinking: { enabled: false },
     },
-    // Linking from a signed-in session does not check the setting above.
-    disabledPaths: ["/oauth2/link"],
+    // Linking from a signed-in session does not check the setting above, and
+    // generic OAuth also registers Keycloak with the social linking route.
+    disabledPaths: ["/oauth2/link", "/link-social"],
+    // OAuth failures that happen before the sign-in state is read (Keycloak
+    // answering access_denied, a lost state) go here, not to an English
+    // library page; the login page explains the code.
+    onAPIError: {
+      errorURL: process.env.SITE_URL
+        ? `${process.env.SITE_URL.replace(/\/+$/, "")}/login`
+        : undefined,
+    },
     databaseHooks: {
       session: {
         create: {
