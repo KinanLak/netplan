@@ -1,0 +1,11 @@
+# Convex environment variables the functions read, one name per line.
+# `convex-deploy` sets each name listed here that has a non-empty value in its
+# own environment and leaves the others untouched.
+NETBOX_URL
+NETBOX_TOKEN
+LIBRENMS_URL
+LIBRENMS_TOKEN
+NETPLAN_CONNECTOR_SECRET
+INTEGRATION_SCHEDULER_ENABLED
+INTEGRATION_MANUAL_REFRESH_ENABLED
+ALLOW_DEV_SEED

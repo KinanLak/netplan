@@ -1,0 +1,17 @@
+# Only what the build needs; never local env files or credentials.
+**
+!package.json
+!bun.lock
+!bunfig.toml
+!tsconfig.json
+!vite.config.ts
+!convex.json
+!components.json
+!convex/
+!src/
+!public/
+!deploy/convex-deploy.sh
+!deploy/convex-env.txt
+**/*.test.ts
+**/*.test.tsx
+**/.env*
