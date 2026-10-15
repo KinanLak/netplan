@@ -21,6 +21,7 @@ import type * as floors from "../floors.js";
 import type * as http from "../http.js";
 import type * as integrations from "../integrations.js";
 import type * as lib_authRoles from "../lib/authRoles.js";
+import type * as lib_deviceMacs from "../lib/deviceMacs.js";
 import type * as lib_functions from "../lib/functions.js";
 import type * as lib_httpRetry from "../lib/httpRetry.js";
 import type * as lib_imageHeader from "../lib/imageHeader.js";
@@ -63,6 +64,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   integrations: typeof integrations;
   "lib/authRoles": typeof lib_authRoles;
+  "lib/deviceMacs": typeof lib_deviceMacs;
   "lib/functions": typeof lib_functions;
   "lib/httpRetry": typeof lib_httpRetry;
   "lib/imageHeader": typeof lib_imageHeader;

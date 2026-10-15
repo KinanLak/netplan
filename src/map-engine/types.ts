@@ -3,10 +3,10 @@ import type {
   DeviceId,
   FloorId,
   FloorOverlay,
-  DeviceMetadata,
   LinkDoc,
   LinkId,
   MapDocumentSnapshot,
+  NewDevice,
   OperationMeta,
   Position,
   Size,
@@ -14,12 +14,10 @@ import type {
   WallSegment,
 } from "@/types/map";
 
+/** The map edits only where a device stands; its identity is edited apart. */
 export interface DevicePatch {
-  name?: string;
-  hostname?: string;
   position?: Position;
   size?: Size;
-  metadata?: DeviceMetadata;
 }
 
 export interface OverlayPatch {
@@ -31,7 +29,7 @@ export interface OverlayPatch {
 }
 
 export type AtomicMapOperation =
-  | { kind: "device.create"; meta: OperationMeta; device: Device }
+  | { kind: "device.create"; meta: OperationMeta; device: NewDevice }
   | {
       kind: "device.patch";
       meta: OperationMeta;
@@ -82,6 +80,7 @@ export type ApplyOperationReason =
   | "overlay-locked"
   | "invalid-overlay"
   | "wrong-floor"
+  | "source-owned"
   | "invalid-batch";
 
 export interface ApplyOperationResult {

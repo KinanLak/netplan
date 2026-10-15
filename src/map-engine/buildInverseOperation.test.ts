@@ -22,6 +22,7 @@ const device = (id: DeviceId): Device => ({
   name: "PC",
   position: { x: 0, y: 0 },
   size: { width: 80, height: 80 },
+  macs: [],
   metadata: {},
 });
 
@@ -107,7 +108,7 @@ describe("buildInverseOperation", () => {
         {
           kind: "device.patch",
           deviceId: a.id,
-          patch: { name: "Moved" },
+          patch: { size: { width: 120, height: 80 } },
         },
       ],
     };

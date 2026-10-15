@@ -44,6 +44,7 @@ const device = (
   floorId: "floor-a" as FloorId,
   position,
   size,
+  macs: [],
   metadata: {},
 });
 

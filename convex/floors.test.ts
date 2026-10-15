@@ -90,7 +90,7 @@ describe("floors", () => {
     expect(after[0]?.name).toBe("Renamed");
   });
 
-  it("remove cascades devices, walls, links, and presences of the floor", async () => {
+  it("remove unplaces the devices of the floor and cascades its walls, links and presences", async () => {
     const t = await signedInTest();
     const buildingId = await freshBuilding(t);
     const floorId = await t.mutation(api.floors.create, {
@@ -102,11 +102,15 @@ describe("floors", () => {
     await t.run(async (ctx) => {
       await ctx.db.insert("devices", {
         objectId: "device:a",
-        floorId,
+        siteId: "site:test",
         type: "pc",
         name: "A",
-        position: { x: 0, y: 0 },
-        size: { width: 80, height: 80 },
+        macs: [],
+        placement: {
+          floorId,
+          position: { x: 0, y: 0 },
+          size: { width: 80, height: 80 },
+        },
         metadata: {},
         updatedAt: 0,
         updatedBy: "test",
@@ -143,7 +147,10 @@ describe("floors", () => {
 
     await t.run(async (ctx) => {
       expect(await ctx.db.query("floors").collect()).toHaveLength(0);
-      expect(await ctx.db.query("devices").collect()).toHaveLength(0);
+      // Devices stay in the site's inventory, off the map.
+      const devices = await ctx.db.query("devices").collect();
+      expect(devices.map((device) => device.objectId)).toEqual(["device:a"]);
+      expect(devices.every((device) => !device.placement)).toBe(true);
       expect(await ctx.db.query("walls").collect()).toHaveLength(0);
       expect(await ctx.db.query("links").collect()).toHaveLength(0);
       expect(await ctx.db.query("presences").collect()).toHaveLength(0);

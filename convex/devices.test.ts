@@ -46,6 +46,7 @@ const createDevice = async (
         name,
         position: { x, y: 0 },
         size: { width: 80, height: 80 },
+        macs: [],
         metadata: {},
       },
     },
@@ -67,10 +68,10 @@ describe("devices", () => {
     expect(list[0]?.id).toBe("device:a");
   });
 
-  it("reflects device patches applied through mapOperations", async () => {
+  it("reflects device moves applied through mapOperations", async () => {
     const t = await signedInTest();
     const floorId = await freshFloor(t);
-    const id = await createDevice(t, floorId, "device:patch", "Old", 0);
+    const id = await createDevice(t, floorId, "device:patch", "PC", 0);
     counter += 1;
 
     await t.mutation(api.mapOperations.apply, {
@@ -78,39 +79,43 @@ describe("devices", () => {
         kind: "device.patch",
         meta: meta(),
         deviceId: id,
-        patch: {
-          name: "New",
-          hostname: "host-new",
-          position: { x: 200, y: 300 },
-        },
+        patch: { position: { x: 200, y: 300 } },
       },
     });
 
     const list = await t.query(api.devices.listForFloor, { floorId });
-    expect(list[0]).toMatchObject({
-      name: "New",
-      hostname: "host-new",
-      position: { x: 200, y: 300 },
-    });
+    expect(list[0]).toMatchObject({ name: "PC", position: { x: 200, y: 300 } });
   });
 
-  it("never exposes MAC addresses from public device queries", async () => {
+  it("shows placed devices with their identity and leaves unplaced ones out", async () => {
     const t = await signedInTest();
     const floorId = await freshFloor(t);
     await t.run(async (ctx) => {
-      await ctx.db.insert("devices", {
-        objectId: "device:private-mac",
-        floorId,
-        type: "pc",
-        name: "Private inventory",
-        position: { x: 0, y: 0 },
-        size: { width: 80, height: 80 },
-        metadata: {
-          ip: "192.0.2.5",
-          macs: ["AA:BB:CC:DD:EE:FF"],
-        },
+      const identity = {
+        siteId: "site:test",
+        type: "pc" as const,
+        metadata: {},
         updatedAt: 1,
         updatedBy: "test",
+      };
+      await ctx.db.insert("devices", {
+        ...identity,
+        objectId: "device:placed",
+        name: "Placed",
+        macs: ["02:00:00:00:00:01"],
+        ip: "192.0.2.5",
+        serial: "SN-1",
+        placement: {
+          floorId,
+          position: { x: 0, y: 0 },
+          size: { width: 80, height: 80 },
+        },
+      });
+      await ctx.db.insert("devices", {
+        ...identity,
+        objectId: "device:unplaced",
+        name: "Unplaced",
+        macs: [],
       });
     });
 
@@ -118,9 +123,20 @@ describe("devices", () => {
       t.query(api.devices.listForFloor, { floorId }),
       t.query(api.mapDocument.getFloorDevices, { floorId }),
     ]);
-    expect(devices[0]?.metadata).toEqual({ ip: "192.0.2.5" });
-    expect(mapDevices[0]?.metadata).toEqual({ ip: "192.0.2.5" });
-    expect(Object.hasOwn(devices[0]?.metadata ?? {}, "macs")).toBe(false);
-    expect(Object.hasOwn(mapDevices[0]?.metadata ?? {}, "macs")).toBe(false);
+    expect(devices).toEqual(mapDevices);
+    expect(mapDevices).toEqual([
+      {
+        id: "device:placed",
+        floorId,
+        type: "pc",
+        name: "Placed",
+        serial: "SN-1",
+        macs: ["02:00:00:00:00:01"],
+        ip: "192.0.2.5",
+        position: { x: 0, y: 0 },
+        size: { width: 80, height: 80 },
+        metadata: {},
+      },
+    ]);
   });
 });

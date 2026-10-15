@@ -37,6 +37,7 @@ export const buildDevice = (overrides: Partial<Device> = {}): Device => ({
   floorId: "floor-1" as FloorId,
   position: { x: 0, y: 0 },
   size: { width: 80, height: 80 },
+  macs: [],
   metadata: {},
   ...overrides,
 });

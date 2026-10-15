@@ -74,7 +74,7 @@ const floorIsEmpty = async (ctx: MutationCtx, floorId: string) => {
   const [device, wall] = await Promise.all([
     ctx.db
       .query("devices")
-      .withIndex("by_floor", (q) => q.eq("floorId", floorId))
+      .withIndex("by_floor", (q) => q.eq("placement.floorId", floorId))
       .first(),
     ctx.db
       .query("walls")

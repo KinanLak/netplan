@@ -5,6 +5,7 @@ import type { Doc } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { requireSite } from "./sites";
 import { syncOverlayFileReleases } from "./lib/overlayFiles";
+import { deleteDeviceMacs } from "./lib/deviceMacs";
 
 const buildingValidator = v.object({
   id: v.string(),
@@ -156,6 +157,18 @@ export const clearMap = editorMutation({
       await ctx.db.delete(building._id);
     }
 
+    // Clearing the map also clears what was drawn on it; a sourced device
+    // stays unplaced, since its integration would bring it back anyway.
+    const devices = await ctx.db
+      .query("devices")
+      .withIndex("by_site", (q) => q.eq("siteId", siteId))
+      .collect();
+    for (const device of devices) {
+      if (device.source) continue;
+      await deleteDeviceMacs(ctx, device.objectId);
+      await ctx.db.delete(device._id);
+    }
+
     return null;
   },
 });
@@ -202,9 +215,11 @@ export async function cascadeRemoveFloor(ctx: MutationCtx, floorId: string) {
     .collect();
   for (const link of links) await ctx.db.delete(link._id);
 
+  // Devices belong to the site's inventory: losing their floor only takes
+  // them off the map.
   const devices = await ctx.db
     .query("devices")
-    .withIndex("by_floor", (q) => q.eq("floorId", floorId))
+    .withIndex("by_floor", (q) => q.eq("placement.floorId", floorId))
     .collect();
 
   const presences = await ctx.db
@@ -215,7 +230,9 @@ export async function cascadeRemoveFloor(ctx: MutationCtx, floorId: string) {
     await ctx.db.delete(presence._id);
   }
 
-  for (const device of devices) await ctx.db.delete(device._id);
+  for (const device of devices) {
+    await ctx.db.patch(device._id, { placement: undefined });
+  }
 
   const walls = await ctx.db
     .query("walls")

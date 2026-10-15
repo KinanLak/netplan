@@ -174,7 +174,7 @@ export default function DeviceDrawer() {
 
       <ScrollArea className="flex-1">
         <div className="space-y-4 px-4 py-4">
-          {device.hostname || device.metadata.ip ? (
+          {device.hostname || device.ip || device.macs.length > 0 ? (
             <section>
               <h3 className="mb-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
                 Réseau
@@ -188,14 +188,20 @@ export default function DeviceDrawer() {
                     </span>
                   </div>
                 ) : null}
-                {device.metadata.ip ? (
+                {device.ip ? (
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">IP</span>
                     <span className="font-mono text-foreground">
-                      {device.metadata.ip}
+                      {device.ip}
                     </span>
                   </div>
                 ) : null}
+                {device.macs.map((mac) => (
+                  <div key={mac} className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">MAC</span>
+                    <span className="font-mono text-foreground">{mac}</span>
+                  </div>
+                ))}
               </div>
             </section>
           ) : null}
@@ -226,14 +232,37 @@ export default function DeviceDrawer() {
             </section>
           ) : null}
 
-          {device.metadata.model ? (
+          {device.model || device.serial ? (
             <section>
               <h3 className="mb-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
                 Matériel
               </h3>
-              <div className="text-sm">
-                <span className="text-foreground">{device.metadata.model}</span>
+              <div className="space-y-2">
+                {device.model ? (
+                  <div className="text-sm">
+                    <span className="text-foreground">{device.model}</span>
+                  </div>
+                ) : null}
+                {device.serial ? (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">N° de série</span>
+                    <span className="font-mono text-foreground">
+                      {device.serial}
+                    </span>
+                  </div>
+                ) : null}
               </div>
+            </section>
+          ) : null}
+
+          {device.notes ? (
+            <section>
+              <h3 className="mb-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+                Notes
+              </h3>
+              <p className="text-sm whitespace-pre-wrap text-foreground">
+                {device.notes}
+              </p>
             </section>
           ) : null}
 
@@ -270,7 +299,8 @@ export default function DeviceDrawer() {
         </div>
       </ScrollArea>
 
-      {isEditMode ? (
+      {/* A sourced device comes back at each sync, so it is never deleted. */}
+      {isEditMode && !device.source ? (
         <footer className="space-y-2 border-t border-border bg-muted p-4">
           <Button
             variant="destructive"

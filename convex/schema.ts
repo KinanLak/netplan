@@ -1,10 +1,11 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import {
+  deviceIdentityFields,
   deviceMetadata,
-  deviceType,
+  devicePlacement,
+  deviceSource,
   position,
-  size,
   wallColor,
 } from "./mapValidators";
 import {
@@ -55,20 +56,31 @@ export default defineSchema({
     .index("by_object_id", ["objectId"])
     .index("by_building", ["buildingId", "order"]),
 
+  // The site inventory (ADR 0022): a device without a placement is known but
+  // not on any floor.
   devices: defineTable({
     objectId: v.string(),
-    floorId: v.string(),
-    type: deviceType,
-    name: v.string(),
-    hostname: v.optional(v.string()),
-    position,
-    size,
+    siteId: v.string(),
+    ...deviceIdentityFields,
+    placement: v.optional(devicePlacement),
+    source: v.optional(deviceSource),
     metadata: deviceMetadata,
     updatedAt: v.number(),
     updatedBy: v.string(),
   })
     .index("by_object_id", ["objectId"])
-    .index("by_floor", ["floorId"]),
+    .index("by_site", ["siteId"])
+    .index("by_floor", ["placement.floorId"]),
+
+  // One row per MAC address of a device, so a MAC belongs to at most one
+  // device of a site and a sighting finds its device in one lookup.
+  deviceMacs: defineTable({
+    siteId: v.string(),
+    mac: v.string(),
+    deviceId: v.string(),
+  })
+    .index("by_site_mac", ["siteId", "mac"])
+    .index("by_device", ["deviceId"]),
 
   walls: defineTable({
     objectId: v.string(),

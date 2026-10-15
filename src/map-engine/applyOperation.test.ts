@@ -22,6 +22,7 @@ const device = (id: DeviceId, x = 0): Device => ({
   name: `Device ${id}`,
   position: { x, y: 0 },
   size: { width: 80, height: 80 },
+  macs: [],
   metadata: {},
 });
 
@@ -107,6 +108,24 @@ describe("applyOperation", () => {
     expect(result.snapshot.links).toEqual([]);
   });
 
+  it("refuses to delete a device its integration owns", () => {
+    const sourced: Device = {
+      ...device(deviceId("device:a")),
+      source: { integration: "netbox", externalId: "42", syncedAt: 1 },
+    };
+    const snapshot = { ...emptySnapshot, devices: [sourced] };
+
+    const result = applyOperation(snapshot, {
+      kind: "device.delete",
+      meta: meta(2),
+      deviceId: sourced.id,
+    });
+
+    expect(result.applied).toBe(false);
+    expect(result.reason).toBe("source-owned");
+    expect(result.snapshot).toBe(snapshot);
+  });
+
   it("link.create requires both endpoints", () => {
     const a = device(deviceId("device:a"));
     const result = applyOperation(
@@ -168,12 +187,12 @@ describe("applyOperation", () => {
         {
           kind: "device.patch",
           deviceId: created.id,
-          patch: { name: "Renamed" },
+          patch: { position: { x: 200, y: 0 } },
         },
       ],
     });
 
-    expect(result.snapshot.devices[0]?.name).toBe("Renamed");
+    expect(result.snapshot.devices[0]?.position).toEqual({ x: 200, y: 0 });
   });
 
   it("batch rolls back when a later sub-operation is rejected", () => {
@@ -186,7 +205,7 @@ describe("applyOperation", () => {
         {
           kind: "device.patch",
           deviceId: deviceId("device:missing"),
-          patch: { name: "Missing" },
+          patch: { position: { x: 200, y: 0 } },
         },
       ],
     });

@@ -10,6 +10,7 @@ const device = (id: string, x: number): Device => ({
   name: id,
   position: { x, y: 0 },
   size: { width: 40, height: 40 },
+  macs: [],
   metadata: {},
 });
 

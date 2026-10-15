@@ -50,6 +50,7 @@ describe("device kind registry", () => {
       floorId: "floor-1" as FloorId,
       position: { x: 80, y: 120 },
       size: { width: 200, height: 60 },
+      macs: [],
       metadata: { status: "up" },
     };
 

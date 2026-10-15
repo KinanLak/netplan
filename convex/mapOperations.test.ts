@@ -24,9 +24,9 @@ async function getFloorDocument(t: TestClient, floorId: string) {
   return { floorId, revision, devices, walls, links };
 }
 
-async function freshFloor(t: TestClient) {
+async function freshFloor(t: TestClient, siteId?: string) {
   counter += 1;
-  const siteId = await createTestSite(t);
+  siteId ??= await createTestSite(t);
   const buildingId = await t.mutation(api.buildings.create, {
     siteId,
     objectId: `building:ops:${counter}`,
@@ -39,13 +39,20 @@ async function freshFloor(t: TestClient) {
   });
 }
 
-const device = (id: string, floorId: string, x: number, y = 0) => ({
+const device = (
+  id: string,
+  floorId: string,
+  x: number,
+  y = 0,
+  macs: Array<string> = [],
+) => ({
   id,
   floorId,
   type: "pc" as const,
   name: id,
   position: { x, y },
   size: { width: 80, height: 80 },
+  macs,
   metadata: {},
 });
 
@@ -884,5 +891,180 @@ describe("mapOperations.apply", () => {
     expect(atCap.status).toBe("applied");
     expect(overCap.status).toBe("rejected");
     expect(overCap.error).toContain("Too many walls");
+  });
+});
+
+describe("mapOperations.apply on the site inventory", () => {
+  const MAC = "02:ab:cd:00:00:01";
+
+  const create = (
+    t: TestClient,
+    seq: number,
+    item: ReturnType<typeof device>,
+  ) =>
+    t.mutation(api.mapOperations.apply, {
+      operation: { kind: "device.create", meta: meta(seq), device: item },
+    });
+
+  it("files a created device under its floor's site", async () => {
+    const t = await signedInTest();
+    const siteId = await createTestSite(t);
+    const floorId = await freshFloor(t, siteId);
+
+    await create(t, 1, device("device:site", floorId, 0, 0, [MAC]));
+
+    const [row, macs] = await t.run(async (ctx) => [
+      await ctx.db
+        .query("devices")
+        .withIndex("by_object_id", (q) => q.eq("objectId", "device:site"))
+        .unique(),
+      await ctx.db.query("deviceMacs").collect(),
+    ]);
+    expect(row).toMatchObject({
+      siteId,
+      macs: [MAC],
+      placement: { floorId, position: { x: 0, y: 0 } },
+    });
+    expect(macs).toMatchObject([{ siteId, mac: MAC, deviceId: "device:site" }]);
+  });
+
+  it("keeps a MAC address to one device of a site", async () => {
+    const t = await signedInTest();
+    const siteId = await createTestSite(t);
+    const floorA = await freshFloor(t, siteId);
+    const floorB = await freshFloor(t, siteId);
+    const otherSiteFloor = await freshFloor(t);
+
+    await create(t, 1, device("device:first", floorA, 0, 0, [MAC]));
+    const sameSite = await create(
+      t,
+      2,
+      device("device:second", floorB, 0, 0, [MAC]),
+    );
+    const otherSite = await create(
+      t,
+      3,
+      device("device:elsewhere", otherSiteFloor, 0, 0, [MAC]),
+    );
+
+    expect(sameSite).toMatchObject({
+      status: "rejected",
+      error: "MAC address belongs to another device of the site",
+    });
+    expect(otherSite.status).toBe("applied");
+  });
+
+  it("rejects duplicate and non-canonical MAC addresses", async () => {
+    const t = await signedInTest();
+    const floorId = await freshFloor(t);
+
+    const duplicate = await create(
+      t,
+      1,
+      device("device:dup", floorId, 0, 0, [MAC, MAC]),
+    );
+    const uppercase = await create(
+      t,
+      2,
+      device("device:upper", floorId, 0, 0, [MAC.toUpperCase()]),
+    );
+
+    expect(duplicate.error).toBe("Duplicate MAC address");
+    expect(uppercase.error).toBe("Invalid MAC address");
+  });
+
+  it("frees the MAC addresses of a deleted device, within one batch too", async () => {
+    const t = await signedInTest();
+    const floorId = await freshFloor(t);
+    await create(t, 1, device("device:old", floorId, 0, 0, [MAC]));
+
+    const result = await t.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "batch",
+        meta: meta(2),
+        operations: [
+          { kind: "device.delete", deviceId: "device:old" },
+          {
+            kind: "device.create",
+            device: device("device:new", floorId, 0, 0, [MAC]),
+          },
+        ],
+      },
+    });
+
+    expect(result.status).toBe("applied");
+    const macs = await t.run((ctx) => ctx.db.query("deviceMacs").collect());
+    expect(macs.map((row) => row.deviceId)).toEqual(["device:new"]);
+  });
+
+  it("refuses to delete a device its integration owns", async () => {
+    const t = await signedInTest();
+    const siteId = await createTestSite(t);
+    const floorId = await freshFloor(t, siteId);
+    await t.run(async (ctx) => {
+      await ctx.db.insert("devices", {
+        objectId: "device:sourced",
+        siteId,
+        type: "switch",
+        name: "sw-1",
+        macs: [],
+        placement: {
+          floorId,
+          position: { x: 0, y: 0 },
+          size: { width: 80, height: 80 },
+        },
+        source: { integration: "netbox", externalId: "7", syncedAt: 1 },
+        metadata: {},
+        updatedAt: 1,
+        updatedBy: "sync",
+      });
+    });
+
+    const result = await t.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "device.delete",
+        meta: meta(1),
+        deviceId: "device:sourced",
+      },
+    });
+
+    expect(result).toMatchObject({
+      status: "rejected",
+      error: "Device is owned by its source",
+    });
+  });
+
+  it("does not reuse the id of a device that is off the map", async () => {
+    const t = await signedInTest();
+    const siteId = await createTestSite(t);
+    const floorId = await freshFloor(t, siteId);
+    await t.run(async (ctx) => {
+      await ctx.db.insert("devices", {
+        objectId: "device:unplaced",
+        siteId,
+        type: "pc",
+        name: "Stored",
+        macs: [],
+        metadata: {},
+        updatedAt: 1,
+        updatedBy: "test",
+      });
+    });
+
+    const created = await create(t, 1, device("device:unplaced", floorId, 0));
+    const moved = await t.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "device.patch",
+        meta: meta(2),
+        deviceId: "device:unplaced",
+        patch: { position: { x: 100, y: 0 } },
+      },
+    });
+
+    expect(created.status).toBe("rejected");
+    expect(moved).toMatchObject({
+      status: "rejected",
+      error: "Device not found",
+    });
   });
 });

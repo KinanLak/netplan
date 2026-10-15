@@ -21,6 +21,7 @@ import type { LocalIdentity } from "@/lib/identity";
 import { rectanglesOverlap } from "@/lib/geometry";
 import type {
   Device,
+  NewDevice,
   DeviceDraft,
   DeviceId,
   FloorId,
@@ -367,7 +368,7 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
     const id = createObjectId("device", identity) as DeviceId;
     const meta = freshMeta();
     if (!meta) return null;
-    const device: Device = { id, ...draft };
+    const device: NewDevice = { id, ...draft };
     dispatchOperation({ kind: "device.create", meta, device });
     return id;
   };
@@ -377,7 +378,7 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
     if (!isReadyRef.current || !identity || drafts.length === 0) return [];
     const meta = freshMeta();
     if (!meta) return [];
-    const devices = drafts.map((draft): Device => ({
+    const devices = drafts.map((draft): NewDevice => ({
       id: createObjectId("device", identity) as DeviceId,
       ...draft,
     }));
@@ -440,8 +441,10 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
 
   const deleteDevice = (deviceId: DeviceId) => {
     if (!isReadyRef.current) return;
-    if (!documentRef.current.devices.some((device) => device.id === deviceId))
-      return;
+    const device = documentRef.current.devices.find(
+      (item) => item.id === deviceId,
+    );
+    if (!device || device.source) return;
     const meta = freshMeta();
     if (!meta) return;
     dispatchOperation({ kind: "device.delete", meta, deviceId });
