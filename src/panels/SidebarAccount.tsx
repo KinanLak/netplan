@@ -8,15 +8,20 @@ import { useCurrentUser } from "@/hooks/use-current-user";
 import { ROLE_LABELS, isAdmin } from "@/lib/roles";
 import { roleOf } from "../../convex/lib/roles";
 
-export function SidebarAccount() {
-  const me = useCurrentUser();
+/** Ends the session and leaves for the sign-in page. */
+export function useSignOut() {
   const [signingOut, setSigningOut] = useState(false);
-
   const signOut = async () => {
     setSigningOut(true);
     await authClient.signOut();
     window.location.assign("/login");
   };
+  return { signingOut, signOut };
+}
+
+export function SidebarAccount() {
+  const me = useCurrentUser();
+  const { signingOut, signOut } = useSignOut();
 
   return (
     <div className="mt-3 flex items-center justify-between gap-2 border-t pt-3">

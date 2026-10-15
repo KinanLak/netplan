@@ -29,7 +29,8 @@ import {
   useShortcutIntentEffect,
 } from "@/hooks/use-shortcuts";
 import { useCanEdit, useCurrentUser } from "@/hooks/use-current-user";
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { useSignOut } from "@/panels/SidebarAccount";
 import { isAdmin } from "@/lib/roles";
 import { siteSearch, useCurrentSite } from "@/sites/useCurrentSite";
 import { ShortcutsDialog } from "@/components/shortcuts-dialog";
@@ -122,14 +123,16 @@ function HomePageContent() {
     buildings === undefined ||
     (currentBuildingId !== null && floors === undefined);
 
-  if (isBootstrappingMap) {
-    return <div className="h-screen w-screen bg-background" />;
-  }
-
+  // The provider stays mounted while another site or building loads: it
+  // holds the outbox of unsent edits and each floor's undo history.
   return (
     <SidebarProvider>
       <MapDocumentProvider floorId={currentFloorId}>
-        <MapWorkspace sortedFloors={sortedFloors} />
+        {isBootstrappingMap ? (
+          <div className="h-screen w-screen bg-background" />
+        ) : (
+          <MapWorkspace sortedFloors={sortedFloors} />
+        )}
       </MapDocumentProvider>
     </SidebarProvider>
   );
@@ -308,6 +311,8 @@ function MapWorkspace({ sortedFloors }: { sortedFloors: Array<Floor> }) {
 function NoSite() {
   const me = useCurrentUser();
   const admin = me ? isAdmin(me.role) : false;
+  // Without a site there is no sidebar, which holds the sign-out button.
+  const { signingOut, signOut } = useSignOut();
   return (
     <main className="flex h-screen w-screen flex-col items-center justify-center gap-3 bg-background p-6 text-center">
       <h1 className="text-lg font-semibold">Aucun site</h1>
@@ -316,11 +321,20 @@ function NoSite() {
           ? "Créez un premier site pour commencer à dessiner son plan."
           : "Aucun site n'est encore configuré. Demandez à un administrateur d'en créer un."}
       </p>
-      {admin ? (
-        <Link to="/admin/sites" className={buttonVariants()}>
-          Créer un site
-        </Link>
-      ) : null}
+      <div className="flex flex-wrap justify-center gap-2">
+        {admin ? (
+          <Link to="/admin/sites" className={buttonVariants()}>
+            Créer un site
+          </Link>
+        ) : null}
+        <Button
+          variant="outline"
+          disabled={signingOut}
+          onClick={() => void signOut()}
+        >
+          Se déconnecter
+        </Button>
+      </div>
     </main>
   );
 }
