@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { stubFetch } from "../_test/fetch";
-import { fetchWithRetry } from "./httpRetry";
+import { fetchWithRetry, RetryStopped } from "./httpRetry";
 
 const pauses: Array<number> = [];
 const options = {
@@ -61,6 +61,35 @@ describe("fetchWithRetry", () => {
     expect(await response.json()).toEqual({ ok: true });
     expect(stub.calls).toHaveLength(2);
     expect(pauses).toEqual([2_000]);
+  });
+
+  it("stops before a retry nobody wants any more", async () => {
+    const calls = answers(503, 200);
+    let wanted = true;
+    const stopping = {
+      ...options,
+      sleep: () => {
+        wanted = false;
+        return Promise.resolve();
+      },
+      stillWanted: () => Promise.resolve(wanted),
+    };
+    const stopped = await fetchWithRetry("https://x.test", {}, stopping).catch(
+      (error: unknown) => error,
+    );
+    expect(stopped).toBeInstanceOf(RetryStopped);
+    expect(calls).toHaveLength(1);
+  });
+
+  it("sends nothing nobody wants any more", async () => {
+    const calls = answers(200);
+    const stopped = await fetchWithRetry(
+      "https://x.test",
+      {},
+      { ...options, stillWanted: () => Promise.resolve(false) },
+    ).catch((error: unknown) => error);
+    expect(stopped).toBeInstanceOf(RetryStopped);
+    expect(calls).toHaveLength(0);
   });
 
   it("returns a 4xx at once", async () => {

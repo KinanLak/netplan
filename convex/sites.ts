@@ -5,6 +5,7 @@ import { deleteIgnoredMacs } from "./lib/ignoredMacs";
 import { deleteDeviceCabling } from "./lib/ports";
 import { deleteSightings } from "./librenmsCycle";
 import { deleteImportReviews } from "./netboxImport";
+import { deletePushes } from "./netboxPush";
 import { adminMutation, adminQuery, readerQuery } from "./lib/functions";
 import type { Doc } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
@@ -207,6 +208,7 @@ export const remove = adminMutation({
     }
     await deleteCycle(ctx, siteId);
     await deleteImportReviews(ctx, siteId);
+    await deletePushes(ctx, siteId);
     await deleteSightings(ctx, siteId);
     await deleteIgnoredMacs(ctx, siteId);
     const devices = await ctx.db

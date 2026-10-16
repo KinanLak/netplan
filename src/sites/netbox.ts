@@ -25,6 +25,8 @@ export type NetBoxRoleMapping = {
 export type NetBoxSettings = {
   site: NetBoxSite | null;
   roles: Array<NetBoxRoleMapping>;
+  /** Whether each cycle pushes observed locations to NetBox (ADR 0027). */
+  push?: boolean;
 };
 
 export const EMPTY_NETBOX_SETTINGS: NetBoxSettings = { site: null, roles: [] };

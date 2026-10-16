@@ -7,6 +7,7 @@ import { internalMutation, internalQuery } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
 import type { ActionCtx, MutationCtx } from "./_generated/server";
 import { cycleOf } from "./lib/cycles";
+import { deletePush, deletePushes } from "./netboxPush";
 import { SOURCE_RETRY } from "./lib/httpRetry";
 import { netboxList } from "./lib/netboxApi";
 import {
@@ -216,11 +217,13 @@ export const apply = internalMutation({
       if (!device) continue;
       await deleteDeviceMacs(ctx, deviceId);
       await deleteDeviceCabling(ctx, deviceId);
+      await deletePush(ctx, deviceId);
       await ctx.db.delete(device._id);
     }
     for (const deviceId of plan.unbind) {
       const device = byId.get(deviceId);
       if (device) await ctx.db.patch(device._id, { source: undefined });
+      await deletePush(ctx, deviceId);
     }
 
     // Every MAC the import moves is freed before any is claimed again.
@@ -315,6 +318,7 @@ export const releaseNetBox = async (ctx: MutationCtx, siteId: string) => {
     await ctx.db.patch(cable._id, { source: undefined });
   }
   await deleteImportReviews(ctx, siteId);
+  await deletePushes(ctx, siteId);
 };
 
 export const deleteImportReviews = async (ctx: MutationCtx, siteId: string) => {

@@ -96,6 +96,34 @@ export const netboxSettings = v.object({
   roles: v.array(
     v.object({ id: v.number(), name: v.string(), type: netboxRoleType }),
   ),
+  /** Whether each cycle pushes observed locations to NetBox (ADR 0027). */
+  push: v.optional(v.boolean()),
+});
+
+/** `PushedValues` from `src/sites/netboxPush.ts`. */
+export const pushedValues = v.object({
+  site: v.string(),
+  floor: v.union(v.null(), v.string()),
+  socket: v.union(v.null(), v.string()),
+  switchPort: v.string(),
+  lastSeen: v.number(),
+});
+
+/** How the last push run to NetBox ended. */
+export const pushRun = v.object({
+  startedAt: v.number(),
+  finishedAt: v.number(),
+  /** Devices NetBox accepted. */
+  sent: v.number(),
+  /** Devices NetBox refused, each with its message on its push row. */
+  refused: v.number(),
+  /** Why the run stopped early: NetBox unreachable, no token. */
+  error: v.optional(v.string()),
+});
+
+export const runningPush = v.object({
+  runId: v.string(),
+  leaseUntil: v.number(),
 });
 
 /** `LibreNMSSettings` from `src/sites/librenms.ts`. */
