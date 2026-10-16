@@ -86,6 +86,46 @@ describe("buildInverseOperation", () => {
     ]);
   });
 
+  it("puts an unplaced device back with its links, and takes a placed one off", () => {
+    const a = device(deviceId("device:a"));
+    const b = { ...device(deviceId("device:b")), position: { x: 200, y: 0 } };
+    const link = {
+      id: linkId("link:a"),
+      floorId,
+      fromDeviceId: a.id,
+      toDeviceId: b.id,
+    };
+    const snapshot = {
+      floorId,
+      revision: 0,
+      devices: [a, b],
+      walls: [],
+      links: [link],
+      overlay: null,
+    };
+    const unplace: MapOperation = {
+      kind: "device.unplace",
+      meta: meta(1),
+      deviceId: a.id,
+    };
+
+    const inverse = buildInverseOperation(snapshot, unplace);
+    const unplaced = applyOperation(snapshot, unplace).snapshot;
+
+    expect(inverse?.kind).toBe("batch");
+    if (!inverse) return;
+    const restored = applyOperation(unplaced, inverse).snapshot;
+    expect(restored.devices).toContainEqual(a);
+    expect(restored.links).toEqual([link]);
+    expect(buildInverseOperation(unplaced, inverse)).toMatchObject({
+      kind: "batch",
+      operations: [
+        { kind: "link.delete", linkId: link.id },
+        { kind: "device.unplace", deviceId: a.id },
+      ],
+    });
+  });
+
   it("reverses batch operations in reverse order", () => {
     const a = device(deviceId("device:a"));
     const snapshot = {

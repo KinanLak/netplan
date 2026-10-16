@@ -32,6 +32,7 @@ export const shortcutGroups: Array<ShortcutGroup> = [
       "close-drawer",
       "delete-device",
       "edit-device-identity",
+      "unplace-device",
       "highlight-connections",
     ],
   },

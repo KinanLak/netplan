@@ -217,6 +217,11 @@ function MapWorkspace({ sortedFloors }: { sortedFloors: Array<Floor> }) {
   useShortcutIntentEffect("cycle-theme", cycleTheme);
   useShortcutIntentEffect("close-drawer", closeDrawer);
   useShortcutIntentEffect("delete-device", deleteSelectedDevice);
+  useShortcutIntentEffect("unplace-device", () => {
+    if (!selectedDeviceId || !isReady || !isEditMode) return;
+    commands.unplaceDevice(selectedDeviceId);
+    selectDevice(null);
+  });
   useShortcutIntentEffect("highlight-connections", highlightConnections);
   useShortcutIntentEffect("escape", () => {
     const {

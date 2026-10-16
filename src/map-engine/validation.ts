@@ -83,6 +83,7 @@ export function validateOperation(
 ): ValidationResult {
   switch (operation.kind) {
     case "device.create":
+    case "device.place":
       return validateDevicePlacement(snapshot, operation.device);
 
     case "device.patch": {
@@ -124,6 +125,7 @@ export function validateOperation(
     }
 
     case "device.delete":
+    case "device.unplace":
     case "link.delete":
     case "walls.add":
     case "walls.delete":

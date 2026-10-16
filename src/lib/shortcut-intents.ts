@@ -50,6 +50,7 @@ const shortcutRoutingPriority: Array<ShortcutAction> = [
   "close-drawer",
   "delete-device",
   "edit-device-identity",
+  "unplace-device",
   "cancel-wall-tool",
   "highlight-connections",
   "escape",
@@ -238,6 +239,7 @@ const isActionAllowedByContext = (
       return runtime.isEditMode && runtime.activeDrawTool !== "device";
     case "delete-device":
     case "edit-device-identity":
+    case "unplace-device":
       return runtime.isEditMode;
     case "toggle-wall-debug":
       return runtime.isEditMode && runtime.activeDrawTool !== "device";

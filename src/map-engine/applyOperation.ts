@@ -1,4 +1,4 @@
-import type { MapDocumentSnapshot } from "@/types/map";
+import type { Device, MapDocumentSnapshot } from "@/types/map";
 import {
   applyOverlayPatch,
   isPatchBlockedByLock,
@@ -24,6 +24,12 @@ const changed = (snapshot: MapDocumentSnapshot): ApplyOperationResult => ({
 
 const sameJson = (left: object, right: object): boolean =>
   JSON.stringify(left) === JSON.stringify(right);
+
+const placementOf = ({ floorId, position, size }: Device) => ({
+  floorId,
+  position,
+  size,
+});
 
 const withoutConnectedLinks = (
   snapshot: MapDocumentSnapshot,
@@ -73,7 +79,10 @@ const isSafeBatchNoop = (
     case "device.create":
     case "link.create":
       return reason === "already-exists";
+    case "device.place":
+      return reason === "already-exists";
     case "device.delete":
+    case "device.unplace":
       return reason === "missing-device";
     case "link.delete":
       return reason === "missing-link";
@@ -131,6 +140,33 @@ export function applyOperation(
       // Its integration would bring it back at the next sync.
       if (device.source) return unchanged(snapshot, "source-owned");
 
+      return changed({
+        ...snapshot,
+        devices: snapshot.devices.filter((item) => item !== device),
+        links: withoutConnectedLinks(snapshot, operation.deviceId),
+      });
+    }
+
+    case "device.place": {
+      const existing = snapshot.devices.find(
+        (device) => device.id === operation.device.id,
+      );
+      if (existing) {
+        return sameJson(placementOf(existing), placementOf(operation.device))
+          ? unchanged(snapshot, "already-exists")
+          : unchanged(snapshot, "conflict");
+      }
+      return changed({
+        ...snapshot,
+        devices: [...snapshot.devices, operation.device],
+      });
+    }
+
+    case "device.unplace": {
+      const device = snapshot.devices.find(
+        (item) => item.id === operation.deviceId,
+      );
+      if (!device) return unchanged(snapshot, "missing-device");
       return changed({
         ...snapshot,
         devices: snapshot.devices.filter((item) => item !== device),
