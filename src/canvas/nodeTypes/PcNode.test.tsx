@@ -18,8 +18,7 @@ const renderPcNode = (overrides: Partial<Device> = {}) => {
   seedMapStore({
     isEditMode: true,
     selectedDeviceId: null,
-    highlightedDeviceIds: [],
-    highlightedDeviceIdSet: new Set(),
+    shownCablesDeviceId: null,
   });
 
   return render(

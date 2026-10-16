@@ -59,7 +59,7 @@ const seedStore = (
     selectedDeviceId: null,
     hoveredDeviceId: null,
     isEditMode: true,
-    highlightedDeviceIds: [],
+    shownCablesDeviceId: null,
     activeDrawTool: "device",
     selectedWallColor: "concrete",
     ...overrides,

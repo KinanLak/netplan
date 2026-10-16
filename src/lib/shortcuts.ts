@@ -55,7 +55,7 @@ export type ShortcutAction =
   | "edit-device-identity"
   | "unplace-device"
   | "show-port-cables"
-  | "highlight-connections";
+  | "toggle-device-cables";
 
 export type ShortcutConfig = {
   /** Shortcut key bindings — one per physical/logical binding */
@@ -320,10 +320,11 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
     description: "Voir les câbles de chaque port et où ils mènent",
     scope: "drawer",
   },
-  "highlight-connections": {
+  "toggle-device-cables": {
     keys: ["H"],
-    label: "Connexions",
-    description: "Afficher/masquer les connexions",
+    label: "Câbles sur le plan",
+    description:
+      "Afficher ou masquer les câbles du switch ou du panneau de brassage sélectionné ou survolé",
     scope: "global",
   },
 };

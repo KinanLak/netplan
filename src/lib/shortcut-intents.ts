@@ -1,8 +1,7 @@
 import { isMac, shortcuts } from "@/lib/shortcuts";
 import type { ShortcutAction, ShortcutScope } from "@/lib/shortcuts";
 import type { ShortcutKeyBinding } from "@/lib/shortcut-types";
-import { cabledDeviceIds } from "@/devices/ports";
-import type { Cable, DeviceId, DrawTool } from "@/types/map";
+import type { DrawTool } from "@/types/map";
 
 export type ShortcutIntentEvent = Pick<
   KeyboardEvent,
@@ -32,15 +31,6 @@ export type ShortcutIntentMatch = {
   registrationId: string;
 };
 
-export type ConnectionHighlightShortcutState = {
-  cables: ReadonlyArray<Cable>;
-  /** The devices on the active floor, the only ones a highlight can show. */
-  devices: ReadonlyArray<{ id: DeviceId }>;
-  highlightedDeviceIds: ReadonlyArray<DeviceId>;
-  hoveredDeviceId: DeviceId | null;
-  selectedDeviceId: DeviceId | null;
-};
-
 type ShortcutModifiers = {
   alt?: boolean;
   ctrl?: boolean;
@@ -56,7 +46,7 @@ const shortcutRoutingPriority: Array<ShortcutAction> = [
   "unplace-device",
   "show-port-cables",
   "cancel-wall-tool",
-  "highlight-connections",
+  "toggle-device-cables",
   "escape",
   "delete",
   "undo",
@@ -338,36 +328,4 @@ export const resolveShortcutIntent = ({
 
 export const isPlainShortcutEvent = (event: ShortcutIntentEvent): boolean => {
   return hasNoExtraModifiers(event);
-};
-
-export const getNextConnectionHighlightIds = ({
-  cables,
-  devices,
-  highlightedDeviceIds,
-  hoveredDeviceId,
-  selectedDeviceId,
-}: ConnectionHighlightShortcutState): Array<DeviceId> | null => {
-  const targetDeviceId = selectedDeviceId ?? hoveredDeviceId;
-
-  if (!targetDeviceId) {
-    return highlightedDeviceIds.length > 0 ? [] : null;
-  }
-
-  // A cable may reach an unplaced device or another floor; highlighting it
-  // would leave an id the toggle can never see again.
-  const onFloor = new Set(devices.map((device) => device.id));
-  const connectedDeviceIds = cabledDeviceIds(cables, targetDeviceId).filter(
-    (id) => onFloor.has(id),
-  );
-
-  if (connectedDeviceIds.length === 0) {
-    return highlightedDeviceIds.length > 0 ? [] : null;
-  }
-
-  const idsToHighlight = [targetDeviceId, ...connectedDeviceIds];
-  const isCurrentlyHighlighted = idsToHighlight.every((id) =>
-    highlightedDeviceIds.includes(id),
-  );
-
-  return isCurrentlyHighlighted ? [] : idsToHighlight;
 };

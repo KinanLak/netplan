@@ -1,6 +1,5 @@
 import { describe, expect, it } from "bun:test";
 import {
-  getNextConnectionHighlightIds,
   matchesShortcutBinding,
   resolveShortcutIntent,
 } from "@/lib/shortcut-intents";
@@ -10,9 +9,6 @@ import type {
   ShortcutIntentRuntime,
 } from "@/lib/shortcut-intents";
 import type { ShortcutAction } from "@/lib/shortcuts";
-import type { Cable, CableId, DeviceId, PortId } from "@/types/map";
-
-const did = (s: string) => s as DeviceId;
 
 const baseRuntime: ShortcutIntentRuntime = {
   activeDrawTool: "device",
@@ -282,87 +278,5 @@ describe("shortcut intents", () => {
         runtime: { ...baseRuntime, isEditMode: false },
       }),
     ).toBe(null);
-  });
-
-  it("computes connection highlights for selected and hovered devices", () => {
-    const cable = (id: string, from: string, to: string): Cable => ({
-      id: `cable:${id}` as CableId,
-      a: { deviceId: did(from), portId: `port:${from}:1` as PortId },
-      b: { deviceId: did(to), portId: `port:${to}:1` as PortId },
-    });
-    const cables = [cable("ab", "a", "b"), cable("ca", "c", "a")];
-    const devices = [{ id: did("a") }, { id: did("b") }, { id: did("c") }];
-
-    expect(
-      getNextConnectionHighlightIds({
-        cables,
-        devices,
-        highlightedDeviceIds: [],
-        hoveredDeviceId: null,
-        selectedDeviceId: did("a"),
-      }),
-    ).toEqual([did("a"), did("b"), did("c")]);
-
-    expect(
-      getNextConnectionHighlightIds({
-        cables,
-        devices,
-        highlightedDeviceIds: [],
-        hoveredDeviceId: did("a"),
-        selectedDeviceId: null,
-      }),
-    ).toEqual([did("a"), did("b"), did("c")]);
-
-    expect(
-      getNextConnectionHighlightIds({
-        cables,
-        devices,
-        highlightedDeviceIds: [did("a"), did("b"), did("c")],
-        hoveredDeviceId: did("a"),
-        selectedDeviceId: null,
-      }),
-    ).toEqual([]);
-
-    expect(
-      getNextConnectionHighlightIds({
-        cables,
-        devices,
-        highlightedDeviceIds: [did("a"), did("b"), did("c")],
-        hoveredDeviceId: did("b"),
-        selectedDeviceId: null,
-      }),
-    ).toEqual([]);
-  });
-
-  it("highlights only the cabled devices on the active floor", () => {
-    const cables: Array<Cable> = [
-      {
-        id: "cable:ab" as CableId,
-        a: { deviceId: did("a"), portId: "port:a:1" as PortId },
-        b: { deviceId: did("b"), portId: "port:b:1" as PortId },
-      },
-      {
-        id: "cable:ax" as CableId,
-        a: { deviceId: did("a"), portId: "port:a:2" as PortId },
-        b: { deviceId: did("unplaced"), portId: "port:unplaced:1" as PortId },
-      },
-    ];
-    const devices = [{ id: did("a") }, { id: did("b") }];
-    const state = {
-      cables,
-      devices,
-      hoveredDeviceId: null,
-      selectedDeviceId: did("a"),
-    };
-
-    expect(
-      getNextConnectionHighlightIds({ ...state, highlightedDeviceIds: [] }),
-    ).toEqual([did("a"), did("b")]);
-    expect(
-      getNextConnectionHighlightIds({
-        ...state,
-        highlightedDeviceIds: [did("a"), did("b")],
-      }),
-    ).toEqual([]);
   });
 });

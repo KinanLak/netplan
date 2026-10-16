@@ -15,9 +15,9 @@ import {
   useMapDocumentData,
 } from "@/map-session/useMapDocument";
 import {
-  useHighlightedDeviceIds,
   useIsEditMode,
   useSelectedDeviceId,
+  useShownCablesDeviceId,
 } from "@/store/selectors";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,7 +26,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { ShortcutHintInline } from "@/components/ui/shortcut-hint";
 import { StatusDot } from "@/components/StatusDot";
 import { getDeviceKindLabel } from "@/devices/deviceKindRegistry";
-import { getNextConnectionHighlightIds } from "@/lib/shortcut-intents";
+import { TRACED_ON_ASK, toggledCableDisplay } from "@/canvas/cablePaths";
 import { cn } from "@/lib/utils";
 import { DrawerConnectionsSection } from "@/panels/drawer/DrawerConnectionsSection";
 import type { ConnectedDeviceSummary } from "@/panels/drawer/DrawerConnectionsSection";
@@ -41,10 +41,10 @@ import { cabledDeviceIds, comparePorts } from "@/devices/ports";
 export default function DeviceDrawer() {
   const selectedDeviceId = useSelectedDeviceId();
   const isEditMode = useIsEditMode();
-  const highlightedDeviceIds = useHighlightedDeviceIds();
+  const shownCablesDeviceId = useShownCablesDeviceId();
 
   const selectDevice = useMapStore((s) => s.selectDevice);
-  const setHighlightedDevices = useMapStore((s) => s.setHighlightedDevices);
+  const showCables = useMapStore((s) => s.showCables);
 
   const { document } = useMapDocumentData();
   const { commands } = useMapDocumentActions();
@@ -89,28 +89,6 @@ export default function DeviceDrawer() {
     ? ports.filter((port) => port.deviceId === device.id).sort(comparePorts)
     : [];
 
-  const isCurrentDeviceHighlighted = (() => {
-    if (!device || connectedDevices.length === 0) return false;
-    if (highlightedDeviceIds.length === 0) return false;
-    const highlightedIdSet = new Set(highlightedDeviceIds);
-    const allIds = [device.id, ...connectedDevices.map((c) => c.id)];
-    return allIds.every((id) => highlightedIdSet.has(id));
-  })();
-
-  const handleHighlightConnections = () => {
-    const next = getNextConnectionHighlightIds({
-      cables,
-      devices,
-      highlightedDeviceIds,
-      hoveredDeviceId: null,
-      selectedDeviceId,
-    });
-
-    if (next) {
-      setHighlightedDevices(next);
-    }
-  };
-
   const handleSelectConnected = (deviceId: DeviceId) => {
     const targetDevice = devices.find((d) => d.id === deviceId);
     if (targetDevice) {
@@ -122,12 +100,11 @@ export default function DeviceDrawer() {
         zoom: currentZoom,
       });
     }
-    setHighlightedDevices([]);
     selectDevice(deviceId);
   };
 
   const handleCloseDrawer = () => {
-    setHighlightedDevices([]);
+    showCables(null);
     selectDevice(null);
   };
 
@@ -201,6 +178,25 @@ export default function DeviceDrawer() {
           <StatusDot status={status} className="size-4" />
           {DEVICE_STATUS_LABELS[status]}
         </span>
+
+        {TRACED_ON_ASK.has(device.type) ? (
+          <Button
+            type="button"
+            variant={
+              shownCablesDeviceId === device.id ? "secondary" : "outline"
+            }
+            size="sm"
+            onClick={() =>
+              showCables(toggledCableDisplay(shownCablesDeviceId, device))
+            }
+            className="w-full gap-1.5"
+          >
+            {shownCablesDeviceId === device.id
+              ? "Masquer les câbles"
+              : "Afficher les câbles"}
+            <ShortcutHintInline action="toggle-device-cables" />
+          </Button>
+        ) : null}
       </header>
 
       <ScrollArea className="flex-1">
@@ -299,8 +295,6 @@ export default function DeviceDrawer() {
 
           <DrawerConnectionsSection
             connectedDevices={connectedDevices}
-            isCurrentDeviceHighlighted={isCurrentDeviceHighlighted}
-            onHighlightConnections={handleHighlightConnections}
             onSelectConnected={handleSelectConnected}
           />
 

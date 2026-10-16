@@ -12,7 +12,9 @@ import {
   useMapDocumentActions,
   useMapDocumentData,
 } from "@/map-session/useMapDocument";
-import { useIsEditMode } from "@/store/selectors";
+import { TRACED_ON_ASK, toggledCableDisplay } from "@/canvas/cablePaths";
+import { ShortcutHintInline } from "@/components/ui/shortcut-hint";
+import { useIsEditMode, useShownCablesDeviceId } from "@/store/selectors";
 import { useMapStore } from "@/store/useMapStore";
 import type { DeviceId } from "@/types/map";
 
@@ -23,6 +25,8 @@ export function DeviceContextMenu({ deviceId }: { deviceId: DeviceId }) {
   const reactFlow = useReactFlow();
   const selectDevice = useMapStore((state) => state.selectDevice);
   const setActiveDrawTool = useMapStore((state) => state.setActiveDrawTool);
+  const shownCablesDeviceId = useShownCablesDeviceId();
+  const showCables = useMapStore((state) => state.showCables);
 
   const device = document.devices.find(
     (candidate) => candidate.id === deviceId,
@@ -55,6 +59,18 @@ export function DeviceContextMenu({ deviceId }: { deviceId: DeviceId }) {
       <ContextMenuGroup>
         <ContextMenuLabel>{device.name}</ContextMenuLabel>
         <ContextMenuItem onClick={openDevice}>Ouvrir la fiche</ContextMenuItem>
+        {TRACED_ON_ASK.has(device.type) ? (
+          <ContextMenuItem
+            onClick={() =>
+              showCables(toggledCableDisplay(shownCablesDeviceId, device))
+            }
+          >
+            {shownCablesDeviceId === device.id
+              ? "Masquer les câbles"
+              : "Afficher les câbles"}
+            <ShortcutHintInline action="toggle-device-cables" />
+          </ContextMenuItem>
+        ) : null}
       </ContextMenuGroup>
       {isEditMode ? (
         <>

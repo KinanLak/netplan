@@ -5,6 +5,35 @@
 import { MAX_TRACE_HOPS } from "@/devices/ports";
 import type { Cable, Device, DeviceId, Port } from "@/types/map";
 
+/** The devices whose path shows when hovered or selected. */
+export const TRACED_ON_HOVER: ReadonlySet<Device["type"]> = new Set([
+  "pc",
+  "endpoint",
+  "wall-port",
+]);
+
+/**
+ * The devices whose paths show only when asked: a switch or a patch panel
+ * carries too many cables to show them unasked.
+ */
+export const TRACED_ON_ASK: ReadonlySet<Device["type"]> = new Set([
+  "switch",
+  "patch-panel",
+]);
+
+/**
+ * The device whose cables show after "Afficher les câbles" on `target`:
+ * asking again hides them, and asking on another switch or patch panel
+ * shows its own instead. Asking on any other device, or on none, hides them.
+ */
+export const toggledCableDisplay = (
+  shown: DeviceId | null,
+  target: Pick<Device, "id" | "type"> | undefined,
+): DeviceId | null =>
+  target && TRACED_ON_ASK.has(target.type) && target.id !== shown
+    ? target.id
+    : null;
+
 /** Where the network last saw a `pc` or `endpoint` of the floor. */
 export type SeenAt = {
   deviceId: string;
@@ -173,7 +202,7 @@ const traceInto = (start: Port, floor: FloorCabling, path: CablePath) => {
 };
 
 /** Each item the first time its key comes up. */
-const once = <T>(items: Array<T>, key: (item: T) => string) => {
+const once = <T>(items: ReadonlyArray<T>, key: (item: T) => string) => {
   const keys = new Set<string>();
   return items.filter((item) => {
     const k = key(item);
@@ -182,6 +211,63 @@ const once = <T>(items: Array<T>, key: (item: T) => string) => {
     return true;
   });
 };
+
+const labelOf = (end: Exclude<PathEnd, { kind: "port" }>): string => {
+  switch (end.kind) {
+    case "shared":
+      return `${end.portName} · arrière partagé`;
+    case "away":
+      return `${end.deviceName} · ${end.portName} (${end.floorName ?? "non placé"})`;
+    case "seen-away":
+      return `Vu à ${end.socketName} (${end.floorName ?? "non placé"})`;
+  }
+};
+
+/** Beyond this, the ports a path reaches on one device show as a count. */
+const PORT_NAMES_SHOWN = 3;
+
+/**
+ * The labels under each device where paths end. The ports reached on one
+ * device share a label, so a patch panel's paths do not stack a label per
+ * port under its switch.
+ */
+export const endLabels = (
+  ends: ReadonlyArray<PathEnd>,
+): Map<DeviceId, Array<string>> => {
+  const labels = new Map<DeviceId, Array<string>>();
+  for (const [at, atEnds] of Map.groupBy(ends, (end) => end.at)) {
+    const ports = atEnds.flatMap((end) =>
+      end.kind === "port" ? [end.portName] : [],
+    );
+    labels.set(at, [
+      ...(ports.length === 0
+        ? []
+        : [
+            ports.length <= PORT_NAMES_SHOWN
+              ? ports.join(", ")
+              : `${ports.length} ports`,
+          ]),
+      ...atEnds.flatMap((end) => (end.kind === "port" ? [] : [labelOf(end)])),
+    ]);
+  }
+  return labels;
+};
+
+/** Several paths drawn together, each cable, sighting and end once. */
+export const mergedPaths = (paths: ReadonlyArray<CablePath>): CablePath => ({
+  cables: once(
+    paths.flatMap((path) => path.cables),
+    ({ id }) => id,
+  ),
+  sightings: once(
+    paths.flatMap((path) => path.sightings),
+    ({ deviceId }) => deviceId,
+  ),
+  ends: once(
+    paths.flatMap((path) => path.ends),
+    (end) => JSON.stringify(end),
+  ),
+});
 
 /**
  * The path a device shows: its cables, followed to where they end. A device
@@ -215,9 +301,5 @@ export const cablePathOf = (
   sightingsAt(deviceId, floor, path);
 
   for (const start of starts) traceInto(start, floor, path);
-  return {
-    cables: once(path.cables, ({ id }) => id),
-    sightings: once(path.sightings, ({ deviceId: id }) => id),
-    ends: once(path.ends, (end) => JSON.stringify(end)),
-  };
+  return mergedPaths([path]);
 };

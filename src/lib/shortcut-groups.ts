@@ -35,7 +35,7 @@ export const shortcutGroups: Array<ShortcutGroup> = [
       "edit-device-identity",
       "unplace-device",
       "show-port-cables",
-      "highlight-connections",
+      "toggle-device-cables",
     ],
   },
   {

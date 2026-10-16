@@ -7,12 +7,11 @@ export type EphemeralStatePatch = Partial<
     | "selectedDeviceIds"
     | "selectedDeviceIdSet"
     | "hoveredDeviceId"
-    | "highlightedDeviceIds"
-    | "highlightedDeviceIdSet"
+    | "shownCablesDeviceId"
   >
 >;
 
-const toHighlightSet = (deviceIds: Array<DeviceId>): ReadonlySet<DeviceId> =>
+const toIdSet = (deviceIds: Array<DeviceId>): ReadonlySet<DeviceId> =>
   deviceIds.length === 0 ? new Set<DeviceId>() : new Set(deviceIds);
 
 export function reconcileEphemeralState(
@@ -22,7 +21,7 @@ export function reconcileEphemeralState(
     | "selectedDeviceId"
     | "selectedDeviceIds"
     | "hoveredDeviceId"
-    | "highlightedDeviceIds"
+    | "shownCablesDeviceId"
   >,
 ): EphemeralStatePatch | null {
   const deviceIds = new Set(snapshot.devices.map((device) => device.id));
@@ -37,7 +36,7 @@ export function reconcileEphemeralState(
   );
   if (selectedDeviceIds.length !== state.selectedDeviceIds.length) {
     patch.selectedDeviceIds = selectedDeviceIds;
-    patch.selectedDeviceIdSet = toHighlightSet(selectedDeviceIds);
+    patch.selectedDeviceIdSet = toIdSet(selectedDeviceIds);
     patch.selectedDeviceId =
       selectedDeviceIds.length === 1 ? selectedDeviceIds[0] : null;
   }
@@ -46,12 +45,8 @@ export function reconcileEphemeralState(
     patch.hoveredDeviceId = null;
   }
 
-  const highlightedDeviceIds = state.highlightedDeviceIds.filter((id) =>
-    deviceIds.has(id),
-  );
-  if (highlightedDeviceIds.length !== state.highlightedDeviceIds.length) {
-    patch.highlightedDeviceIds = highlightedDeviceIds;
-    patch.highlightedDeviceIdSet = toHighlightSet(highlightedDeviceIds);
+  if (state.shownCablesDeviceId && !deviceIds.has(state.shownCablesDeviceId)) {
+    patch.shownCablesDeviceId = null;
   }
 
   return Object.keys(patch).length > 0 ? patch : null;
