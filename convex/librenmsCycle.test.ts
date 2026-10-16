@@ -595,6 +595,21 @@ describe("the LibreNMS step", () => {
       ],
     });
 
+    // A capture that stopped before its end reads as no snapshot, for the
+    // device too.
+    await admin.run(async (ctx) => {
+      const slot = await ctx.db.query("historySlots").first();
+      if (slot) await ctx.db.patch(slot._id, { entries: undefined });
+    });
+    expect(
+      (
+        await admin.query(api.history.snapshotsForDevice, {
+          deviceId: "device:pc",
+          paginationOpts: { numItems: 10, cursor: null },
+        })
+      ).page,
+    ).toEqual([]);
+
     // Outside every window, no slot is taken.
     setSystemTime(new Date("2026-10-16T12:30:00Z"));
     admin = await signIn();

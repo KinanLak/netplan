@@ -10,7 +10,7 @@ import { v } from "convex/values";
 import type { Infer } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalMutation } from "./_generated/server";
-import type { Doc } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { editorQuery } from "./lib/functions";
 import { PRESENT_TYPES } from "./lib/statuses";
@@ -399,7 +399,11 @@ export const slotEntries = editorQuery({
   },
 });
 
-/** Where a device was at each snapshot, newest first. */
+/**
+ * Where a device was at each snapshot, newest first. An entry of a capture
+ * that stopped before its end is left out, as `slotEntries` leaves out the
+ * whole snapshot: it reads as no snapshot, so a page may come back short.
+ */
 export const snapshotsForDevice = editorQuery({
   args: { deviceId: v.string(), paginationOpts: paginationOptsValidator },
   returns: paginationResultValidator(publicSnapshotEntry),
@@ -409,7 +413,16 @@ export const snapshotsForDevice = editorQuery({
       .withIndex("by_device_at", (q) => q.eq("deviceId", deviceId))
       .order("desc")
       .paginate(paginationOpts);
-    return { ...result, page: result.page.map(toPublicEntry) };
+    const complete = new Map<Id<"historySlots">, boolean>();
+    const page = [];
+    for (const entry of result.page) {
+      if (!complete.has(entry.slotId)) {
+        const slot = await ctx.db.get(entry.slotId);
+        complete.set(entry.slotId, slot?.entries !== undefined);
+      }
+      if (complete.get(entry.slotId)) page.push(toPublicEntry(entry));
+    }
+    return { ...result, page };
   },
 });
 
