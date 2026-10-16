@@ -486,6 +486,44 @@ describe("the LibreNMS step", () => {
       name: "Inconnu",
     });
     expect(await statusOf(later, "device:stranger")).toBeNull();
+    // Nor does a status nothing saw.
+    await later.mutation(api.devices.create, {
+      siteId,
+      deviceId: "device:ghost",
+      type: "pc",
+      identity: { name: "ghost", macs: [macOf(9)] },
+      metadata: { status: "up" },
+    });
+    expect(await statusOf(later, "device:ghost")).toBeNull();
+  });
+
+  it("forgets the status of a device made from a sighted MAC, once its read expires", async () => {
+    setSystemTime(new Date("2026-10-16T08:00:00Z"));
+    const { admin, siteId, signIn } = await siteWithLibreNMS();
+    librenms.state.fdb = [{ port_id: 101, mac_address: STRANGER }];
+    await cycle(admin, siteId);
+    const site = await admin.query(api.sites.getSettings, { siteId });
+    if (!site) throw new Error("expected the site");
+    await admin.mutation(api.sites.update, {
+      siteId,
+      name: site.name,
+      timezone: site.timezone,
+      cadence: site.cadence,
+      automaticRefresh: false,
+      manualRefresh: true,
+    });
+    // Through the inventory form, so no cycle records it as the MAC's owner.
+    await admin.mutation(api.devices.create, {
+      siteId,
+      deviceId: "device:stranger",
+      type: "endpoint",
+      identity: { name: "stranger", macs: [STRANGER] },
+    });
+    expect(await statusOf(admin, "device:stranger")).toBe("up");
+    setSystemTime(new Date("2026-10-16T10:16:00Z"));
+    const later = await signIn();
+    await tick(later);
+    expect(await statusOf(later, "device:stranger")).toBeNull();
   });
 
   it("forgets the sightings with the site", async () => {

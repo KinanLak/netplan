@@ -253,16 +253,23 @@ export const expireStaleReads = async (
   const rowOf = new Map(rows.map((row) => [row.mac, row]));
   const settled = new Set<string>();
   for (const row of rows) {
-    if (!stale.has(row.switchId) || row.ownerId === undefined) continue;
-    if (settled.has(row.ownerId)) continue;
-    settled.add(row.ownerId);
-    const owner = await deviceOf(ctx, row.ownerId);
-    if (!owner || !PRESENT_TYPES.has(owner.type)) continue;
-    await setStatus(
-      ctx,
-      owner,
-      statusFrom(owner.macs, (mac) => rowOf.get(mac), fresh),
-    );
+    if (!stale.has(row.switchId)) continue;
+    // The device carrying the MAC now, which no cycle may have recorded yet,
+    // and the one the last cycle saw with it.
+    const owners = [
+      await ownerOf(ctx, site.objectId, row.mac),
+      row.ownerId === undefined ? null : await deviceOf(ctx, row.ownerId),
+    ];
+    for (const owner of owners) {
+      if (!owner || settled.has(owner.objectId)) continue;
+      settled.add(owner.objectId);
+      if (!PRESENT_TYPES.has(owner.type)) continue;
+      await setStatus(
+        ctx,
+        owner,
+        statusFrom(owner.macs, (mac) => rowOf.get(mac), fresh),
+      );
+    }
   }
 };
 

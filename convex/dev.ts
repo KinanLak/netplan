@@ -12,6 +12,7 @@ import { createAuth } from "./auth";
 import { DEV_ACCOUNTS, DEV_PASSWORD } from "../src/dev-seed/accounts";
 import { DEMO_BUILDING, buildDemoFloors } from "../src/dev-seed/demoMap";
 import { INTEGRATION_KINDS } from "../src/sites/integrations";
+import type { BatchSubOperation } from "../src/map-engine/types";
 
 const SEED_CLIENT_ID = "dev-seed";
 
@@ -94,6 +95,26 @@ const lastSeedSeq = async (ctx: MutationCtx) => {
 };
 
 /**
+ * Writes the statuses of the demo's devices. A device enters the inventory
+ * with only what a fresh switch read vouches for (ADR 0025), and the demo
+ * stands in for cycles that never ran.
+ */
+const writeSeededStatuses = async (
+  ctx: MutationCtx,
+  operations: ReadonlyArray<BatchSubOperation>,
+) => {
+  for (const operation of operations) {
+    if (operation.kind !== "device.create") continue;
+    const row = await ctx.db
+      .query("devices")
+      .withIndex("by_object_id", (q) => q.eq("objectId", operation.device.id))
+      .unique();
+    if (row)
+      await ctx.db.patch(row._id, { metadata: operation.device.metadata });
+  }
+};
+
+/**
  * Loads the demo site, building and map, filling only what is missing: a
  * floor is drawn while it is empty, so a cleared map comes back and a user's
  * edits stay. A change to the demo data reaches an existing backend through
@@ -130,6 +151,7 @@ export const seed = internalMutation({
           `The seed of ${floor.id} was rejected: ${result.error ?? "unknown error"}`,
         );
       }
+      await writeSeededStatuses(ctx, floor.operations);
     }
     return {
       buildingId: DEMO_BUILDING.id,

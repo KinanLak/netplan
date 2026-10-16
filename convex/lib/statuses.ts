@@ -37,48 +37,46 @@ export const statusFrom = (
   return isOnline(missed) ? "up" : "down";
 };
 
+/** The switches whose read still vouches for what rests on it. */
+const freshSwitchesOf = async (ctx: QueryCtx, siteId: string) => {
+  const cycle = await cycleOf(ctx, siteId);
+  const site = await ctx.db
+    .query("sites")
+    .withIndex("by_object_id", (q) => q.eq("objectId", siteId))
+    .unique();
+  if (!cycle?.switchReads || !site) return new Set<string>();
+  return freshSwitches(cycle.switchReads, Date.now(), staleAfterOf(site));
+};
+
 /**
  * The metadata a device enters the inventory with, when it is created or an
- * undo brings it back. A status that rests on a read is the one that read
- * gives now: the cycle skips a read it already expired, so a stale status
- * brought back would otherwise stay. A status nothing observed, as on a
- * manual or seeded device, is kept.
+ * undo brings it back. Only a read sets a status (ADR 0025), and the cron
+ * never revisits a read it expired, so a status the device brings along is
+ * dropped: it gets the one a fresh read gives it now, if any.
  */
 export const observedMetadata = async (
   ctx: QueryCtx,
   device: Pick<Doc<"devices">, "siteId" | "objectId" | "type" | "macs">,
   metadata: Doc<"devices">["metadata"],
 ): Promise<Doc<"devices">["metadata"]> => {
-  const { siteId } = device;
-  const cycle = await cycleOf(ctx, siteId);
-  const site = await ctx.db
-    .query("sites")
-    .withIndex("by_object_id", (q) => q.eq("objectId", siteId))
-    .unique();
-  if (!cycle || !site) return metadata;
-  const reads = cycle.switchReads ?? [];
-  const fresh = freshSwitches(reads, Date.now(), staleAfterOf(site));
-
-  let status: Status | "unknown" = metadata.status;
+  const { status: claimed, ...rest } = metadata;
+  const fresh = await freshSwitchesOf(ctx, device.siteId);
+  let status: Status;
   if (PRESENT_TYPES.has(device.type)) {
     const seen = new Map<string, Seen>();
     for (const mac of device.macs) {
       const row = await ctx.db
         .query("macSightings")
-        .withIndex("by_site_mac", (q) => q.eq("siteId", siteId).eq("mac", mac))
+        .withIndex("by_site_mac", (q) =>
+          q.eq("siteId", device.siteId).eq("mac", mac),
+        )
         .unique();
       if (row) seen.set(mac, row);
     }
-    if (seen.size === 0) return metadata;
     status = statusFrom(device.macs, (mac) => seen.get(mac), fresh);
-  } else if (device.type === "switch") {
-    if (!reads.some((read) => read.switchId === device.objectId)) {
-      return metadata;
-    }
-    if (!fresh.has(device.objectId)) status = undefined;
-  } else {
-    return metadata;
+  } else if (device.type === "switch" && fresh.has(device.objectId)) {
+    // What LibreNMS said of it in that read, which the switch carried.
+    status = claimed === "up" || claimed === "down" ? claimed : undefined;
   }
-  const { status: _previous, ...rest } = metadata;
   return status === undefined ? rest : { ...rest, status };
 };
