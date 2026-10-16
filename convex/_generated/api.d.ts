@@ -30,6 +30,7 @@ import type * as lib_cycles from "../lib/cycles.js";
 import type * as lib_deviceMacs from "../lib/deviceMacs.js";
 import type * as lib_functions from "../lib/functions.js";
 import type * as lib_httpRetry from "../lib/httpRetry.js";
+import type * as lib_ignoredMacs from "../lib/ignoredMacs.js";
 import type * as lib_imageHeader from "../lib/imageHeader.js";
 import type * as lib_integrationProbe from "../lib/integrationProbe.js";
 import type * as lib_keycloak from "../lib/keycloak.js";
@@ -86,6 +87,7 @@ declare const fullApi: ApiFromModules<{
   "lib/deviceMacs": typeof lib_deviceMacs;
   "lib/functions": typeof lib_functions;
   "lib/httpRetry": typeof lib_httpRetry;
+  "lib/ignoredMacs": typeof lib_ignoredMacs;
   "lib/imageHeader": typeof lib_imageHeader;
   "lib/integrationProbe": typeof lib_integrationProbe;
   "lib/keycloak": typeof lib_keycloak;

@@ -155,6 +155,16 @@ export default defineSchema({
     ownerId: v.optional(v.string()),
   }).index("by_site_mac", ["siteId", "mac"]),
 
+  /** Unknown MACs an Éditeur chose to ignore (ADR 0026). */
+  ignoredMacs: defineTable({
+    siteId: v.string(),
+    mac: v.string(),
+    ignoredBy: v.string(),
+    /** The name at the time, so the list reads without the auth tables. */
+    ignoredByName: v.string(),
+    ignoredAt: v.number(),
+  }).index("by_site_mac", ["siteId", "mac"]),
+
   walls: defineTable({
     objectId: v.string(),
     floorId: v.string(),
