@@ -1,6 +1,6 @@
 ---
 title: Current architecture
-description: Netplan as it stands now, partway through the rebuild.
+description: Netplan as it stands now, at the end of the rebuild.
 ---
 
 # Current architecture
@@ -9,7 +9,9 @@ Netplan is a collaborative map editor for buildings: floors, walls and network
 devices (racks, switches, patch panels, PCs, endpoints, wall sockets) with the
 cables between them. Each site owns an inventory of devices, placed on a floor
 or not, which a collection cycle inside Convex fills from NetBox and keeps
-online or offline from LibreNMS (ADRs 0022 and 0023).
+online or offline from LibreNMS (ADRs 0022 and 0023). The cycle also keeps 30
+days of history and can write where it saw each device back to NetBox (ADR
+0027).
 
 ## Pieces
 
@@ -220,6 +222,36 @@ Built by lot 3b (ADR 0025).
   undo or redo carries where it expects the device (`expected` on
   `device.patch` and `device.unplace`), and the engine and server refuse it
   once someone else, the cycle included, has moved the device since.
+
+## History and the push to NetBox
+
+Built by lot 5 (ADR 0027).
+
+- **History** is what the network observed, written only by the LibreNMS
+  step, so it has no map operation and no undo. `deviceEvents` records,
+  for pcs and endpoints, a `located` event when a device is first seen or
+  seen on none of the ports its latest sighting saw, and `online`/`offline`
+  when its derived status changes; a status cleared because its read grew
+  old records nothing. Each event copies the names it shows, so renaming or
+  deleting a socket never rewrites the past.
+- **Snapshots.** At 08, 12, 14, 16 and 19h site time, the first cycle whose
+  LibreNMS step reads within the slot's window claims a `historySlots` row
+  in its own mutation, then its action writes the MACs it saw to
+  `historySlotEntries`, 500 per mutation, and marks the slot complete. An
+  incomplete or missing slot reads "Pas de relevé"; nothing fills it later.
+- **Access and retention.** Every history query is an `editorQuery`; a
+  Lecteur is refused by the server. A daily cron deletes events and slots
+  older than 30 days in pages of 500.
+- **Push.** With the site's switch on, a cycle that ends schedules one push
+  run under a lease on its `siteCycles` row. It compares each NetBox
+  device's location with what `netboxPushes` says was last sent to that
+  NetBox id and PATCHes five `netplan_*` custom fields where they differ,
+  at most 100 per run. Each attempt first asks whether the push is still on
+  and the lease still held; changing or removing the NetBox forgets the
+  rows and the lease, so nothing from the old NetBox is recorded. A refusal
+  waits from one minute doubling to an hour; a network failure or 5xx ends
+  the run. `health.overview` shows the last run and the devices still
+  failing.
 
 ## Deployment
 

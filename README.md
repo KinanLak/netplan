@@ -6,10 +6,9 @@ cables. Netplan can then read NetBox and LibreNMS to show where each PC was
 last seen on the network. Several people can edit the same floor at once. The
 interface is in French.
 
-> Netplan is being rebuilt to be fully self-hosted, with accounts and roles
-> and a tool-agnostic inventory. See
-> [`docs/architecture/target.md`](docs/architecture/target.md) for where it is
-> heading and [`docs/adr/`](docs/adr/index.md) for why.
+> Netplan is fully self-hosted, with accounts and roles and a tool-agnostic
+> inventory. See [`docs/architecture/current.md`](docs/architecture/current.md)
+> for how it is built and [`docs/adr/`](docs/adr/index.md) for why.
 
 ## Development
 
