@@ -2,18 +2,22 @@
 // switches rediscover, their ports and forwarding tables are read, and each
 // MAC address seen on an edge port is recorded where it was seen. A `pc` or
 // `endpoint` comes online when one of its MACs is seen, and goes offline
-// once none has been for two cycles.
+// once none has been for two cycles; one seen at a new socket, or while on no
+// floor, is placed next to it.
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalMutation, internalQuery } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
 import type { ActionCtx, MutationCtx, QueryCtx } from "./_generated/server";
 import { cycleOf } from "./lib/cycles";
+import { bumpDocumentRevisions, getWallCollisionRect } from "./mapOperations";
 import { pause, SOURCE_RETRY } from "./lib/httpRetry";
 import { PROBE_RETRY, sourceGet } from "./lib/integrationProbe";
 import { cableRowAt, portRowsOf, traceRows } from "./lib/ports";
 import { fdbTable } from "./siteValidators";
+import { DEFAULT_DEVICE_SIZES } from "../src/devices/deviceSizes";
 import { EMPTY_LIBRENMS_SETTINGS, polledSwitches } from "../src/sites/librenms";
+import { spotNextToSocket } from "../src/sites/socketPlacement";
 import {
   edgeSightings,
   freshFdb,
@@ -30,6 +34,7 @@ import type {
   FdbTable,
   SwitchPort,
 } from "../src/sites/librenmsCycle";
+import type { FloorId } from "../src/types/map";
 
 const DISCOVERY_EVERY_MS = 5 * 60_000;
 const DISCOVERY_WAIT_MS = 2 * 60_000;
@@ -204,11 +209,63 @@ const setStatus = async (
 };
 
 /**
+ * Places a device next to the wall socket it was seen at (ADR 0022): on the
+ * socket's floor, at the free spot nearest to it on its side of the walls.
+ * Returns whether it moved; a socket on no floor places nothing.
+ */
+const placeNextTo = async (
+  ctx: MutationCtx,
+  device: Doc<"devices">,
+  socketId: string,
+): Promise<boolean> => {
+  const socket = await deviceOf(ctx, socketId);
+  if (!socket?.placement) return false;
+  const { floorId } = socket.placement;
+  const size = device.placement?.size ?? DEFAULT_DEVICE_SIZES[device.type];
+  const others = (
+    await ctx.db
+      .query("devices")
+      .withIndex("by_floor", (q) => q.eq("placement.floorId", floorId))
+      .collect()
+  ).flatMap((other) =>
+    other.objectId === device.objectId || !other.placement
+      ? []
+      : [other.placement],
+  );
+  const walls = await ctx.db
+    .query("walls")
+    .withIndex("by_floor", (q) => q.eq("floorId", floorId))
+    .collect();
+  const spot = spotNextToSocket({
+    floorId: floorId as FloorId,
+    socket: socket.placement,
+    size,
+    others,
+    walls: walls.map(getWallCollisionRect),
+  });
+  if (!spot) return false;
+  const now = Date.now();
+  await ctx.db.patch(device._id, {
+    placement: { floorId, position: spot, size },
+    updatedAt: now,
+    updatedBy: SIGHTED_BY,
+  });
+  await bumpDocumentRevisions(
+    ctx,
+    new Set([floorId, device.placement?.floorId ?? floorId]),
+    now,
+  );
+  return true;
+};
+
+/**
  * Records a cycle's sightings. A MAC not seen counts a miss when its switch
  * was read, so a LibreNMS that fails does not take devices offline; a MAC no
  * device carries is forgotten once it is offline. Every MAC's owner is looked
  * up again, so a device that dropped a MAC, or a MAC whose device was
- * deleted, is settled too.
+ * deleted, is settled too. A device seen at another socket than the last
+ * time, or while on no floor, is placed next to the socket; where a person
+ * put it is kept while the socket stays the same.
  */
 export const recordSightings = internalMutation({
   args: {
@@ -225,6 +282,7 @@ export const recordSightings = internalMutation({
       seen: v.number(),
       online: v.number(),
       offline: v.number(),
+      placed: v.number(),
       unknown: v.number(),
     }),
   ),
@@ -272,6 +330,7 @@ export const recordSightings = internalMutation({
 
     const owners = new Map<string, Doc<"devices">>();
     const dropped = new Set<string>();
+    const moves = new Map<string, string>();
     let unknown = 0;
     for (const [mac, missed] of misses) {
       const owner = await ownerOf(ctx, siteId, mac);
@@ -281,6 +340,15 @@ export const recordSightings = internalMutation({
       else if (seen) unknown += 1;
       if (row?.ownerId !== undefined && row.ownerId !== owner?.objectId) {
         dropped.add(row.ownerId);
+      }
+      if (
+        owner &&
+        PRESENT_TYPES.has(owner.type) &&
+        seen?.socketId !== undefined &&
+        (!owner.placement ||
+          (row?.ownerId === owner.objectId && row.socketId !== seen.socketId))
+      ) {
+        moves.set(owner.objectId, seen.socketId);
       }
       if (!owner && missed >= MISSES_OFFLINE) {
         if (row) await ctx.db.delete(row._id);
@@ -319,6 +387,12 @@ export const recordSightings = internalMutation({
       if (device) owners.set(deviceId, device);
     }
 
+    let placed = 0;
+    for (const [deviceId, socketId] of moves) {
+      const device = owners.get(deviceId);
+      if (device && (await placeNextTo(ctx, device, socketId))) placed += 1;
+    }
+
     let online = 0;
     let offline = 0;
     for (const device of owners.values()) {
@@ -338,7 +412,7 @@ export const recordSightings = internalMutation({
       if (status === "up") online += 1;
       else offline += 1;
     }
-    return { seen: sightingOf.size, online, offline, unknown };
+    return { seen: sightingOf.size, online, offline, placed, unknown };
   },
 });
 

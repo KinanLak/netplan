@@ -269,6 +269,8 @@ export type SightingCounts = {
   /** Devices that came online or went offline during the cycle. */
   online: number;
   offline: number;
+  /** Devices placed next to the socket they were seen at. */
+  placed: number;
   /** MAC addresses seen that no device of the site carries. */
   unknown: number;
 };
@@ -284,6 +286,13 @@ export function sightingSummary(counts: SightingCounts): string {
       : null,
     counts.offline > 0
       ? counted(counts.offline, "passé hors ligne", "passés hors ligne")
+      : null,
+    counts.placed > 0
+      ? counted(
+          counts.placed,
+          "placé près de sa prise",
+          "placés près de leur prise",
+        )
       : null,
     counts.unknown > 0
       ? counted(counts.unknown, "inconnue", "inconnues")

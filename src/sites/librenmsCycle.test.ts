@@ -230,6 +230,7 @@ describe("presence", () => {
         seen: 1,
         online: 0,
         offline: 0,
+        placed: 0,
         unknown: 0,
       }),
     ).toBe("1 switch lu, 1 MAC vue.");
@@ -239,10 +240,11 @@ describe("presence", () => {
         seen: 9,
         online: 2,
         offline: 1,
+        placed: 1,
         unknown: 3,
       }),
     ).toBe(
-      "2 switchs lus, 9 MAC vues (2 passés en ligne, 1 passé hors ligne, 3 inconnues).",
+      "2 switchs lus, 9 MAC vues (2 passés en ligne, 1 passé hors ligne, 1 placé près de sa prise, 3 inconnues).",
     );
   });
 });
