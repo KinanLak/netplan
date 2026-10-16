@@ -363,6 +363,20 @@ describe("the LibreNMS step", () => {
       { status: "up", seen: undefined },
     ]);
 
+    // A MAC on two edge ports shows a device behind both; one passing
+    // through to the core shows none behind the uplink.
+    librenms.state.fdb = [
+      { port_id: 101, mac_address: PC },
+      { port_id: 102, mac_address: PC },
+      { port_id: 103, mac_address: PRINTER },
+    ];
+    await cycle(admin, siteId);
+    expect((await portFacts(admin)).map(({ seen }) => seen)).toEqual([
+      true,
+      true,
+      undefined,
+    ]);
+
     librenms.state.fdb = [];
     await cycle(admin, siteId);
     expect((await portFacts(admin))[0]).toEqual({
@@ -1005,6 +1019,7 @@ describe("the LibreNMS step", () => {
         baseUrl: LIBRENMS,
         readSwitches: [{ switchId: "device:sw", status: "up" }],
         links: [{ portId: "port:device:sw:interface:2", link: "up" }],
+        presence: [],
         sightings: [
           {
             mac: PC,

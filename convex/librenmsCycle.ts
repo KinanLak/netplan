@@ -24,6 +24,7 @@ import { EMPTY_LIBRENMS_SETTINGS, polledSwitches } from "../src/sites/librenms";
 import { spotNextToSocket } from "../src/sites/socketPlacement";
 import {
   edgeSightings,
+  portPresence,
   freshFdb,
   freshSwitches,
   matchPorts,
@@ -78,6 +79,18 @@ export const ownerOf = async (ctx: QueryCtx, siteId: string, mac: string) => {
     .withIndex("by_site_mac", (q) => q.eq("siteId", siteId).eq("mac", mac))
     .unique();
   return row ? await deviceOf(ctx, row.deviceId) : null;
+};
+
+/** Whether a device of the site carries one of these MACs. */
+const someOwned = async (
+  ctx: QueryCtx,
+  siteId: string,
+  macs: ReadonlyArray<string>,
+) => {
+  for (const mac of macs) {
+    if (await ownerOf(ctx, siteId, mac)) return true;
+  }
+  return false;
 };
 
 const sightingRowsOf = async (ctx: QueryCtx, siteId: string) =>
@@ -184,6 +197,7 @@ export const switchPorts = internalQuery({
       switchId: v.string(),
       name: v.string(),
       socketId: v.union(v.null(), v.string()),
+      endId: v.union(v.null(), v.string()),
       cabled: v.boolean(),
     }),
   ),
@@ -199,6 +213,7 @@ export const switchPorts = internalQuery({
           switchId,
           name: port.name,
           socketId: socket?.type === "wall-port" ? socket.objectId : null,
+          endId: end?.deviceId ?? null,
           cabled,
         });
       }
@@ -392,6 +407,13 @@ export const recordSightings = internalMutation({
     ),
     /** The links LibreNMS knows of the read switches' ports. */
     links: v.array(v.object({ portId: v.string(), link: upOrDown })),
+    presence: v.array(
+      v.object({
+        portId: v.string(),
+        macs: v.array(v.string()),
+        deviceId: v.optional(v.string()),
+      }),
+    ),
     sightings: v.array(sighting),
     tables: v.array(v.object({ deviceId: v.number(), table: fdbTable })),
   },
@@ -407,7 +429,16 @@ export const recordSightings = internalMutation({
   ),
   handler: async (
     ctx,
-    { siteId, cycleId, baseUrl, readSwitches, links, sightings, tables },
+    {
+      siteId,
+      cycleId,
+      baseUrl,
+      readSwitches,
+      links,
+      presence,
+      sightings,
+      tables,
+    },
   ) => {
     const cycle = await cycleOf(ctx, siteId);
     if (cycle?.running?.cycleId !== cycleId) return null;
@@ -477,7 +508,6 @@ export const recordSightings = internalMutation({
     const dropped = new Set<string>();
     const presentOwners = new Map<string, { id: string; placed: boolean }>();
     const ignored = await ignoredMacsOf(ctx, siteId);
-    const seenPorts = new Set<string>();
     let unknown = 0;
     for (const [mac, missed] of misses) {
       const owner = await ownerOf(ctx, siteId, mac);
@@ -485,7 +515,6 @@ export const recordSightings = internalMutation({
       const seen = sightingOf.get(mac);
       if (owner) owners.set(owner.objectId, owner);
       else if (seen && !ignored.has(mac)) unknown += 1;
-      if (owner && seen) seenPorts.add(seen.portId);
       if (row?.ownerId !== undefined && row.ownerId !== owner?.objectId) {
         dropped.add(row.ownerId);
       }
@@ -532,6 +561,16 @@ export const recordSightings = internalMutation({
       if (device) owners.set(deviceId, device);
     }
 
+    const seenPorts = new Set<string>();
+    for (const { portId, macs, deviceId } of presence) {
+      const device =
+        deviceId === undefined ? null : await deviceOf(ctx, deviceId);
+      const seen =
+        deviceId === undefined
+          ? await someOwned(ctx, siteId, macs)
+          : device !== null && macs.some((mac) => device.macs.includes(mac));
+      if (seen) seenPorts.add(portId);
+    }
     const linkOf = new Map(links.map(({ portId, link }) => [portId, link]));
     for (const switchId of readIds) {
       await setPortFacts(ctx, switchId, (port) => ({
@@ -777,6 +816,7 @@ export const collectFromLibreNMS = async (
     baseUrl,
     readSwitches,
     links,
+    presence: portPresence(fdb, matched, ports),
     sightings: edgeSightings(fdb, matched, ports),
     tables,
   });
