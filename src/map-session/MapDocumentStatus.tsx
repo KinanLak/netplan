@@ -13,8 +13,16 @@ export const getRejectedOperationMessage = (message: string): string =>
     ? "Action refusée : votre rôle ne permet pas de modifier le plan."
     : message;
 
-export function MapDocumentStatus() {
-  const isReady = useMapDocumentReady();
+/**
+ * `floorless` when the map shows no floor: there is no document to load, but
+ * edits made on another floor may still be saving or be refused.
+ */
+export function MapDocumentStatus({
+  floorless = false,
+}: {
+  floorless?: boolean;
+}) {
+  const isReady = useMapDocumentReady() || floorless;
   const {
     isSaving,
     isRetrying,

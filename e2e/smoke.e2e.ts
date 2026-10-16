@@ -17,7 +17,9 @@ test("an editor signs in and the seeded demo map opens on both floors", async ({
   await page.getByLabel("Mot de passe").fill(DEV_PASSWORD);
   await page.getByRole("button", { name: "Se connecter" }).click();
 
-  await expect(page.getByRole("button", { name: "Bâtiment A" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Bâtiment A", exact: true }),
+  ).toBeVisible();
 
   // Offline devices also name their floor in the sidebar.
   const floors = page.locator('[data-sidebar="menu-sub"]');

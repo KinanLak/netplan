@@ -1,12 +1,16 @@
 import { ConvexError, v } from "convex/values";
-import { internalMutation } from "./_generated/server";
 import { readerQuery, editorMutation } from "./lib/functions";
 import type { Doc } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { requireSite } from "./sites";
-import { syncOverlayFileReleases } from "./lib/overlayFiles";
-import { deleteDeviceMacs } from "./lib/deviceMacs";
-import { deleteDeviceCabling } from "./lib/ports";
+import {
+  buildingRow,
+  checkedName,
+  deleteEmptyFloor,
+  floorContent,
+  floorRow,
+  floorsOf,
+} from "./lib/structure";
 
 const buildingValidator = v.object({
   id: v.string(),
@@ -15,34 +19,12 @@ const buildingValidator = v.object({
   order: v.number(),
 });
 
-const defaultBuildingId = (siteId: string) => `building:${siteId}:default`;
-const defaultFloors = (siteId: string) => [
-  { objectId: `floor:${siteId}:default:rdc`, name: "RDC", order: 0 },
-  {
-    objectId: `floor:${siteId}:default:etage-1`,
-    name: "Étage 1",
-    order: 1,
-  },
-];
-
-const defaultMapResult = v.object({
-  buildingId: v.string(),
-  floorIds: v.array(v.string()),
-});
-
 const toBuilding = (row: Doc<"buildings">) => ({
   id: row.objectId,
   siteId: row.siteId,
   name: row.name,
   order: row.order,
 });
-
-const getBuildingRow = async (ctx: MutationCtx, objectId: string) => {
-  return await ctx.db
-    .query("buildings")
-    .withIndex("by_object_id", (q) => q.eq("objectId", objectId))
-    .unique();
-};
 
 export const list = readerQuery({
   args: {},
@@ -61,117 +43,62 @@ export const listForSite = readerQuery({
       .query("buildings")
       .withIndex("by_site", (q) => q.eq("siteId", siteId))
       .collect();
-    return buildings.map(toBuilding);
+    return buildings.toSorted((a, b) => a.order - b.order).map(toBuilding);
   },
 });
 
+const buildingsOf = async (ctx: MutationCtx, siteId: string) =>
+  await ctx.db
+    .query("buildings")
+    .withIndex("by_site", (q) => q.eq("siteId", siteId))
+    .collect();
+
+/**
+ * A new building, with its first floor when one is named, so the map has
+ * somewhere to draw at once. Retrying with the same id returns it.
+ */
 export const create = editorMutation({
-  args: { siteId: v.string(), objectId: v.string(), name: v.string() },
+  args: {
+    siteId: v.string(),
+    objectId: v.string(),
+    name: v.string(),
+    firstFloor: v.optional(
+      v.object({ objectId: v.string(), name: v.string() }),
+    ),
+  },
   returns: v.string(),
-  handler: async (ctx, { siteId, objectId, name }) => {
+  handler: async (ctx, { siteId, objectId, name, firstFloor }) => {
     await requireSite(ctx, siteId);
-    const existing = await getBuildingRow(ctx, objectId);
+    const existing = await buildingRow(ctx, objectId);
     if (existing) {
       if (existing.siteId !== siteId) {
-        throw new ConvexError("Building identity belongs to another site");
+        throw new ConvexError("Cet identifiant de bâtiment est déjà pris.");
       }
       return existing.objectId;
     }
 
-    const buildings = await ctx.db
-      .query("buildings")
-      .withIndex("by_site", (q) => q.eq("siteId", siteId))
-      .collect();
-    const maxOrder = Math.max(...buildings.map((b) => b.order), -1);
-    const order = maxOrder + 1;
-    await ctx.db.insert("buildings", { objectId, siteId, name, order });
-    return objectId;
-  },
-});
-
-export const createDefaultMap = editorMutation({
-  args: { siteId: v.string() },
-  returns: defaultMapResult,
-  handler: async (ctx, { siteId }) => {
-    await requireSite(ctx, siteId);
-    const buildingId = defaultBuildingId(siteId);
-    const floors = defaultFloors(siteId);
-    const existingBuilding = await getBuildingRow(ctx, buildingId);
-    if (existingBuilding && existingBuilding.siteId !== siteId) {
-      throw new ConvexError(
-        "Default building identity belongs to another site",
-      );
+    const buildings = await buildingsOf(ctx, siteId);
+    const checked = checkedName("building", name, buildings);
+    const floorName = firstFloor && checkedName("floor", firstFloor.name, []);
+    if (firstFloor && (await floorRow(ctx, firstFloor.objectId))) {
+      throw new ConvexError("Cet identifiant d'étage est déjà pris.");
     }
-    if (!existingBuilding) {
-      await ctx.db.insert("buildings", {
-        objectId: buildingId,
-        siteId,
-        name: "Bâtiment Principal",
+    const order = Math.max(...buildings.map((b) => b.order), -1) + 1;
+    await ctx.db.insert("buildings", {
+      objectId,
+      siteId,
+      name: checked,
+      order,
+    });
+    if (firstFloor && floorName) {
+      await ctx.db.insert("floors", {
+        objectId: firstFloor.objectId,
+        buildingId: objectId,
+        name: floorName,
         order: 0,
       });
     }
-
-    for (const floor of floors) {
-      const existingFloor = await ctx.db
-        .query("floors")
-        .withIndex("by_object_id", (q) => q.eq("objectId", floor.objectId))
-        .unique();
-      if (existingFloor) {
-        if (existingFloor.buildingId !== buildingId) {
-          throw new ConvexError(
-            "Default floor identity belongs to another building",
-          );
-        }
-        continue;
-      }
-
-      await ctx.db.insert("floors", {
-        objectId: floor.objectId,
-        buildingId,
-        name: floor.name,
-        order: floor.order,
-      });
-    }
-
-    return {
-      buildingId,
-      floorIds: floors.map((floor) => floor.objectId),
-    };
-  },
-});
-
-export const clearMap = editorMutation({
-  args: { siteId: v.string() },
-  returns: v.null(),
-  handler: async (ctx, { siteId }) => {
-    await requireSite(ctx, siteId);
-    const buildings = await ctx.db
-      .query("buildings")
-      .withIndex("by_site", (q) => q.eq("siteId", siteId))
-      .collect();
-    for (const building of buildings) {
-      const floors = await ctx.db
-        .query("floors")
-        .withIndex("by_building", (q) => q.eq("buildingId", building.objectId))
-        .collect();
-      for (const floor of floors) await cascadeRemoveFloor(ctx, floor.objectId);
-      await ctx.db.delete(building._id);
-    }
-
-    // Clearing the map also clears what was drawn on it; a sourced device
-    // stays unplaced, since its integration would bring it back anyway.
-    const devices = await ctx.db
-      .query("devices")
-      .withIndex("by_site", (q) => q.eq("siteId", siteId))
-      .collect();
-    for (const device of devices) {
-      if (device.source) continue;
-      await deleteDeviceMacs(ctx, device.objectId);
-      await deleteDeviceCabling(ctx, device.objectId);
-      await ctx.db.delete(device._id);
-    }
-
-    return null;
+    return objectId;
   },
 });
 
@@ -179,85 +106,36 @@ export const rename = editorMutation({
   args: { id: v.string(), name: v.string() },
   returns: v.null(),
   handler: async (ctx, { id, name }) => {
-    const building = await getBuildingRow(ctx, id);
-    if (!building) throw new ConvexError("Building not found");
-    await ctx.db.patch(building._id, { name });
+    const building = await buildingRow(ctx, id);
+    if (!building) throw new ConvexError("Ce bâtiment n'existe plus.");
+    const others = (await buildingsOf(ctx, building.siteId)).filter(
+      (other) => other._id !== building._id,
+    );
+    await ctx.db.patch(building._id, {
+      name: checkedName("building", name, others),
+    });
     return null;
   },
 });
 
-export const remove = internalMutation({
+/** Only an empty building goes, with its empty floors. */
+export const remove = editorMutation({
   args: { id: v.string() },
   returns: v.null(),
   handler: async (ctx, { id }) => {
-    const building = await getBuildingRow(ctx, id);
-    if (!building) throw new ConvexError("Building not found");
-    const floors = await ctx.db
-      .query("floors")
-      .withIndex("by_building", (q) => q.eq("buildingId", id))
-      .collect();
+    const building = await buildingRow(ctx, id);
+    if (!building) return null;
+    const floors = await floorsOf(ctx, id);
     for (const floor of floors) {
-      await cascadeRemoveFloor(ctx, floor.objectId);
+      const content = await floorContent(ctx, floor.objectId);
+      if (content) {
+        throw new ConvexError(
+          `Le bâtiment « ${building.name} » n'est pas vide : l'étage « ${floor.name} » porte encore ${content}.`,
+        );
+      }
     }
+    for (const floor of floors) await deleteEmptyFloor(ctx, floor);
     await ctx.db.delete(building._id);
     return null;
   },
 });
-
-export async function cascadeRemoveFloor(ctx: MutationCtx, floorId: string) {
-  const floor = await ctx.db
-    .query("floors")
-    .withIndex("by_object_id", (q) => q.eq("objectId", floorId))
-    .unique();
-  if (!floor) return;
-
-  // Devices belong to the site's inventory, with their ports and cables:
-  // losing their floor only takes them off the map.
-  const devices = await ctx.db
-    .query("devices")
-    .withIndex("by_floor", (q) => q.eq("placement.floorId", floorId))
-    .collect();
-
-  const presences = await ctx.db
-    .query("presences")
-    .withIndex("by_floor", (q) => q.eq("floorId", floorId))
-    .collect();
-  for (const presence of presences) {
-    await ctx.db.delete(presence._id);
-  }
-
-  for (const device of devices) {
-    await ctx.db.patch(device._id, { placement: undefined });
-  }
-
-  const walls = await ctx.db
-    .query("walls")
-    .withIndex("by_floor", (q) => q.eq("floorId", floorId))
-    .collect();
-  for (const wall of walls) await ctx.db.delete(wall._id);
-
-  const overlays = await ctx.db
-    .query("floorOverlays")
-    .withIndex("by_floor", (q) => q.eq("floorId", floorId))
-    .collect();
-  for (const overlay of overlays) await ctx.db.delete(overlay._id);
-  await syncOverlayFileReleases(
-    ctx,
-    overlays.map((overlay) => overlay.fileId),
-    Date.now(),
-  );
-
-  const revisions = await ctx.db
-    .query("documentRevisions")
-    .withIndex("by_floor", (q) => q.eq("floorId", floorId))
-    .collect();
-  for (const revision of revisions) await ctx.db.delete(revision._id);
-
-  const operations = await ctx.db
-    .query("clientOperations")
-    .filter((q) => q.eq(q.field("floorId"), floorId))
-    .collect();
-  for (const operation of operations) await ctx.db.delete(operation._id);
-
-  await ctx.db.delete(floor._id);
-}

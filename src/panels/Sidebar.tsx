@@ -1,5 +1,6 @@
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
+  Add01Icon,
   Building05Icon,
   DashedLine01Icon,
   PackageIcon,
@@ -8,8 +9,7 @@ import {
   UndoIcon,
 } from "@hugeicons/core-free-icons";
 import { Link } from "@tanstack/react-router";
-import { useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { useMapStore } from "@/store/useMapStore";
 import {
   useCurrentBuildingId,
@@ -35,6 +35,7 @@ import {
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
+  SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSub,
@@ -42,7 +43,8 @@ import {
   SidebarMenuSubItem,
 } from "@/components/ui/sidebar";
 import { ModeToggle } from "@/components/mode-toggle";
-import { useCanEdit } from "@/hooks/use-current-user";
+import { StructureMenu } from "@/buildings/StructureMenu";
+import { useStructureDialog } from "@/buildings/useStructureDialog";
 import { SidebarAccount } from "@/panels/SidebarAccount";
 import { CollectionFreshness } from "@/sites/CollectionFreshness";
 import { OfflineDevices } from "@/sites/OfflineDevices";
@@ -144,12 +146,6 @@ export default function AppSidebar() {
 
   const setCurrentBuilding = useMapStore((s) => s.setCurrentBuilding);
   const setCurrentFloor = useMapStore((s) => s.setCurrentFloor);
-  const createDefaultMap = useMutation(api.buildings.createDefaultMap);
-  const clearMap = useMutation(api.buildings.clearMap);
-  const [devMapAction, setDevMapAction] = useState<"clear" | "create" | null>(
-    null,
-  );
-
   const floorsForCurrent = useQuery(
     api.floors.listForBuilding,
     currentBuildingId ? { buildingId: currentBuildingId } : "skip",
@@ -159,38 +155,8 @@ export default function AppSidebar() {
   const sortedFloors = floorsForCurrent
     ? [...floorsForCurrent].sort((a, b) => a.order - b.order)
     : [];
-  const canEdit = useCanEdit();
-  const showDevMapControls =
-    canEdit && (import.meta.env.DEV || buildings.length === 0);
-
-  const handleCreateDefaultMap = async () => {
-    if (!site) return;
-    setDevMapAction("create");
-    try {
-      const result = await createDefaultMap({ siteId: site.id });
-      setCurrentBuilding(asBuildingId(result.buildingId));
-      const firstFloorId = result.floorIds[0];
-      if (firstFloorId) setCurrentFloor(asFloorId(firstFloorId));
-    } finally {
-      setDevMapAction(null);
-    }
-  };
-
-  const handleClearMap = async () => {
-    const confirmed = window.confirm(
-      "Supprimer temporairement toute la carte de développement ?",
-    );
-    if (!confirmed) return;
-
-    if (!site) return;
-    setDevMapAction("clear");
-    try {
-      await clearMap({ siteId: site.id });
-      setCurrentBuilding(null);
-    } finally {
-      setDevMapAction(null);
-    }
-  };
+  const isEditMode = useIsEditMode();
+  const openStructureDialog = useStructureDialog((state) => state.open);
 
   return (
     <Sidebar collapsible="none" className="border-r">
@@ -241,7 +207,25 @@ export default function AppSidebar() {
         <SidebarGroup>
           <div className="flex items-center justify-between px-2">
             <SidebarGroupLabel className="px-0">Bâtiments</SidebarGroupLabel>
-            <SidebarFloorShortcutHint />
+            <div className="flex items-center gap-1">
+              <SidebarFloorShortcutHint />
+              {isEditMode && site ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    openStructureDialog({
+                      kind: "create-building",
+                      siteId: site.id,
+                    })
+                  }
+                  className="flex size-5 items-center justify-center rounded-md text-sidebar-foreground ring-sidebar-ring outline-hidden hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2"
+                  title="Nouveau bâtiment"
+                  aria-label="Nouveau bâtiment"
+                >
+                  <HugeiconsIcon icon={Add01Icon} size={16} strokeWidth={1.5} />
+                </button>
+              ) : null}
+            </div>
           </div>
           <SidebarGroupContent>
             <SidebarMenu>
@@ -280,8 +264,16 @@ export default function AppSidebar() {
                         />
                       ) : null}
                     </SidebarMenuButton>
+                    {isEditMode ? (
+                      <StructureMenu
+                        target="building"
+                        id={building.id}
+                        name={building.name}
+                        trigger={<SidebarMenuAction />}
+                      />
+                    ) : null}
 
-                    {isCurrentBuilding ? (
+                    {isCurrentBuilding && sortedFloors.length > 0 ? (
                       <SidebarMenuSub>
                         {sortedFloors.map((floor) => {
                           const isActive = floor.id === currentFloorId;
@@ -299,11 +291,12 @@ export default function AppSidebar() {
                                 }
                                 className={cn(
                                   "cursor-pointer justify-between",
+                                  isEditMode && "pr-8",
                                   isActive &&
                                     "bg-primary font-semibold text-primary-foreground hover:bg-primary hover:text-primary-foreground",
                                 )}
                               >
-                                <span className="flex items-center gap-2">
+                                <span className="flex min-w-0 items-center gap-2">
                                   <HugeiconsIcon
                                     icon={
                                       isActive
@@ -313,7 +306,7 @@ export default function AppSidebar() {
                                     size={16}
                                     strokeWidth={1}
                                   />
-                                  <span>{floor.name}</span>
+                                  <span className="truncate">{floor.name}</span>
                                 </span>
                                 {floorPresences.length > 0 ? (
                                   <UserAvatarStack
@@ -323,6 +316,24 @@ export default function AppSidebar() {
                                   />
                                 ) : null}
                               </SidebarMenuSubButton>
+                              {isEditMode ? (
+                                <StructureMenu
+                                  target="floor"
+                                  id={floor.id}
+                                  name={floor.name}
+                                  trigger={
+                                    <button
+                                      type="button"
+                                      className={cn(
+                                        "absolute top-0.5 right-1 flex size-6 items-center justify-center rounded-md ring-sidebar-ring outline-hidden focus-visible:ring-2",
+                                        isActive
+                                          ? "text-primary-foreground hover:bg-primary"
+                                          : "text-sidebar-foreground hover:bg-sidebar-accent",
+                                      )}
+                                    />
+                                  }
+                                />
+                              ) : null}
                             </SidebarMenuSubItem>
                           );
                         })}
@@ -340,30 +351,6 @@ export default function AppSidebar() {
       <SidebarUndoRedo />
 
       <SidebarFooter className="border-t px-4 py-3">
-        {showDevMapControls ? (
-          <div className="mb-3 space-y-2 rounded-md border border-dashed border-border bg-muted p-2">
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={handleCreateDefaultMap}
-                disabled={devMapAction !== null}
-                className="rounded-md border border-border bg-background px-2 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
-              >
-                {devMapAction === "create"
-                  ? "Création..."
-                  : "Create default map"}
-              </button>
-              <button
-                type="button"
-                onClick={handleClearMap}
-                disabled={devMapAction !== null}
-                className="hover:text-destructive-foreground rounded-md border border-destructive bg-background px-2 py-1.5 text-xs font-medium text-destructive transition-colors hover:bg-destructive disabled:pointer-events-none disabled:opacity-50"
-              >
-                {devMapAction === "clear" ? "Suppression..." : "Clear map"}
-              </button>
-            </div>
-          </div>
-        ) : null}
         <div className="flex items-center justify-between gap-2">
           <div className="truncate text-xs text-muted-foreground">
             {currentBuilding?.name ?? "Aucun bâtiment"}
