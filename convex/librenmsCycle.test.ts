@@ -436,10 +436,16 @@ describe("the LibreNMS step", () => {
     });
     const socketAt = { x: 400, y: 400 };
     const socketSize = { width: 40, height: 40 };
+    const upstairs = await admin.mutation(api.floors.create, {
+      objectId: "floor:cycle-2",
+      buildingId,
+      name: "Étage",
+    });
     const setPlacement = async (
       deviceId: string,
       position: { x: number; y: number },
       size: { width: number; height: number },
+      on = floorId,
     ) =>
       await admin.run(async (ctx) => {
         const row = await ctx.db
@@ -448,12 +454,17 @@ describe("the LibreNMS step", () => {
           .unique();
         if (row) {
           await ctx.db.patch(row._id, {
-            placement: { floorId, position, size },
+            placement: { floorId: on, position, size },
           });
         }
       });
     await setPlacement("device:socket", socketAt, socketSize);
-    await setPlacement("device:socket-2", { x: 2000, y: 400 }, socketSize);
+    await setPlacement(
+      "device:socket-2",
+      { x: 2000, y: 400 },
+      socketSize,
+      upstairs,
+    );
     const placementOf = async (deviceId: string) =>
       await admin.run(
         async (ctx) =>
@@ -500,14 +511,26 @@ describe("the LibreNMS step", () => {
       y: 1000,
     });
 
-    // Seen at another socket: it follows.
+    // Seen at a socket upstairs: it follows, through the map's operations.
     librenms.state.fdb = [{ port_id: 102, mac_address: PC }];
     expect((await cycle(admin, siteId)).message).toContain(
       "1 placé près de sa prise",
     );
     const moved = await placementOf("device:pc");
     if (!moved) throw new Error("expected the pc on the floor");
+    expect(moved.floorId).toBe(upstairs);
     expect(distance(moved.position, { x: 2000, y: 400 })).toBeLessThan(150);
+    expect(
+      await admin.run(async (ctx) =>
+        (await ctx.db.query("clientOperations").collect()).map(
+          ({ kind, clientId, status }) => [kind, clientId, status],
+        ),
+      ),
+    ).toEqual([
+      ["device.place", "librenms", "applied"],
+      ["device.unplace", "librenms", "applied"],
+      ["device.place", "librenms", "applied"],
+    ]);
   });
 
   it("lists unknown MACs and makes an endpoint of one, next to its socket", async () => {
@@ -579,6 +602,13 @@ describe("the LibreNMS step", () => {
     const position = created?.placement?.position;
     if (!position) throw new Error("expected the endpoint on the floor");
     expect(Math.hypot(position.x - 400, position.y - 400)).toBeLessThan(150);
+    expect(
+      await admin.run(async (ctx) =>
+        (await ctx.db.query("clientOperations").collect()).map(
+          ({ kind, status }) => [kind, status],
+        ),
+      ),
+    ).toEqual([["device.place", "applied"]]);
     expect(
       (await admin.query(api.unknownMacs.listForSite, { siteId })).map(
         ({ mac }) => mac,
