@@ -430,3 +430,116 @@ describe("NetBox import", () => {
     expect(await inventory(editor, siteId)).toEqual([]);
   });
 });
+
+describe("Import reviews", () => {
+  const reviews = async (client: TestClient, siteId: string) =>
+    await client.query(api.importReviews.listForSite, { siteId });
+
+  it("binds a hostname suggestion an Éditeur confirms, and the next import keeps it", async () => {
+    const source = netbox([device(12, "PC-0012", { serial: "SN-12" })], []);
+    const { editor, siteId } = await importingSite(source);
+    await editor.mutation(api.devices.create, {
+      siteId,
+      deviceId: "device:manual",
+      type: "pc",
+      identity: { name: "Accueil", hostname: "pc-0012", macs: [], notes: "B4" },
+    });
+    await refresh(editor, siteId);
+    expect(await reviews(editor, siteId)).toMatchObject([
+      {
+        kind: "suggestion",
+        device: { externalId: "12" },
+        candidates: [{ id: "device:manual", name: "Accueil", placed: false }],
+      },
+    ]);
+
+    await editor.mutation(api.importReviews.resolve, {
+      siteId,
+      externalId: "12",
+      deviceId: "device:manual",
+    });
+    await refresh(editor, siteId);
+
+    expect(await reviews(editor, siteId)).toEqual([]);
+    expect(await inventory(editor, siteId)).toMatchObject([
+      {
+        id: "device:manual",
+        name: "PC-0012",
+        serial: "SN-12",
+        notes: "B4",
+        source: { integration: "netbox", externalId: "12" },
+      },
+    ]);
+  });
+
+  it("keeps a refused suggestion apart as a new device", async () => {
+    const source = netbox([device(12, "PC-0012")], []);
+    const { editor, siteId } = await importingSite(source);
+    await editor.mutation(api.devices.create, {
+      siteId,
+      deviceId: "device:manual",
+      type: "pc",
+      identity: { name: "pc-0012", macs: [] },
+    });
+    await refresh(editor, siteId);
+
+    await editor.mutation(api.importReviews.resolve, {
+      siteId,
+      externalId: "12",
+      deviceId: null,
+    });
+    await refresh(editor, siteId);
+
+    expect(await reviews(editor, siteId)).toEqual([]);
+    expect(
+      (await inventory(editor, siteId)).map((d) => [
+        d.name,
+        d.source?.externalId ?? null,
+      ]),
+    ).toEqual([
+      ["pc-0012", null],
+      ["PC-0012", "12"],
+    ]);
+  });
+
+  it("leaves a conflict to an admin, and a MAC another device holds stays with it", async () => {
+    const source = netbox(
+      [device(12, "pc-0012")],
+      [iface(12, MAC_A), iface(12, MAC_B)],
+    );
+    const { admin, editor, siteId } = await importingSite(source);
+    for (const [id, mac] of [
+      ["device:a", MAC_A],
+      ["device:b", MAC_B],
+    ] as const) {
+      await editor.mutation(api.devices.create, {
+        siteId,
+        deviceId: id,
+        type: "pc",
+        identity: { name: id, macs: [mac] },
+      });
+    }
+    await refresh(editor, siteId);
+    expect(
+      (await reviews(editor, siteId)).map((r) => [
+        r.kind,
+        r.candidates.map((c) => c.id),
+      ]),
+    ).toEqual([["conflict", ["device:a", "device:b"]]]);
+
+    const choice = { siteId, externalId: "12", deviceId: "device:a" };
+    await expect(
+      editor.mutation(api.importReviews.resolve, choice),
+    ).rejects.toThrow("administrateur");
+    await admin.mutation(api.importReviews.resolve, choice);
+
+    const devices = await inventory(editor, siteId);
+    expect(devices.map((d) => [d.id, d.macs, d.source?.externalId])).toEqual([
+      ["device:b", [MAC_B], undefined],
+      ["device:a", [MAC_A], "12"],
+    ]);
+    await expect(
+      admin.mutation(api.importReviews.resolve, choice),
+    ).rejects.toThrow("déjà traité");
+  });
+});

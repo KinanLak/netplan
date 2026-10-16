@@ -62,6 +62,7 @@ import { cn } from "@/lib/utils";
 import { DeviceIdentityDialog } from "@/panels/drawer/DeviceIdentityDialog";
 import { PortTableDialog } from "@/panels/drawer/PortTableDialog";
 import { matchesDeviceSearch } from "@/devices/search";
+import { ImportReviews } from "@/sites/ImportReviews";
 import { INTEGRATION_LABELS } from "@/sites/integrations";
 import { SiteSwitcher } from "@/sites/SiteSwitcher";
 import { siteSearch, useCurrentSite } from "@/sites/useCurrentSite";
@@ -177,6 +178,8 @@ function SiteInventory({ site }: { site: SiteSummary }) {
           </Button>
         ) : null}
       </header>
+
+      {canEdit ? <ImportReviews siteId={site.id} /> : null}
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="relative flex-1">
