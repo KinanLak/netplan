@@ -72,6 +72,22 @@ export const netboxSettings = v.object({
   ),
 });
 
+/** `ImportedPort` from `src/sites/netboxImport.ts`. */
+export const importedPort = v.object({
+  deviceExternalId: v.string(),
+  externalId: v.string(),
+  kind: v.union(v.literal("interface"), v.literal("front"), v.literal("rear")),
+  name: v.string(),
+  rearExternalId: v.optional(v.string()),
+});
+
+/** `ImportedCable` from `src/sites/netboxImport.ts`. */
+export const importedCable = v.object({
+  externalId: v.string(),
+  a: v.string(),
+  b: v.string(),
+});
+
 /** `ImportedDevice` from `src/sites/netboxImport.ts`. */
 export const importedDevice = v.object({
   externalId: v.string(),

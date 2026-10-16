@@ -4,6 +4,8 @@
 // imports only.
 import { MAX_MACS_PER_DEVICE } from "../devices/identity";
 import { normalizeMac } from "../devices/mac";
+import { MAX_PORTS_PER_DEVICE, PORT_NAME_MAX_LENGTH } from "../devices/ports";
+import type { PortKind } from "../types/map";
 import type {
   NetBoxRoleMapping,
   NetBoxRoleType,
@@ -345,3 +347,158 @@ export const sameImport = (a: NetBoxSettings, b: NetBoxSettings) => {
       .join(",");
   return a.site?.id === b.site?.id && roles(a) === roles(b);
 };
+
+/** A port of an imported device; its external id names its NetBox kind. */
+export type ImportedPort = {
+  deviceExternalId: string;
+  externalId: string;
+  kind: PortKind;
+  name: string;
+  /** For a front port, the rear port it passes through to. */
+  rearExternalId?: string;
+};
+
+export type ImportedCable = { externalId: string; a: string; b: string };
+
+const PORT_TYPES: Record<string, string | undefined> = {
+  "dcim.interface": "interface",
+  "dcim.frontport": "front-port",
+  "dcim.rearport": "rear-port",
+};
+
+const portExternalId = (prefix: string, id: unknown) =>
+  typeof id === "number" ? `${prefix}:${id}` : undefined;
+
+/** The rear port a front port maps to, before and after NetBox 4.5. */
+const rearOf = (item: Raw): string | undefined => {
+  if (Array.isArray(item.rear_ports)) {
+    const [first] = item.rear_ports as Array<unknown>;
+    return isObject(first)
+      ? portExternalId("rear-port", first.rear_port)
+      : undefined;
+  }
+  return portExternalId("rear-port", idOf(item.rear_port));
+};
+
+/**
+ * The ports of the imported devices, interfaces first, and the cables that
+ * join two of them end to end. A cable with several terminations at one end
+ * (a breakout) has no place in Netplan's one-cable-per-port model and is left
+ * out, as is a second cable on a port.
+ */
+export function readNetBoxCabling(
+  devices: ReadonlyArray<ImportedDevice>,
+  lists: {
+    interfaces: ReadonlyArray<Raw>;
+    frontPorts: ReadonlyArray<Raw>;
+    rearPorts: ReadonlyArray<Raw>;
+    cables: ReadonlyArray<Raw>;
+  },
+): { ports: Array<ImportedPort>; cables: Array<ImportedCable> } {
+  const imported = new Set(devices.map((device) => device.externalId));
+  const ports: Array<ImportedPort> = [];
+  const perDevice = new Map<string, number>();
+  const read = (
+    items: ReadonlyArray<Raw>,
+    prefix: string,
+    kind: PortKind,
+    rear?: (item: Raw) => string | undefined,
+  ) => {
+    for (const item of items) {
+      const deviceId = idOf(item.device);
+      const externalId = portExternalId(prefix, item.id);
+      const name = text(item.name);
+      if (deviceId === undefined || !externalId || !name) continue;
+      const deviceExternalId = String(deviceId);
+      const count = perDevice.get(deviceExternalId) ?? 0;
+      if (!imported.has(deviceExternalId) || count >= MAX_PORTS_PER_DEVICE) {
+        continue;
+      }
+      perDevice.set(deviceExternalId, count + 1);
+      ports.push({
+        deviceExternalId,
+        externalId,
+        kind,
+        name: name.slice(0, PORT_NAME_MAX_LENGTH),
+        rearExternalId: rear?.(item),
+      });
+    }
+  };
+  read(lists.interfaces, "interface", "interface");
+  read(lists.rearPorts, "rear-port", "rear");
+  read(lists.frontPorts, "front-port", "front", rearOf);
+
+  const known = new Set(ports.map((port) => port.externalId));
+  const end = (terminations: unknown): string | undefined => {
+    if (!Array.isArray(terminations) || terminations.length !== 1) return;
+    const [only] = terminations as Array<unknown>;
+    if (!isObject(only) || typeof only.object_type !== "string") return;
+    const prefix = PORT_TYPES[only.object_type];
+    const id = prefix && portExternalId(prefix, only.object_id);
+    return id && known.has(id) ? id : undefined;
+  };
+  const cabled = new Set<string>();
+  const cables = lists.cables.flatMap((item): Array<ImportedCable> => {
+    const a = end(item.a_terminations);
+    const b = end(item.b_terminations);
+    if (typeof item.id !== "number" || !a || !b || a === b) return [];
+    if (cabled.has(a) || cabled.has(b)) return [];
+    cabled.add(a);
+    cabled.add(b);
+    return [{ externalId: String(item.id), a, b }];
+  });
+  return { ports, cables };
+}
+
+/** A port a device already has, as the reconciliation sees it. */
+export type ExistingPort = {
+  id: string;
+  name: string;
+  kind: PortKind;
+  /** Its NetBox port, `null` for a manual port. */
+  netboxId: string | null;
+};
+
+/**
+ * How a device's ports become NetBox's: a port keeps its id when it already
+ * came from that NetBox port or, on a manual device NetBox now owns, when
+ * its kind and name match, so the cables plugged into it stay. Other ports go
+ * with their cables.
+ */
+export function planDevicePorts(
+  deviceId: string,
+  existing: ReadonlyArray<ExistingPort>,
+  wanted: ReadonlyArray<ImportedPort>,
+): {
+  ports: Array<{ id: string; port: ImportedPort; order: number }>;
+  remove: Array<string>;
+} {
+  const bySource = new Map(
+    existing.flatMap((port) =>
+      port.netboxId ? [[port.netboxId, port.id] as const] : [],
+    ),
+  );
+  const nameKey = (kind: PortKind, name: string) =>
+    `${kind}:${name.trim().toLowerCase()}`;
+  const manual = new Map<string, string>();
+  for (const port of existing) {
+    const key = nameKey(port.kind, port.name);
+    if (port.netboxId === null && !manual.has(key)) manual.set(key, port.id);
+  }
+  const used = new Set<string>();
+  const ports = wanted.map((port, index) => {
+    const key = nameKey(port.kind, port.name);
+    const matched = bySource.get(port.externalId) ?? manual.get(key);
+    const id =
+      matched && !used.has(matched)
+        ? matched
+        : `port:${deviceId}:nb:${port.externalId}`;
+    used.add(id);
+    // Netplan numbers its own ports from 1.
+    return { id, port, order: index + 1 };
+  });
+  return {
+    ports,
+    remove: existing.map((port) => port.id).filter((id) => !used.has(id)),
+  };
+}
