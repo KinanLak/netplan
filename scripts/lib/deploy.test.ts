@@ -120,7 +120,7 @@ test("compose runs the backend and dashboard dev:agent runs", async () => {
   const tag = CONVEX_BACKEND_IMAGE.split(":").at(-1);
   expect(field(services["convex-backend"], "image")).toBe(CONVEX_BACKEND_IMAGE);
   expect(field(services["convex-dashboard"], "image")).toBe(
-    `ghcr.io/get-convex/convex-dashboard:${tag}`,
+    `ghcr.io/convex/convex-dashboard:${tag}`,
   );
 });
 
