@@ -23,7 +23,9 @@ import { DEFAULT_DEVICE_SIZES } from "../src/devices/deviceSizes";
 import { EMPTY_LIBRENMS_SETTINGS, polledSwitches } from "../src/sites/librenms";
 import { spotNextToSocket } from "../src/sites/socketPlacement";
 import {
+  adoptedPorts,
   edgeSightings,
+  ethernetNames,
   portPresence,
   freshFdb,
   freshSwitches,
@@ -384,6 +386,82 @@ export const placeNextTo = async (
 };
 
 /**
+ * The site's cycle while `cycleId` still runs it against LibreNMS at
+ * `baseUrl`. When LibreNMS was removed or moved while it was read, its
+ * release already settled what the read would write, which must not come
+ * back.
+ */
+const heldCycle = async (
+  ctx: QueryCtx,
+  siteId: string,
+  cycleId: string,
+  baseUrl: string,
+) => {
+  const cycle = await cycleOf(ctx, siteId);
+  if (cycle?.running?.cycleId !== cycleId) return null;
+  const integration = await ctx.db
+    .query("integrations")
+    .withIndex("by_site_kind", (q) =>
+      q.eq("siteId", siteId).eq("kind", "librenms"),
+    )
+    .unique();
+  return integration?.baseUrl === baseUrl ? cycle : null;
+};
+
+/**
+ * Gives a switch whose ports still carry their default names LibreNMS's
+ * (`adoptedPorts`); whether its ports changed.
+ */
+export const adoptPortNames = internalMutation({
+  args: {
+    siteId: v.string(),
+    cycleId: v.string(),
+    baseUrl: v.string(),
+    switchId: v.string(),
+    names: v.array(v.string()),
+  },
+  returns: v.boolean(),
+  handler: async (ctx, { siteId, cycleId, baseUrl, switchId, names }) => {
+    if (!(await heldCycle(ctx, siteId, cycleId, baseUrl))) return false;
+    const device = await deviceOf(ctx, switchId);
+    if (device?.siteId !== siteId || device.type !== "switch") return false;
+    const rows = await portRowsOf(ctx, switchId);
+    const own = await Promise.all(
+      rows.map(async (row) => ({
+        id: row.objectId,
+        name: row.name,
+        kind: row.kind,
+        order: row.order,
+        cabled: (await cableRowAt(ctx, row.objectId)) !== null,
+        sourced: row.source !== undefined,
+      })),
+    );
+    const plan = adoptedPorts(switchId, own, names);
+    if (!plan) return false;
+    const rowOf = new Map(rows.map((row) => [row.objectId, row]));
+    for (const { id, name } of plan.rename) {
+      const row = rowOf.get(id);
+      if (row) await ctx.db.patch(row._id, { name });
+    }
+    for (const id of plan.remove) {
+      const row = rowOf.get(id);
+      if (row) await ctx.db.delete(row._id);
+    }
+    for (const { id, name, order } of plan.add) {
+      await ctx.db.insert("ports", {
+        objectId: id,
+        siteId,
+        deviceId: switchId,
+        name,
+        kind: "interface",
+        order,
+      });
+    }
+    return plan.rename.length + plan.add.length + plan.remove.length > 0;
+  },
+});
+
+/**
  * Records a cycle's sightings. A MAC not seen counts a miss when its switch
  * was read, so a LibreNMS that fails does not take devices offline, and a
  * status rests only on switches read recently enough (ADR 0025); a MAC no
@@ -440,17 +518,8 @@ export const recordSightings = internalMutation({
       tables,
     },
   ) => {
-    const cycle = await cycleOf(ctx, siteId);
-    if (cycle?.running?.cycleId !== cycleId) return null;
-    // LibreNMS was removed or moved while it was read: its release already
-    // settled the statuses, which this read must not bring back.
-    const integration = await ctx.db
-      .query("integrations")
-      .withIndex("by_site_kind", (q) =>
-        q.eq("siteId", siteId).eq("kind", "librenms"),
-      )
-      .unique();
-    if (integration?.baseUrl !== baseUrl) return null;
+    const cycle = await heldCycle(ctx, siteId, cycleId, baseUrl);
+    if (!cycle) return null;
 
     const site = await ctx.db
       .query("sites")
@@ -766,7 +835,7 @@ export const collectFromLibreNMS = async (
     const [state, portList, fdbList] = await Promise.all([
       read(`/api/v0/devices/${device.id}`),
       read(
-        `/api/v0/devices/${device.id}/ports?columns=port_id,ifName,ifDescr,ifOperStatus`,
+        `/api/v0/devices/${device.id}/ports?columns=port_id,ifIndex,ifName,ifDescr,ifType,ifOperStatus`,
       ),
       read(`/api/v0/devices/${device.id}/fdb`),
     ]);
@@ -782,10 +851,32 @@ export const collectFromLibreNMS = async (
     for (const switchId of device.switchIds) {
       readSwitches.push({ switchId, ...(status && { status }) });
     }
-    const own = await ctx.runQuery(internal.librenmsCycle.switchPorts, {
-      switchIds: device.switchIds,
+    const { switchIds } = device;
+    let own = await ctx.runQuery(internal.librenmsCycle.switchPorts, {
+      switchIds,
     });
     const librenmsPorts = readLibreNMSPorts(portList.body);
+    const names = ethernetNames(librenmsPorts);
+    // A LibreNMS device standing for several switches does not say which of
+    // its ports is whose.
+    const sole = switchIds.length === 1 ? switchIds[0] : undefined;
+    if (
+      sole !== undefined &&
+      names.length > 0 &&
+      own.length > 0 &&
+      own.every(({ name }) => /^\d+$/.test(name)) &&
+      (await ctx.runMutation(internal.librenmsCycle.adoptPortNames, {
+        siteId,
+        cycleId,
+        baseUrl,
+        switchId: sole,
+        names,
+      }))
+    ) {
+      own = await ctx.runQuery(internal.librenmsCycle.switchPorts, {
+        switchIds,
+      });
+    }
     const linkOf = new Map(librenmsPorts.map(({ id, link }) => [id, link]));
     // LibreNMS numbers ports across all its devices, so the maps merge.
     for (const [portId, ownId] of matchPorts(librenmsPorts, own)) {

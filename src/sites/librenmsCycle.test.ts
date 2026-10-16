@@ -1,6 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import {
+  adoptedPorts,
   edgeSightings,
+  ethernetNames,
   portPresence,
   freshFdb,
   isOnline,
@@ -13,7 +15,7 @@ import {
   sightingSummary,
   socketMoves,
 } from "./librenmsCycle";
-import type { SwitchPort } from "./librenmsCycle";
+import type { OwnPort, SwitchPort } from "./librenmsCycle";
 
 describe("reading LibreNMS", () => {
   it("reads ports, forwarding entries and discovery times, ids as text too", () => {
@@ -22,18 +24,31 @@ describe("reading LibreNMS", () => {
         ports: [
           {
             port_id: 5,
+            ifIndex: "10101",
             ifName: "Gi1/0/1",
             ifDescr: "GigabitEthernet1/0/1",
+            ifType: "ethernetCsmacd",
             ifOperStatus: "up",
           },
-          { port_id: "6", ifName: "", ifDescr: "Vlan10" },
+          {
+            port_id: "6",
+            ifIndex: 10,
+            ifName: "",
+            ifDescr: "Vlan10",
+            ifType: "l3ipvlan",
+          },
           { port_id: 7, ifName: "Gi1/0/2", ifOperStatus: "lowerLayerDown" },
           { port_id: 8, ifName: "Gi1/0/3", ifOperStatus: "unknown" },
           { ifName: "no-id" },
         ],
       }),
     ).toEqual([
-      { id: 5, names: ["Gi1/0/1", "GigabitEthernet1/0/1"], link: "up" },
+      {
+        id: 5,
+        names: ["Gi1/0/1", "GigabitEthernet1/0/1"],
+        link: "up",
+        ethernetIndex: 10101,
+      },
       { id: 6, names: ["Vlan10"] },
       { id: 7, names: ["Gi1/0/2"], link: "down" },
       { id: 8, names: ["Gi1/0/3"] },
@@ -184,6 +199,71 @@ describe("matchPorts", () => {
         stack,
       ).size,
     ).toBe(0);
+  });
+});
+
+describe("adopting LibreNMS's port names", () => {
+  it("takes the Ethernet ports' names, by interface index", () => {
+    expect(
+      ethernetNames([
+        { id: 1, names: ["Gi1/0/2", "GigabitEthernet1/0/2"], ethernetIndex: 2 },
+        { id: 2, names: ["Vl1"] },
+        { id: 3, names: [" Gi1/0/1 "], ethernetIndex: 1 },
+        { id: 4, names: [], ethernetIndex: 3 },
+      ]),
+    ).toEqual(["Gi1/0/1", "Gi1/0/2"]);
+  });
+
+  const defaults = (count: number, cabled: Array<number> = []) =>
+    Array.from({ length: count }, (_, i): OwnPort => ({
+      id: `port:sw:interface:${i + 1}`,
+      name: String(i + 1),
+      kind: "interface",
+      order: i + 1,
+      cabled: cabled.includes(i + 1),
+      sourced: false,
+    }));
+
+  it("renames ports by position and drops the uncabled ones LibreNMS lacks", () => {
+    expect(adoptedPorts("sw", defaults(4, [4]), ["Gi1", "Gi2"])).toEqual({
+      rename: [
+        { id: "port:sw:interface:1", name: "Gi1" },
+        { id: "port:sw:interface:2", name: "Gi2" },
+      ],
+      add: [],
+      remove: ["port:sw:interface:3"],
+    });
+  });
+
+  it("adds the ports LibreNMS has beyond, with ids no port has", () => {
+    const [first, second] = defaults(2);
+    const own = [first, { ...second, id: "port:sw:interface:3" }];
+    expect(adoptedPorts("sw", own, ["a", "b", "c"])).toEqual({
+      rename: [
+        { id: "port:sw:interface:1", name: "a" },
+        { id: "port:sw:interface:3", name: "b" },
+      ],
+      add: [{ id: "port:sw:interface:4", name: "c", order: 3 }],
+      remove: [],
+    });
+  });
+
+  it("leaves ports a person or a source named", () => {
+    const [first, ...rest] = defaults(3);
+    expect(
+      adoptedPorts("sw", [{ ...first, name: "uplink" }, ...rest], ["a"]),
+    ).toBeNull();
+    expect(
+      adoptedPorts("sw", [{ ...first, sourced: true }, ...rest], ["a"]),
+    ).toBeNull();
+    expect(adoptedPorts("sw", defaults(3).slice(1), ["a"])).toBeNull();
+  });
+
+  it("adopts nothing LibreNMS cannot name each port with once", () => {
+    expect(adoptedPorts("sw", defaults(2), [])).toBeNull();
+    expect(adoptedPorts("sw", defaults(2), ["Gi1", "gi1"])).toBeNull();
+    expect(adoptedPorts("sw", defaults(2), ["x".repeat(65)])).toBeNull();
+    expect(adoptedPorts("sw", [], ["a"])).toBeNull();
   });
 });
 

@@ -99,7 +99,9 @@ report(
 const readSwitch = async (id: number) => {
   const [device, ports, fdb] = await Promise.all([
     read(`/api/v0/devices/${id}`),
-    read(`/api/v0/devices/${id}/ports?columns=port_id,ifName,ifDescr`),
+    read(
+      `/api/v0/devices/${id}/ports?columns=port_id,ifIndex,ifName,ifDescr,ifType,ifOperStatus`,
+    ),
     read(`/api/v0/devices/${id}/fdb`),
   ]);
   const failures = [
