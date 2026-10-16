@@ -25,7 +25,6 @@ import { nextRunAt, retryAt } from "../src/sites/cadence";
 import { INTEGRATION_KINDS } from "../src/sites/integrations";
 import type { IntegrationKind } from "../src/sites/integrations";
 
-// Longer than a cycle can take: an action stops after ten minutes.
 /** Ends the cycle if it still holds this lease once it runs out. */
 const scheduleExpiry = async (
   ctx: MutationCtx,
