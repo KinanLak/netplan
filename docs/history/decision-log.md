@@ -1668,3 +1668,119 @@ Questions of 2026-10-15 and 16.
   - the real-validation script (#56), then this closing docs change.
 - Why: each step landed something a person can use and verify, and reviews stayed small enough to settle in one or two rounds.
 - Who: agent (judgement call)
+
+### L4 — Experience
+
+Questions of 2026-10-16, in the order they came up.
+
+#### Who may press "Actualiser"?
+
+- Context: L2 shipped `collection.refresh` as an Éditeur mutation but the button only in the admin; the brief asks the lot to decide from the product direction.
+- Decision: Éditeur and Admin see and press "Actualiser" on the map and in the inventory; a Lecteur sees freshness only.
+- Why: the lot 1 journal already split roles as reads → Lecteur, map edits and manual refresh → Éditeur; the server rule exists, only the button was missing.
+- Who: agent (follows the lot 1 journal)
+
+#### When is a site's data "late"?
+
+- Context: the 2026-07 plan used fixed thresholds (10 min by day, 75 min otherwise); cadences are now per site (ADR 0010).
+- Decision: data is as fresh as the start of the last cycle where every source answered; it is late once two scheduled cycles have passed since then (computed from the site's cadence), or after two failed cycles in a row.
+- Why: a fixed threshold would be wrong for any site whose cadence differs from the default; "two missed cycles" is the same rule at every cadence and matches the old numbers at the default one.
+- Who: agent (judgement call)
+
+#### What does "Prochaine collecte" say once its date has passed?
+
+- Context: the admin showed the stored `nextRunAt`, which stays in the past while automatic cycles are off, collection is paused or the site has no integration, and for up to a minute before the cron picks it up.
+- Decision: "imminente" for two minutes after the due date, then "en attente"; when cycles are off, paused or without integration, that state replaces the date.
+- Why: a past date reads as a bug; each state that causes it has a name the user can act on.
+- Who: agent (obvious)
+
+#### Does a manual refresh ask for confirmation when the last cycle is recent?
+
+- Context: the 2026-07 plan asked for one under two minutes.
+- Decision: no confirmation; the button is disabled while a cycle runs.
+- Why: the server refuses overlapping cycles and throttles LibreNMS discoveries to one per five minutes (ADR 0023), so a second press cannot load the switches.
+- Who: agent (judgement call)
+
+#### Where do toasts go, and how is React Scan kept off them?
+
+- Context: each page mounted its own `<Toaster/>` (the admin none), bottom-right, where React Scan's toolbar sits in development and the map's status card sits always.
+- Decision: one toaster in the authenticated layout, bottom-centre; map-operation rejections become error toasts instead of a card.
+- Why: React Scan's toolbar is draggable and snaps to a corner, so no corner is safe; bottom-centre is free on every page.
+- Who: agent (judgement call)
+
+#### In which language do map operations reject?
+
+- Context: the server rejected map operations with English sentences that the client translated by substring, falling back to "Action refusee: <English>".
+- Decision: the server's rejections are French sentences, like every `ConvexError`; the client shows them as they are.
+- Why: one source of wording; the translation table silently missed most messages.
+- Who: agent (obvious, ADR 0016)
+
+#### How is an unknown MAC ignored durably?
+
+- Context: L2 left unknown MACs without a way to dismiss a phone or a visitor's laptop.
+- Decision: an `ignoredMacs` row per site and MAC, written and removed by inverse Éditeur mutations with an "Annuler" toast; an ignored list restores one; the server refuses a MAC a device carries and treats repeats as no-ops.
+- Why: sightings are deleted after misses, so the fact must outlive them; inventory edits already undo through inverse mutations (L2).
+- Who: agent (follows ADR 0022)
+
+#### What replaces the development "Create default map" and "Clear map" buttons?
+
+- Context: they showed, in English, to any Éditeur of a site without buildings; "Clear map" deleted every manual device of the site.
+- Decision: delete both mutations; Éditeurs create a building with its first floor, add floors, and remove only empty ones.
+- Why: the seed already fills local instances; a one-click wipe of a site is not an Éditeur action.
+- Who: agent (judgement call)
+
+#### Who ignored a MAC, and does the LibreNMS step still count it?
+
+- Context: the ignored list shows who ignored each MAC; user names live in the better-auth component, and the LibreNMS step reports "N inconnues".
+- Decision: store the user id and the name at the time (as presences do); the LibreNMS step no longer counts ignored MACs as unknown.
+- Why: the list reads without joining the auth tables, and the step's count must match the list an Éditeur sees.
+- Who: agent (judgement call)
+
+#### Where do offline devices show, and how many?
+
+- Context: the scope asks for an offline devices section; the map's sidebar is the one place every role sees, and a site can have dozens of offline PCs after a power cut.
+- Decision: a "Hors ligne (n)" group in the map's sidebar, at most eight entries, each opening the device on its floor; the rest through a link to the inventory pre-filtered by `?status=down`, which also gains a status column and filter. Unplaced offline devices are listed, disabled, as "Hors plan". The group is hidden when nothing is offline.
+- Why: the sidebar must stay a navigation aid, not a report; the inventory already handles long lists, and a URL filter makes the link shareable.
+- Who: agent (judgement call)
+
+#### When is a floor empty enough to remove?
+
+- Context: removing a floor or a building must never take a drawing with it, but presences and revisions only describe the floor.
+- Decision: a floor is empty when no device, wall or calque stands on it; removal deletes its presences and revision with it (operation receipts stay, keyed by operation, so a retry still finds its answer); a building is removed only when all its floors are empty. The refusal names what remains, floor by floor.
+- Why: the removal stays outside undo, so it must lose nothing a user drew; the cleanup leaves no orphan.
+- Who: agent (judgement call)
+
+#### What makes a building or floor name valid?
+
+- Context: names were free text; two "Rez-de-chaussée" in one building cannot be told apart in the sidebar.
+- Decision: trimmed, inner spaces collapsed, 1 to 60 characters, and unique among siblings ignoring case and accents (French collator); the server checks it, the dialog repeats the check and shows the server's refusal inline.
+- Why: the sidebar and the offline list identify a floor by name only.
+- Who: agent (judgement call)
+
+#### Where do building and floor actions live, and are they undoable?
+
+- Context: the map's undo history covers `MapOperation`s on one floor's document; a building has no document.
+- Decision: the actions sit in the sidebar behind edit mode (a "+" on the Bâtiments header, a menu per building and floor), plus the empty-state button; edit mode can be entered without a floor. They are plain Éditeur mutations outside undo; removal asks for confirmation instead.
+- Why: edit mode already marks "I am changing the plan" and hides controls from Lecteurs; a cross-floor undo entry would need a site-level history that does not exist.
+- Who: agent (judgement call)
+
+#### How does the inventory show what is left to draw?
+
+- Context: ADR 0026 asks for per-type placed/total counts that filter to the unplaced devices, and an inventory empty state that offers creation.
+- Decision: one card per device type the site has, in registry order, with placed/total, a bar and "N hors plan". A click shows that type's unplaced devices, clearing search and status so nothing hides them; a second click resets. Fully placed types are disabled. A type select joins the filters so the card's filter has a visible way out. An empty inventory replaces the table with a message; Éditeurs get its "Nouvel équipement" button (the header one is hidden then), Lecteurs learn who can create.
+- Why: the count is only useful if the click lands on exactly what is left to place; a hidden type filter with no control would be a way in without a way out.
+- Who: agent (judgement call)
+
+#### How does the admin health page show each polled switch's result?
+
+- Context: ADR 0026 asks for each polled switch's result in the last LibreNMS read, kept as structured data next to the step's message; until now the per-switch outcome lived only inside the message text.
+- Decision: a LibreNMS cycle step gains an optional `switches` list (name, ok, notes), while its message keeps naming the failing switches for the site page's "Collecte" section. The health page lists the polled switches failures first, open when one failed and folded otherwise. "Santé" is the first admin section, so `/admin` lands on it. Switch counts by status hide zeros so a red dot only appears for a real offline switch.
+- Why: the site page reads only the message and must stay readable alone; a structured list lets the admin page sort and fold without parsing French text.
+- Who: agent (judgement call)
+
+#### How was the lot split?
+
+- Context: ADR 0019 asks for one concern per pull request, each green on its own.
+- Decision: eight pull requests: one toaster and French map-operation refusals (#59); freshness and "Actualiser" for everyone who may (#61); ignored MACs (#63); the offline group and status filter (#64); building and floor management with the empty states (#66); the coverage view (#68); the admin health page (#70); then this closing docs change.
+- Why: each landed something a user can see and verify alone, so each review stayed within one or two rounds.
+- Who: agent (judgement call)
