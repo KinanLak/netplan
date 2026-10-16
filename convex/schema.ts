@@ -15,6 +15,7 @@ import {
   connectionCheck,
   cycleRun,
   encryptedSecret,
+  fdbTable,
   importedDevice,
   integrationKind,
   librenmsSettings,
@@ -63,12 +64,9 @@ export default defineSchema({
     netboxImportedAt: v.optional(v.number()),
     /** LibreNMS is asked to rediscover at most every 5 minutes (ADR 0023). */
     librenmsDiscoveryAt: v.optional(v.number()),
-    /**
-     * The newest forwarding entry of each LibreNMS device at its last read,
-     * in LibreNMS's clock: a discovery that does not move it refreshed none.
-     */
+    /** What the last read of each LibreNMS device's forwarding table left. */
     librenmsTables: v.optional(
-      v.array(v.object({ deviceId: v.number(), newest: v.number() })),
+      v.array(v.object({ deviceId: v.number(), table: fdbTable })),
     ),
   }).index("by_site", ["siteId"]),
 

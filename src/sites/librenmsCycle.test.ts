@@ -80,24 +80,28 @@ describe("freshFdb", () => {
     read.fresh.map(({ portId }) => portId);
 
   it("keeps what the latest discovery refreshed", () => {
-    const first = freshFdb(table, { newest: undefined, discovered: true });
+    const first = freshFdb(table, undefined, true);
     expect(ports(first)).toEqual([1, 2]);
-    expect(first.newest).toBe(newest);
+    expect(first.table).toEqual({ newest });
     // Read again before the next discovery: the same entries.
-    expect(ports(freshFdb(table, { newest, discovered: false }))).toEqual([
-      1, 2,
-    ]);
+    expect(ports(freshFdb(table, { newest }, false))).toEqual([1, 2]);
     // Without timestamps nothing can be told apart.
     expect(
-      freshFdb([entry(1, null), entry(2, null)], {
-        newest: undefined,
-        discovered: true,
-      }).fresh,
+      freshFdb([entry(1, null), entry(2, null)], undefined, true).fresh,
     ).toHaveLength(2);
   });
 
-  it("sees nothing once a discovery refreshed nothing", () => {
-    expect(ports(freshFdb(table, { newest, discovered: true }))).toEqual([]);
+  it("sees nothing once a discovery refreshed nothing, until one does", () => {
+    const stale = freshFdb(table, { newest }, true);
+    expect(ports(stale)).toEqual([]);
+    expect(stale.table).toEqual({ newest, staleUpTo: newest });
+    // A read without a discovery remembers it.
+    expect(ports(freshFdb(table, stale.table ?? undefined, false))).toEqual([]);
+    // A later discovery refreshes one entry.
+    const refreshed = [entry(5, "2026-10-16 07:10:00"), ...table];
+    expect(ports(freshFdb(refreshed, stale.table ?? undefined, true))).toEqual([
+      5,
+    ]);
   });
 
   it("reads timestamps with or without a zone", () => {

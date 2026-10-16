@@ -395,14 +395,14 @@ describe("the LibreNMS step", () => {
 
     await discoverAgain();
     expect((await cycle(admin, siteId)).message).toContain(
-      "« pile » : la découverte n'a rafraîchi aucune entrée.",
+      "« pile » : sa dernière découverte n'a rafraîchi aucune entrée.",
     );
     expect(await statusOf(admin, "device:pc")).toBe("up");
-    await discoverAgain();
+    // The next cycle, too soon to rediscover, still trusts none of them.
     expect((await cycle(admin, siteId)).message).toContain(
       "0 MAC vue (1 passé hors ligne).",
     );
-    expect(librenms.state.discoveries).toBe(3);
+    expect(librenms.state.discoveries).toBe(2);
     expect(await statusOf(admin, "device:pc")).toBe("down");
   });
 

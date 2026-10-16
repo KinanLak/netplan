@@ -48,6 +48,12 @@ export const cycleRun = v.object({
   steps: v.array(cycleStep),
 });
 
+/** What a cycle keeps of a LibreNMS forwarding table (`FdbTable`). */
+export const fdbTable = v.object({
+  newest: v.number(),
+  staleUpTo: v.optional(v.number()),
+});
+
 export const runningCycle = v.object({
   cycleId: v.string(),
   startedAt: v.number(),

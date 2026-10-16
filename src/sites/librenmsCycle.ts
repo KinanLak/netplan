@@ -111,28 +111,40 @@ export function readLibreNMSTime(value: unknown): number | null {
 }
 
 /**
+ * What a cycle keeps of a switch's table, in LibreNMS's clock: its newest
+ * entry, and up to when a discovery proved its entries stale.
+ */
+export type FdbTable = { newest: number; staleUpTo?: number };
+
+/**
  * The entries of one switch's table that its latest discovery refreshed, and
- * the table's newest timestamp, which the next read compares with. A
- * discovery that finished without moving it refreshed nothing, so nothing in
- * the table is seen. A table without timestamps cannot be judged and is kept
- * whole.
+ * what the next read compares with. A discovery that finished without moving
+ * the newest entry refreshed nothing: every entry up to it stays unseen, in
+ * this read and the later ones, until a discovery brings newer ones. A table
+ * without timestamps cannot be judged and is kept whole.
  */
 export function freshFdb(
   entries: ReadonlyArray<FdbEntry>,
-  previous: { newest: number | undefined; discovered: boolean },
-): { fresh: Array<FdbEntry>; newest: number | null } {
+  previous: FdbTable | undefined,
+  discovered: boolean,
+): { fresh: Array<FdbEntry>; table: FdbTable | null } {
   const times = entries.flatMap(({ updatedAt }) =>
     updatedAt === null ? [] : [updatedAt],
   );
-  if (times.length === 0) return { fresh: [...entries], newest: null };
+  if (times.length === 0) return { fresh: [...entries], table: null };
   const newest = times.reduce((a, b) => Math.max(a, b));
-  if (previous.discovered && previous.newest === newest) {
-    return { fresh: [], newest };
-  }
+  const staleUpTo =
+    discovered && previous?.newest === newest ? newest : previous?.staleUpTo;
   const fresh = entries.filter(
-    ({ updatedAt }) => updatedAt !== null && updatedAt >= newest - FDB_FRESH_MS,
+    ({ updatedAt }) =>
+      updatedAt !== null &&
+      updatedAt >= newest - FDB_FRESH_MS &&
+      (staleUpTo === undefined || updatedAt > staleUpTo),
   );
-  return { fresh, newest };
+  return {
+    fresh,
+    table: { newest, ...(staleUpTo !== undefined && { staleUpTo }) },
+  };
 }
 
 /** When LibreNMS last finished discovering a device, from `/devices/:id`. */

@@ -12,6 +12,7 @@ import { cycleOf } from "./lib/cycles";
 import { pause, SOURCE_RETRY } from "./lib/httpRetry";
 import { PROBE_RETRY, sourceGet } from "./lib/integrationProbe";
 import { cableRowAt, portRowsOf, traceRows } from "./lib/ports";
+import { fdbTable } from "./siteValidators";
 import { EMPTY_LIBRENMS_SETTINGS, polledSwitches } from "../src/sites/librenms";
 import {
   edgeSightings,
@@ -24,7 +25,11 @@ import {
   readLibreNMSPorts,
   sightingSummary,
 } from "../src/sites/librenmsCycle";
-import type { FdbEntry, SwitchPort } from "../src/sites/librenmsCycle";
+import type {
+  FdbEntry,
+  FdbTable,
+  SwitchPort,
+} from "../src/sites/librenmsCycle";
 
 const DISCOVERY_EVERY_MS = 5 * 60_000;
 const DISCOVERY_WAIT_MS = 2 * 60_000;
@@ -80,7 +85,7 @@ export const cyclePlan = internalQuery({
           id: v.number(),
           name: v.string(),
           switchIds: v.array(v.string()),
-          fdbNewest: v.optional(v.number()),
+          fdbTable: v.optional(fdbTable),
         }),
       ),
     }),
@@ -105,10 +110,10 @@ export const cyclePlan = internalQuery({
         .filter((device) => device.type === "switch")
         .map((device) => device.objectId),
     );
-    const newest = new Map(
-      (cycle.librenmsTables ?? []).map((table) => [
-        table.deviceId,
-        table.newest,
+    const tables = new Map(
+      (cycle.librenmsTables ?? []).map(({ deviceId, table }) => [
+        deviceId,
+        table,
       ]),
     );
     const devices = new Map<
@@ -117,7 +122,7 @@ export const cyclePlan = internalQuery({
         id: number;
         name: string;
         switchIds: Array<string>;
-        fdbNewest?: number;
+        fdbTable?: FdbTable;
       }
     >();
     for (const { switchId, device } of polledSwitches(
@@ -127,7 +132,7 @@ export const cyclePlan = internalQuery({
       const entry = devices.get(device.id) ?? {
         ...device,
         switchIds: [],
-        ...(newest.has(device.id) && { fdbNewest: newest.get(device.id) }),
+        ...(tables.has(device.id) && { fdbTable: tables.get(device.id) }),
       };
       entry.switchIds.push(switchId);
       devices.set(device.id, entry);
@@ -212,7 +217,7 @@ export const recordSightings = internalMutation({
     baseUrl: v.string(),
     failedSwitchIds: v.array(v.string()),
     sightings: v.array(sighting),
-    tables: v.array(v.object({ deviceId: v.number(), newest: v.number() })),
+    tables: v.array(v.object({ deviceId: v.number(), table: fdbTable })),
   },
   returns: v.union(
     v.null(),
@@ -478,7 +483,7 @@ export const collectFromLibreNMS = async (
 
   const failedSwitchIds: Array<string> = [];
   const fdb: Array<FdbEntry> = [];
-  const tables: Array<{ deviceId: number; newest: number }> = [];
+  const tables: Array<{ deviceId: number; table: FdbTable }> = [];
   const matched = new Map<number, string>();
   const ports: Array<SwitchPort> = [];
   let readCount = 0;
@@ -504,14 +509,15 @@ export const collectFromLibreNMS = async (
       matched.set(portId, ownId);
     }
     const entries = readLibreNMSFdb(fdbList.body);
-    const { fresh, newest } = freshFdb(entries, {
-      newest: device.fdbNewest,
-      discovered: finished.has(device.id),
-    });
-    if (newest !== null) tables.push({ deviceId: device.id, newest });
+    const { fresh, table } = freshFdb(
+      entries,
+      device.fdbTable,
+      finished.has(device.id),
+    );
+    if (table) tables.push({ deviceId: device.id, table });
     if (entries.length > 0 && fresh.length === 0) {
       notes.push(
-        `« ${device.name} » : la découverte n'a rafraîchi aucune entrée.`,
+        `« ${device.name} » : sa dernière découverte n'a rafraîchi aucune entrée.`,
       );
     }
     fdb.push(...fresh);
