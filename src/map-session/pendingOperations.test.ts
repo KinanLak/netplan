@@ -3,6 +3,7 @@ import type { DeviceId, FloorId, OperationMeta } from "@/types/map";
 import type { MapOperation } from "@/map-engine/types";
 import {
   appendPendingOperation,
+  isPlacementPending,
   pruneAckedRevisionsInPlace,
   reconcileObservedOperationLogEntries,
   removeAckedPendingOperations,
@@ -303,5 +304,39 @@ describe("pending operation reconciliation", () => {
     expect(result.pendingEntries).toEqual([]);
     expect(result.rejectedOpIds).toEqual([active.operation.meta.opId]);
     expect(result.rejectedMessage).toBe("Device not found");
+  });
+});
+
+describe("isPlacementPending", () => {
+  const created = operation(1, floorA);
+  const device = created.kind === "device.create" ? created.device : null;
+  if (!device) throw new Error("fixture");
+  const place: MapOperation = { kind: "device.place", meta: meta(2), device };
+
+  it("holds while a placement of the device waits for the server", () => {
+    expect(isPlacementPending([], device.id)).toBe(false);
+    expect(
+      isPlacementPending([{ operation: created, floorId: floorA }], device.id),
+    ).toBe(false);
+    expect(
+      isPlacementPending([{ operation: place, floorId: floorA }], device.id),
+    ).toBe(true);
+    expect(
+      isPlacementPending(
+        [{ operation: place, floorId: floorA }],
+        "device:other" as DeviceId,
+      ),
+    ).toBe(false);
+  });
+
+  it("finds a placement inside a batch", () => {
+    const batch: MapOperation = {
+      kind: "batch",
+      meta: meta(3),
+      operations: [{ kind: "device.place", device }],
+    };
+    expect(
+      isPlacementPending([{ operation: batch, floorId: floorA }], device.id),
+    ).toBe(true);
   });
 });

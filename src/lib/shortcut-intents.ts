@@ -34,6 +34,8 @@ export type ShortcutIntentMatch = {
 
 export type ConnectionHighlightShortcutState = {
   cables: ReadonlyArray<Cable>;
+  /** The devices on the active floor, the only ones a highlight can show. */
+  devices: ReadonlyArray<{ id: DeviceId }>;
   highlightedDeviceIds: ReadonlyArray<DeviceId>;
   hoveredDeviceId: DeviceId | null;
   selectedDeviceId: DeviceId | null;
@@ -334,6 +336,7 @@ export const isPlainShortcutEvent = (event: ShortcutIntentEvent): boolean => {
 
 export const getNextConnectionHighlightIds = ({
   cables,
+  devices,
   highlightedDeviceIds,
   hoveredDeviceId,
   selectedDeviceId,
@@ -344,7 +347,12 @@ export const getNextConnectionHighlightIds = ({
     return highlightedDeviceIds.length > 0 ? [] : null;
   }
 
-  const connectedDeviceIds = cabledDeviceIds(cables, targetDeviceId);
+  // A cable may reach an unplaced device or another floor; highlighting it
+  // would leave an id the toggle can never see again.
+  const onFloor = new Set(devices.map((device) => device.id));
+  const connectedDeviceIds = cabledDeviceIds(cables, targetDeviceId).filter(
+    (id) => onFloor.has(id),
+  );
 
   if (connectedDeviceIds.length === 0) {
     return highlightedDeviceIds.length > 0 ? [] : null;

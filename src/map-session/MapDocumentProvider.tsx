@@ -67,6 +67,7 @@ import { SequentialOutbox, rejectingForbidden } from "./outbox";
 import type { OutboxState } from "./outbox";
 import {
   appendPendingOperation,
+  isPlacementPending,
   pruneAckedRevisionsInPlace,
   reconcileObservedOperationLogEntries,
   removeAckedPendingOperations,
@@ -85,7 +86,8 @@ export interface MapDocumentCommands {
   addDevices: (drafts: Array<DeviceDraft>) => Array<DeviceId>;
   updateDevicePosition: (deviceId: DeviceId, position: Position) => void;
   updateDevicePositions: (updates: Array<DevicePositionUpdate>) => void;
-  deleteDevice: (deviceId: DeviceId) => void;
+  /** False when the device cannot be deleted yet, or at all. */
+  deleteDevice: (deviceId: DeviceId) => boolean;
   /** Takes a device off the map; it stays in the site inventory. */
   unplaceDevice: (deviceId: DeviceId) => void;
   /** Puts an inventory device on the current floor; false when it cannot. */
@@ -285,6 +287,7 @@ interface SessionActionDeps {
   redoStackRef: RefObject<ReadonlyArray<SessionHistoryEntry>>;
   historyGroupRef: RefObject<PendingHistoryGroup | null>;
   outboxRef: RefObject<SequentialOutbox | null>;
+  pendingEntriesRef: RefObject<ReadonlyArray<PendingOperationEntry>>;
   setPendingEntries: Dispatch<
     SetStateAction<ReadonlyArray<PendingOperationEntry>>
   >;
@@ -307,6 +310,7 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
     redoStackRef,
     historyGroupRef,
     outboxRef,
+    pendingEntriesRef,
     setPendingEntries,
     setHistoryByFloor,
     setRejectedMessage,
@@ -441,15 +445,22 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
     });
   };
 
-  const deleteDevice = (deviceId: DeviceId) => {
-    if (!isReadyRef.current) return;
+  const deleteDevice = (deviceId: DeviceId): boolean => {
+    if (!isReadyRef.current) return false;
     const device = documentRef.current.devices.find(
       (item) => item.id === deviceId,
     );
-    if (!device || device.source) return;
+    if (!device || device.source) return false;
+    if (isPlacementPending(pendingEntriesRef.current, deviceId)) {
+      setRejectedMessage(
+        "Cet équipement vient d'être placé : réessayez dans un instant.",
+      );
+      return false;
+    }
     const meta = freshMeta();
-    if (!meta) return;
+    if (!meta) return false;
     dispatchOperation({ kind: "device.delete", meta, deviceId });
+    return true;
   };
 
   const unplaceDevice = (deviceId: DeviceId) => {
@@ -930,6 +941,7 @@ export function MapDocumentProvider({
   const ackedRevisionsRef = useRef<Map<string, number>>(new Map());
   const historyGroupRef = useRef<PendingHistoryGroup | null>(null);
   const outboxRef = useRef<SequentialOutbox | null>(null);
+  const pendingEntriesRef = useRef(pendingEntries);
 
   useLayoutEffect(() => {
     documentRef.current = document;
@@ -939,6 +951,7 @@ export function MapDocumentProvider({
     isReadyRef.current = isReady;
     activeFloorIdRef.current = activeFloorId;
     serverRevisionRef.current = serverDocument.revision;
+    pendingEntriesRef.current = pendingEntries;
     pruneAckedRevisionsInPlace(ackedRevisionsRef.current, pendingEntries);
   });
 
@@ -955,6 +968,7 @@ export function MapDocumentProvider({
       redoStackRef,
       historyGroupRef,
       outboxRef,
+      pendingEntriesRef,
       setPendingEntries,
       setHistoryByFloor,
       setRejectedMessage,

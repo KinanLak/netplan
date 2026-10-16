@@ -95,6 +95,7 @@ export default function DeviceDrawer() {
   const handleHighlightConnections = () => {
     const next = getNextConnectionHighlightIds({
       cables,
+      devices,
       highlightedDeviceIds,
       hoveredDeviceId: null,
       selectedDeviceId,
@@ -127,8 +128,7 @@ export default function DeviceDrawer() {
 
   const handleDeleteDevice = () => {
     if (!device) return;
-    deleteDevice(device.id);
-    selectDevice(null);
+    if (deleteDevice(device.id)) selectDevice(null);
   };
 
   if (!device) {
