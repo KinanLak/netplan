@@ -17,6 +17,7 @@ import {
   encryptedSecret,
   importedDevice,
   integrationKind,
+  librenmsSettings,
   netboxSettings,
   runningCycle,
   siteCadence,
@@ -44,6 +45,8 @@ export default defineSchema({
     lastCheck: v.optional(connectionCheck),
     /** NetBox only: what the site imports from it. */
     netbox: v.optional(netboxSettings),
+    /** LibreNMS only: the device each polled switch stands for. */
+    librenms: v.optional(librenmsSettings),
     updatedAt: v.number(),
   }).index("by_site_kind", ["siteId", "kind"]),
 

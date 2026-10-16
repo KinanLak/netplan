@@ -28,6 +28,7 @@ import { CollectionSection } from "@/admin/CollectionSection";
 import { adminErrorMessage } from "@/admin/errors";
 import { IntegrationsSection } from "@/admin/IntegrationsSection";
 import { NetBoxSettingsSection } from "@/admin/NetBoxSettingsSection";
+import { LibreNMSSettingsSection } from "@/admin/LibreNMSSettingsSection";
 import { TimeZoneField } from "@/admin/TimeZoneField";
 import {
   MAX_INTERVAL_MINUTES,
@@ -92,6 +93,7 @@ function SitePage() {
       <SiteSettingsForm key={site.id} site={site} />
       <IntegrationsSection siteId={site.id} />
       <NetBoxSettingsSection siteId={site.id} />
+      <LibreNMSSettingsSection siteId={site.id} />
       <CollectionSection
         siteId={site.id}
         automaticRefresh={site.automaticRefresh}

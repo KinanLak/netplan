@@ -248,8 +248,11 @@ export const store = internalMutation({
       ...(token ? { token } : {}),
       // The last check described the old connection.
       ...(changed ? { lastCheck: undefined } : {}),
-      // Another NetBox has other sites and roles under the same ids.
-      ...(existing.baseUrl !== baseUrl ? { netbox: undefined } : {}),
+      // Another NetBox has other sites and roles under the same ids, and
+      // another LibreNMS other devices.
+      ...(existing.baseUrl !== baseUrl
+        ? { netbox: undefined, librenms: undefined }
+        : {}),
       // Strictly later, even within a millisecond: a test result is recorded
       // only if no save came after the one it tested.
       updatedAt: Math.max(updatedAt, existing.updatedAt + 1),
