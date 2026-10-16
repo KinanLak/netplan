@@ -340,6 +340,13 @@ describe("the site inventory", () => {
     await createDevice(t, floorId, "device:up", "PC-Up", 0);
     await createDevice(t, floorId, "device:down-placed", "PC-10", 100);
     await createDevice(t, other.floorId, "device:elsewhere", "PC-Ailleurs", 0);
+    await t.mutation(api.devices.create, {
+      siteId,
+      deviceId: "device:down-stored",
+      type: "endpoint",
+      identity: identity("PC-9"),
+    });
+    // As a collection would write them: creation keeps no status unvouched.
     await t.run(async (ctx) => {
       for (const device of await ctx.db.query("devices").collect()) {
         if (device.objectId === "device:up") continue;
@@ -347,13 +354,6 @@ describe("the site inventory", () => {
           metadata: { ...device.metadata, status: "down" },
         });
       }
-    });
-    await t.mutation(api.devices.create, {
-      siteId,
-      deviceId: "device:down-stored",
-      type: "endpoint",
-      identity: identity("PC-9"),
-      metadata: { status: "down" },
     });
 
     expect(await t.query(api.devices.offlineForSite, { siteId })).toEqual([
