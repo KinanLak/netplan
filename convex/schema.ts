@@ -61,6 +61,8 @@ export default defineSchema({
     last: v.optional(cycleRun),
     /** NetBox changes slowly: it is imported every 15 minutes (ADR 0023). */
     netboxImportedAt: v.optional(v.number()),
+    /** LibreNMS is asked to rediscover at most every 5 minutes (ADR 0023). */
+    librenmsDiscoveryAt: v.optional(v.number()),
   }).index("by_site", ["siteId"]),
 
   buildings: defineTable({
@@ -122,6 +124,21 @@ export default defineSchema({
   })
     .index("by_site_mac", ["siteId", "mac"])
     .index("by_device", ["deviceId"]),
+
+  // Where the network last saw each MAC address of a site (ADR 0022), apart
+  // from the devices so that a cycle rewrites a device only when it comes
+  // online or goes offline. A MAC no device carries is an unknown MAC.
+  macSightings: defineTable({
+    siteId: v.string(),
+    mac: v.string(),
+    switchId: v.string(),
+    portId: v.string(),
+    /** The wall socket the port's cabling reaches, if any. */
+    socketId: v.optional(v.string()),
+    seenAt: v.number(),
+    /** Cycles in a row that read its switch without seeing it. */
+    misses: v.number(),
+  }).index("by_site_mac", ["siteId", "mac"]),
 
   walls: defineTable({
     objectId: v.string(),
