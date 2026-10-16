@@ -9,7 +9,7 @@ import { internal } from "./_generated/api";
 import { internalMutation, internalQuery } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
 import type { ActionCtx, MutationCtx, QueryCtx } from "./_generated/server";
-import { cycleOf } from "./lib/cycles";
+import { cycleOf, LEASE_MS } from "./lib/cycles";
 import { ignoredMacsOf } from "./lib/ignoredMacs";
 import { toPublicDevice } from "./mapDocument";
 import { applyMapOperation, getWallCollisionRect } from "./mapOperations";
@@ -24,12 +24,15 @@ import { spotNextToSocket } from "../src/sites/socketPlacement";
 import {
   edgeSightings,
   freshFdb,
+  freshSwitches,
   isOnline,
   matchPorts,
   MISSES_OFFLINE,
   readLastDiscovered,
+  readLibreNMSDeviceStatus,
   readLibreNMSFdb,
   readLibreNMSPorts,
+  readStaleAfterMs,
   sightingSummary,
   socketMoves,
 } from "../src/sites/librenmsCycle";
@@ -37,6 +40,7 @@ import type {
   FdbEntry,
   FdbTable,
   SwitchPort,
+  SwitchRead,
 } from "../src/sites/librenmsCycle";
 import type { FloorId } from "../src/types/map";
 
@@ -212,12 +216,80 @@ const setStatus = async (
   device: Doc<"devices">,
   status: "up" | "down" | undefined,
 ) => {
+  if (device.metadata.status === status) return;
   const { status: _previous, ...metadata } = device.metadata;
   await ctx.db.patch(device._id, {
     metadata: status === undefined ? metadata : { ...metadata, status },
     updatedAt: Date.now(),
     updatedBy: SIGHTED_BY,
   });
+};
+
+const staleAfterOf = (site: Doc<"sites">) =>
+  readStaleAfterMs(site.cadence, LEASE_MS);
+
+/**
+ * A present device's status from the MACs it was last seen with on a switch
+ * whose read still vouches for it (ADR 0025); none when there is no such MAC.
+ */
+const statusFrom = (
+  device: Doc<"devices">,
+  seenOn: (mac: string) => { misses: number; switchId: string } | undefined,
+  fresh: ReadonlySet<string>,
+): "up" | "down" | undefined => {
+  const missed = device.macs.flatMap((mac) => {
+    const seen = seenOn(mac);
+    return seen && fresh.has(seen.switchId) ? [seen.misses] : [];
+  });
+  if (missed.length === 0) return undefined;
+  return isOnline(missed) ? "up" : "down";
+};
+
+/**
+ * Removes what rests on a switch read that has grown too old (ADR 0025): the
+ * switch's status, and the status of devices last seen on it unless another
+ * switch still vouches for them. Run every minute, so it holds when LibreNMS
+ * fails, the switch is no longer polled, or cycles stop.
+ */
+export const expireStaleReads = async (
+  ctx: MutationCtx,
+  site: Doc<"sites">,
+  cycle: Doc<"siteCycles">,
+  now: number,
+) => {
+  const reads = cycle.switchReads ?? [];
+  const staleAfter = staleAfterOf(site);
+  const stale = new Set(
+    reads
+      .filter((read) => !read.expired && now - read.readAt > staleAfter)
+      .map((read) => read.switchId),
+  );
+  if (stale.size === 0) return;
+  const next = reads.map((read): SwitchRead =>
+    stale.has(read.switchId) ? { ...read, expired: true } : read,
+  );
+  await ctx.db.patch(cycle._id, { switchReads: next });
+  const fresh = freshSwitches(next, now, staleAfter);
+
+  for (const switchId of stale) {
+    const device = await deviceOf(ctx, switchId);
+    if (device) await setStatus(ctx, device, undefined);
+  }
+  const rows = await sightingRowsOf(ctx, site.objectId);
+  const rowOf = new Map(rows.map((row) => [row.mac, row]));
+  const settled = new Set<string>();
+  for (const row of rows) {
+    if (!stale.has(row.switchId) || row.ownerId === undefined) continue;
+    if (settled.has(row.ownerId)) continue;
+    settled.add(row.ownerId);
+    const owner = await deviceOf(ctx, row.ownerId);
+    if (!owner || !PRESENT_TYPES.has(owner.type)) continue;
+    await setStatus(
+      ctx,
+      owner,
+      statusFrom(owner, (mac) => rowOf.get(mac), fresh),
+    );
+  }
 };
 
 /**
@@ -298,7 +370,8 @@ export const placeNextTo = async (
 
 /**
  * Records a cycle's sightings. A MAC not seen counts a miss when its switch
- * was read, so a LibreNMS that fails does not take devices offline; a MAC no
+ * was read, so a LibreNMS that fails does not take devices offline, and a
+ * status rests only on switches read recently enough (ADR 0025); a MAC no
  * device carries is forgotten once it is offline. Every MAC's owner is looked
  * up again, so a device that dropped a MAC, or a MAC whose device was
  * deleted, is settled too. A device seen at another socket than the last
@@ -310,7 +383,13 @@ export const recordSightings = internalMutation({
     siteId: v.string(),
     cycleId: v.string(),
     baseUrl: v.string(),
-    failedSwitchIds: v.array(v.string()),
+    /** The switches read, with the status LibreNMS gives the device. */
+    readSwitches: v.array(
+      v.object({
+        switchId: v.string(),
+        status: v.optional(v.union(v.literal("up"), v.literal("down"))),
+      }),
+    ),
     sightings: v.array(sighting),
     tables: v.array(v.object({ deviceId: v.number(), table: fdbTable })),
   },
@@ -326,7 +405,7 @@ export const recordSightings = internalMutation({
   ),
   handler: async (
     ctx,
-    { siteId, cycleId, baseUrl, failedSwitchIds, sightings, tables },
+    { siteId, cycleId, baseUrl, readSwitches, sightings, tables },
   ) => {
     const cycle = await cycleOf(ctx, siteId);
     if (cycle?.running?.cycleId !== cycleId) return null;
@@ -340,7 +419,21 @@ export const recordSightings = internalMutation({
       .unique();
     if (integration?.baseUrl !== baseUrl) return null;
 
+    const site = await ctx.db
+      .query("sites")
+      .withIndex("by_object_id", (q) => q.eq("objectId", siteId))
+      .unique();
+    if (!site) return null;
+
+    const now = Date.now();
     const read = new Set(tables.map(({ deviceId }) => deviceId));
+    const readIds = new Set(readSwitches.map(({ switchId }) => switchId));
+    const reads = [
+      ...(cycle.switchReads ?? []).filter(
+        ({ switchId }) => !readIds.has(switchId),
+      ),
+      ...[...readIds].map((switchId) => ({ switchId, readAt: now })),
+    ];
     await ctx.db.patch(cycle._id, {
       librenmsTables: [
         ...(cycle.librenmsTables ?? []).filter(
@@ -348,23 +441,35 @@ export const recordSightings = internalMutation({
         ),
         ...tables,
       ],
+      switchReads: reads,
     });
+    const fresh = freshSwitches(reads, now, staleAfterOf(site));
+    for (const { switchId, status } of readSwitches) {
+      const device = await deviceOf(ctx, switchId);
+      if (device?.type === "switch") await setStatus(ctx, device, status);
+    }
 
-    const now = Date.now();
     const rows = await sightingRowsOf(ctx, siteId);
     const rowOf = new Map(rows.map((row) => [row.mac, row]));
     const sightingOf = new Map(sightings.map((one) => [one.mac, one]));
-    const failed = new Set(failedSwitchIds);
     const misses = new Map<string, number>();
     for (const row of rows) {
       // Past the offline mark a further miss changes nothing.
       const missed =
-        failed.has(row.switchId) || row.misses >= MISSES_OFFLINE
+        !readIds.has(row.switchId) || row.misses >= MISSES_OFFLINE
           ? row.misses
           : row.misses + 1;
       misses.set(row.mac, missed);
     }
     for (const { mac } of sightings) misses.set(mac, 0);
+    const seenOn = (mac: string) => {
+      const missed = misses.get(mac);
+      const switchId =
+        sightingOf.get(mac)?.switchId ?? rowOf.get(mac)?.switchId;
+      return missed === undefined || switchId === undefined
+        ? undefined
+        : { misses: missed, switchId };
+    };
 
     const owners = new Map<string, Doc<"devices">>();
     const dropped = new Set<string>();
@@ -437,28 +542,22 @@ export const recordSightings = internalMutation({
     let offline = 0;
     for (const device of owners.values()) {
       if (!PRESENT_TYPES.has(device.type)) continue;
-      const missed = device.macs.flatMap((mac) => misses.get(mac) ?? []);
-      // A device left with no MAC the network saw has no status from it any
-      // more, and no row would let a later release clear one.
-      if (missed.length === 0) {
-        if (device.metadata.status !== undefined) {
-          await setStatus(ctx, device, undefined);
-        }
-        continue;
-      }
-      const status = isOnline(missed) ? "up" : "down";
+      // A device left with no MAC a fresh read saw has no status from the
+      // network any more.
+      const status = statusFrom(device, seenOn, fresh);
       if (device.metadata.status === status) continue;
       await setStatus(ctx, device, status);
       if (status === "up") online += 1;
-      else offline += 1;
+      else if (status === "down") offline += 1;
     }
     return { seen: sightingOf.size, online, offline, placed, unknown };
   },
 });
 
 /**
- * Forgets where the network saw the site's MAC addresses, and the online
- * status it gave their devices: without LibreNMS nothing would update them.
+ * Forgets where the network saw the site's MAC addresses, and the statuses
+ * it gave their devices and switches: without LibreNMS nothing would update
+ * them.
  */
 export const releaseLibreNMS = async (ctx: MutationCtx, siteId: string) => {
   const settled = new Set<string>();
@@ -477,8 +576,16 @@ export const releaseLibreNMS = async (ctx: MutationCtx, siteId: string) => {
     await ctx.db.delete(row._id);
   }
   const cycle = await cycleOf(ctx, siteId);
-  if (cycle?.librenmsTables) {
-    await ctx.db.patch(cycle._id, { librenmsTables: undefined });
+  if (!cycle) return;
+  for (const { switchId } of cycle.switchReads ?? []) {
+    const device = await deviceOf(ctx, switchId);
+    if (device) await setStatus(ctx, device, undefined);
+  }
+  if (cycle.librenmsTables || cycle.switchReads) {
+    await ctx.db.patch(cycle._id, {
+      librenmsTables: undefined,
+      switchReads: undefined,
+    });
   }
 };
 
@@ -596,21 +703,29 @@ export const collectFromLibreNMS = async (
   }
 
   const failedSwitchIds: Array<string> = [];
+  const readSwitches: Array<{ switchId: string; status?: "up" | "down" }> = [];
   const fdb: Array<FdbEntry> = [];
   const tables: Array<{ deviceId: number; table: FdbTable }> = [];
   const matched = new Map<number, string>();
   const ports: Array<SwitchPort> = [];
   let readCount = 0;
   for (const device of plan.devices) {
-    const [portList, fdbList] = await Promise.all([
+    const [state, portList, fdbList] = await Promise.all([
+      read(`/api/v0/devices/${device.id}`),
       read(`/api/v0/devices/${device.id}/ports?columns=port_id,ifName,ifDescr`),
       read(`/api/v0/devices/${device.id}/fdb`),
     ]);
-    if (!portList.ok || !fdbList.ok) {
+    if (!state.ok || !portList.ok || !fdbList.ok) {
       failedSwitchIds.push(...device.switchIds);
-      const reason = portList.ok ? fdbList : portList;
-      if (!reason.ok) notes.push(`« ${device.name} » : ${reason.message}`);
+      const reason = [state, portList, fdbList].find(
+        (answer): answer is Extract<typeof answer, { ok: false }> => !answer.ok,
+      );
+      if (reason) notes.push(`« ${device.name} » : ${reason.message}`);
       continue;
+    }
+    const status = readLibreNMSDeviceStatus(state.body) ?? undefined;
+    for (const switchId of device.switchIds) {
+      readSwitches.push({ switchId, ...(status && { status }) });
     }
     const own = await ctx.runQuery(internal.librenmsCycle.switchPorts, {
       switchIds: device.switchIds,
@@ -643,7 +758,7 @@ export const collectFromLibreNMS = async (
     siteId,
     cycleId,
     baseUrl,
-    failedSwitchIds,
+    readSwitches,
     sightings: edgeSightings(fdb, matched, ports),
     tables,
   });

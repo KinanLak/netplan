@@ -5,6 +5,7 @@ import {
   isOnline,
   matchPorts,
   readLastDiscovered,
+  readLibreNMSDeviceStatus,
   readLibreNMSFdb,
   readLibreNMSPorts,
   readLibreNMSTime,
@@ -60,6 +61,15 @@ describe("reading LibreNMS", () => {
     expect(
       readLastDiscovered({ devices: [{ last_discovered: null }] }),
     ).toBeNull();
+  });
+
+  it("reads whether LibreNMS reaches a device, whatever the number's type", () => {
+    const of = (status: unknown) =>
+      readLibreNMSDeviceStatus({ devices: [{ device_id: 7, status }] });
+    expect([1, "1", true].map(of)).toEqual(["up", "up", "up"]);
+    expect([0, "0", false].map(of)).toEqual(["down", "down", "down"]);
+    expect([null, 2, "up"].map(of)).toEqual([null, null, null]);
+    expect(readLibreNMSDeviceStatus({ status: "ok" })).toBeNull();
   });
 });
 

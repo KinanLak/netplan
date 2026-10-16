@@ -1,4 +1,5 @@
 import type { DeviceStatus } from "@/types/map";
+import { DEVICE_STATUS_LABELS } from "@/devices/status";
 import { cn } from "@/lib/utils";
 
 interface StatusDotProps {
@@ -16,7 +17,9 @@ export function StatusDot({
     <div
       role={decorative ? undefined : "img"}
       aria-hidden={decorative ? true : undefined}
-      aria-label={decorative ? undefined : `Status: ${status}`}
+      aria-label={
+        decorative ? undefined : `Statut : ${DEVICE_STATUS_LABELS[status]}`
+      }
       className={cn(
         "h-2 w-2 rounded-full",
         status === "up" && "bg-up",

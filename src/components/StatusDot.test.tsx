@@ -10,7 +10,7 @@ describe("StatusDot", () => {
   it("exposes an accessible label by default", () => {
     render(<StatusDot status="up" />);
     const dot = screen.getByRole("img");
-    expect(dot.getAttribute("aria-label")).toBe("Status: up");
+    expect(dot.getAttribute("aria-label")).toBe("Statut : En ligne");
   });
 
   it("hides itself from assistive tech when decorative", () => {
