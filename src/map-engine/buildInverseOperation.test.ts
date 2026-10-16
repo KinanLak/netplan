@@ -83,7 +83,40 @@ describe("buildInverseOperation", () => {
       meta: move.meta,
       deviceId: original.id,
       patch: { position: { x: 0, y: 0 } },
+      expected: { position: { x: 100, y: 100 } },
     });
+  });
+
+  it("does not undo a move once the device has moved again", () => {
+    const original = device(deviceId("device:a"));
+    const snapshot = {
+      floorId,
+      revision: 0,
+      devices: [original],
+      walls: [],
+      ports: [],
+      cables: [],
+      overlay: null,
+    };
+    const move: MapOperation = {
+      kind: "device.patch",
+      meta: meta(0),
+      deviceId: original.id,
+      patch: { position: { x: 100, y: 100 } },
+    };
+    const inverse = buildInverseOperation(snapshot, move);
+    if (!inverse) throw new Error("no inverse");
+    const moved = applyOperation(snapshot, move).snapshot;
+    // The collecte, or another person, moves the device again.
+    const movedAgain = applyOperation(moved, {
+      ...move,
+      patch: { position: { x: 300, y: 0 } },
+    }).snapshot;
+
+    expect(applyOperation(moved, inverse).snapshot.devices[0]).toEqual(
+      original,
+    );
+    expect(applyOperation(movedAgain, inverse).reason).toBe("conflict");
   });
 
   it("brings a deleted device back with its ports and cables", () => {
@@ -145,7 +178,28 @@ describe("buildInverseOperation", () => {
       kind: "device.unplace",
       meta: meta(1),
       deviceId: a.id,
+      expected: { position: a.position, size: a.size },
     });
+  });
+
+  it("does not take a placed device off once it has moved", () => {
+    const { a, snapshot } = cabledPair();
+    const place: MapOperation = {
+      kind: "device.place",
+      meta: meta(1),
+      device: a,
+    };
+    const inverse = buildInverseOperation({ ...snapshot, devices: [] }, place);
+    if (!inverse) throw new Error("no inverse");
+    const moved = applyOperation(snapshot, {
+      kind: "device.patch",
+      meta: meta(2),
+      deviceId: a.id,
+      patch: { position: { x: 0, y: 300 } },
+    }).snapshot;
+
+    expect(applyOperation(snapshot, inverse).applied).toBe(true);
+    expect(applyOperation(moved, inverse).reason).toBe("conflict");
   });
 
   it("reverses batch operations in reverse order", () => {

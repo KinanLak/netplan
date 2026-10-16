@@ -10,6 +10,7 @@ import {
   overlayError,
   sameOverlay,
 } from "../src/map-engine/overlay";
+import { isAsExpected } from "../src/map-engine/devicePatch";
 import { deleteDeviceMacs } from "./lib/deviceMacs";
 import { observedMetadata, observedPort } from "./lib/statuses";
 import { syncOverlayFileReleases } from "./lib/overlayFiles";
@@ -924,12 +925,19 @@ const planCables = (
   return null;
 };
 
+/** An undo or a redo finds the device moved by someone else (ADR 0025). */
+const MOVED_SINCE =
+  "Cet équipement a été déplacé depuis, par une autre personne ou par la collecte.";
+
 const planDevicePatch = (
   state: PlanningState,
   operation: DevicePatchOperation,
 ): string | null => {
   const existing = state.devices.get(operation.deviceId);
   if (!existing) return "Cet équipement n'existe plus.";
+  if (operation.expected && !isAsExpected(existing, operation.expected)) {
+    return MOVED_SINCE;
+  }
 
   const patched: PlannedDevice = {
     ...existing,
@@ -1085,6 +1093,9 @@ const planDeviceUnplace = (
   const existing = state.devices.get(operation.deviceId);
   // A device created by the same batch has no row to keep yet.
   if (!existing?.rowId) return "Cet équipement n'existe plus.";
+  if (operation.expected && !isAsExpected(existing, operation.expected)) {
+    return MOVED_SINCE;
+  }
 
   // Its ports and cables stay with it in the inventory.
   const { floorId, position: _position, size: _size, ...device } = existing;

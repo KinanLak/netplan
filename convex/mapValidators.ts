@@ -165,6 +165,7 @@ export const mapOperation = v.union(
     meta: operationMeta,
     deviceId: v.string(),
     patch: devicePatch,
+    expected: v.optional(devicePatch),
   }),
   v.object({
     kind: v.literal("device.delete"),
@@ -180,6 +181,7 @@ export const mapOperation = v.union(
     kind: v.literal("device.unplace"),
     meta: operationMeta,
     deviceId: v.string(),
+    expected: v.optional(devicePatch),
   }),
   v.object({
     kind: v.literal("walls.add"),
@@ -218,6 +220,7 @@ export const mapOperation = v.union(
           kind: v.literal("device.patch"),
           deviceId: v.string(),
           patch: devicePatch,
+          expected: v.optional(devicePatch),
         }),
         v.object({
           kind: v.literal("device.delete"),
@@ -230,6 +233,7 @@ export const mapOperation = v.union(
         v.object({
           kind: v.literal("device.unplace"),
           deviceId: v.string(),
+          expected: v.optional(devicePatch),
         }),
         v.object({
           kind: v.literal("walls.add"),

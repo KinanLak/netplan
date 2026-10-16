@@ -1,7 +1,7 @@
 import type { MapDocumentSnapshot } from "@/types/map";
 import { cableTouches } from "@/devices/ports";
 import { applyOperation } from "./applyOperation";
-import type { BatchSubOperation, MapOperation } from "./types";
+import type { BatchSubOperation, DevicePatch, MapOperation } from "./types";
 
 /** Sub-operations of an inverse, flattening a nested batch. */
 const batchOperations = (operation: MapOperation): Array<BatchSubOperation> => {
@@ -24,15 +24,25 @@ const invertDevicePatch = (
   );
   if (!device) return null;
 
-  const patch: Extract<MapOperation, { kind: "device.patch" }>["patch"] = {};
-  if (operation.patch.position !== undefined) patch.position = device.position;
-  if (operation.patch.size !== undefined) patch.size = device.size;
+  // The inverse expects the device where the operation leaves it: anywhere
+  // else, someone has moved it since.
+  const patch: DevicePatch = {};
+  const expected: DevicePatch = {};
+  if (operation.patch.position !== undefined) {
+    patch.position = device.position;
+    expected.position = operation.patch.position;
+  }
+  if (operation.patch.size !== undefined) {
+    patch.size = device.size;
+    expected.size = operation.patch.size;
+  }
 
   return {
     kind: "device.patch",
     meta: operation.meta,
     deviceId: operation.deviceId,
     patch,
+    expected,
   };
 };
 
@@ -98,6 +108,10 @@ export function buildInverseOperation(
         kind: "device.unplace",
         meta: operation.meta,
         deviceId: operation.device.id,
+        expected: {
+          position: operation.device.position,
+          size: operation.device.size,
+        },
       };
 
     case "device.unplace": {

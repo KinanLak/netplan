@@ -5,6 +5,7 @@ import {
   defaultPorts,
   portListError,
 } from "@/devices/ports";
+import { isAsExpected } from "./devicePatch";
 import {
   applyOverlayPatch,
   isPatchBlockedByLock,
@@ -180,6 +181,9 @@ export function applyOperation(
 
       const devices = [...snapshot.devices];
       const device = devices[index];
+      if (operation.expected && !isAsExpected(device, operation.expected)) {
+        return unchanged(snapshot, "conflict");
+      }
       devices[index] = { ...device, ...operation.patch };
 
       return changed({ ...snapshot, devices });
@@ -216,6 +220,9 @@ export function applyOperation(
         (item) => item.id === operation.deviceId,
       );
       if (!device) return unchanged(snapshot, "missing-device");
+      if (operation.expected && !isAsExpected(device, operation.expected)) {
+        return unchanged(snapshot, "conflict");
+      }
       return changed(withoutDevice(snapshot, device, "keep"));
     }
 
