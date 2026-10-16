@@ -51,7 +51,31 @@ export const saveSettings = adminMutation({
     }
     const refused = netboxSettingsError(args.settings);
     if (refused) throw new ConvexError(refused);
-    await ctx.db.patch(row._id, { netbox: args.settings });
+    const { site, roles } = args.settings;
+    // The push has its own switch, which this form does not show.
+    const push = row.netbox?.push;
+    await ctx.db.patch(row._id, {
+      netbox: { site, roles, ...(push !== undefined && { push }) },
+    });
+    return null;
+  },
+});
+
+/**
+ * Turns on or off the push of observed locations to NetBox (ADR 0027). Off
+ * stops writes at once; what was written stays in NetBox.
+ */
+export const setPush = adminMutation({
+  args: { siteId: v.string(), push: v.boolean() },
+  returns: v.null(),
+  handler: async (ctx, { siteId, push }) => {
+    await requireSite(ctx, siteId);
+    const row = await netboxRow(ctx, siteId);
+    if (!row)
+      throw new ConvexError("Configurez d'abord la connexion à NetBox.");
+    await ctx.db.patch(row._id, {
+      netbox: { ...(row.netbox ?? EMPTY_NETBOX_SETTINGS), push },
+    });
     return null;
   },
 });

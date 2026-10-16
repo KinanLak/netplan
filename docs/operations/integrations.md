@@ -1,6 +1,6 @@
 ---
 title: Integrations
-description: Connecting a site to NetBox and LibreNMS, and checking that a LibreNMS gives the collection what it needs.
+description: Connecting a site to NetBox and LibreNMS, checking that a LibreNMS gives the collection what it needs, and writing observed locations back to NetBox.
 ---
 
 # Integrations
@@ -12,9 +12,10 @@ then an API token, which is stored encrypted and never shown again.
 collection; the "Collecte" section below it shows the last cycle's report,
 step by step, and when the next one runs.
 
-Both tokens only read. NetBox needs no write right. LibreNMS needs a token
-that may read devices, ports and forwarding tables and ask for a discovery:
-each cycle asks for one per polled switch, at most every five minutes.
+A NetBox token only reads, unless the site writes locations back to NetBox
+(below). LibreNMS needs a token that may read devices, ports and forwarding
+tables and ask for a discovery: each cycle asks for one per polled switch,
+at most every five minutes.
 
 ## Checking a LibreNMS before relying on it
 
@@ -81,3 +82,50 @@ After the script passes, with an admin account and one site:
 The automatic cycles then follow the site's cadence, by default every five
 minutes from 07:00 to 20:00 on weekdays in the site's time zone, and hourly
 otherwise.
+
+## Writing locations back to NetBox
+
+A site can write where the network last saw each device NetBox brought into
+five custom fields of that NetBox device (ADR 0027): `netplan_site`,
+`netplan_floor`, `netplan_socket`, `netplan_switch_port` (text) and
+`netplan_last_seen` (date and time). It is off by default and one way:
+Netplan never reads these fields back, writes nothing else, and never clears
+what it wrote.
+
+1. **Create the fields once per NetBox**, from a checkout, with a token
+   allowed to add custom fields:
+
+   ```sh
+   export NETBOX_URL=https://netbox.example.org NETBOX_TOKEN=...
+   bun scripts/netbox-custom-fields.ts --check   # only say what is missing
+   bun scripts/netbox-custom-fields.ts           # create what is missing
+   ```
+
+   It creates them on `dcim.device`, in the group "Netplan", not editable in
+   NetBox's interface, since Netplan would overwrite an edit. A field of that
+   name with another type is reported and left alone. By hand, give each
+   field the name and type above and the object type "DCIM > Device".
+
+2. **Let the site's token change devices**: in NetBox, a permission on
+   `dcim.device` with the `change` action for the token's user, or a write
+   token.
+3. **Turn it on** in **Administration › Sites › <site> › Import NetBox**:
+   "Écrire dans NetBox où le réseau voit chaque équipement".
+
+After the next cycle, **Administration › Santé** shows the site's last push
+("Envoi vers NetBox") and each device NetBox refused, with NetBox's reason
+and when it is tried again (one minute after the first refusal, doubling up
+to an hour):
+
+- **"NetBox refuse ce jeton (403)"**: the token cannot change devices
+  (step 2).
+- **"NetBox refuse ces valeurs (400)"** followed by NetBox's detail: usually
+  a field missing or of another type; `--check` says which.
+- **"Cet équipement n'existe plus dans NetBox (404)"**: the device was
+  deleted in NetBox after Netplan imported it.
+- **NetBox unreachable or failing (5xx)**: the run stops at the first such
+  answer and the next cycle's run tries again; the line shows the error.
+
+A run writes at most 100 devices; the rest follow on the next cycles. An online
+device's `netplan_last_seen` is rewritten every six hours, an offline one's
+once, with the time it was last seen.

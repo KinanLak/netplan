@@ -3,9 +3,39 @@ import { v } from "convex/values";
 import { freshnessOf, siteFreshness } from "./collection";
 import { cycleOf } from "./lib/cycles";
 import { adminQuery } from "./lib/functions";
-import { cycleRun } from "./siteValidators";
+import type { QueryCtx } from "./_generated/server";
+import { cycleRun, pushRun } from "./siteValidators";
+
+/** Failing devices the page lists; past that it says how many more. */
+const FAILING_SHOWN = 20;
 
 const byName = new Intl.Collator("fr", { numeric: true, sensitivity: "base" });
+
+const failingPushes = async (ctx: QueryCtx, siteId: string) => {
+  const rows = await ctx.db
+    .query("netboxPushes")
+    .withIndex("by_site_retry", (q) => q.eq("siteId", siteId).gt("retryAt", 0))
+    .take(FAILING_SHOWN + 1);
+  const failing = [];
+  for (const row of rows.slice(0, FAILING_SHOWN)) {
+    const device = await ctx.db
+      .query("devices")
+      .withIndex("by_object_id", (q) => q.eq("objectId", row.deviceId))
+      .unique();
+    // A device removed since: nothing will push to it again.
+    if (!device?.source || device.source.integration !== "netbox") continue;
+    failing.push({
+      deviceId: row.deviceId,
+      deviceName: device.name,
+      message: row.message ?? "",
+      failures: row.failures,
+      failingSince: row.failingSince ?? row.retryAt ?? 0,
+      retryAt: row.retryAt ?? 0,
+    });
+  }
+  failing.sort((a, b) => a.failingSince - b.failingSince);
+  return { failing, more: rows.length > FAILING_SHOWN };
+};
 
 export const overview = adminQuery({
   args: {},
@@ -19,7 +49,29 @@ export const overview = adminQuery({
       /** `null` without an enabled NetBox; `importedAt` before the first import. */
       netbox: v.union(
         v.null(),
-        v.object({ importedAt: v.union(v.null(), v.number()) }),
+        v.object({
+          importedAt: v.union(v.null(), v.number()),
+          /** `null` while the push to NetBox is off (ADR 0027). */
+          push: v.union(
+            v.null(),
+            v.object({
+              last: v.union(v.null(), pushRun),
+              /** Devices NetBox refuses, the longest failing first. */
+              failing: v.array(
+                v.object({
+                  deviceId: v.string(),
+                  deviceName: v.string(),
+                  message: v.string(),
+                  failures: v.number(),
+                  failingSince: v.number(),
+                  retryAt: v.number(),
+                }),
+              ),
+              /** Whether more devices fail than `failing` lists. */
+              more: v.boolean(),
+            }),
+          ),
+        }),
       ),
       switches: v.object({
         up: v.number(),
@@ -59,7 +111,15 @@ export const overview = adminQuery({
           freshness: await freshnessOf(ctx, site, cycle),
           last: cycle?.last ?? null,
           netbox: netbox?.enabled
-            ? { importedAt: cycle?.netboxImportedAt ?? null }
+            ? {
+                importedAt: cycle?.netboxImportedAt ?? null,
+                push: netbox.netbox?.push
+                  ? {
+                      last: cycle?.lastPush ?? null,
+                      ...(await failingPushes(ctx, siteId)),
+                    }
+                  : null,
+              }
             : null,
           switches,
         };

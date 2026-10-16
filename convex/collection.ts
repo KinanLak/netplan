@@ -12,6 +12,7 @@ import { openConnection } from "./integrations";
 import { cycleOf, isRunning, LEASE_MS } from "./lib/cycles";
 import { collectFromLibreNMS, expireStaleReads } from "./librenmsCycle";
 import { importFromNetBox } from "./netboxImport";
+import { schedulePush } from "./netboxPush";
 import { adminQuery, editorMutation, readerQuery } from "./lib/functions";
 import { SOURCE_RETRY } from "./lib/httpRetry";
 import { probeIntegration } from "./lib/integrationProbe";
@@ -236,7 +237,10 @@ export const run = internalAction({
   },
 });
 
-/** Records a cycle's outcome and plans the next one. */
+/**
+ * Records a cycle's outcome, plans the next one, and starts the push to
+ * NetBox, which sends what this cycle saw.
+ */
 export const finish = internalMutation({
   args: {
     siteId: v.string(),
@@ -265,6 +269,7 @@ export const finish = internalMutation({
       last: { startedAt, finishedAt: Date.now(), manual, steps },
       ...(ok ? { lastSuccessAt: startedAt } : {}),
     });
+    await schedulePush(ctx, siteId);
     return null;
   },
 });

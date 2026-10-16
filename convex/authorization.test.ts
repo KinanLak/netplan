@@ -61,6 +61,7 @@ const POLICY: Record<string, Role> = {
   "mapOperations:observePending": "reader",
   "netbox:options": "admin",
   "netbox:saveSettings": "admin",
+  "netbox:setPush": "admin",
   "netbox:settings": "admin",
   "presences:list": "reader",
   "presences:remove": "reader",

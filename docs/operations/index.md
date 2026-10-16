@@ -13,7 +13,8 @@ Netplan runs as a Docker Compose stack (`deploy/compose.yaml`, ADR 0020).
 - **[Backup and restore](backup.md)**: two procedures, both tested end to
   end.
 - **[Integrations](integrations.md)**: connecting a site to NetBox and
-  LibreNMS, and checking a LibreNMS before relying on it.
+  LibreNMS, checking a LibreNMS before relying on it, and writing locations
+  back to NetBox.
 - **[Monitoring](monitoring.md)**: `/health` and the containers' health
   checks.
 

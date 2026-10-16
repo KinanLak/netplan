@@ -21,7 +21,10 @@ import {
   integrationKind,
   librenmsSettings,
   netboxSettings,
+  pushedValues,
+  pushRun,
   runningCycle,
+  runningPush,
   siteCadence,
   switchRead,
 } from "./siteValidators";
@@ -77,6 +80,9 @@ export default defineSchema({
     ),
     /** When each polled switch was last read; statuses rest on it (ADR 0025). */
     switchReads: v.optional(v.array(switchRead)),
+    /** The push run to NetBox that follows a cycle (ADR 0027). */
+    pushRunning: v.optional(runningPush),
+    lastPush: v.optional(pushRun),
   }).index("by_site", ["siteId"]),
 
   buildings: defineTable({
@@ -178,6 +184,24 @@ export default defineSchema({
     .index("by_site_at", ["siteId", "at"])
     .index("by_site_kind_at", ["siteId", "kind", "at"])
     .index("by_at", ["at"]),
+
+  // What the push last sent to each NetBox device, and its failures (ADR
+  // 0027). A row whose `retryAt` is set is failing.
+  netboxPushes: defineTable({
+    siteId: v.string(),
+    deviceId: v.string(),
+    /** The NetBox device the values went to. */
+    netboxId: v.number(),
+    sent: v.optional(pushedValues),
+    sentAt: v.optional(v.number()),
+    /** Refusals in a row. */
+    failures: v.number(),
+    message: v.optional(v.string()),
+    failingSince: v.optional(v.number()),
+    retryAt: v.optional(v.number()),
+  })
+    .index("by_device", ["deviceId"])
+    .index("by_site_retry", ["siteId", "retryAt"]),
 
   // The five daily MAC snapshots of a site (ADR 0027): a slot is claimed by
   // the cycle that reads the network in its window, which then writes where

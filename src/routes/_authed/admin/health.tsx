@@ -164,6 +164,10 @@ function SiteCard({ site, now }: { site: SiteHealth; now: number }) {
       ) : null}
 
       {polled && polled.length > 0 ? <PolledSwitches polled={polled} /> : null}
+
+      {netbox?.push ? (
+        <PushHealth push={netbox.push} now={now} timezone={timezone} />
+      ) : null}
     </li>
   );
 }
@@ -227,5 +231,78 @@ function PolledSwitches({ polled }: { polled: Polled }) {
         ))}
       </ul>
     </details>
+  );
+}
+
+type Push = NonNullable<NonNullable<SiteHealth["netbox"]>["push"]>;
+
+const devices = (n: number) => `${n} ${n > 1 ? "équipements" : "équipement"}`;
+
+const describePush = (last: NonNullable<Push["last"]>) => {
+  const parts = [];
+  if (last.sent > 0) parts.push(`${devices(last.sent)} mis à jour`);
+  if (last.refused > 0) {
+    parts.push(`${last.refused} ${last.refused > 1 ? "refusés" : "refusé"}`);
+  }
+  if (last.error) parts.push(last.error);
+  return parts.length > 0 ? parts.join(", ") : "rien à mettre à jour";
+};
+
+/** The last push run to NetBox and every device NetBox still refuses. */
+function PushHealth({
+  push,
+  now,
+  timezone,
+}: {
+  push: Push;
+  now: number;
+  timezone: string;
+}) {
+  const { last, failing, more } = push;
+  const ok = !last?.error && failing.length === 0;
+  return (
+    <div className="space-y-2 text-sm">
+      <p className="flex items-baseline gap-2">
+        <Dot
+          className={cn(
+            "translate-y-[-1px]",
+            last === null ? "bg-muted-foreground" : ok ? "bg-up" : "bg-down",
+          )}
+        />
+        <span>
+          <span className="font-medium">Envoi vers NetBox</span>
+          <span className="text-muted-foreground">
+            {" "}
+            ·{" "}
+            {last === null
+              ? "aucun envoi depuis qu'il est activé"
+              : `${describeAge(last.finishedAt, now, timezone)} : ${describePush(last)}`}
+          </span>
+        </span>
+      </p>
+      {failing.length > 0 ? (
+        <ul className="divide-y rounded-lg border">
+          {failing.map((entry) => (
+            <li key={entry.deviceId} className="space-y-0.5 px-3 py-2">
+              <p className="flex items-baseline gap-2">
+                <Dot className="bg-down" />
+                <span className="font-medium">{entry.deviceName}</span>
+                <span className="text-muted-foreground">{entry.message}</span>
+              </p>
+              <p className="ps-4 text-xs text-muted-foreground">
+                En échec depuis{" "}
+                {formatSiteTime(entry.failingSince, now, timezone)}, nouvel
+                essai après {formatSiteTime(entry.retryAt, now, timezone)}
+              </p>
+            </li>
+          ))}
+          {more ? (
+            <li className="px-3 py-2 text-muted-foreground">
+              Et d'autres équipements en échec.
+            </li>
+          ) : null}
+        </ul>
+      ) : null}
+    </div>
   );
 }

@@ -1,7 +1,9 @@
 // Reads from the NetBox REST API. Lists are read page by page with offsets
 // rather than by following `next`, whose address NetBox builds from the
 // request's headers and could point the token elsewhere behind a proxy.
-import { sourceGet } from "./integrationProbe";
+import { fetchWithRetry } from "./httpRetry";
+import { authHeaders, sourceGet } from "./integrationProbe";
+import type { SourceAnswer } from "./integrationProbe";
 import type { RetryOptions } from "./httpRetry";
 
 const PAGE = 1000;
@@ -58,3 +60,88 @@ export const nameOf = (item: NetBoxObject): string =>
     : typeof item.display === "string"
       ? item.display
       : String(item.id);
+
+const DETAIL_MAX = 300;
+
+/**
+ * What NetBox said about a refused write, flattened: it answers with
+ * `detail`, or with the messages of each field it refused.
+ */
+const refusalDetail = (body: unknown): string => {
+  const messages: Array<string> = [];
+  const walk = (value: unknown) => {
+    if (typeof value === "string") messages.push(value);
+    else if (Array.isArray(value)) value.forEach(walk);
+    else if (isObject(value)) Object.values(value).forEach(walk);
+  };
+  walk(body);
+  const detail = messages.join(" ");
+  return detail.length > DETAIL_MAX
+    ? `${detail.slice(0, DETAIL_MAX - 1)}…`
+    : detail;
+};
+
+const refusal = (status: number): string => {
+  if (status === 401 || status === 403) {
+    return `NetBox refuse ce jeton (${status}) : il doit pouvoir modifier les équipements.`;
+  }
+  if (status === 404) return "Cet équipement n'existe plus dans NetBox (404).";
+  if (status === 400) return "NetBox refuse ces valeurs (400).";
+  if (status >= 300 && status < 400) {
+    return `L'adresse redirige (${status}) : saisissez l'adresse finale de NetBox.`;
+  }
+  return `NetBox a répondu ${status}.`;
+};
+
+/**
+ * One JSON `PATCH` to NetBox, with retries, or the French reason it failed:
+ * `status` is set when NetBox answered, with what it said.
+ */
+export async function netboxPatch(
+  baseUrl: string,
+  token: string,
+  path: string,
+  body: unknown,
+  retry: RetryOptions,
+): Promise<SourceAnswer> {
+  let response: Response;
+  try {
+    response = await fetchWithRetry(
+      `${baseUrl}${path}`,
+      {
+        method: "PATCH",
+        headers: {
+          ...authHeaders("netbox", token),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+        // A redirect could carry the token to another host.
+        redirect: "manual",
+      },
+      retry,
+    );
+  } catch (error) {
+    const timedOut =
+      error instanceof DOMException && error.name === "TimeoutError";
+    return {
+      ok: false,
+      message: timedOut
+        ? "NetBox ne répond pas (délai dépassé)."
+        : "NetBox est injoignable à cette adresse.",
+    };
+  }
+  let answer: unknown = null;
+  try {
+    answer = await response.json();
+  } catch {
+    // An empty or HTML body: the status says enough.
+  }
+  if (response.ok) return { ok: true, body: answer };
+  // Only a 400 says something the status does not: which field, and why.
+  const detail = response.status === 400 ? refusalDetail(answer) : "";
+  return {
+    ok: false,
+    message: [refusal(response.status), detail].filter(Boolean).join(" "),
+    status: response.status,
+  };
+}

@@ -2,7 +2,12 @@ import { useAction, useMutation, useQuery } from "convex/react";
 import { useState } from "react";
 import type { FunctionReturnType } from "convex/server";
 import { Button } from "@/components/ui/button";
-import { Field, FieldError, FieldLabel } from "@/components/ui/field";
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldLabel,
+} from "@/components/ui/field";
 import {
   Select,
   SelectContent,
@@ -13,6 +18,7 @@ import {
 import { failureMessage } from "@/lib/errors";
 import { getDeviceKindLabel } from "@/devices/deviceKindRegistry";
 import { NETBOX_ROLE_TYPES } from "@/sites/netbox";
+import { PUSH_FIELDS } from "@/sites/netboxPush";
 import type {
   NetBoxRoleType,
   NetBoxSettings,
@@ -92,7 +98,60 @@ export function NetBoxSettingsSection({ siteId }: { siteId: string }) {
           </div>
         </>
       )}
+      <PushSetting siteId={siteId} push={settings.push === true} />
     </section>
+  );
+}
+
+/** The push of observed locations to NetBox custom fields (ADR 0027). */
+function PushSetting({ siteId, push }: { siteId: string; push: boolean }) {
+  const setPush = useMutation(api.netbox.setPush);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const change = async (next: boolean) => {
+    setPending(true);
+    setError(null);
+    try {
+      await setPush({ siteId, push: next });
+    } catch (failure) {
+      setError(failureMessage(failure, "admin"));
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2 border-t pt-4">
+      <Field orientation="horizontal">
+        <input
+          id="netbox-push"
+          type="checkbox"
+          className="size-4 accent-primary"
+          checked={push}
+          disabled={pending}
+          onChange={(event) => void change(event.target.checked)}
+        />
+        <FieldLabel htmlFor="netbox-push">
+          Écrire dans NetBox où le réseau voit chaque équipement
+        </FieldLabel>
+      </Field>
+      <FieldDescription>
+        Après chaque collecte, Netplan écrit la prise, l'étage, le port de
+        switch et la dernière observation des équipements importés de NetBox
+        dans leurs champs personnalisés{" "}
+        {PUSH_FIELDS.map((field, index) => (
+          <span key={field.name}>
+            {index > 0 ? ", " : null}
+            <code className="font-mono text-xs">{field.name}</code>
+          </span>
+        ))}
+        . Ces champs doivent exister et le jeton doit pouvoir modifier les
+        équipements. Netplan n'écrit rien d'autre et n'efface jamais ce qu'il a
+        écrit.
+      </FieldDescription>
+      {error ? <FieldError>{error}</FieldError> : null}
+    </div>
   );
 }
 
