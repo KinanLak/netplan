@@ -317,15 +317,10 @@ describe("collection cycles", () => {
   });
 
   it("brings the next cycle forward for a shorter cadence, and goes with its site", async () => {
-    // Inside business hours, so that the start of a window does not come
-    // before either interval.
+    // Ten in the morning in Paris, so that the start of a window does not
+    // come before any of the intervals below.
     setSystemTime(new Date("2026-10-14T08:00:00Z"));
     const { admin, siteId } = await siteWithNetBox();
-    await admin.mutation(api.collection.refresh, { siteId });
-    await settle(admin);
-    const planned = await status(admin, siteId);
-    const startedAt = planned.last?.startedAt ?? 0;
-
     const site = await admin.query(api.sites.getSettings, { siteId });
     if (!site) throw new Error("expected the site");
     const every = (minutes: number) => ({
@@ -340,6 +335,13 @@ describe("collection cycles", () => {
         otherIntervalMinutes: minutes,
       },
     });
+    await admin.mutation(api.sites.update, every(60));
+    await admin.mutation(api.collection.refresh, { siteId });
+    await settle(admin);
+    const planned = await status(admin, siteId);
+    const startedAt = planned.last?.startedAt ?? 0;
+    expect(planned.nextRunAt).toBe(startedAt + 60 * 60_000);
+
     await admin.mutation(api.sites.update, every(5));
     expect((await status(admin, siteId)).nextRunAt).toBe(
       startedAt + 5 * 60_000,
