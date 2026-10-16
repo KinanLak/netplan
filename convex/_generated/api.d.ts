@@ -46,6 +46,7 @@ import type * as mapDocument from "../mapDocument.js";
 import type * as mapOperations from "../mapOperations.js";
 import type * as mapValidators from "../mapValidators.js";
 import type * as netbox from "../netbox.js";
+import type * as netboxImport from "../netboxImport.js";
 import type * as presences from "../presences.js";
 import type * as siteValidators from "../siteValidators.js";
 import type * as sites from "../sites.js";
@@ -97,6 +98,7 @@ declare const fullApi: ApiFromModules<{
   mapOperations: typeof mapOperations;
   mapValidators: typeof mapValidators;
   netbox: typeof netbox;
+  netboxImport: typeof netboxImport;
   presences: typeof presences;
   siteValidators: typeof siteValidators;
   sites: typeof sites;

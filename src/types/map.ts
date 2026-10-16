@@ -60,6 +60,7 @@ export interface DeviceSource {
   integration: IntegrationKind;
   externalId: string;
   url?: string;
+  /** When the source last changed what it owns, not when it was last read. */
   syncedAt: number;
 }
 

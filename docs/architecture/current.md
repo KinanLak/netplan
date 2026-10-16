@@ -8,8 +8,8 @@ description: Netplan as it stands now, partway through the rebuild.
 Netplan is a collaborative map editor for buildings: floors, walls and network
 devices (racks, switches, PCs, wall sockets) with the cables between them.
 Lot 2 is replacing the old NetBox/LibreNMS localization pipeline (deleted) with
-a site inventory and a collection cycle inside Convex (ADRs 0022 and 0023);
-until it lands, no integration runs.
+a site inventory and a collection cycle inside Convex (ADRs 0022 and 0023).
+The cycle runs and imports devices from NetBox; LibreNMS is only probed.
 
 ## Pieces
 
@@ -92,14 +92,23 @@ it, so anything clickable placed there needs `pointer-events-auto`.
 ## Sites
 
 Admins create, configure and remove sites under `/admin` (ADR 0023). A site
-holds its name, unique ignoring case, its time zone and the cadence its
-collection cycle will follow; `src/sites/settings.ts` holds the rules both the
+holds its name, unique ignoring case, its time zone and the cadence of its
+collection cycle; `src/sites/settings.ts` holds the rules both the
 form and the server apply. A site with a building cannot be removed. The map
 shows the site the `?site=` parameter names, the first one by name otherwise,
 and the sidebar switches between them. A site may connect one NetBox and one
 LibreNMS: the admin enters an address and a token, which actions encrypt with
 `NETPLAN_SECRET_KEY` before storing and no function returns, and the page tests
-the connection. Nothing collects from them yet. The
+the connection.
+
+Each site's collection cycle (`convex/collection.ts`) runs on that cadence or on
+demand, one cycle at a time per site, and records what each
+source answered. With a NetBox site and role types chosen, the cycle imports
+the devices of those roles at most every 15 minutes (always on a manual run)
+and merges them into the inventory by the rules of ADR 0022: an import is one
+mutation, discarded if the address, site or roles changed while NetBox was
+read. Bindings are to one NetBox: changing its address or removing it turns
+its devices back into manual ones. The
 plan of the deleted localization pipeline is frozen in
 [`docs/history/2026-07-computer-location-refresh/`](../history/2026-07-computer-location-refresh/README.md).
 

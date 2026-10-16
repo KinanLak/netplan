@@ -56,20 +56,30 @@ export const runningCycle = v.object({
   manual: v.boolean(),
 });
 
+const netboxRoleType = v.union(
+  v.literal("switch"),
+  v.literal("patch-panel"),
+  v.literal("wall-port"),
+  v.literal("pc"),
+  v.literal("endpoint"),
+);
+
 /** `NetBoxSettings` from `src/sites/netbox.ts`. */
 export const netboxSettings = v.object({
   site: v.union(v.null(), v.object({ id: v.number(), name: v.string() })),
   roles: v.array(
-    v.object({
-      id: v.number(),
-      name: v.string(),
-      type: v.union(
-        v.literal("switch"),
-        v.literal("patch-panel"),
-        v.literal("wall-port"),
-        v.literal("pc"),
-        v.literal("endpoint"),
-      ),
-    }),
+    v.object({ id: v.number(), name: v.string(), type: netboxRoleType }),
   ),
+});
+
+/** `ImportedDevice` from `src/sites/netboxImport.ts`. */
+export const importedDevice = v.object({
+  externalId: v.string(),
+  url: v.optional(v.string()),
+  type: netboxRoleType,
+  name: v.string(),
+  serial: v.optional(v.string()),
+  macs: v.array(v.string()),
+  model: v.optional(v.string()),
+  ip: v.optional(v.string()),
 });

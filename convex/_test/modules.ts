@@ -23,6 +23,7 @@ export const modules: Record<string, () => Promise<Record<string, any>>> = {
   "./mapOperations.ts": () => import("../mapOperations"),
   "./mapValidators.ts": () => import("../mapValidators"),
   "./netbox.ts": () => import("../netbox"),
+  "./netboxImport.ts": () => import("../netboxImport"),
   "./presences.ts": () => import("../presences"),
   "./schema.ts": () => import("../schema"),
   "./sites.ts": () => import("../sites"),

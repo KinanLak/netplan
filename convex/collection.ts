@@ -9,6 +9,7 @@ import type { Doc } from "./_generated/dataModel";
 import type { ActionCtx, MutationCtx, QueryCtx } from "./_generated/server";
 import { openConnection } from "./integrations";
 import { cycleOf, isRunning } from "./lib/cycles";
+import { importFromNetBox } from "./netboxImport";
 import { adminQuery, editorMutation } from "./lib/functions";
 import { SOURCE_RETRY } from "./lib/httpRetry";
 import { probeIntegration } from "./lib/integrationProbe";
@@ -166,6 +167,7 @@ export const claim = internalMutation({
 const collectFrom = async (
   ctx: ActionCtx,
   siteId: string,
+  cycleId: string,
   source: IntegrationKind,
 ): Promise<CycleStep> => {
   try {
@@ -179,7 +181,13 @@ const collectFrom = async (
       connection.token,
       SOURCE_RETRY,
     );
-    return { source, ...answer };
+    if (!answer.ok || source !== "netbox") return { source, ...answer };
+    const imported = await importFromNetBox(ctx, siteId, cycleId, connection);
+    return {
+      source,
+      ok: imported.ok,
+      message: [answer.message, imported.message].filter(Boolean).join(" "),
+    };
   } catch (error) {
     // The token is never part of an error the source code builds.
     console.error(`collection ${siteId} ${source}`, error);
@@ -202,7 +210,7 @@ export const run = internalAction({
     if (sources === null) return null;
     const steps: Array<CycleStep> = [];
     for (const source of sources) {
-      steps.push(await collectFrom(ctx, siteId, source));
+      steps.push(await collectFrom(ctx, siteId, cycleId, source));
     }
     await ctx.runMutation(internal.collection.finish, {
       siteId,
