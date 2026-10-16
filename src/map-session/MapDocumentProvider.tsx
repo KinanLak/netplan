@@ -1134,6 +1134,15 @@ export function MapDocumentProvider({
       : "disconnected";
   const isSaving = pendingEntries.length > 0 || outboxState.pendingCount > 0;
 
+  useEffect(() => {
+    if (!isSaving) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [isSaving]);
+
   const data = useMemo<MapDocumentData>(
     () => ({ floorId, document, serverDocument, pendingOperations }),
     [floorId, document, serverDocument, pendingOperations],
