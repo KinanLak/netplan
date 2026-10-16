@@ -23,6 +23,7 @@ import type * as devices from "../devices.js";
 import type * as floorOverlays from "../floorOverlays.js";
 import type * as floors from "../floors.js";
 import type * as http from "../http.js";
+import type * as importReviews from "../importReviews.js";
 import type * as integrations from "../integrations.js";
 import type * as lib_authRoles from "../lib/authRoles.js";
 import type * as lib_cycles from "../lib/cycles.js";
@@ -75,6 +76,7 @@ declare const fullApi: ApiFromModules<{
   floorOverlays: typeof floorOverlays;
   floors: typeof floors;
   http: typeof http;
+  importReviews: typeof importReviews;
   integrations: typeof integrations;
   "lib/authRoles": typeof lib_authRoles;
   "lib/cycles": typeof lib_cycles;

@@ -327,7 +327,7 @@ export const deleteImportReviews = async (ctx: MutationCtx, siteId: string) => {
   for (const row of rows) await ctx.db.delete(row._id);
 };
 
-const sourceFields = (
+export const sourceFields = (
   device: ImportedDevice,
   macs: Array<string>,
   syncedAt: number,
@@ -496,7 +496,7 @@ const importCables = async (
   }
 };
 
-const macRowsOf = async (ctx: MutationCtx, deviceId: string) =>
+export const macRowsOf = async (ctx: MutationCtx, deviceId: string) =>
   await ctx.db
     .query("deviceMacs")
     .withIndex("by_device", (q) => q.eq("deviceId", deviceId))
