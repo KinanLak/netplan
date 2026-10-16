@@ -4,6 +4,7 @@ import {
   Building05Icon,
   DashedLine01Icon,
   PackageIcon,
+  WorkHistoryIcon,
   RedoIcon,
   SolidLine01Icon,
   UndoIcon,
@@ -50,6 +51,7 @@ import { CollectionFreshness } from "@/sites/CollectionFreshness";
 import { OfflineDevices } from "@/sites/OfflineDevices";
 import { SiteSwitcher } from "@/sites/SiteSwitcher";
 import { useCurrentSite } from "@/sites/useCurrentSite";
+import { useCanEdit } from "@/hooks/use-current-user";
 import { api } from "../../convex/_generated/api";
 
 /**
@@ -133,6 +135,7 @@ function SidebarUndoRedo() {
 
 export default function AppSidebar() {
   const { site } = useCurrentSite();
+  const canEdit = useCanEdit();
   const buildings =
     useQuery(api.buildings.listForSite, site ? { siteId: site.id } : "skip") ??
     [];
@@ -201,6 +204,25 @@ export default function AppSidebar() {
                   Inventaire
                 </SidebarMenuButton>
               </SidebarMenuItem>
+              {canEdit ? (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    render={
+                      <Link
+                        to="/history"
+                        search={site ? { site: site.id } : {}}
+                      />
+                    }
+                  >
+                    <HugeiconsIcon
+                      icon={WorkHistoryIcon}
+                      size={16}
+                      strokeWidth={1.5}
+                    />
+                    Historique
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ) : null}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

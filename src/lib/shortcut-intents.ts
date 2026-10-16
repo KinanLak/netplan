@@ -45,6 +45,7 @@ const shortcutRoutingPriority: Array<ShortcutAction> = [
   "edit-device-identity",
   "unplace-device",
   "show-port-cables",
+  "show-device-history",
   "cancel-wall-tool",
   "toggle-device-cables",
   "escape",
@@ -234,6 +235,7 @@ const isActionAllowedByContext = (
 ): boolean => {
   switch (action) {
     case "toggle-edit-mode":
+    case "show-device-history":
       return runtime.canEdit;
     case "cancel-wall-tool":
       return runtime.isEditMode && runtime.activeDrawTool !== "device";

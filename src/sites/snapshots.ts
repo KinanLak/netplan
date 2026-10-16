@@ -64,3 +64,32 @@ export const slotAt = (timezone: string, at: number): SnapshotSlot | null => {
   }
   return null;
 };
+
+/** The site's calendar day at `at`, `YYYY-MM-DD`. */
+export const siteDay = (timezone: string, at: number): string =>
+  wallClock(timezone, at).day;
+
+/**
+ * Whether a cycle may still take the slot `time` of `day`: once its window
+ * has closed, a slot no cycle took stays empty.
+ */
+export const slotStillOpen = (
+  timezone: string,
+  day: string,
+  time: string,
+  now: number,
+): boolean => {
+  const clock = wallClock(timezone, now);
+  if (clock.day !== day) return clock.day < day;
+  return clock.minute < minuteOf(time) + LATE_MINUTES;
+};
+
+/** How long a capture may run: within its cycle's action, which stops after ten minutes. */
+export const CAPTURE_MAX_MS = 10 * 60_000;
+
+/**
+ * Whether an incomplete slot taken at `takenAt` may still be written. Past
+ * that, its capture failed and the slot stays without a snapshot.
+ */
+export const captureRunning = (takenAt: number, now: number): boolean =>
+  now - takenAt < CAPTURE_MAX_MS;

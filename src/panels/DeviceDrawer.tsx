@@ -7,6 +7,7 @@ import {
   LocationRemove01Icon,
   UserIcon,
   WasteIcon,
+  WorkHistoryIcon,
 } from "@hugeicons/core-free-icons";
 import type { DeviceId } from "@/types/map";
 import { useMapStore } from "@/store/useMapStore";
@@ -33,6 +34,12 @@ import type { ConnectedDeviceSummary } from "@/panels/drawer/DrawerConnectionsSe
 import { DrawerPortsSection } from "@/panels/drawer/DrawerPortsSection";
 import { DeviceIdentityDialog } from "@/panels/drawer/DeviceIdentityDialog";
 import { PortTableDialog } from "@/panels/drawer/PortTableDialog";
+import {
+  DeviceHistoryDialog,
+  HAS_HISTORY,
+} from "@/history/DeviceHistoryDialog";
+import { useCanEdit } from "@/hooks/use-current-user";
+import { useCurrentSite } from "@/sites/useCurrentSite";
 import { useShortcutIntentEffect } from "@/hooks/use-shortcuts";
 import { INTEGRATION_LABELS } from "@/sites/integrations";
 import { DEVICE_STATUS_LABELS } from "@/devices/status";
@@ -62,6 +69,13 @@ export default function DeviceDrawer() {
   const [cablesDeviceId, setCablesDeviceId] = useState<DeviceId | null>(null);
   useShortcutIntentEffect("show-port-cables", () =>
     setCablesDeviceId(selectedDeviceId),
+  );
+  // History is read by role, in or out of edit mode (ADR 0027).
+  const canEdit = useCanEdit();
+  const { site } = useCurrentSite();
+  const [historyDeviceId, setHistoryDeviceId] = useState<DeviceId | null>(null);
+  useShortcutIntentEffect("show-device-history", () =>
+    setHistoryDeviceId(selectedDeviceId),
   );
 
   const deviceById = new Map(devices.map((item) => [item.id, item]));
@@ -195,6 +209,25 @@ export default function DeviceDrawer() {
               ? "Masquer les câbles"
               : "Afficher les câbles"}
             <ShortcutHintInline action="toggle-device-cables" />
+          </Button>
+        ) : null}
+
+        {canEdit && HAS_HISTORY.has(device.type) ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setHistoryDeviceId(device.id)}
+            className="w-full gap-1.5"
+          >
+            <HugeiconsIcon
+              icon={WorkHistoryIcon}
+              size={16}
+              color="currentColor"
+              strokeWidth={1.5}
+            />
+            Historique
+            <ShortcutHintInline action="show-device-history" />
           </Button>
         ) : null}
       </header>
@@ -388,6 +421,18 @@ export default function DeviceDrawer() {
         open={cablesDeviceId === device.id}
         onOpenChange={(open) => setCablesDeviceId(open ? device.id : null)}
       />
+      {site ? (
+        <DeviceHistoryDialog
+          device={device}
+          timezone={site.timezone}
+          open={
+            canEdit &&
+            HAS_HISTORY.has(device.type) &&
+            historyDeviceId === device.id
+          }
+          onOpenChange={(open) => setHistoryDeviceId(open ? device.id : null)}
+        />
+      ) : null}
     </aside>
   );
 }

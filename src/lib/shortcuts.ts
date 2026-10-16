@@ -55,6 +55,7 @@ export type ShortcutAction =
   | "edit-device-identity"
   | "unplace-device"
   | "show-port-cables"
+  | "show-device-history"
   | "toggle-device-cables";
 
 export type ShortcutConfig = {
@@ -318,6 +319,13 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
     keys: ["K"],
     label: "Câbles",
     description: "Voir les câbles de chaque port et où ils mènent",
+    scope: "drawer",
+  },
+  "show-device-history": {
+    keys: ["J"],
+    label: "Historique",
+    description:
+      "Voir où le réseau a vu l'appareil et quand il était en ligne, sur 30 jours",
     scope: "drawer",
   },
   "toggle-device-cables": {

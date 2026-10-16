@@ -16,6 +16,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as AuthedIndexRouteImport } from './routes/_authed/index'
 import { Route as AuthedAdminRouteImport } from './routes/_authed/admin'
+import { Route as AuthedHistoryRouteImport } from './routes/_authed/history'
 import { Route as AuthedInventoryRouteImport } from './routes/_authed/inventory'
 import { Route as AuthedLogoRouteImport } from './routes/_authed/logo'
 import { Route as AuthedAdminIndexRouteImport } from './routes/_authed/admin/index'
@@ -57,6 +58,11 @@ const AuthedIndexRoute = AuthedIndexRouteImport.update({
 const AuthedAdminRoute = AuthedAdminRouteImport.update({
   id: '/admin',
   path: '/admin',
+  getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedHistoryRoute = AuthedHistoryRouteImport.update({
+  id: '/history',
+  path: '/history',
   getParentRoute: () => AuthedRoute,
 } as any)
 const AuthedInventoryRoute = AuthedInventoryRouteImport.update({
@@ -107,6 +113,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
   '/admin': typeof AuthedAdminRouteWithChildren
+  '/history': typeof AuthedHistoryRoute
   '/inventory': typeof AuthedInventoryRoute
   '/logo': typeof AuthedLogoRoute
   '/admin/health': typeof AuthedAdminHealthRoute
@@ -121,6 +128,7 @@ export interface FileRoutesByTo {
   '/health': typeof HealthRoute
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/history': typeof AuthedHistoryRoute
   '/inventory': typeof AuthedInventoryRoute
   '/logo': typeof AuthedLogoRoute
   '/': typeof AuthedIndexRoute
@@ -139,6 +147,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
   '/_authed/admin': typeof AuthedAdminRouteWithChildren
+  '/_authed/history': typeof AuthedHistoryRoute
   '/_authed/inventory': typeof AuthedInventoryRoute
   '/_authed/logo': typeof AuthedLogoRoute
   '/_authed/': typeof AuthedIndexRoute
@@ -158,6 +167,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/reset-password'
     | '/admin'
+    | '/history'
     | '/inventory'
     | '/logo'
     | '/admin/health'
@@ -172,6 +182,7 @@ export interface FileRouteTypes {
     | '/health'
     | '/login'
     | '/reset-password'
+    | '/history'
     | '/inventory'
     | '/logo'
     | '/'
@@ -189,6 +200,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/reset-password'
     | '/_authed/admin'
+    | '/_authed/history'
     | '/_authed/inventory'
     | '/_authed/logo'
     | '/_authed/'
@@ -258,6 +270,13 @@ declare module '@tanstack/react-router' {
       path: '/admin'
       fullPath: '/admin'
       preLoaderRoute: typeof AuthedAdminRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/history': {
+      id: '/_authed/history'
+      path: '/history'
+      fullPath: '/history'
+      preLoaderRoute: typeof AuthedHistoryRouteImport
       parentRoute: typeof AuthedRoute
     }
     '/_authed/inventory': {
@@ -341,6 +360,7 @@ const AuthedAdminRouteWithChildren = AuthedAdminRoute._addFileChildren(
 
 interface AuthedRouteChildren {
   AuthedAdminRoute: typeof AuthedAdminRouteWithChildren
+  AuthedHistoryRoute: typeof AuthedHistoryRoute
   AuthedInventoryRoute: typeof AuthedInventoryRoute
   AuthedLogoRoute: typeof AuthedLogoRoute
   AuthedIndexRoute: typeof AuthedIndexRoute
@@ -348,6 +368,7 @@ interface AuthedRouteChildren {
 
 const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedAdminRoute: AuthedAdminRouteWithChildren,
+  AuthedHistoryRoute: AuthedHistoryRoute,
   AuthedInventoryRoute: AuthedInventoryRoute,
   AuthedLogoRoute: AuthedLogoRoute,
   AuthedIndexRoute: AuthedIndexRoute,
