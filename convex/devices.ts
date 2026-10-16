@@ -43,6 +43,7 @@ const inventoryDevice = v.object({
   id: v.string(),
   ...deviceIdentityFields,
   source: v.optional(deviceSource),
+  metadata: deviceMetadata,
   /** Where it stands, or `null` for a device on no floor. */
   location: v.union(
     v.null(),
@@ -80,6 +81,7 @@ export const listForSite = readerQuery({
         ip: row.ip,
         notes: row.notes,
         source: row.source,
+        metadata: row.metadata,
         location:
           row.placement && floor
             ? { floorId: row.placement.floorId, ...floor }

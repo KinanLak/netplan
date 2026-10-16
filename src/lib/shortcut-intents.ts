@@ -77,6 +77,7 @@ const shortcutRoutingPriority: Array<ShortcutAction> = [
   "tool-room",
   "tool-wall-brush",
   "tool-wall-erase",
+  "place-device",
   "toggle-overlay-panel",
   "toggle-overlay-visibility",
   "toggle-overlay-lock",
@@ -253,6 +254,7 @@ const isActionAllowedByContext = (
     case "undo":
     case "redo":
       return runtime.isEditMode;
+    case "place-device":
     case "toggle-overlay-panel":
     case "toggle-overlay-lock":
     case "calibrate-overlay":

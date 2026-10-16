@@ -61,6 +61,7 @@ export const shortcutGroups: Array<ShortcutGroup> = [
       "tool-wall-erase",
       "wall-eraser-size-increase",
       "wall-eraser-size-decrease",
+      "place-device",
     ],
   },
   {
