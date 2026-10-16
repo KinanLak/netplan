@@ -486,9 +486,23 @@ describe("the LibreNMS step", () => {
       baseUrl: LIBRENMS,
       settings: { switches: [{ switchId: "device:sw", device: null }] },
     });
+    const sw = await removed(admin, "device:sw");
+    expect(sw.ports[0]).toMatchObject({ status: "up", seen: true });
     setSystemTime(new Date("2026-10-16T10:16:00Z"));
     const later = await signIn();
     await tick(later);
+    await later.mutation(api.devices.create, {
+      siteId,
+      deviceId: "device:sw",
+      ...sw,
+    });
+    expect(await statusOf(later, "device:sw")).toBeNull();
+    expect(await portFacts(later)).toEqual(
+      Array.from({ length: 3 }, () => ({
+        status: undefined,
+        seen: undefined,
+      })),
+    );
 
     // The cycle no longer looks at the expired read, so nothing would
     // remove a status brought back from before.

@@ -239,9 +239,9 @@ const setPortFacts = async (
 
 /**
  * Removes what rests on a switch read that has grown too old (ADR 0025): the
- * switch's status and its ports' facts, and the status of devices last seen on it unless another
- * switch still vouches for them. Run every minute, so it holds when LibreNMS
- * fails, the switch is no longer polled, or cycles stop.
+ * switch's status and its ports' facts, and the status of devices last seen
+ * on it unless another switch still vouches for them. Run every minute, so it
+ * holds when LibreNMS fails, the switch is no longer polled, or cycles stop.
  */
 export const expireStaleReads = async (
   ctx: MutationCtx,

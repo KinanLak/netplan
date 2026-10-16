@@ -11,7 +11,7 @@ import {
   sameOverlay,
 } from "../src/map-engine/overlay";
 import { deleteDeviceMacs } from "./lib/deviceMacs";
-import { observedMetadata } from "./lib/statuses";
+import { observedMetadata, observedPort } from "./lib/statuses";
 import { syncOverlayFileReleases } from "./lib/overlayFiles";
 import {
   identityEditError,
@@ -1390,7 +1390,7 @@ const executePlan = async (ctx: MutationCtx, plan: WritePlan) => {
         await ctx.db.delete(write.rowId);
         break;
       case "insertPort":
-        await ctx.db.insert("ports", write.value);
+        await ctx.db.insert("ports", await observedPort(ctx, write.value));
         break;
       case "deletePort":
         await ctx.db.delete(write.rowId);
