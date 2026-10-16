@@ -169,7 +169,12 @@ export default defineSchema({
     .index("by_a_device", ["aDeviceId"])
     .index("by_b_device", ["bDeviceId"])
     .index("by_a_port", ["aPortId"])
-    .index("by_b_port", ["bPortId"]),
+    .index("by_b_port", ["bPortId"])
+    .index("by_site_source", [
+      "siteId",
+      "source.integration",
+      "source.externalId",
+    ]),
 
   // One calque per floor (ADR 0024); `fileId` is a `floorOverlayFiles` object id.
   floorOverlays: defineTable({

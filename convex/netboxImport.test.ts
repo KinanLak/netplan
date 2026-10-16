@@ -16,8 +16,24 @@ const MAC_B = "02:00:00:00:00:0b";
 
 type Raw = Record<string, unknown>;
 
-/** A NetBox that lists these devices and interfaces, one page each. */
-const netbox = (devices: Array<Raw>, interfaces: Array<Raw>) => {
+type Lists = {
+  devices: Array<Raw>;
+  interfaces?: Array<Raw>;
+  frontPorts?: Array<Raw>;
+  rearPorts?: Array<Raw>;
+  cables?: Array<Raw>;
+};
+
+const LIST_OF: Partial<Record<string, keyof Lists>> = {
+  "/api/dcim/devices/": "devices",
+  "/api/dcim/interfaces/": "interfaces",
+  "/api/dcim/front-ports/": "frontPorts",
+  "/api/dcim/rear-ports/": "rearPorts",
+  "/api/dcim/cables/": "cables",
+};
+
+/** A NetBox that serves these lists, one page each. */
+const netboxServing = (lists: Lists) => {
   const reads: Array<string> = [];
   const answer = (url: string) => {
     const { pathname } = new URL(url);
@@ -25,11 +41,15 @@ const netbox = (devices: Array<Raw>, interfaces: Array<Raw>) => {
     if (pathname === "/api/status/") {
       return Response.json({ "netbox-version": "4.6.10" });
     }
-    const results = pathname === "/api/dcim/devices/" ? devices : interfaces;
+    const name = LIST_OF[pathname];
+    const results = (name && lists[name]) ?? [];
     return Response.json({ count: results.length, results });
   };
-  return { answer, reads };
+  return { answer, reads, lists };
 };
+
+const netbox = (devices: Array<Raw>, interfaces: Array<Raw>) =>
+  netboxServing({ devices, interfaces });
 
 const device = (id: number, name: string, more: Raw = {}): Raw => ({
   id,
@@ -56,8 +76,11 @@ afterEach(() => {
   delete process.env.NETPLAN_SECRET_KEY;
 });
 
-/** A site whose NetBox imports role 4 of NetBox site 7 as computers. */
-async function importingSite(source: ReturnType<typeof netbox>) {
+/**
+ * A site whose NetBox imports role 4 of NetBox site 7 as computers, and
+ * role 5 as patch panels.
+ */
+async function importingSite(source: ReturnType<typeof netboxServing>) {
   fetchStub = stubFetch(source.answer);
   const t = testBackend();
   const editor = t.withIdentity(
@@ -77,7 +100,10 @@ async function importingSite(source: ReturnType<typeof netbox>) {
     baseUrl: NETBOX,
     settings: {
       site: { id: 7, name: "Siège" },
-      roles: [{ id: 4, name: "Workstation", type: "pc" }],
+      roles: [
+        { id: 4, name: "Workstation", type: "pc" },
+        { id: 5, name: "Patch panel", type: "patch-panel" },
+      ],
     },
   });
   return { t, admin, editor, siteId };
@@ -219,6 +245,38 @@ describe("NetBox import", () => {
     ).toEqual([]);
   });
 
+  it("retires what NetBox brought once no role has a type, without reading NetBox", async () => {
+    const source = netbox([device(12, "pc-0012"), device(13, "PC-0013")], []);
+    const { t, admin, editor, siteId } = await importingSite(source);
+    await editor.mutation(api.devices.create, {
+      siteId,
+      deviceId: "device:manual",
+      type: "pc",
+      identity: { name: "Accueil", hostname: "pc-0013", macs: [] },
+    });
+    await refresh(editor, siteId);
+    expect(await inventory(editor, siteId)).toHaveLength(2);
+
+    await admin.mutation(api.netbox.saveSettings, {
+      siteId,
+      baseUrl: NETBOX,
+      settings: { site: { id: 7, name: "Siège" }, roles: [] },
+    });
+    source.reads.length = 0;
+    await refresh(editor, siteId);
+
+    expect(source.reads).toEqual(["/api/status/"]);
+    expect(
+      (await inventory(editor, siteId)).map((d) => [d.name, d.source ?? null]),
+    ).toEqual([["Accueil", null]]);
+    expect(
+      await t.run(async (ctx) => await ctx.db.query("importReviews").collect()),
+    ).toEqual([]);
+    expect((await lastSteps(admin, siteId))?.[0]?.message).toContain(
+      "(1 retiré)",
+    );
+  });
+
   it("releases NetBox's devices when the site leaves that NetBox", async () => {
     const source = netbox([device(12, "pc-0012"), device(13, "PC-0013")], []);
     const { t, admin, editor, siteId } = await importingSite(source);
@@ -251,6 +309,111 @@ describe("NetBox import", () => {
     expect(await reviews()).toEqual([]);
   });
 
+  it("brings NetBox's ports and cables, keeping the manual ports it names alike", async () => {
+    const lists = {
+      devices: [
+        device(12, "pc-0012", { serial: "SN-12" }),
+        device(20, "panel-a", { role: { id: 5 } }),
+      ],
+      interfaces: [
+        { id: 10, device: { id: 12 }, name: "1", mac_address: MAC_A },
+      ],
+      frontPorts: [
+        {
+          id: 30,
+          device: { id: 20 },
+          name: "F1",
+          rear_ports: [{ rear_port: 40 }],
+        },
+      ],
+      rearPorts: [{ id: 40, device: { id: 20 }, name: "R1" }],
+      cables: [
+        {
+          id: 100,
+          a_terminations: [{ object_type: "dcim.interface", object_id: 10 }],
+          b_terminations: [{ object_type: "dcim.frontport", object_id: 30 }],
+        },
+      ],
+    };
+    const { t, admin, editor, siteId } = await importingSite(
+      netboxServing(lists),
+    );
+    await editor.mutation(api.devices.create, {
+      siteId,
+      deviceId: "device:manual",
+      type: "pc",
+      identity: { name: "Accueil", macs: [MAC_A] },
+    });
+    await editor.mutation(api.devices.create, {
+      siteId,
+      deviceId: "device:socket",
+      type: "wall-port",
+      identity: { name: "Prise B-01", macs: [] },
+    });
+    await editor.mutation(api.cables.connect, {
+      id: "cable:manual",
+      a: {
+        deviceId: "device:manual",
+        portId: "port:device:manual:interface:1",
+      },
+      b: { deviceId: "device:socket", portId: "port:device:socket:front:1" },
+    });
+
+    await refresh(editor, siteId);
+
+    const pc = await editor.query(api.cables.portTable, {
+      deviceId: "device:manual",
+    });
+    // The manual port keeps its id; NetBox's cable replaces the manual one.
+    expect(pc?.ports).toMatchObject([
+      {
+        id: "port:device:manual:interface:1",
+        name: "1",
+        source: { integration: "netbox", externalId: "interface:10" },
+        cable: { source: { integration: "netbox", externalId: "100" } },
+      },
+    ]);
+    const cables = async () =>
+      await t.run(async (ctx) => await ctx.db.query("cables").collect());
+    expect(await cables()).toHaveLength(1);
+    const panelPorts = await t.run(async (ctx) =>
+      (await ctx.db.query("ports").collect()).filter(
+        (port) => port.source?.externalId !== "interface:10" && port.source,
+      ),
+    );
+    expect(panelPorts.map((port) => port.kind).toSorted()).toEqual([
+      "front",
+      "rear",
+    ]);
+    const rear = panelPorts.find((port) => port.kind === "rear");
+    expect(panelPorts.find((port) => port.kind === "front")).toMatchObject({
+      name: "F1",
+      rearPortId: rear?.objectId,
+    });
+
+    const laid = lists.cables.pop();
+    await refresh(editor, siteId);
+    expect(await cables()).toEqual([]);
+
+    // Leaving that NetBox leaves its cabling in place, as manual.
+    if (laid) lists.cables.push(laid);
+    await refresh(editor, siteId);
+    await admin.action(api.integrations.save, {
+      siteId,
+      kind: "netbox",
+      baseUrl: "https://other-netbox.test",
+      enabled: true,
+      token: TOKEN,
+    });
+    expect((await cables()).map((cable) => cable.source ?? null)).toEqual([
+      null,
+    ]);
+    const ports = await t.run(
+      async (ctx) => await ctx.db.query("ports").collect(),
+    );
+    expect(ports.filter((port) => port.source)).toEqual([]);
+  });
+
   it("ignores an import whose cycle or settings changed meanwhile", async () => {
     const source = netbox([], []);
     const { editor, siteId } = await importingSite(source);
@@ -260,6 +423,8 @@ describe("NetBox import", () => {
       baseUrl: NETBOX,
       settings: { site: { id: 7, name: "Siège" }, roles: [] },
       devices: [{ externalId: "1", type: "pc", name: "pc-1", macs: [] }],
+      ports: [],
+      cables: [],
     });
     expect(stale).toBeNull();
     expect(await inventory(editor, siteId)).toEqual([]);

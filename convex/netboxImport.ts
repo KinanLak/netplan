@@ -9,16 +9,32 @@ import type { ActionCtx, MutationCtx } from "./_generated/server";
 import { cycleOf } from "./lib/cycles";
 import { SOURCE_RETRY } from "./lib/httpRetry";
 import { netboxList } from "./lib/netboxApi";
-import { deleteDeviceCabling } from "./lib/ports";
-import { importedDevice, netboxSettings } from "./siteValidators";
+import {
+  cableRow,
+  cableRowAt,
+  deleteDeviceCabling,
+  portRowsOf,
+} from "./lib/ports";
+import {
+  importedCable,
+  importedDevice,
+  importedPort,
+  netboxSettings,
+} from "./siteValidators";
 import {
   importSummary,
   newDeviceKey,
+  planDevicePorts,
   planNetBoxImport,
+  readNetBoxCabling,
   readNetBoxDevices,
   sameImport,
 } from "../src/sites/netboxImport";
-import type { ImportedDevice } from "../src/sites/netboxImport";
+import type {
+  ImportedCable,
+  ImportedDevice,
+  ImportedPort,
+} from "../src/sites/netboxImport";
 
 // NetBox changes when people edit it, which is rare next to what LibreNMS
 // sees, so an automatic cycle imports it at most this often.
@@ -80,39 +96,55 @@ export const importFromNetBox = async (
   }
   const { baseUrl, token } = connection;
 
-  // Without a role NetBox would list every device of the site.
+  // Without a role NetBox would list every device of the site, so nothing is
+  // read, and the empty import still retires what earlier roles brought.
+  const noRole = settings.roles.length === 0;
   const roleFilter = settings.roles.map((role) => `&role_id=${role.id}`);
-  const [devices, interfaces] =
-    roleFilter.length === 0
-      ? [
-          { ok: true as const, items: [] },
-          { ok: true as const, items: [] },
-        ]
-      : await Promise.all([
-          netboxList(
-            baseUrl,
-            token,
-            `/api/dcim/devices/?site_id=${site.id}${roleFilter.join("")}`,
-            SOURCE_RETRY,
-          ),
-          netboxList(
-            baseUrl,
-            token,
-            `/api/dcim/interfaces/?site_id=${site.id}`,
-            SOURCE_RETRY,
-          ),
-        ]);
-  if (!devices.ok) return { ok: false, message: devices.message };
-  if (!interfaces.ok) return { ok: false, message: interfaces.message };
+  const lists = noRole
+    ? []
+    : await Promise.all(
+        [
+          `/api/dcim/devices/?site_id=${site.id}${roleFilter.join("")}`,
+          `/api/dcim/interfaces/?site_id=${site.id}`,
+          `/api/dcim/front-ports/?site_id=${site.id}`,
+          `/api/dcim/rear-ports/?site_id=${site.id}`,
+          `/api/dcim/cables/?site_id=${site.id}`,
+        ].map((path) => netboxList(baseUrl, token, path, SOURCE_RETRY)),
+      );
+  const items = [];
+  for (const list of lists) {
+    if (!list.ok) return { ok: false, message: list.message };
+    items.push(list.items);
+  }
+  const [
+    devices = [],
+    interfaces = [],
+    frontPorts = [],
+    rearPorts = [],
+    cables = [],
+  ] = items;
 
+  const imported = readNetBoxDevices(devices, interfaces, settings.roles);
   const counts = await ctx.runMutation(internal.netboxImport.apply, {
     siteId,
     cycleId,
     baseUrl,
     settings,
-    devices: readNetBoxDevices(devices.items, interfaces.items, settings.roles),
+    devices: imported,
+    ...readNetBoxCabling(imported, {
+      interfaces,
+      frontPorts,
+      rearPorts,
+      cables,
+    }),
   });
   if (!counts) return { ok: true, message: "" };
+  if (noRole && counts.removed === 0) {
+    return {
+      ok: true,
+      message: "Aucun rôle NetBox n'a de type : rien n'est importé.",
+    };
+  }
   return { ok: true, message: importSummary(counts) };
 };
 
@@ -132,6 +164,8 @@ export const apply = internalMutation({
     baseUrl: v.string(),
     settings: netboxSettings,
     devices: v.array(importedDevice),
+    ports: v.array(importedPort),
+    cables: v.array(importedCable),
   },
   returns: v.union(v.null(), importCounts),
   handler: async (ctx, args) => {
@@ -239,6 +273,9 @@ export const apply = internalMutation({
       }
     }
 
+    for (const deviceId of plan.unbind) await unbindPorts(ctx, deviceId);
+    const portIds = await importPorts(ctx, siteId, written, args.ports);
+    await importCables(ctx, siteId, portIds, args.cables, now);
     await replaceReviews(ctx, siteId, plan, now);
     await ctx.db.patch(cycle._id, { netboxImportedAt: now });
     return {
@@ -252,9 +289,10 @@ export const apply = internalMutation({
 });
 
 /**
- * Releases the devices bound to the site's NetBox, which become manual, and
- * drops its pending reviews: another NetBox reuses the same ids for other
- * devices, so a binding means nothing once the address changes.
+ * Releases the devices, ports and cables bound to the site's NetBox, which
+ * become manual, and drops its pending reviews: another NetBox reuses the
+ * same ids for other devices, so a binding means nothing once the address
+ * changes.
  */
 export const releaseNetBox = async (ctx: MutationCtx, siteId: string) => {
   const bound = await ctx.db
@@ -265,6 +303,16 @@ export const releaseNetBox = async (ctx: MutationCtx, siteId: string) => {
     .collect();
   for (const device of bound) {
     await ctx.db.patch(device._id, { source: undefined });
+    await unbindPorts(ctx, device.objectId);
+  }
+  const cables = await ctx.db
+    .query("cables")
+    .withIndex("by_site_source", (q) =>
+      q.eq("siteId", siteId).eq("source.integration", "netbox"),
+    )
+    .collect();
+  for (const cable of cables) {
+    await ctx.db.patch(cable._id, { source: undefined });
   }
   await deleteImportReviews(ctx, siteId);
 };
@@ -314,6 +362,139 @@ const changes = (
   OWNED.some(
     (key) => JSON.stringify(device[key]) !== JSON.stringify(fields[key]),
   );
+
+const netbox = (externalId: string) => ({
+  integration: "netbox" as const,
+  externalId,
+});
+
+/** A device NetBox dropped keeps its ports as manual ones. */
+const unbindPorts = async (ctx: MutationCtx, deviceId: string) => {
+  for (const port of await portRowsOf(ctx, deviceId)) {
+    if (port.source) await ctx.db.patch(port._id, { source: undefined });
+  }
+};
+
+/**
+ * Gives each written device NetBox's ports, and returns where each NetBox
+ * port now is. A port that goes takes its cable with it.
+ */
+const importPorts = async (
+  ctx: MutationCtx,
+  siteId: string,
+  written: ReadonlyArray<{ deviceId: string; device: ImportedDevice }>,
+  ports: ReadonlyArray<ImportedPort>,
+) => {
+  const wantedBy = Map.groupBy(ports, (port) => port.deviceExternalId);
+  const located = new Map<string, { deviceId: string; portId: string }>();
+  for (const { deviceId, device } of written) {
+    const rows = await portRowsOf(ctx, deviceId);
+    const plan = planDevicePorts(
+      deviceId,
+      rows.map((row) => ({
+        id: row.objectId,
+        name: row.name,
+        kind: row.kind,
+        netboxId:
+          row.source?.integration === "netbox" ? row.source.externalId : null,
+      })),
+      wantedBy.get(device.externalId) ?? [],
+    );
+    const rowOf = new Map(rows.map((row) => [row.objectId, row]));
+    for (const portId of plan.remove) {
+      const cable = await cableRowAt(ctx, portId);
+      if (cable) await ctx.db.delete(cable._id);
+      const row = rowOf.get(portId);
+      if (row) await ctx.db.delete(row._id);
+    }
+    const idOf = new Map(
+      plan.ports.map(({ id, port }) => [port.externalId, id] as const),
+    );
+    for (const { id, port, order } of plan.ports) {
+      located.set(port.externalId, { deviceId, portId: id });
+      const fields = {
+        name: port.name,
+        kind: port.kind,
+        order,
+        rearPortId: port.rearExternalId && idOf.get(port.rearExternalId),
+        source: netbox(port.externalId),
+      };
+      const row = rowOf.get(id);
+      if (!row) {
+        await ctx.db.insert("ports", {
+          objectId: id,
+          siteId,
+          deviceId,
+          ...fields,
+        });
+      } else if (
+        row.name !== fields.name ||
+        row.kind !== fields.kind ||
+        row.order !== fields.order ||
+        row.rearPortId !== fields.rearPortId ||
+        row.source?.externalId !== port.externalId
+      ) {
+        await ctx.db.patch(row._id, fields);
+      }
+    }
+  }
+  return located;
+};
+
+/**
+ * Lays NetBox's cables between the ports it placed. A cable NetBox no longer
+ * lists goes; one NetBox lays on a port with a manual cable replaces it.
+ */
+const importCables = async (
+  ctx: MutationCtx,
+  siteId: string,
+  located: ReadonlyMap<string, { deviceId: string; portId: string }>,
+  cables: ReadonlyArray<ImportedCable>,
+  now: number,
+) => {
+  const existing = await ctx.db
+    .query("cables")
+    .withIndex("by_site_source", (q) =>
+      q.eq("siteId", siteId).eq("source.integration", "netbox"),
+    )
+    .collect();
+  const byId = new Map(
+    existing.map((row) => [row.source?.externalId ?? "", row]),
+  );
+  const kept = new Set<string>();
+  for (const cable of cables) {
+    const a = located.get(cable.a);
+    const b = located.get(cable.b);
+    if (!a || !b) continue;
+    const row = byId.get(cable.externalId);
+    const ends = [a.portId, b.portId].sort().join(" ");
+    if (row && [row.aPortId, row.bPortId].sort().join(" ") === ends) {
+      kept.add(cable.externalId);
+      continue;
+    }
+    if (row) await ctx.db.delete(row._id);
+    byId.delete(cable.externalId);
+    for (const portId of [a.portId, b.portId]) {
+      const other = await cableRowAt(ctx, portId);
+      if (!other) continue;
+      await ctx.db.delete(other._id);
+      if (other.source) byId.delete(other.source.externalId);
+    }
+    await ctx.db.insert("cables", {
+      ...cableRow(
+        siteId,
+        { id: `cable:${crypto.randomUUID()}`, a, b },
+        now,
+        IMPORTED_BY,
+      ),
+      source: netbox(cable.externalId),
+    });
+    kept.add(cable.externalId);
+  }
+  for (const [externalId, row] of byId) {
+    if (!kept.has(externalId)) await ctx.db.delete(row._id);
+  }
+};
 
 const macRowsOf = async (ctx: MutationCtx, deviceId: string) =>
   await ctx.db

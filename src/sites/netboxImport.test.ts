@@ -1,8 +1,10 @@
 import { describe, expect, it } from "bun:test";
 import {
   importSummary,
+  planDevicePorts,
   planNetBoxImport,
   sameImport,
+  readNetBoxCabling,
   readNetBoxDevices,
 } from "./netboxImport";
 import type { ImportedDevice, InventoryDevice } from "./netboxImport";
@@ -251,5 +253,179 @@ describe("sameImport", () => {
     );
     expect(sameImport(saved, settings(1, [4, "pc"]))).toBe(false);
     expect(sameImport(saved, settings(1, [4, "pc"], [9, "pc"]))).toBe(false);
+  });
+});
+
+describe("readNetBoxCabling", () => {
+  const devices = [netbox("1"), netbox("2")];
+  const term = (objectType: string, id: number) => [
+    { object_type: objectType, object_id: id },
+  ];
+
+  it("reads the imported devices' ports and the cables between them", () => {
+    const { ports, cables } = readNetBoxCabling(devices, {
+      interfaces: [
+        { id: 10, device: { id: 1 }, name: "Gi1/0/1" },
+        { id: 11, device: { id: 9 }, name: "eth0" },
+      ],
+      rearPorts: [{ id: 30, device: { id: 2 }, name: "R1" }],
+      frontPorts: [
+        // NetBox 4.5 and later list the rear ports a front port maps to.
+        {
+          id: 20,
+          device: { id: 2 },
+          name: "F1",
+          rear_ports: [{ rear_port: 30 }],
+        },
+        { id: 21, device: { id: 2 }, name: "F2", rear_port: { id: 31 } },
+      ],
+      cables: [
+        {
+          id: 100,
+          a_terminations: term("dcim.interface", 10),
+          b_terminations: term("dcim.frontport", 20),
+        },
+        // To a device the import leaves out.
+        {
+          id: 101,
+          a_terminations: term("dcim.interface", 11),
+          b_terminations: term("dcim.rearport", 30),
+        },
+        // A breakout.
+        {
+          id: 102,
+          a_terminations: [
+            ...term("dcim.rearport", 30),
+            ...term("dcim.frontport", 21),
+          ],
+          b_terminations: term("dcim.interface", 10),
+        },
+        // A second cable on a port.
+        {
+          id: 103,
+          a_terminations: term("dcim.interface", 10),
+          b_terminations: term("dcim.rearport", 30),
+        },
+      ],
+    });
+    expect(ports).toEqual([
+      {
+        deviceExternalId: "1",
+        externalId: "interface:10",
+        kind: "interface",
+        name: "Gi1/0/1",
+        rearExternalId: undefined,
+      },
+      {
+        deviceExternalId: "2",
+        externalId: "rear-port:30",
+        kind: "rear",
+        name: "R1",
+        rearExternalId: undefined,
+      },
+      {
+        deviceExternalId: "2",
+        externalId: "front-port:20",
+        kind: "front",
+        name: "F1",
+        rearExternalId: "rear-port:30",
+      },
+      {
+        deviceExternalId: "2",
+        externalId: "front-port:21",
+        kind: "front",
+        name: "F2",
+        rearExternalId: "rear-port:31",
+      },
+    ]);
+    expect(cables).toEqual([
+      { externalId: "100", a: "interface:10", b: "front-port:20" },
+    ]);
+  });
+});
+
+describe("planDevicePorts", () => {
+  const wanted = (externalId: string, name: string) => ({
+    deviceExternalId: "1",
+    externalId,
+    kind: "interface" as const,
+    name,
+  });
+
+  it("keeps the ports NetBox already gave and the manual ports it names alike", () => {
+    const plan = planDevicePorts(
+      "device:a",
+      [
+        {
+          id: "port:device:a:nb:interface:10",
+          name: "old",
+          kind: "interface",
+          netboxId: "interface:10",
+        },
+        {
+          id: "port:device:a:interface:1",
+          name: "GI1/0/2",
+          kind: "interface",
+          netboxId: null,
+        },
+        {
+          id: "port:device:a:interface:2",
+          name: "Port 2",
+          kind: "interface",
+          netboxId: null,
+        },
+        {
+          id: "port:device:a:front:1",
+          name: "Gi1/0/3",
+          kind: "front",
+          netboxId: null,
+        },
+      ],
+      [
+        wanted("interface:10", "Gi1/0/1"),
+        wanted("interface:11", "Gi1/0/2"),
+        wanted("interface:12", "Gi1/0/3"),
+      ],
+    );
+    expect(plan.ports.map(({ id, order }) => [id, order])).toEqual([
+      ["port:device:a:nb:interface:10", 1],
+      ["port:device:a:interface:1", 2],
+      ["port:device:a:nb:interface:12", 3],
+    ]);
+    expect(plan.remove).toEqual([
+      "port:device:a:interface:2",
+      "port:device:a:front:1",
+    ]);
+  });
+
+  it("never gives a new port the id of a port another NetBox left behind", () => {
+    const plan = planDevicePorts(
+      "device:a",
+      [
+        {
+          id: "port:device:a:nb:interface:11",
+          name: "eth1",
+          kind: "interface",
+          netboxId: null,
+        },
+        {
+          id: "port:device:a:nb:interface:12",
+          name: "old",
+          kind: "interface",
+          netboxId: null,
+        },
+      ],
+      [
+        wanted("interface:11", "eth2"),
+        wanted("interface:10", "eth1"),
+        wanted("interface:12", "eth3"),
+      ],
+    );
+    expect(plan.ports.map(({ id }) => id)).toEqual([
+      "port:device:a:nb:interface:11:2",
+      "port:device:a:nb:interface:11",
+      "port:device:a:nb:interface:12:2",
+    ]);
+    expect(plan.remove).toEqual(["port:device:a:nb:interface:12"]);
   });
 });
