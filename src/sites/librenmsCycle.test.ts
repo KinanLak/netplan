@@ -13,6 +13,7 @@ import {
   readLibreNMSPorts,
   readLibreNMSTime,
   sightingSummary,
+  portMoves,
   socketMoves,
 } from "./librenmsCycle";
 import type { OwnPort, SwitchPort } from "./librenmsCycle";
@@ -395,6 +396,31 @@ describe("presence", () => {
         [{ ownerId: "pc", socketId: "socket-a", seenAt: 1 }],
       ),
     ]).toEqual([["pc", "socket-b"]]);
+  });
+
+  it("records a device as located when first seen or seen on another port", () => {
+    const owners = new Map([
+      ["mac-a", { id: "pc" }],
+      ["mac-b", { id: "pc" }],
+    ]);
+    const onA = { mac: "mac-a", portId: "port-a", switchId: "sw" };
+    const onB = { mac: "mac-b", portId: "port-b", switchId: "sw" };
+    // Never seen before.
+    expect([...portMoves([onA], owners, [])]).toEqual([["pc", onA]]);
+    const atA = [{ ownerId: "pc", portId: "port-a", seenAt: 1 }];
+    // Still on a port its latest sighting saw, through either MAC.
+    expect(portMoves([onB, onA], owners, atA).size).toBe(0);
+    // Only on another port: located there.
+    expect([...portMoves([onB], owners, atA)]).toEqual([["pc", onB]]);
+    // Back on a port an older sighting saw.
+    expect([
+      ...portMoves([onA], owners, [
+        ...atA,
+        { ownerId: "pc", portId: "port-b", seenAt: 2 },
+      ]),
+    ]).toEqual([["pc", onA]]);
+    // A MAC no device carries records nothing.
+    expect(portMoves([{ ...onA, mac: "mac-x" }], owners, []).size).toBe(0);
   });
 
   it("summarises a read", () => {

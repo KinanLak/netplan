@@ -18,4 +18,12 @@ crons.daily(
   {},
 );
 
+// History is kept 30 days (ADR 0027).
+crons.daily(
+  "purge history older than 30 days",
+  { hourUTC: 3, minuteUTC: 41 },
+  internal.history.purge,
+  {},
+);
+
 export default crons;

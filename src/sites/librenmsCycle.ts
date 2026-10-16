@@ -478,6 +478,28 @@ export const isOnline = (misses: ReadonlyArray<number>) =>
   misses.some((missed) => missed < MISSES_OFFLINE);
 
 /**
+ * What each device's latest sighting saw, across all of its MACs so that one
+ * seen through another interface still counts: `pick` of every row with the
+ * newest `seenAt`. Only the devices `wanted` are looked up.
+ */
+function latestSeen<Row extends { ownerId?: string; seenAt: number }, Value>(
+  history: ReadonlyArray<Row>,
+  wanted: ReadonlySet<string> | ReadonlyMap<string, unknown>,
+  pick: (row: Row) => Value,
+): Map<string, Set<Value>> {
+  const latest = new Map<string, { seenAt: number; values: Set<Value> }>();
+  for (const row of history) {
+    const { ownerId, seenAt } = row;
+    if (ownerId === undefined || !wanted.has(ownerId)) continue;
+    const last = latest.get(ownerId);
+    if (!last || seenAt > last.seenAt) {
+      latest.set(ownerId, { seenAt, values: new Set([pick(row)]) });
+    } else if (seenAt === last.seenAt) last.values.add(pick(row));
+  }
+  return new Map([...latest].map(([id, { values }]) => [id, values]));
+}
+
+/**
  * The socket each device is to be placed next to: the first one this read saw
  * it at, when it is on no floor, or when none of the sockets its MACs are seen
  * at now is one where its latest sighting saw it. A device the network sees
@@ -503,27 +525,40 @@ export function socketMoves(
     seen.sockets.push(socketId);
     current.set(owner.id, seen);
   }
-  // Across all of a device's MACs, so one seen through another interface
-  // still counts as a move.
-  const latest = new Map<
-    string,
-    { seenAt: number; sockets: Set<string | undefined> }
-  >();
-  for (const { ownerId, socketId, seenAt } of history) {
-    if (ownerId === undefined || !current.has(ownerId)) continue;
-    const last = latest.get(ownerId);
-    if (!last || seenAt > last.seenAt) {
-      latest.set(ownerId, { seenAt, sockets: new Set([socketId]) });
-    } else if (seenAt === last.seenAt) last.sockets.add(socketId);
-  }
+  const latest = latestSeen(history, current, ({ socketId }) => socketId);
   const moves = new Map<string, string>();
   for (const [id, { placed, sockets }] of current) {
     const last = latest.get(id);
     const moved =
       !placed ||
-      (last !== undefined &&
-        !sockets.some((socket) => last.sockets.has(socket)));
+      (last !== undefined && !sockets.some((socket) => last.has(socket)));
     if (moved) moves.set(id, sockets[0]);
+  }
+  return moves;
+}
+
+/**
+ * Where each device the history records as located now (ADR 0027): the first
+ * sighting this read made of it, when its MACs were never seen before, or
+ * when none of the ports they are seen on now is one its latest sighting saw.
+ */
+export function portMoves<Seen extends { mac: string; portId: string }>(
+  sightings: ReadonlyArray<Seen>,
+  ownerOf: ReadonlyMap<string, { id: string }>,
+  history: ReadonlyArray<{ ownerId?: string; portId: string; seenAt: number }>,
+): Map<string, Seen> {
+  const current = new Map<string, Array<Seen>>();
+  for (const sighting of sightings) {
+    const owner = ownerOf.get(sighting.mac);
+    if (!owner) continue;
+    current.set(owner.id, [...(current.get(owner.id) ?? []), sighting]);
+  }
+  const latest = latestSeen(history, current, ({ portId }) => portId);
+  const moves = new Map<string, Seen>();
+  for (const [id, seen] of current) {
+    const last = latest.get(id);
+    // Every entry of `current` holds at least one sighting.
+    if (!seen.some(({ portId }) => last?.has(portId))) moves.set(id, seen[0]);
   }
   return moves;
 }
