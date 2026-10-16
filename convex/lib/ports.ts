@@ -34,6 +34,7 @@ export const toPort = (row: Doc<"ports">): PortValue => ({
   order: row.order,
   rearPortId: row.rearPortId,
   status: row.status,
+  seen: row.seen,
   source: row.source,
 });
 
@@ -53,6 +54,7 @@ export const portRow = (siteId: string, value: NewPort) => ({
   order: value.order,
   rearPortId: value.rearPortId,
   status: value.status,
+  seen: value.seen,
 });
 
 export const cableRow = (

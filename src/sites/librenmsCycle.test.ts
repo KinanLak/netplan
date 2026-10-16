@@ -19,14 +19,23 @@ describe("reading LibreNMS", () => {
     expect(
       readLibreNMSPorts({
         ports: [
-          { port_id: 5, ifName: "Gi1/0/1", ifDescr: "GigabitEthernet1/0/1" },
+          {
+            port_id: 5,
+            ifName: "Gi1/0/1",
+            ifDescr: "GigabitEthernet1/0/1",
+            ifOperStatus: "up",
+          },
           { port_id: "6", ifName: "", ifDescr: "Vlan10" },
+          { port_id: 7, ifName: "Gi1/0/2", ifOperStatus: "lowerLayerDown" },
+          { port_id: 8, ifName: "Gi1/0/3", ifOperStatus: "unknown" },
           { ifName: "no-id" },
         ],
       }),
     ).toEqual([
-      { id: 5, names: ["Gi1/0/1", "GigabitEthernet1/0/1"] },
+      { id: 5, names: ["Gi1/0/1", "GigabitEthernet1/0/1"], link: "up" },
       { id: 6, names: ["Vlan10"] },
+      { id: 7, names: ["Gi1/0/2"], link: "down" },
+      { id: 8, names: ["Gi1/0/3"] },
     ]);
     expect(
       readLibreNMSFdb({

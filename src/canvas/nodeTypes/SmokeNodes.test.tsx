@@ -51,7 +51,7 @@ describe("device node smoke renders", () => {
     expect(screen.getByText("Rack-A")).toBeTruthy();
   });
 
-  it("SwitchNode shows its first 24 interfaces with their status", () => {
+  it("SwitchNode shows every port NetBox gave it, rear ones too, with what was observed", () => {
     const device = buildDevice({
       id: "switch-1" as DeviceId,
       type: "switch",
@@ -61,23 +61,31 @@ describe("device node smoke renders", () => {
       metadata: { status: "up" },
     });
 
+    // A real NetBox models a switch's ports as rear ports.
     const ports = numberedPorts(
       device.id,
       "interface",
       48,
       (n) => `Gi1/0/${n}`,
-    );
-    ports[0] = { ...ports[0], status: "up" };
+    ).map((port): Port => ({ ...port, kind: "rear" }));
+    ports[0] = { ...ports[0], status: "up", seen: true };
+    ports[1] = { ...ports[1], status: "up" };
+    ports[2] = { ...ports[2], status: "down" };
 
     const { container } = renderWithFlow(
       <SwitchNode {...nodeProps(device, ports)} />,
     );
     expect(screen.getByText("sw-a")).toBeTruthy();
 
-    expect(container.querySelectorAll('[title^="Gi1/0/"]').length).toBe(24);
-    expect(
-      container.querySelector('[title="Gi1/0/1 : En ligne"]'),
-    ).toBeTruthy();
+    expect(container.querySelectorAll('[title^="Gi1/0/"]').length).toBe(48);
+    for (const title of [
+      "Gi1/0/1 : Appareil vu",
+      "Gi1/0/2 : Lien actif",
+      "Gi1/0/3 : Lien inactif",
+      "Gi1/0/4 : Inconnu",
+    ]) {
+      expect(container.querySelector(`[title="${title}"]`)).toBeTruthy();
+    }
   });
 
   it("WallPortNode renders the device name", () => {

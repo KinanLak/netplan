@@ -4,8 +4,15 @@
 import { normalizeMac } from "../devices/mac";
 import { librenmsId } from "./librenms";
 
-/** A LibreNMS port and the names a person may know it by. */
-export type LibreNMSPort = { id: number; names: Array<string> };
+/**
+ * A LibreNMS port, the names a person may know it by, and its link when
+ * LibreNMS knows it.
+ */
+export type LibreNMSPort = {
+  id: number;
+  names: Array<string>;
+  link?: "up" | "down";
+};
 
 /**
  * A forwarding table entry: a MAC address learnt on a LibreNMS port, and
@@ -65,6 +72,18 @@ const fieldsOf = (item: unknown): Record<string, unknown> =>
     ? (item as Record<string, unknown>)
     : {};
 
+/**
+ * A port's link from its IF-MIB operational status; `testing` and `unknown`
+ * say nothing about it.
+ */
+const LINKS = new Map<string, "up" | "down">([
+  ["up", "up"],
+  ["down", "down"],
+  ["lowerLayerDown", "down"],
+  ["dormant", "down"],
+  ["notPresent", "down"],
+]);
+
 /** The ports of a `/api/v0/devices/:id/ports` answer. */
 export const readLibreNMSPorts = (body: unknown): Array<LibreNMSPort> =>
   listOf(body, "ports").flatMap((item) => {
@@ -74,7 +93,8 @@ export const readLibreNMSPorts = (body: unknown): Array<LibreNMSPort> =>
     const names = [fields.ifName, fields.ifDescr].filter(
       (name): name is string => typeof name === "string" && name.trim() !== "",
     );
-    return [{ id, names }];
+    const link = LINKS.get(String(fields.ifOperStatus));
+    return [{ id, names, ...(link && { link }) }];
   });
 
 /** The entries of a `/api/v0/devices/:id/fdb` answer. */

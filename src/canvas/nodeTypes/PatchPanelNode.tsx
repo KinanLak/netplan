@@ -4,12 +4,17 @@ import NetworkNode from "./NetworkNode";
 import { areDeviceNodePropsEqual } from "./memo";
 import type { Node, NodeProps } from "@xyflow/react";
 import type { DeviceNodeData } from "@/devices/reactFlowDeviceAdapter";
+import { shownPorts } from "@/devices/portState";
 
 type PatchPanelNodeType = Node<DeviceNodeData>;
 
-// A patch panel is passive: it has no status of its own, only the ports a
-// cable passes through.
+// A panel's ports sit in rows of 24, as on the rack.
+const PANEL_COLUMNS = 24;
+
+// A patch panel is passive: it has no status of its own, and nothing
+// observes its ports, only the cables passing through them.
 function PatchPanelNode({ data: device, id }: NodeProps<PatchPanelNodeType>) {
+  const ports = shownPorts(device.ports);
   return (
     <NetworkNode
       id={id}
@@ -24,16 +29,16 @@ function PatchPanelNode({ data: device, id }: NodeProps<PatchPanelNodeType>) {
         </span>
       </div>
       <div
-        className="gap-0.5 p-1"
+        className="grid gap-0.5 overflow-hidden p-1"
         style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(24, minmax(0, 1fr))",
+          gridTemplateColumns: `repeat(${PANEL_COLUMNS}, minmax(0, 1fr))`,
         }}
       >
-        {Array.from({ length: 24 }, (_, index) => (
+        {ports.map((port) => (
           <div
-            key={index}
+            key={port.id}
             className="h-2 rounded-xs border border-border bg-muted"
+            title={port.name}
           />
         ))}
       </div>

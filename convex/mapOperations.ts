@@ -295,6 +295,7 @@ const plannedPortPayload = (value: PlannedPort): NewPort => ({
   order: value.order,
   rearPortId: value.rearPortId,
   status: value.status,
+  seen: value.seen,
 });
 
 const portPayload = (value: NewPort): NewPort => ({
@@ -305,6 +306,7 @@ const portPayload = (value: NewPort): NewPort => ({
   order: value.order,
   rearPortId: value.rearPortId,
   status: value.status,
+  seen: value.seen,
 });
 
 const byId = (left: { id: string }, right: { id: string }) =>
