@@ -60,6 +60,11 @@ export default defineSchema({
     failures: v.number(),
     running: v.optional(runningCycle),
     last: v.optional(cycleRun),
+    /**
+     * When the last cycle in which every source answered started: the data
+     * is as fresh as that (ADR 0026).
+     */
+    lastSuccessAt: v.optional(v.number()),
     /** NetBox changes slowly: it is imported every 15 minutes (ADR 0023). */
     netboxImportedAt: v.optional(v.number()),
     /** LibreNMS is asked to rediscover at most every 5 minutes (ADR 0023). */

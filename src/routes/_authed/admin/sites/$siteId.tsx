@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { CollectionSection } from "@/admin/CollectionSection";
-import { adminErrorMessage } from "@/admin/errors";
+import { failureMessage } from "@/lib/errors";
 import { IntegrationsSection } from "@/admin/IntegrationsSection";
 import { NetBoxSettingsSection } from "@/admin/NetBoxSettingsSection";
 import { LibreNMSSettingsSection } from "@/admin/LibreNMSSettingsSection";
@@ -94,11 +94,7 @@ function SitePage() {
       <IntegrationsSection siteId={site.id} />
       <NetBoxSettingsSection siteId={site.id} />
       <LibreNMSSettingsSection siteId={site.id} />
-      <CollectionSection
-        siteId={site.id}
-        automaticRefresh={site.automaticRefresh}
-        manualRefresh={site.manualRefresh}
-      />
+      <CollectionSection siteId={site.id} />
       <DeleteSite site={site} />
     </div>
   );
@@ -179,7 +175,7 @@ function SiteSettingsForm({ site }: { site: Site }) {
       await update({ siteId: site.id, ...settings });
       setSaved(true);
     } catch (failure) {
-      setError(adminErrorMessage(failure));
+      setError(failureMessage(failure, "admin"));
     } finally {
       setPending(false);
     }
@@ -363,7 +359,7 @@ function DeleteSite({ site }: { site: Site }) {
       setOpen(false);
       await navigate({ to: "/admin/sites" });
     } catch (failure) {
-      setError(adminErrorMessage(failure));
+      setError(failureMessage(failure, "admin"));
     }
   };
 

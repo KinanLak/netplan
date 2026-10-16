@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { adminErrorMessage } from "@/admin/errors";
+import { failureMessage } from "@/lib/errors";
 import { getDeviceKindLabel } from "@/devices/deviceKindRegistry";
 import { NETBOX_ROLE_TYPES } from "@/sites/netbox";
 import type {
@@ -54,7 +54,7 @@ export function NetBoxSettingsSection({ siteId }: { siteId: string }) {
       if ("error" in answer) setError(answer.error);
       else setOptions(answer);
     } catch (failure) {
-      setError(adminErrorMessage(failure));
+      setError(failureMessage(failure, "admin"));
     } finally {
       setLoading(false);
     }
@@ -177,7 +177,7 @@ function SettingsForm({
       });
       onDone();
     } catch (failure) {
-      setError(adminErrorMessage(failure));
+      setError(failureMessage(failure, "admin"));
     } finally {
       setPending(false);
     }

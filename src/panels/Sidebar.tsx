@@ -44,6 +44,7 @@ import {
 import { ModeToggle } from "@/components/mode-toggle";
 import { useCanEdit } from "@/hooks/use-current-user";
 import { SidebarAccount } from "@/panels/SidebarAccount";
+import { CollectionFreshness } from "@/sites/CollectionFreshness";
 import { SiteSwitcher } from "@/sites/SiteSwitcher";
 import { useCurrentSite } from "@/sites/useCurrentSite";
 import { api } from "../../convex/_generated/api";
@@ -208,6 +209,13 @@ export default function AppSidebar() {
           <SidebarGroupLabel>Site</SidebarGroupLabel>
           <SidebarGroupContent className="flex flex-col gap-1">
             <SiteSwitcher />
+            {site ? (
+              <CollectionFreshness
+                siteId={site.id}
+                withShortcut
+                className="px-2 py-1"
+              />
+            ) : null}
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton

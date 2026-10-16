@@ -22,6 +22,7 @@ export type ShortcutAction =
   | "redo"
   | "show-shortcuts"
   | "cycle-theme"
+  | "refresh-site"
   | "sidebar-toggle"
   | "toggle-wall-debug"
   // Navigation
@@ -109,6 +110,12 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
     keys: ["Shift+T"],
     label: "Thème",
     description: "Changer le thème",
+    scope: "global",
+  },
+  "refresh-site": {
+    keys: ["Shift+R"],
+    label: "Actualiser les données",
+    description: "Lancer une collecte du site maintenant",
     scope: "global",
   },
   "sidebar-toggle": {

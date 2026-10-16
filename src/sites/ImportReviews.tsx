@@ -11,7 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { getDeviceKindLabel } from "@/devices/deviceKindRegistry";
-import { deviceMutationError } from "@/devices/mutationError";
+import { failureMessage } from "@/lib/errors";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { isAdmin } from "@/lib/roles";
 import { api } from "../../convex/_generated/api";
@@ -65,7 +65,7 @@ function ReviewItem({ siteId, review }: { siteId: string; review: Review }) {
     try {
       await resolve({ siteId, externalId: device.externalId, deviceId });
     } catch (failure) {
-      toast.error(deviceMutationError(failure));
+      toast.error(failureMessage(failure, "editor"));
     } finally {
       setPending(false);
     }

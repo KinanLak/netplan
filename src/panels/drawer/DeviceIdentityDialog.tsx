@@ -28,7 +28,7 @@ import {
 } from "@/devices/identity";
 import type { IdentityEdit, IdentityField } from "@/devices/identity";
 import { parseMacList } from "@/devices/mac";
-import { deviceMutationError } from "@/devices/mutationError";
+import { failureMessage } from "@/lib/errors";
 import { INTEGRATION_LABELS } from "@/sites/integrations";
 import { api } from "../../../convex/_generated/api";
 
@@ -155,7 +155,7 @@ function IdentityForm({
       await updateIdentity({ deviceId: device.id, edit: normalized });
       onDone();
     } catch (caught) {
-      setError(deviceMutationError(caught));
+      setError(failureMessage(caught, "editor"));
     } finally {
       setSaving(false);
     }

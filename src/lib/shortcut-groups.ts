@@ -20,6 +20,7 @@ export const shortcutGroups: Array<ShortcutGroup> = [
       "escape",
       "delete",
       "cycle-theme",
+      "refresh-site",
       "show-shortcuts",
       "sidebar-toggle",
     ],

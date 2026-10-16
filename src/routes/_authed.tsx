@@ -5,6 +5,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { CurrentUserProvider } from "@/hooks/use-current-user";
 import { MapDocumentProvider } from "@/map-session/MapDocumentProvider";
+import { RefreshOutcomes } from "@/sites/RefreshOutcomes";
 import { useCurrentFloorId } from "@/store/selectors";
 import { providerAuthClient } from "@/lib/auth-client";
 import { isSessionLost } from "@/lib/login";
@@ -43,6 +44,7 @@ function AuthedLayout() {
           <MapSession>
             <Outlet />
           </MapSession>
+          <RefreshOutcomes />
         </CurrentUserProvider>
         {/* The only toaster, so a toast survives a change of page. Bottom
             centre: every corner of the map is taken, and React Scan's toolbar

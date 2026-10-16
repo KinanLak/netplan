@@ -11,11 +11,16 @@ import { openConnection } from "./integrations";
 import { cycleOf, isRunning } from "./lib/cycles";
 import { collectFromLibreNMS } from "./librenmsCycle";
 import { importFromNetBox } from "./netboxImport";
-import { adminQuery, editorMutation } from "./lib/functions";
+import { adminQuery, editorMutation, readerQuery } from "./lib/functions";
 import { SOURCE_RETRY } from "./lib/httpRetry";
 import { probeIntegration } from "./lib/integrationProbe";
 import { requireSite } from "./sites";
-import { cycleRun, cycleStep, integrationKind } from "./siteValidators";
+import {
+  cycleRun,
+  cycleStep,
+  integrationKind,
+  siteCadence,
+} from "./siteValidators";
 import { nextRunAt, retryAt } from "../src/sites/cadence";
 import { INTEGRATION_KINDS } from "../src/sites/integrations";
 import type { IntegrationKind } from "../src/sites/integrations";
@@ -93,6 +98,7 @@ const begin = async (
   });
   // In case the action never starts.
   await scheduleExpiry(ctx, siteId, running.cycleId);
+  return running.startedAt;
 };
 
 /** Run by the cron every minute: starts the cycle of each site that is due. */
@@ -115,10 +121,13 @@ export const startDue = internalMutation({
   },
 });
 
-/** "Actualiser": a cycle now, unless one is running. */
+/**
+ * "Actualiser": a cycle now, unless one is running. Returns when it started,
+ * so the page that asked can tell the person how it ended.
+ */
 export const refresh = editorMutation({
   args: { siteId: v.string() },
-  returns: v.null(),
+  returns: v.number(),
   handler: async (ctx, { siteId }) => {
     const site = await requireSite(ctx, siteId);
     if (!site.manualRefresh) {
@@ -137,8 +146,7 @@ export const refresh = editorMutation({
     if ((await enabledSources(ctx, siteId)).length === 0) {
       throw new ConvexError("Ce site n'a aucune intégration active.");
     }
-    await begin(ctx, siteId, cycle, true, now);
-    return null;
+    return await begin(ctx, siteId, cycle, true, now);
   },
 });
 
@@ -252,6 +260,7 @@ export const finish = internalMutation({
         ? nextRunAt(site.cadence, site.timezone, startedAt)
         : retryAt(site.cadence, site.timezone, startedAt, failures),
       last: { startedAt, finishedAt: Date.now(), manual, steps },
+      ...(ok ? { lastSuccessAt: startedAt } : {}),
     });
     return null;
   },
@@ -314,6 +323,76 @@ export const status = adminQuery({
       paused: collectionPaused(),
       running,
       last: cycle?.last ?? null,
+      nextRunAt: cycle ? cycle.nextRunAt : null,
+      failures: cycle?.failures ?? 0,
+    };
+  },
+});
+
+/**
+ * How fresh a site's data is and when it is next collected, for everyone
+ * who reads the site (ADR 0026). The client ages it against its own clock.
+ * `null` when the site is gone.
+ */
+export const freshness = readerQuery({
+  args: { siteId: v.string() },
+  returns: v.union(
+    v.null(),
+    v.object({
+      paused: v.boolean(),
+      hasSources: v.boolean(),
+      automaticRefresh: v.boolean(),
+      manualRefresh: v.boolean(),
+      cadence: siteCadence,
+      timezone: v.string(),
+      running: v.union(
+        v.null(),
+        v.object({ startedAt: v.number(), manual: v.boolean() }),
+      ),
+      /** The last cycle that ended, and the sources that failed in it. */
+      last: v.union(
+        v.null(),
+        v.object({
+          startedAt: v.number(),
+          finishedAt: v.number(),
+          failed: v.array(integrationKind),
+        }),
+      ),
+      lastSuccessAt: v.union(v.null(), v.number()),
+      nextRunAt: v.union(v.null(), v.number()),
+      failures: v.number(),
+    }),
+  ),
+  handler: async (ctx, { siteId }) => {
+    const site = await siteOf(ctx, siteId);
+    if (!site) return null;
+    const cycle = await cycleOf(ctx, siteId);
+    const last = cycle?.last;
+    // A row from before `lastSuccessAt` existed still knows its last cycle.
+    const lastSuccessAt =
+      cycle?.lastSuccessAt ??
+      (last?.steps.every((step) => step.ok) ? last.startedAt : null);
+    return {
+      paused: collectionPaused(),
+      hasSources: (await enabledSources(ctx, siteId)).length > 0,
+      automaticRefresh: site.automaticRefresh,
+      manualRefresh: site.manualRefresh,
+      cadence: site.cadence,
+      timezone: site.timezone,
+      running:
+        cycle?.running && isRunning(cycle, Date.now())
+          ? { startedAt: cycle.running.startedAt, manual: cycle.running.manual }
+          : null,
+      last: last
+        ? {
+            startedAt: last.startedAt,
+            finishedAt: last.finishedAt,
+            failed: last.steps
+              .filter((step) => !step.ok)
+              .map((step) => step.source),
+          }
+        : null,
+      lastSuccessAt,
       nextRunAt: cycle ? cycle.nextRunAt : null,
       failures: cycle?.failures ?? 0,
     };

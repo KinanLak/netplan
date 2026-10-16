@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { getDeviceKindLabel } from "@/devices/deviceKindRegistry";
-import { deviceMutationError } from "@/devices/mutationError";
+import { failureMessage } from "@/lib/errors";
 import { matchesDeviceSearch } from "@/devices/search";
 import { createStandaloneObjectId } from "@/lib/identity";
 import { INTEGRATION_LABELS } from "@/sites/integrations";
@@ -170,7 +170,7 @@ function PortTableLine({
         try {
           await connect(removed);
         } catch (error) {
-          toast.error(deviceMutationError(error));
+          toast.error(failureMessage(error, "editor"));
         }
       };
       toast(`« ${deviceName} » ${portLabel(port)} débranché`, {
@@ -178,7 +178,7 @@ function PortTableLine({
         duration: 10_000,
       });
     } catch (error) {
-      toast.error(deviceMutationError(error));
+      toast.error(failureMessage(error, "editor"));
     }
   };
 
@@ -356,7 +356,7 @@ function FreePortList({
       });
       onDone();
     } catch (caught) {
-      setError(deviceMutationError(caught));
+      setError(failureMessage(caught, "editor"));
     }
   };
 

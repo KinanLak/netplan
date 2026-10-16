@@ -1,0 +1,155 @@
+// How fresh a site's data is and when it is next collected (ADR 0026),
+// computed against the page's clock so it ages without the query re-running.
+import { nextRunAt } from "./cadence";
+import { INTEGRATION_LABELS } from "./integrations";
+import type { IntegrationKind } from "./integrations";
+import type { SiteCadence } from "./settings";
+
+const MINUTE = 60_000;
+
+/** The cron starts a due cycle within a minute, and the cycle takes another. */
+export const DUE_GRACE_MS = 2 * MINUTE;
+
+export interface SiteFreshness {
+  paused: boolean;
+  hasSources: boolean;
+  automaticRefresh: boolean;
+  manualRefresh: boolean;
+  cadence: SiteCadence;
+  timezone: string;
+  running: { startedAt: number; manual: boolean } | null;
+  last: {
+    startedAt: number;
+    finishedAt: number;
+    failed: Array<IntegrationKind>;
+  } | null;
+  lastSuccessAt: number | null;
+  nextRunAt: number | null;
+  failures: number;
+}
+
+/**
+ * Late once two scheduled cycles have passed since the last good one, or
+ * after two failures in a row. Only automatic cycles make a promise to keep.
+ */
+export const isLate = (freshness: SiteFreshness, now: number): boolean => {
+  const { paused, hasSources, automaticRefresh, failures } = freshness;
+  if (paused || !hasSources || !automaticRefresh) return false;
+  if (failures >= 2) return true;
+  if (freshness.lastSuccessAt === null) return false;
+  const { cadence, timezone } = freshness;
+  const first = nextRunAt(cadence, timezone, freshness.lastSuccessAt);
+  const second = nextRunAt(cadence, timezone, first);
+  return now > second + DUE_GRACE_MS;
+};
+
+export type NextRun =
+  | { kind: "running" }
+  | { kind: "paused" }
+  | { kind: "no-source" }
+  | { kind: "manual-only" }
+  | { kind: "at"; at: number }
+  | { kind: "imminent" }
+  | { kind: "waiting" };
+
+/** What stands in for the next cycle's date, which is never shown past. */
+export const nextRun = (freshness: SiteFreshness, now: number): NextRun => {
+  if (freshness.running) return { kind: "running" };
+  if (freshness.paused) return { kind: "paused" };
+  if (!freshness.hasSources) return { kind: "no-source" };
+  if (!freshness.automaticRefresh) return { kind: "manual-only" };
+  // No cycle yet: the cron starts the first one within the minute.
+  const due = freshness.nextRunAt ?? now;
+  if (due > now) return { kind: "at", at: due };
+  return now - due < DUE_GRACE_MS ? { kind: "imminent" } : { kind: "waiting" };
+};
+
+const sameDay = (a: number, b: number, timezone: string) => {
+  const day = new Intl.DateTimeFormat("fr-FR", {
+    timeZone: timezone,
+    dateStyle: "short",
+  });
+  return day.format(a) === day.format(b);
+};
+
+/** A time of the site's day, with the day when it is not today. */
+export const formatSiteTime = (
+  at: number,
+  now: number,
+  timezone: string,
+): string =>
+  new Intl.DateTimeFormat("fr-FR", {
+    timeZone: timezone,
+    ...(sameDay(at, now, timezone)
+      ? { timeStyle: "short" }
+      : {
+          weekday: "short",
+          day: "numeric",
+          month: "short",
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+  }).format(at);
+
+export const describeNextRun = (
+  next: NextRun,
+  now: number,
+  timezone: string,
+): string => {
+  switch (next.kind) {
+    case "running":
+      return "Collecte en cours…";
+    case "paused":
+      return "Collecte suspendue sur le serveur";
+    case "no-source":
+      return "Aucune intégration active";
+    case "manual-only":
+      return "Collecte automatique désactivée";
+    case "at":
+      return `Prochaine collecte : ${formatSiteTime(next.at, now, timezone)}`;
+    case "imminent":
+      return "Prochaine collecte imminente";
+    case "waiting":
+      return "Prochaine collecte en attente";
+  }
+};
+
+/** How long ago the data was collected, in words. */
+export const describeAge = (
+  at: number,
+  now: number,
+  timezone: string,
+): string => {
+  const minutes = Math.floor((now - at) / MINUTE);
+  if (minutes < 1) return "à l'instant";
+  if (minutes < 60) return `il y a ${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `il y a ${hours} h`;
+  return `le ${formatSiteTime(at, now, timezone)}`;
+};
+
+const listSources = (sources: Array<IntegrationKind>) =>
+  sources.map((source) => INTEGRATION_LABELS[source]).join(" et ");
+
+export type RefreshOutcome =
+  | { kind: "pending" }
+  | { kind: "gone" }
+  | { kind: "succeeded" }
+  | { kind: "failed"; sources: string }
+  | { kind: "interrupted" };
+
+/**
+ * How the cycle someone started at `startedAt` ended. Read only after their
+ * `refresh` returned, so the query already shows that cycle running or done.
+ */
+export const refreshOutcome = (
+  freshness: SiteFreshness | null,
+  startedAt: number,
+): RefreshOutcome => {
+  if (!freshness) return { kind: "gone" };
+  if (freshness.running?.startedAt === startedAt) return { kind: "pending" };
+  if (freshness.last?.startedAt !== startedAt) return { kind: "interrupted" };
+  return freshness.last.failed.length === 0
+    ? { kind: "succeeded" }
+    : { kind: "failed", sources: listSources(freshness.last.failed) };
+};
