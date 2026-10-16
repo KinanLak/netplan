@@ -431,6 +431,19 @@ describe("the LibreNMS step", () => {
       expect.objectContaining({ kind: "online" }),
     ]);
 
+    // A device made from a MAC already seen starts its history where it is.
+    await admin.mutation(api.unknownMacs.createDevice, {
+      siteId,
+      mac: STRANGER,
+      deviceId: "device:stranger",
+      name: "Imprimante",
+    });
+    await cycle(admin, siteId);
+    expect(await history("device:stranger")).toEqual([
+      expect.objectContaining({ kind: "located", place: atSocket }),
+      expect.objectContaining({ kind: "online", deviceName: "Imprimante" }),
+    ]);
+
     // Seen on another port, then not at all for two cycles.
     librenms.state.fdb = [
       { port_id: 102, mac_address: PC },
@@ -458,6 +471,7 @@ describe("the LibreNMS step", () => {
     });
     expect(located.page.map(({ deviceId }) => deviceId)).toEqual([
       "device:pc",
+      "device:stranger",
       "device:printer",
       "device:pc",
     ]);

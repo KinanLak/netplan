@@ -13,6 +13,7 @@ import {
 } from "./mapValidators";
 import { deleteDeviceCabling, insertDeviceCabling } from "./lib/ports";
 import { observedMetadata } from "./lib/statuses";
+import { recordArrival } from "./history";
 import { requireSite } from "./sites";
 import {
   IDENTITY_FIELD_NAMES,
@@ -254,6 +255,7 @@ export async function insertManualDevice(
     updatedAt: Date.now(),
     updatedBy: userId,
   });
+  await recordArrival(ctx, deviceId, Date.now());
   await insertDeviceCabling(
     ctx,
     { siteId, objectId: deviceId, type },

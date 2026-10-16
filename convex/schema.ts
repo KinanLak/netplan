@@ -176,6 +176,7 @@ export default defineSchema({
   })
     .index("by_device_at", ["deviceId", "at"])
     .index("by_site_at", ["siteId", "at"])
+    .index("by_site_kind_at", ["siteId", "kind", "at"])
     .index("by_at", ["at"]),
 
   /** Unknown MACs an Éditeur chose to ignore (ADR 0026). */

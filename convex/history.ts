@@ -12,6 +12,7 @@ import { internalMutation } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { editorQuery } from "./lib/functions";
+import { PRESENT_TYPES } from "./lib/statuses";
 import { deviceEventKind, publicDeviceEvent } from "./historyValidators";
 import type { historyPlace } from "./historyValidators";
 
@@ -106,6 +107,13 @@ export const recordLocated = async (
   place: HistoryPlace,
   at: number,
 ) => {
+  const previous = await ctx.db
+    .query("deviceEvents")
+    .withIndex("by_device_at", (q) => q.eq("deviceId", device.objectId))
+    .order("desc")
+    .filter((q) => q.eq(q.field("kind"), "located"))
+    .first();
+  if (previous?.place?.portId === place.portId) return;
   await ctx.db.insert("deviceEvents", {
     siteId: device.siteId,
     deviceId: device.objectId,
@@ -143,6 +151,43 @@ export const recordPresence = async (
     kind,
     ...(lastSeenAt !== undefined && { lastSeenAt }),
   });
+};
+
+/**
+ * Records where and how the network sees a device entering the inventory with
+ * a MAC it already sighted: the device starts with the status that sighting
+ * gives it, so the cycle, which records changes, would find none.
+ */
+export const recordArrival = async (
+  ctx: MutationCtx,
+  deviceId: string,
+  at: number,
+) => {
+  const device = await ctx.db
+    .query("devices")
+    .withIndex("by_object_id", (q) => q.eq("objectId", deviceId))
+    .unique();
+  const status = device?.metadata.status;
+  if (!device || !PRESENT_TYPES.has(device.type) || status === undefined) {
+    return;
+  }
+  let latest: Doc<"macSightings"> | null = null;
+  for (const mac of device.macs) {
+    const row = await ctx.db
+      .query("macSightings")
+      .withIndex("by_site_mac", (q) =>
+        q.eq("siteId", device.siteId).eq("mac", mac),
+      )
+      .unique();
+    if (row && (!latest || row.seenAt > latest.seenAt)) latest = row;
+  }
+  if (!latest) return;
+  await recordLocated(ctx, device, await placeNamer(ctx)(latest), at);
+  if (status === "up") {
+    await recordPresence(ctx, device, "online", at);
+  } else if (status === "down") {
+    await recordPresence(ctx, device, "offline", at, latest.seenAt);
+  }
 };
 
 const toPublicEvent = ({
@@ -188,15 +233,17 @@ export const forSite = editorQuery({
   },
   returns: eventPage,
   handler: async (ctx, { siteId, kind, paginationOpts }) => {
-    const ordered = ctx.db
-      .query("deviceEvents")
-      .withIndex("by_site_at", (q) => q.eq("siteId", siteId))
-      .order("desc");
-    const result = await (
+    const events =
       kind === undefined
-        ? ordered
-        : ordered.filter((q) => q.eq(q.field("kind"), kind))
-    ).paginate(paginationOpts);
+        ? ctx.db
+            .query("deviceEvents")
+            .withIndex("by_site_at", (q) => q.eq("siteId", siteId))
+        : ctx.db
+            .query("deviceEvents")
+            .withIndex("by_site_kind_at", (q) =>
+              q.eq("siteId", siteId).eq("kind", kind),
+            );
+    const result = await events.order("desc").paginate(paginationOpts);
     return { ...result, page: result.page.map(toPublicEvent) };
   },
 });
