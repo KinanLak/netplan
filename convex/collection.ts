@@ -4,11 +4,7 @@
 // each answered for the admin.
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
-import {
-  internalAction,
-  internalMutation,
-  internalQuery,
-} from "./_generated/server";
+import { internalAction, internalMutation } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
 import type { ActionCtx, MutationCtx, QueryCtx } from "./_generated/server";
 import { openConnection } from "./integrations";
@@ -22,9 +18,20 @@ import { nextRunAt, retryAt } from "../src/sites/cadence";
 import { INTEGRATION_KINDS } from "../src/sites/integrations";
 import type { IntegrationKind } from "../src/sites/integrations";
 
-// Longer than a cycle can take: each source retries for a few minutes at
-// most, and LibreNMS waits up to two for its discovery.
+// Longer than a cycle can take: an action stops after ten minutes.
 const LEASE_MS = 15 * 60_000;
+
+/** Ends the cycle if it still holds this lease once it runs out. */
+const scheduleExpiry = async (
+  ctx: MutationCtx,
+  siteId: string,
+  cycleId: string,
+) => {
+  await ctx.scheduler.runAfter(LEASE_MS + 1000, internal.collection.expire, {
+    siteId,
+    cycleId,
+  });
+};
 
 type CycleStep = { source: IntegrationKind; ok: boolean; message: string };
 
@@ -48,6 +55,12 @@ const enabledSources = async (
     rows.some((row) => row.kind === kind && row.enabled),
   );
 };
+
+const siteOf = async (ctx: QueryCtx, siteId: string) =>
+  await ctx.db
+    .query("sites")
+    .withIndex("by_object_id", (q) => q.eq("objectId", siteId))
+    .unique();
 
 const begin = async (
   ctx: MutationCtx,
@@ -76,6 +89,8 @@ const begin = async (
     siteId,
     cycleId: running.cycleId,
   });
+  // In case the action never starts.
+  await scheduleExpiry(ctx, siteId, running.cycleId);
 };
 
 /** Run by the cron every minute: starts the cycle of each site that is due. */
@@ -125,13 +140,25 @@ export const refresh = editorMutation({
   },
 });
 
-/** The sources a cycle asks, or `null` when it no longer holds the lease. */
-export const plan = internalQuery({
+/**
+ * Run as a cycle's action starts: renews its lease from now, since the action
+ * may have waited in the queue, and returns the sources to ask. `null` when
+ * the cycle no longer holds the lease or collection was paused meanwhile.
+ */
+export const claim = internalMutation({
   args: { siteId: v.string(), cycleId: v.string() },
   returns: v.union(v.null(), v.array(integrationKind)),
   handler: async (ctx, { siteId, cycleId }) => {
     const cycle = await cycleOf(ctx, siteId);
-    if (cycle?.running?.cycleId !== cycleId) return null;
+    if (!cycle?.running || cycle.running.cycleId !== cycleId) return null;
+    if (collectionPaused()) {
+      await ctx.db.patch(cycle._id, { running: undefined });
+      return null;
+    }
+    await ctx.db.patch(cycle._id, {
+      running: { ...cycle.running, leaseUntil: Date.now() + LEASE_MS },
+    });
+    await scheduleExpiry(ctx, siteId, cycleId);
     return await enabledSources(ctx, siteId);
   },
 });
@@ -168,7 +195,7 @@ export const run = internalAction({
   args: { siteId: v.string(), cycleId: v.string() },
   returns: v.null(),
   handler: async (ctx, { siteId, cycleId }) => {
-    const sources = await ctx.runQuery(internal.collection.plan, {
+    const sources = await ctx.runMutation(internal.collection.claim, {
       siteId,
       cycleId,
     });
@@ -198,10 +225,7 @@ export const finish = internalMutation({
     const cycle = await cycleOf(ctx, siteId);
     // Its lease ran out and another cycle took over: that one reports.
     if (!cycle?.running || cycle.running.cycleId !== cycleId) return null;
-    const site = await ctx.db
-      .query("sites")
-      .withIndex("by_object_id", (q) => q.eq("objectId", siteId))
-      .unique();
+    const site = await siteOf(ctx, siteId);
     if (!site) {
       await ctx.db.delete(cycle._id);
       return null;
@@ -216,6 +240,38 @@ export const finish = internalMutation({
         ? nextRunAt(site.cadence, site.timezone, startedAt)
         : retryAt(site.cadence, site.timezone, startedAt, failures),
       last: { startedAt, finishedAt: Date.now(), manual, steps },
+    });
+    return null;
+  },
+});
+
+/**
+ * A cycle whose action died without reporting: it counts as a failure, and
+ * its row changes so the admin's page stops showing it as running.
+ */
+export const expire = internalMutation({
+  args: { siteId: v.string(), cycleId: v.string() },
+  returns: v.null(),
+  handler: async (ctx, { siteId, cycleId }) => {
+    const cycle = await cycleOf(ctx, siteId);
+    const now = Date.now();
+    if (
+      !cycle?.running ||
+      cycle.running.cycleId !== cycleId ||
+      cycle.running.leaseUntil > now
+    ) {
+      return null;
+    }
+    const site = await siteOf(ctx, siteId);
+    if (!site) {
+      await ctx.db.delete(cycle._id);
+      return null;
+    }
+    const failures = cycle.failures + 1;
+    await ctx.db.patch(cycle._id, {
+      running: undefined,
+      failures,
+      nextRunAt: retryAt(site.cadence, site.timezone, now, failures),
     });
     return null;
   },

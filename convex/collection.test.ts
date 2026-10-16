@@ -238,6 +238,75 @@ describe("collection cycles", () => {
     await settle(admin);
   });
 
+  it("drops a queued cycle once collection is paused", async () => {
+    const { admin, siteId } = await siteWithNetBox();
+    const before = fetchStub.calls.length;
+    await admin.mutation(api.collection.refresh, { siteId });
+    process.env.NETPLAN_COLLECTION_PAUSED = "true";
+    await settle(admin);
+
+    const after = await status(admin, siteId);
+    expect(after.running).toBeNull();
+    expect(after.last).toBeNull();
+    expect(fetchStub.calls.length).toBe(before);
+  });
+
+  it("renews the lease when the cycle starts, and counts a dead cycle as a failure", async () => {
+    const { admin, siteId } = await siteWithNetBox();
+    const insertRunning = (cycleId: string, leaseUntil: number) =>
+      admin.run(async (ctx) => {
+        const cycle = await ctx.db.query("siteCycles").first();
+        const running = {
+          cycleId,
+          startedAt: Date.now(),
+          leaseUntil,
+          manual: false,
+        };
+        if (cycle) await ctx.db.patch(cycle._id, { running });
+        else {
+          await ctx.db.insert("siteCycles", {
+            siteId,
+            nextRunAt: 0,
+            failures: 0,
+            running,
+          });
+        }
+      });
+    const leaseUntil = async () =>
+      await admin.run(
+        async (ctx) =>
+          (await ctx.db.query("siteCycles").first())?.running?.leaseUntil ??
+          null,
+      );
+
+    // Queued for a while: almost out of lease when it starts.
+    await insertRunning("queued", Date.now() + 1000);
+    expect(
+      await admin.mutation(internal.collection.claim, {
+        siteId,
+        cycleId: "queued",
+      }),
+    ).toEqual(["netbox"]);
+    expect(await leaseUntil()).toBeGreaterThan(Date.now() + 14 * 60_000);
+
+    // Its expiry does nothing while the lease holds.
+    await admin.mutation(internal.collection.expire, {
+      siteId,
+      cycleId: "queued",
+    });
+    expect((await status(admin, siteId)).running).not.toBeNull();
+
+    await insertRunning("dead", Date.now() - 1);
+    await admin.mutation(internal.collection.expire, {
+      siteId,
+      cycleId: "dead",
+    });
+    const after = await status(admin, siteId);
+    expect(after.running).toBeNull();
+    expect(after.failures).toBe(1);
+    expect(await leaseUntil()).toBeNull();
+  });
+
   it("brings the next cycle forward for a shorter cadence, and goes with its site", async () => {
     const { admin, siteId } = await siteWithNetBox();
     await admin.mutation(api.collection.refresh, { siteId });
