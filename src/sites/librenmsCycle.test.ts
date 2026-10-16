@@ -1,11 +1,13 @@
 import { describe, expect, it } from "bun:test";
 import {
   edgeSightings,
+  freshFdb,
   isOnline,
   matchPorts,
   readLastDiscovered,
   readLibreNMSFdb,
   readLibreNMSPorts,
+  readLibreNMSTime,
   sightingSummary,
 } from "./librenmsCycle";
 import type { SwitchPort } from "./librenmsCycle";
@@ -27,17 +29,27 @@ describe("reading LibreNMS", () => {
     expect(
       readLibreNMSFdb({
         ports_fdb: [
-          { port_id: 5, mac_address: "1aaa2bbb3ccc" },
+          {
+            port_id: 5,
+            mac_address: "1aaa2bbb3ccc",
+            updated_at: "2019-01-1 01:01:01",
+          },
           { port_id: "6", mac_address: "not-a-mac" },
         ],
       }),
-    ).toEqual([{ portId: 5, mac: "1a:aa:2b:bb:3c:cc" }]);
+    ).toEqual([
+      {
+        portId: 5,
+        mac: "1a:aa:2b:bb:3c:cc",
+        updatedAt: Date.UTC(2019, 0, 1, 1, 1, 1),
+      },
+    ]);
     // A single entry comes as an object.
     expect(
       readLibreNMSFdb({
         ports_fdb: { port_id: 7, mac_address: "AABBCCDDEEFF" },
       }),
-    ).toEqual([{ portId: 7, mac: "aa:bb:cc:dd:ee:ff" }]);
+    ).toEqual([{ portId: 7, mac: "aa:bb:cc:dd:ee:ff", updatedAt: null }]);
     expect(readLibreNMSFdb({ status: "ok" })).toEqual([]);
     expect(
       readLastDiscovered({
@@ -47,6 +59,41 @@ describe("reading LibreNMS", () => {
     expect(
       readLastDiscovered({ devices: [{ last_discovered: null }] }),
     ).toBeNull();
+  });
+});
+
+describe("freshFdb", () => {
+  const entry = (n: number, updatedAt: string | null) => ({
+    portId: n,
+    mac: `00:00:00:00:00:0${n}`,
+    updatedAt: readLibreNMSTime(updatedAt),
+  });
+
+  it("keeps what the latest discovery refreshed", () => {
+    expect(
+      freshFdb([
+        entry(1, "2026-10-16 07:00:40"),
+        entry(2, "2026-10-16 07:00:02"),
+        // Left behind by the discovery five minutes earlier.
+        entry(3, "2026-10-16 06:55:30"),
+        entry(4, null),
+      ]).map(({ portId }) => portId),
+    ).toEqual([1, 2]);
+    // Without timestamps nothing can be told apart.
+    expect(freshFdb([entry(1, null), entry(2, null)])).toHaveLength(2);
+  });
+
+  it("reads timestamps with or without a zone", () => {
+    expect(readLibreNMSTime("2026-10-16T05:00:00.000000Z")).toBe(
+      Date.UTC(2026, 9, 16, 5),
+    );
+    expect(readLibreNMSTime("2026-10-16 07:00:00+02:00")).toBe(
+      Date.UTC(2026, 9, 16, 5),
+    );
+    expect(readLibreNMSTime("2026-10-16 7:00:00")).toBe(
+      Date.UTC(2026, 9, 16, 7),
+    );
+    expect(readLibreNMSTime("hier")).toBeNull();
   });
 });
 
@@ -120,11 +167,15 @@ describe("edgeSightings", () => {
 
   it("counts ports that reach a socket and quiet uncabled ones", () => {
     const fdb = [
-      { portId: 1, mac: mac(1) },
-      { portId: 2, mac: mac(2) },
-      { portId: 3, mac: mac(3) },
-      ...[10, 11, 12, 13, 14].map((n) => ({ portId: 4, mac: mac(n) })),
-      { portId: 99, mac: mac(99) },
+      { portId: 1, mac: mac(1), updatedAt: null },
+      { portId: 2, mac: mac(2), updatedAt: null },
+      { portId: 3, mac: mac(3), updatedAt: null },
+      ...[10, 11, 12, 13, 14].map((n) => ({
+        portId: 4,
+        mac: mac(n),
+        updatedAt: null,
+      })),
+      { portId: 99, mac: mac(99), updatedAt: null },
     ];
     expect(edgeSightings(fdb, matched, ports)).toEqual([
       { mac: mac(1), portId: "to-socket", switchId: "sw", socketId: "socket" },
@@ -134,8 +185,8 @@ describe("edgeSightings", () => {
 
   it("prefers the port at a socket for a MAC seen on two", () => {
     const fdb = [
-      { portId: 3, mac: mac(1) },
-      { portId: 1, mac: mac(1) },
+      { portId: 3, mac: mac(1), updatedAt: null },
+      { portId: 1, mac: mac(1), updatedAt: null },
     ];
     expect(edgeSightings(fdb, matched, ports)).toEqual([
       { mac: mac(1), portId: "to-socket", switchId: "sw", socketId: "socket" },

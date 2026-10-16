@@ -138,6 +138,11 @@ export default defineSchema({
     seenAt: v.number(),
     /** Cycles in a row that read its switch without seeing it. */
     misses: v.number(),
+    /**
+     * The device whose status the MAC last set, so that one that drops the
+     * MAC still has its status settled.
+     */
+    ownerId: v.optional(v.string()),
   }).index("by_site_mac", ["siteId", "mac"]),
 
   walls: defineTable({

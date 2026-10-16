@@ -7,8 +7,15 @@ import { librenmsId } from "./librenms";
 /** A LibreNMS port and the names a person may know it by. */
 export type LibreNMSPort = { id: number; names: Array<string> };
 
-/** A forwarding table entry: a MAC address learnt on a LibreNMS port. */
-export type FdbEntry = { portId: number; mac: string };
+/**
+ * A forwarding table entry: a MAC address learnt on a LibreNMS port, and
+ * when LibreNMS last refreshed it, in its own clock.
+ */
+export type FdbEntry = {
+  portId: number;
+  mac: string;
+  updatedAt: number | null;
+};
 
 /** A port of a polled switch, with where its cabling leads. */
 export type SwitchPort = {
@@ -36,6 +43,14 @@ export const MAX_UNCABLED_EDGE_MACS = 4;
 
 /** A device is offline after this many cycles in a row without a sighting. */
 export const MISSES_OFFLINE = 2;
+
+/**
+ * One discovery refreshes a switch's whole table within seconds, and Netplan
+ * asks for one every five minutes: an entry this much older than the newest
+ * was left behind by an earlier discovery. LibreNMS keeps such entries for a
+ * while, so their presence proves nothing.
+ */
+export const FDB_FRESH_MS = 2 * 60_000;
 
 const listOf = (body: unknown, key: string): Array<unknown> => {
   if (typeof body !== "object" || body === null) return [];
@@ -71,8 +86,44 @@ export const readLibreNMSFdb = (body: unknown): Array<FdbEntry> =>
       typeof fields.mac_address === "string"
         ? normalizeMac(fields.mac_address)
         : null;
-    return portId === null || mac === null ? [] : [{ portId, mac }];
+    const updatedAt = readLibreNMSTime(fields.updated_at);
+    return portId === null || mac === null ? [] : [{ portId, mac, updatedAt }];
   });
+
+/**
+ * A LibreNMS timestamp as milliseconds. One without a zone, such as
+ * `2019-01-1 01:01:01`, is in LibreNMS's own zone and read as UTC, so it
+ * compares only with others from the same answer.
+ */
+export function readLibreNMSTime(value: unknown): number | null {
+  if (typeof value !== "string") return null;
+  if (/(?:z|[+-]\d{2}:?\d{2})$/i.test(value.trim())) {
+    const at = Date.parse(value);
+    return Number.isNaN(at) ? null : at;
+  }
+  const parts =
+    /^(\d{4})-(\d{1,2})-(\d{1,2})[ t](\d{1,2}):(\d{2}):(\d{2})/i.exec(
+      value.trim(),
+    );
+  if (!parts) return null;
+  const [year, month, day, hour, minute, second] = parts.slice(1).map(Number);
+  return Date.UTC(year, month - 1, day, hour, minute, second);
+}
+
+/**
+ * The entries of one switch's table that its latest discovery refreshed. A
+ * table without timestamps cannot be judged and is kept whole.
+ */
+export function freshFdb(entries: ReadonlyArray<FdbEntry>): Array<FdbEntry> {
+  const times = entries.flatMap(({ updatedAt }) =>
+    updatedAt === null ? [] : [updatedAt],
+  );
+  if (times.length === 0) return [...entries];
+  const newest = Math.max(...times);
+  return entries.filter(
+    ({ updatedAt }) => updatedAt !== null && updatedAt >= newest - FDB_FRESH_MS,
+  );
+}
 
 /** When LibreNMS last finished discovering a device, from `/devices/:id`. */
 export const readLastDiscovered = (body: unknown): string | null => {

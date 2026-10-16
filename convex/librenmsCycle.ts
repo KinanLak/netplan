@@ -15,6 +15,7 @@ import { cableRowAt, portRowsOf, traceRows } from "./lib/ports";
 import { EMPTY_LIBRENMS_SETTINGS, polledSwitches } from "../src/sites/librenms";
 import {
   edgeSightings,
+  freshFdb,
   isOnline,
   matchPorts,
   MISSES_OFFLINE,
@@ -184,12 +185,15 @@ const setStatus = async (
 /**
  * Records a cycle's sightings. A MAC not seen counts a miss when its switch
  * was read, so a LibreNMS that fails does not take devices offline; a MAC no
- * device carries is forgotten once it is offline.
+ * device carries is forgotten once it is offline. Every MAC's owner is looked
+ * up again, so a device that dropped a MAC, or a MAC whose device was
+ * deleted, is settled too.
  */
 export const recordSightings = internalMutation({
   args: {
     siteId: v.string(),
     cycleId: v.string(),
+    baseUrl: v.string(),
     failedSwitchIds: v.array(v.string()),
     sightings: v.array(sighting),
   },
@@ -202,44 +206,85 @@ export const recordSightings = internalMutation({
       unknown: v.number(),
     }),
   ),
-  handler: async (ctx, { siteId, cycleId, failedSwitchIds, sightings }) => {
+  handler: async (
+    ctx,
+    { siteId, cycleId, baseUrl, failedSwitchIds, sightings },
+  ) => {
     const cycle = await cycleOf(ctx, siteId);
     if (cycle?.running?.cycleId !== cycleId) return null;
+    // LibreNMS was removed or moved while it was read: its release already
+    // settled the statuses, which this read must not bring back.
+    const integration = await ctx.db
+      .query("integrations")
+      .withIndex("by_site_kind", (q) =>
+        q.eq("siteId", siteId).eq("kind", "librenms"),
+      )
+      .unique();
+    if (integration?.baseUrl !== baseUrl) return null;
+
     const now = Date.now();
     const rows = await sightingRowsOf(ctx, siteId);
     const rowOf = new Map(rows.map((row) => [row.mac, row]));
-    const misses = new Map(rows.map((row) => [row.mac, row.misses]));
-    const changed = new Set<string>();
-
-    for (const { mac, portId, switchId, socketId } of sightings) {
-      const fields = { switchId, portId, socketId, seenAt: now, misses: 0 };
-      const row = rowOf.get(mac);
-      if (row) await ctx.db.patch(row._id, fields);
-      else await ctx.db.insert("macSightings", { siteId, mac, ...fields });
-      misses.set(mac, 0);
-      changed.add(mac);
-    }
-    const seen = new Set(sightings.map(({ mac }) => mac));
+    const sightingOf = new Map(sightings.map((one) => [one.mac, one]));
     const failed = new Set(failedSwitchIds);
+    const misses = new Map<string, number>();
     for (const row of rows) {
       // Past the offline mark a further miss changes nothing.
-      if (seen.has(row.mac) || failed.has(row.switchId)) continue;
-      if (row.misses >= MISSES_OFFLINE) continue;
-      misses.set(row.mac, row.misses + 1);
-      changed.add(row.mac);
+      const missed =
+        failed.has(row.switchId) || row.misses >= MISSES_OFFLINE
+          ? row.misses
+          : row.misses + 1;
+      misses.set(row.mac, missed);
     }
+    for (const { mac } of sightings) misses.set(mac, 0);
 
     const owners = new Map<string, Doc<"devices">>();
+    const dropped = new Set<string>();
     let unknown = 0;
-    for (const mac of changed) {
+    for (const [mac, missed] of misses) {
       const owner = await ownerOf(ctx, siteId, mac);
-      if (owner) owners.set(owner.objectId, owner);
-      else if (seen.has(mac)) unknown += 1;
       const row = rowOf.get(mac);
-      if (!row || seen.has(mac)) continue;
-      const missed = misses.get(mac) ?? 0;
-      if (!owner && missed >= MISSES_OFFLINE) await ctx.db.delete(row._id);
-      else await ctx.db.patch(row._id, { misses: missed });
+      const seen = sightingOf.get(mac);
+      if (owner) owners.set(owner.objectId, owner);
+      else if (seen) unknown += 1;
+      if (row?.ownerId !== undefined && row.ownerId !== owner?.objectId) {
+        dropped.add(row.ownerId);
+      }
+      if (!owner && missed >= MISSES_OFFLINE) {
+        if (row) await ctx.db.delete(row._id);
+        continue;
+      }
+      const fields = {
+        misses: missed,
+        ownerId: owner?.objectId,
+        ...(seen && {
+          switchId: seen.switchId,
+          portId: seen.portId,
+          socketId: seen.socketId,
+          seenAt: now,
+        }),
+      };
+      if (!row && seen) {
+        await ctx.db.insert("macSightings", {
+          siteId,
+          mac,
+          ...fields,
+          switchId: seen.switchId,
+          portId: seen.portId,
+          seenAt: now,
+        });
+      } else if (
+        row &&
+        (seen || row.misses !== missed || row.ownerId !== owner?.objectId)
+      ) {
+        await ctx.db.patch(row._id, fields);
+      }
+    }
+    for (const deviceId of dropped) {
+      const device = owners.has(deviceId)
+        ? null
+        : await deviceOf(ctx, deviceId);
+      if (device) owners.set(deviceId, device);
     }
 
     let online = 0;
@@ -256,7 +301,7 @@ export const recordSightings = internalMutation({
       if (status === "up") online += 1;
       else offline += 1;
     }
-    return { seen: seen.size, online, offline, unknown };
+    return { seen: sightingOf.size, online, offline, unknown };
   },
 });
 
@@ -265,10 +310,18 @@ export const recordSightings = internalMutation({
  * status it gave their devices: without LibreNMS nothing would update them.
  */
 export const releaseLibreNMS = async (ctx: MutationCtx, siteId: string) => {
+  const settled = new Set<string>();
   for (const row of await sightingRowsOf(ctx, siteId)) {
-    const owner = await ownerOf(ctx, siteId, row.mac);
-    if (owner && PRESENT_TYPES.has(owner.type) && owner.metadata.status) {
-      await setStatus(ctx, owner, undefined);
+    const owners = [
+      await ownerOf(ctx, siteId, row.mac),
+      row.ownerId === undefined ? null : await deviceOf(ctx, row.ownerId),
+    ];
+    for (const owner of owners) {
+      if (!owner || settled.has(owner.objectId)) continue;
+      settled.add(owner.objectId);
+      if (PRESENT_TYPES.has(owner.type) && owner.metadata.status) {
+        await setStatus(ctx, owner, undefined);
+      }
     }
     await ctx.db.delete(row._id);
   }
@@ -286,22 +339,36 @@ type LibreNMSRead = (path: string) => ReturnType<typeof sourceGet>;
 /**
  * Asks each device to rediscover and waits, up to two minutes, until
  * LibreNMS records a new discovery for each. LibreNMS clears a device's
- * `last_discovered` when asked and sets it once done. Returns the names of
- * the devices that did not finish in time.
+ * `last_discovered` when asked and sets it once done. Returns why a device
+ * could not be asked, and the devices that did not finish in time.
  */
 const rediscover = async (
   readOnce: LibreNMSRead,
+  trigger: LibreNMSRead,
   devices: ReadonlyArray<{ id: number; name: string }>,
-): Promise<Array<string>> => {
+): Promise<{ failures: Array<string>; unfinished: Array<string> }> => {
+  const failures: Array<string> = [];
   const before = new Map<number, string | null>();
   for (const device of devices) {
     const current = await readOnce(`/api/v0/devices/${device.id}`);
-    if (!current.ok) continue;
-    const asked = await readOnce(`/api/v0/devices/${device.id}/discover`);
-    if (asked.ok) before.set(device.id, readLastDiscovered(current.body));
+    if (!current.ok) {
+      failures.push(`« ${device.name} » : ${current.message}`);
+      continue;
+    }
+    const asked = await trigger(`/api/v0/devices/${device.id}/discover`);
+    if (!asked.ok) {
+      failures.push(
+        `« ${device.name} » n'a pas pu lancer sa découverte : ${asked.message}`,
+      );
+    }
+    // An answer other than a server error says the request did not start
+    // one; a timeout or a 5xx may have, and only waiting tells.
+    const refused =
+      !asked.ok && asked.status !== undefined && asked.status < 500;
+    if (!refused) before.set(device.id, readLastDiscovered(current.body));
   }
   const deadline = Date.now() + DISCOVERY_WAIT_MS;
-  for (;;) {
+  while (before.size > 0) {
     for (const [id, last] of before) {
       const answer = await readOnce(`/api/v0/devices/${id}`);
       const now = answer.ok ? readLastDiscovered(answer.body) : null;
@@ -310,9 +377,10 @@ const rediscover = async (
     if (before.size === 0 || Date.now() + DISCOVERY_POLL_MS > deadline) break;
     await pause(DISCOVERY_POLL_MS);
   }
-  return devices
+  const unfinished = devices
     .filter((device) => before.has(device.id))
     .map((device) => device.name);
+  return { failures, unfinished };
 };
 
 /** Reads the polled switches from LibreNMS and records what they saw. */
@@ -335,8 +403,15 @@ export const collectFromLibreNMS = async (
     await sourceGet("librenms", baseUrl, path, token, SOURCE_RETRY);
   const readOnce: LibreNMSRead = async (path) =>
     await sourceGet("librenms", baseUrl, path, token, PROBE_RETRY);
+  // Asking for a discovery has an effect: a retry could ask again at once.
+  const trigger: LibreNMSRead = async (path) =>
+    await sourceGet("librenms", baseUrl, path, token, {
+      ...PROBE_RETRY,
+      attempts: 1,
+    });
 
   const notes: Array<string> = [];
+  let discoveryFailed = false;
   if (
     plan.discover &&
     plan.devices.length > 0 &&
@@ -345,9 +420,18 @@ export const collectFromLibreNMS = async (
       cycleId,
     }))
   ) {
-    for (const name of await rediscover(readOnce, plan.devices)) {
-      notes.push(`« ${name} » n'a pas fini sa découverte à temps.`);
-    }
+    const { failures, unfinished } = await rediscover(
+      readOnce,
+      trigger,
+      plan.devices,
+    );
+    discoveryFailed = failures.length > 0;
+    notes.push(
+      ...failures,
+      ...unfinished.map(
+        (name) => `« ${name} » n'a pas fini sa découverte à temps.`,
+      ),
+    );
   }
 
   const failedSwitchIds: Array<string> = [];
@@ -376,7 +460,7 @@ export const collectFromLibreNMS = async (
     )) {
       matched.set(portId, ownId);
     }
-    fdb.push(...readLibreNMSFdb(fdbList.body));
+    fdb.push(...freshFdb(readLibreNMSFdb(fdbList.body)));
     ports.push(...own);
     readCount += 1;
   }
@@ -384,6 +468,7 @@ export const collectFromLibreNMS = async (
   const counts = await ctx.runMutation(internal.librenmsCycle.recordSightings, {
     siteId,
     cycleId,
+    baseUrl,
     failedSwitchIds,
     sightings: edgeSightings(fdb, matched, ports),
   });
@@ -392,7 +477,7 @@ export const collectFromLibreNMS = async (
     return { ok: true, message: "Aucun switch n'est interrogé." };
   }
   return {
-    ok: failedSwitchIds.length === 0,
+    ok: failedSwitchIds.length === 0 && !discoveryFailed,
     message: [
       sightingSummary({ switches: readCount, ...counts }),
       ...notes,

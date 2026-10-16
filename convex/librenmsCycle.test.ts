@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { randomBytes } from "node:crypto";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import { createTestSite, signedInTest } from "./_test/auth.setup";
 import { stubFetch } from "./_test/fetch";
 import type { TestClient } from "./_test/auth.setup";
@@ -14,11 +14,20 @@ const PC = macOf(1);
 const PRINTER = macOf(2);
 const STRANGER = macOf(3);
 
-/** A LibreNMS polling one device, whose forwarding table a test sets. */
+/**
+ * A LibreNMS polling one device, whose forwarding table a test sets. An
+ * entry without `updated_at` was refreshed by the latest discovery.
+ */
 function fakeLibreNMS() {
   const state = {
-    fdb: [] as Array<{ port_id: number | string; mac_address: string }>,
+    fdb: [] as Array<{
+      port_id: number | string;
+      mac_address: string;
+      updated_at?: string;
+    }>,
     fdbStatus: 200,
+    /** A 5xx still starts the discovery, as a proxy timing out would. */
+    discoverStatus: 200,
     lastDiscovered: "2026-10-16 06:00:00",
     discoveries: 0,
   };
@@ -37,9 +46,14 @@ function fakeLibreNMS() {
       });
     }
     if (path === `/api/v0/devices/${STACK}/discover`) {
+      if (state.discoverStatus >= 300 && state.discoverStatus < 500) {
+        return new Response("", { status: state.discoverStatus });
+      }
       state.discoveries += 1;
       state.lastDiscovered = `2026-10-16 07:0${state.discoveries}:00`;
-      return Response.json({ status: "ok", result: { status: 0 } });
+      return state.discoverStatus === 200
+        ? Response.json({ status: "ok", result: { status: 0 } })
+        : new Response("", { status: state.discoverStatus });
     }
     if (path === `/api/v0/devices/${STACK}/ports`) {
       return Response.json({
@@ -53,7 +67,13 @@ function fakeLibreNMS() {
     }
     if (path === `/api/v0/devices/${STACK}/fdb`) {
       return state.fdbStatus === 200
-        ? Response.json({ status: "ok", ports_fdb: state.fdb })
+        ? Response.json({
+            status: "ok",
+            ports_fdb: state.fdb.map((entry) => ({
+              updated_at: state.lastDiscovered,
+              ...entry,
+            })),
+          })
         : new Response("", { status: state.fdbStatus });
     }
     return new Response("", { status: 404 });
@@ -233,8 +253,12 @@ describe("the LibreNMS step", () => {
     ]);
 
     // One cycle without the pc keeps it online; the second takes it offline
-    // and forgets the stranger. LibreNMS rediscovers at most every 5 minutes.
-    librenms.state.fdb = [{ port_id: 102, mac_address: PRINTER }];
+    // and forgets the stranger. LibreNMS rediscovers at most every 5 minutes,
+    // and keeps the pc's entry from a discovery long past.
+    librenms.state.fdb = [
+      { port_id: 102, mac_address: PRINTER },
+      { port_id: 101, mac_address: PC, updated_at: "2026-10-16 05:00:00" },
+    ];
     expect((await cycle(admin, siteId)).message).toContain("1 MAC vue.");
     expect(await statusOf(admin, "device:pc")).toBe("up");
     expect((await cycle(admin, siteId)).message).toContain(
@@ -297,5 +321,90 @@ describe("the LibreNMS step", () => {
     expect(await sightings(admin)).toHaveLength(1);
     await admin.mutation(api.sites.remove, { siteId });
     expect(await sightings(admin)).toEqual([]);
+  });
+
+  it("settles a device that dropped its MAC, and forgets one deleted", async () => {
+    const { admin, siteId } = await siteWithLibreNMS();
+    librenms.state.fdb = [
+      { port_id: 101, mac_address: PC },
+      { port_id: 102, mac_address: PRINTER },
+    ];
+    await cycle(admin, siteId);
+    expect(await statusOf(admin, "device:pc")).toBe("up");
+
+    // Its new MAC is not seen: the network no longer sees this pc.
+    await admin.mutation(api.devices.updateIdentity, {
+      deviceId: "device:pc",
+      edit: { macs: [macOf(9)] },
+    });
+    expect((await cycle(admin, siteId)).message).toContain(
+      "2 MAC vues (1 passé hors ligne, 1 inconnue).",
+    );
+    expect(await statusOf(admin, "device:pc")).toBe("down");
+
+    // Once offline, a deleted device's MAC is an unknown one to forget.
+    librenms.state.fdb = [];
+    await cycle(admin, siteId);
+    await cycle(admin, siteId);
+    expect(await statusOf(admin, "device:printer")).toBe("down");
+    await admin.mutation(api.devices.remove, { deviceId: "device:printer" });
+    await cycle(admin, siteId);
+    expect(await sightings(admin)).toEqual([]);
+  });
+
+  it("asks once for a discovery and reports when it could not", async () => {
+    const { admin, siteId } = await siteWithLibreNMS();
+    librenms.state.fdb = [{ port_id: 101, mac_address: PC }];
+    librenms.state.discoverStatus = 503;
+    const uncertain = await cycle(admin, siteId);
+    expect(
+      fetchStub.calls.filter(([url]) => String(url).endsWith("/discover")),
+    ).toHaveLength(1);
+    expect(uncertain.ok).toBe(false);
+    expect(uncertain.message).toContain(
+      "« pile » n'a pas pu lancer sa découverte : LibreNMS a répondu 503.",
+    );
+    // It ran anyway, so the tables are read.
+    expect(await statusOf(admin, "device:pc")).toBe("up");
+
+    // Five minutes later.
+    await admin.run(async (ctx) => {
+      const row = await ctx.db.query("siteCycles").first();
+      if (row) await ctx.db.patch(row._id, { librenmsDiscoveryAt: 0 });
+    });
+    librenms.state.discoverStatus = 403;
+    const refused = await cycle(admin, siteId);
+    expect(refused.message).toContain(
+      "« pile » n'a pas pu lancer sa découverte : LibreNMS refuse ce jeton (403).",
+    );
+    expect(librenms.state.discoveries).toBe(1);
+  });
+
+  it("records nothing once LibreNMS was removed during the read", async () => {
+    const { admin, siteId } = await siteWithLibreNMS();
+    await admin.mutation(api.collection.refresh, { siteId });
+    const cycleId = await admin.run(
+      async (ctx) =>
+        (await ctx.db.query("siteCycles").first())?.running?.cycleId,
+    );
+    if (!cycleId) throw new Error("expected a running cycle");
+    await admin.mutation(api.integrations.remove, { siteId, kind: "librenms" });
+    expect(
+      await admin.mutation(internal.librenmsCycle.recordSightings, {
+        siteId,
+        cycleId,
+        baseUrl: LIBRENMS,
+        failedSwitchIds: [],
+        sightings: [
+          {
+            mac: PC,
+            portId: "port:device:sw:interface:2",
+            switchId: "device:sw",
+          },
+        ],
+      }),
+    ).toBeNull();
+    expect(await sightings(admin)).toEqual([]);
+    expect(await statusOf(admin, "device:pc")).toBeNull();
   });
 });
