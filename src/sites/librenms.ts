@@ -1,0 +1,74 @@
+// What a site polls in LibreNMS (ADR 0023): for each Netplan switch, the
+// LibreNMS device it stands for. Several switches may share one device, as
+// the members of a stack do. A switch an admin chose not to poll keeps a
+// `null` device, so that the form does not suggest one again; a switch
+// never configured is absent.
+
+/** A LibreNMS device as the settings name it. */
+export type LibreNMSDevice = { id: number; name: string };
+
+export type LibreNMSSwitch = {
+  switchId: string;
+  device: LibreNMSDevice | null;
+};
+
+export type LibreNMSSettings = { switches: Array<LibreNMSSwitch> };
+
+export const EMPTY_LIBRENMS_SETTINGS: LibreNMSSettings = { switches: [] };
+
+const isId = (id: number) => Number.isSafeInteger(id) && id > 0;
+
+/** A LibreNMS id, which its API returns as a number or a numeric string. */
+export const librenmsId = (value: unknown): number | null => {
+  const id =
+    typeof value === "string" && /^\d+$/.test(value) ? Number(value) : value;
+  return typeof id === "number" && isId(id) ? id : null;
+};
+
+/** The switches a site polls, each with its device. */
+export const polledSwitches = (settings: LibreNMSSettings) =>
+  settings.switches.flatMap(({ switchId, device }) =>
+    device ? [{ switchId, device }] : [],
+  );
+
+/** Why LibreNMS settings cannot be saved, in French, or `null`. */
+export const librenmsSettingsError = (
+  settings: LibreNMSSettings,
+): string | null => {
+  if (!settings.switches.every(({ device }) => !device || isId(device.id))) {
+    return "Cet équipement LibreNMS n'existe pas.";
+  }
+  const ids = settings.switches.map(({ switchId }) => switchId);
+  if (new Set(ids).size !== ids.length) {
+    return "Chaque switch ne correspond qu'à un équipement LibreNMS.";
+  }
+  return null;
+};
+
+/**
+ * A name without its domain, ignoring case: `SW-01.corp` is `sw-01`. An IPv4
+ * address, which LibreNMS often names a device by, stays whole.
+ */
+const shortName = (name: string) => {
+  const lower = name.trim().toLowerCase();
+  return /^[\d.]+$/.test(lower) ? lower : lower.replace(/\..*$/, "");
+};
+
+/**
+ * The LibreNMS device a switch most likely is: the only one whose name is
+ * the switch's hostname or name, domains ignored. `null` when none or
+ * several are.
+ */
+export const suggestDevice = (
+  netplanSwitch: { name: string; hostname?: string },
+  devices: ReadonlyArray<LibreNMSDevice>,
+): LibreNMSDevice | null => {
+  const names = new Set(
+    [netplanSwitch.hostname, netplanSwitch.name]
+      .filter((name) => name !== undefined)
+      .map(shortName)
+      .filter(Boolean),
+  );
+  const found = devices.filter((device) => names.has(shortName(device.name)));
+  return found.length === 1 ? (found.at(0) ?? null) : null;
+};

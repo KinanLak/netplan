@@ -72,6 +72,16 @@ export const netboxSettings = v.object({
   ),
 });
 
+/** `LibreNMSSettings` from `src/sites/librenms.ts`. */
+export const librenmsSettings = v.object({
+  switches: v.array(
+    v.object({
+      switchId: v.string(),
+      device: v.union(v.null(), v.object({ id: v.number(), name: v.string() })),
+    }),
+  ),
+});
+
 /** `ImportedPort` from `src/sites/netboxImport.ts`. */
 export const importedPort = v.object({
   deviceExternalId: v.string(),
