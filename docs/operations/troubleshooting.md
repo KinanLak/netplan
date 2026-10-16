@@ -108,8 +108,8 @@ answer is final.
 ## LibreNMS switches
 
 The list names LibreNMS devices, so one row may stand for several Netplan
-switches. A row without notes reads "Lu". A row turns red when either the
-discovery or the read failed, and the note says which:
+switches. A row without notes reads "Lu". A row turns red when its discovery
+or its read failed:
 
 - **An error from the table above**: LibreNMS failed to answer for this
   switch, before asking for its discovery or while reading the switch, its
