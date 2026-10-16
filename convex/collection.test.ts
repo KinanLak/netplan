@@ -1,4 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  setSystemTime,
+} from "bun:test";
 import { randomBytes } from "node:crypto";
 import { api, internal } from "./_generated/api";
 import {
@@ -21,6 +28,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  setSystemTime();
   fetchStub.restore();
   delete process.env.NETPLAN_SECRET_KEY;
   delete process.env.NETPLAN_COLLECTION_PAUSED;
@@ -309,6 +317,9 @@ describe("collection cycles", () => {
   });
 
   it("brings the next cycle forward for a shorter cadence, and goes with its site", async () => {
+    // Inside business hours, so that the start of a window does not come
+    // before either interval.
+    setSystemTime(new Date("2026-10-14T08:00:00Z"));
     const { admin, siteId } = await siteWithNetBox();
     await admin.mutation(api.collection.refresh, { siteId });
     await settle(admin);
