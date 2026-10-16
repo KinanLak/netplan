@@ -57,9 +57,7 @@ function ReviewItem({ siteId, review }: { siteId: string; review: Review }) {
   const resolve = useMutation(api.importReviews.resolve);
   const [pending, setPending] = useState(false);
   const { device, candidates } = review;
-  const [chosen, setChosen] = useState<string | null>(
-    candidates[0]?.id ?? null,
-  );
+  const [chosen, setChosen] = useState<string | null>(null);
   const canDecide = review.kind === "suggestion" || isAdmin(me?.role);
 
   const settle = async (deviceId: string | null) => {
@@ -78,7 +76,9 @@ function ReviewItem({ siteId, review }: { siteId: string; review: Review }) {
     device.serial ? `n° ${device.serial}` : null,
     device.macs.length > 0 ? device.macs.join(", ") : null,
   ].filter(Boolean);
-  const match = candidates.find((candidate) => candidate.id === chosen);
+  // The chosen candidate may be bound or deleted meanwhile, by this page too.
+  const match =
+    candidates.find((candidate) => candidate.id === chosen) ?? candidates.at(0);
 
   return (
     <li className="flex flex-col gap-3 py-3 first:pt-0 last:pb-0 md:flex-row md:items-center md:justify-between">
@@ -118,7 +118,7 @@ function ReviewItem({ siteId, review }: { siteId: string; review: Review }) {
                 value: candidate.id,
                 label: candidate.name,
               }))}
-              value={chosen}
+              value={match?.id ?? null}
               onValueChange={setChosen}
             >
               <SelectTrigger
