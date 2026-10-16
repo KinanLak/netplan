@@ -7,22 +7,8 @@ description: The shape the rebuild lots are building towards.
 
 The rebuild replaces the current design in place, with no transitional layers
 and data restarting from zero (ADR 0001). Order: F, then lots 0 and 1 in
-parallel, then lot 2 alongside lot 3a, then 3b, 4 and 5. Lots F, 0, 1 and
-3a are done and described in [Current](current.md).
-
-## Domain model (lot 2)
-
-- Netplan owns its inventory and identity (MAC, hostname, serial). Devices may
-  exist without a place on the map (ADR 0005).
-- Sites and their integrations are configured in the admin page; integration
-  tokens are encrypted with an environment master key and write-only
-  (ADR 0006).
-- NetBox and LibreNMS become optional per-site sources. Fields they own are
-  read-only in Netplan (ADR 0007); devices they learn later are merged by MAC
-  or serial, otherwise reviewed (ADR 0008).
-- Cables are modelled port to port (ADR 0009). Collection runs inside Convex
-  at a per-site cadence (ADR 0010, ADR 0012); the external agent, connector
-  and systemd units are deleted.
+parallel, then lot 2 alongside lot 3a, then 3b, 4 and 5. Lots F, 0, 1, 2
+and 3a are done and described in [Current](current.md).
 
 ## Map (lot 3b, after lot 2)
 

@@ -1222,3 +1222,449 @@ Questions of 2026-10-15 and 16, in the order they came up.
 - Context: Keycloak omits `name` for such a user, and better-auth refuses a login without a name.
 - Decision: `mapProfileToUser` takes the first of `name`, `preferred_username` and `email`.
 - Who: agent (obvious)
+
+### L2 — Domain model
+
+Questions of 2026-10-15 and 16.
+
+#### Does a device stay tied to a floor?
+
+- Context: ADR 0005 says a device can exist without being placed; today `devices.floorId`, `position` and `size` are required, and devices have no site.
+- Decision: a device belongs to a site; its placement (floor, position, size) is optional. Placing and unplacing are map operations (`device.place` / `device.unplace`, inverse of each other); `device.delete` removes the device from the inventory.
+- Why: an unplaced device is the normal state of anything imported from NetBox or created from an unknown MAC; the map stays the only place positions change, so undo keeps working.
+- Who: agent (obvious)
+
+#### Where do identity edits go: map operations or plain mutations?
+
+- Context: name, hostname, serial, MACs, model and IP are inventory facts, edited in the drawer or the inventory page, sometimes for an unplaced device that has no floor document.
+- Decision: identity, ports and cables are edited through site-scoped Éditeur mutations, not map operations. The map history keeps geometry (create, place, unplace, move, resize, delete, walls). Destructive inventory edits offer an "Annuler" toast that applies the inverse.
+- Why: map operations are floor documents with one revision each; an unplaced device or a cross-floor cable has no single floor. Splitting keeps both models simple.
+- Who: agent (judgement call)
+
+#### How are source-owned fields enforced?
+
+- Context: ADR 0007; NetBox provides name, type, serial, MACs, model and primary IP.
+- Decision: a sourced device records its source (integration, external id, URL, last sync). The fields that source owns are a fixed list per provider in shared code; the server rejects edits to them and the drawer shows them read-only with a "NetBox" badge and link. Hostname, notes and placement stay editable.
+- Why: one list read by both the UI and the server cannot drift.
+- Who: agent (obvious)
+
+#### What replaces links?
+
+- Context: links join two devices on one floor with free-text port names; ADR 0009 wants port-level cables across floors.
+- Decision: a `ports` table (device, name, kind interface/front/rear, rear pairing, order, source) and a `cables` table (two port ids, label, source), one cable per port, site-scoped. New devices get default ports per type. A trace follows cables and front↔rear pairs until it reaches a wall socket. Links and the `link.*` operations are removed; drawing cables on the map is L3b.
+- Why: the trace "switch port → socket" is what localisation needs, and NetBox cables at the real site go through patch panels' rear ports.
+- Who: agent (judgement call)
+
+#### Which new device types, and how are NetBox roles mapped?
+
+- Context: the real NetBox site has roles workstation, render, laptop, nas, printer, proxmox, windows, wall_socket, patch-panel, switch_access, switch-core, and 16 devices without role.
+- Decision: add `endpoint` (Terminal) and `patch-panel` (Panneau de brassage). The admin maps each NetBox role to a Netplan type or "ignorer"; unmapped roles default to "ignorer". Racks are not imported. No name regex.
+- Why: ADR 0005; an explicit mapping is predictable and the admin sees every role.
+- Who: agent (obvious)
+
+#### How are LibreNMS port names matched to inventory ports without vendor rules?
+
+- Context: LibreNMS reports `Gi1/0/18` in ifName and `GigabitEthernet1/0/18` in ifDescr; NetBox names the rear port `GigabitEthernet1/0/18`. The old code expanded Cisco prefixes.
+- Decision: first an exact case-insensitive match on ifName or ifDescr; otherwise split each name into a leading alphabetic part and the rest, and match when the rests are identical and one alphabetic part is a prefix of the other. A match must be unique across the ports of every Netplan switch mapped to that LibreNMS device; otherwise the port is reported unmatched.
+- Why: it covers the usual abbreviation scheme of every vendor without a table, and refuses rather than guesses on ambiguity.
+- Who: agent (judgement call)
+
+#### How does a NetBox import merge with devices Netplan already has?
+
+- Context: ADR 0008. The real NetBox site has many devices with the serial "System Serial Number".
+- Decision: per NetBox device, candidates are Netplan devices of the site without a source sharing a MAC or a serial. Serials on a small denylist (placeholders such as "System Serial Number", "To be filled by O.E.M.", "Default string", "0", "N/A") and any serial or MAC carried by more than one NetBox device of the import are ignored for matching. One candidate and no contradiction (a different non-empty serial, or MACs that are disjoint where both have some) → automatic merge. No identifier match but one hostname match → a suggestion an Éditeur confirms (merge) or rejects (import as new); the NetBox device waits until then. Several candidates or a contradiction → an admin conflict; nothing is imported for that device until resolved.
+- Why: shared placeholders would merge unrelated machines; holding the device avoids creating a duplicate that would itself need merging.
+- Who: agent (judgement call)
+
+#### What happens to a device that disappears from NetBox?
+
+- Context: imports run every 15 minutes; a removal in NetBox may be a mistake or a decommission.
+- Decision: an unplaced device that disappears is deleted with its ports and cables; a placed one loses its source binding and becomes a manual device, keeping its position.
+- Why: nobody invested anything in an unplaced import; a placed device was put there by a person.
+- Who: agent (judgement call)
+
+#### Which devices does the LibreNMS cycle localise, and when is a MAC "unknown"?
+
+- Context: FDB tables list every MAC on every port, including uplinks where hundreds of MACs appear.
+- Decision: a sighting counts on an edge port: a port whose trace reaches a socket, or an uncabled port with at most four MACs. Devices of type pc and endpoint with a MAC sighted there become online at that socket; after two cycles without a sighting they become offline. A sighted MAC that belongs to no device of the site is listed as unknown with "Créer l'équipement".
+- Why: uplinks and trunks would put every MAC everywhere; four covers a phone with a PC behind it plus a virtual machine or two.
+- Who: agent (judgement call)
+
+#### Does localisation move devices on the map?
+
+- Context: the product places each PC where the network last saw it.
+- Decision: when a device's observed socket changes, or it is seen while unplaced, the cycle places it next to the socket (rings around the socket, snapped to the grid, avoiding collisions) on the socket's floor, as a system change that bumps the floor revisions. If the socket is unchanged, a position chosen by a person is kept.
+- Why: same rule as the old projection, without fighting manual adjustments.
+- Who: agent (obvious)
+- Update (agent, #54): the move goes through the map's operations with the client id `librenms` rather than as a separate system write; see "When does a sighting move a device on the map?".
+
+#### Where are integration tokens decrypted, and with what?
+
+- Context: ADR 0006; Convex mutations are deterministic and cannot call sources.
+- Decision: AES-256-GCM with Web Crypto inside actions only. Key `NETPLAN_SECRET_KEY` (32 bytes, base64) in the Convex environment; `NETPLAN_SECRET_KEY_PREVIOUS` is accepted for decryption during a rotation, and an admin action re-encrypts every token with the current key. The additional data binds the ciphertext to the integration row and provider. No query returns ciphertext; the admin sees "configuré" or not.
+- Why: real randomness for IVs and the network only exist in actions; binding prevents copying a ciphertext to another integration.
+- Who: agent (obvious)
+
+#### How is the cadence scheduled?
+
+- Context: ADR 0010; the old scheduler had hard-coded French holidays and a workflow/attempt machinery for the external agent.
+- Decision: a cron every minute reads sites with automatic refresh on, and starts a cycle for each site whose next run is due, under a per-site lease. A cycle syncs NetBox if the last sync is 15 minutes old or the refresh is manual, then runs LibreNMS: trigger a discovery on each mapped switch not triggered in the last five minutes, wait up to two minutes for `last_discovered` to move, read ports and FDB, publish. The next run is 5 minutes after the start during business hours (07:00–20:00 Mon–Fri in the site's time zone), 60 minutes otherwise, with backoff after failures. No holidays.
+- Why: one loop per site is all the product needs; the leases prevent overlap; five minutes between discoveries is the LibreNMS budget.
+- Who: agent (judgement call)
+
+#### Can the legacy pipeline be deleted before the new workers are validated?
+
+- Context: ADR 0012 says the workers are validated against the real sources before the agent is deleted. The legacy tables are keyed on NetBox objects and cannot coexist with the new device model; the agent's systemd timer is inactive and its unit files point at a deleted path; nothing is deployed.
+- Decision: the legacy pipeline (agent, connector, orchestration tables, `ops/systemd`) is deleted early in the stack, and the lot is not reported done until the new workers are validated against the real NetBox and LibreNMS. The dangling user units are removed and systemd reloaded.
+- Why: owner Q13 order changed by agent; reason: keeping both would mean porting the old pipeline to a schema it was not written for, only to delete it, and there is no running deployment whose localisation would stop.
+- Who: agent (judgement call), approved by the orchestrator
+
+#### How are dev credentials put into the local instance without printing them?
+
+- Context: the mandate wants the real NetBox/LibreNMS configured in the dev site; tokens live in `~/.zshrc`.
+- Decision: `bun run dev:agent --integrations` reads `NETBOX_URL/TOKEN` and `LIBRENMS_URL/TOKEN` from its own environment and calls an internal seed action with the admin key over HTTP, which encrypts them into the demo site. Nothing is echoed, passed on a command line, or written to disk.
+- Why: command-line arguments are visible in the process list; the admin UI would put the token in a transcript.
+- Who: agent (obvious)
+
+#### LibreNMS is unreachable from this host
+
+- Context: `$LIBRENMS_URL` resolves to a Tailscale address and Tailscale is stopped on the host; requests time out.
+- Decision: build and test the LibreNMS worker against payload fixtures (real recordings if any exist, otherwise from the API docs); the real validation is a separate final step with a script and a checklist in docs/operations. If Tailscale is still down when the rest is merged, the lot ends with NetBox validated for real and LibreNMS against fixtures, listed as open.
+- Why: bringing the node up changes the owner's host networking; the orchestrator asked the owner and said not to run `tailscale up`.
+- Who: orchestrator
+- Update (orchestrator, later): Tailscale is up with the owner's authorisation, but the host is on the owner's personal tailnet and no peer owns or routes to the LibreNMS address, so it still times out. The plan is unchanged: fixtures, then a real-validation script and checklist; the agent does not touch Tailscale settings.
+
+#### Where does the map keep the site it shows?
+
+- Context: the default site is gone, and several sites can exist.
+- Decision: in the map URL (`/?site=<id>`); without one the map shows the first site by name, and the sidebar picks between sites when there is more than one.
+- Why: a link to a site's plan can be shared, and reload keeps it; nothing new in `localStorage` (AGENTS.md allows only the identity key).
+- Who: agent (obvious)
+
+#### Can an admin delete a site that has buildings?
+
+- Context: buildings, floors and devices belong to a site.
+- Decision: no; a site is deleted only when empty, and the page says why.
+- Why: deleting a site must never silently delete a plan; buildings already have their own delete path.
+- Who: agent (judgement call)
+
+#### Who creates the admin shell?
+
+- Context: L1 (users) and L2 (sites) both need `/admin`; agreed that whoever lands first creates it.
+- Decision: L2 creates `src/routes/_authed/admin.tsx`, `admin/index.tsx` and `src/admin/sections.ts` in its sites PR; L1 adds its users section to `ADMIN_SECTIONS`.
+- Why: L1 had not started it.
+- Who: agent, agreed with L1
+
+#### Who validates the site forms: the browser or the app?
+
+- Context: the cadence fields are native number and time inputs; the browser blocks submission with its own English bubbles.
+- Decision: the forms are `noValidate`. The rules in `src/sites/settings.ts` run on submit and on the server, and show one French error, which clears when a field changes.
+- Why: one source of rules and one language; the server must reject the same things anyway.
+- Who: agent (obvious)
+
+#### An empty site's map still shows the old dev controls
+
+- Context: a site with no building shows the English "create demo" controls and a "Plan indisponible" that never resolves.
+- Decision: left for the lot that owns the map's empty states; recorded in PR #28's Scope.
+- Why: out of L2's domain, and it is visible only on a new site.
+- Who: agent (judgement call)
+
+#### Where do PR screenshots live?
+
+- Context: AGENTS.md says to upload them to the PR and never commit them; `gh` cannot attach images to a PR body.
+- Decision: a secret gist per PR, referenced by its raw URLs.
+- Why: they stay out of the repository and render in the PR.
+- Who: agent (obvious)
+
+#### No migration for sites in the old shape (zipzoup P1 on #28)
+
+- Context: #28 reshapes `sites`; a backend seeded before it refuses the schema push.
+- Decision: answered as intended, no migration. Local backends use `dev:agent --reseed`; L1 and L3a were told.
+- Why: ADR 0022 restarts data from zero and nothing is deployed; a shim would outlive its use.
+- Who: agent (following the owner's "data restarts from zero")
+
+#### How is a key rotation run?
+
+- Context: `NETPLAN_SECRET_KEY_PREVIOUS` decrypts during a rotation; every token must then be re-encrypted.
+- Decision: an internal action, `convex run integrations:reencryptTokens`, documented in docs/operations/configuration.md; no admin button.
+- Why: a rotation is an operator's act on the deployment, done with its environment, not a site setting.
+- Who: agent (judgement call)
+
+#### What is a token bound to?
+
+- Context: AES-GCM additional data can tie a ciphertext to its context.
+- Decision: site + tool + normalised address. Changing the address requires entering the token again.
+- Why: a token is never sent to an address other than the one it was entered for, even by an admin's mistake.
+- Who: agent (judgement call)
+
+#### What does "Enregistrer et tester" do when the test fails?
+
+- Decision: the connection stays saved and the failure is shown and stored as its last check.
+- Why: an unreachable tool (LibreNMS today) must still be configurable; the collection reports the failure later too.
+- Who: agent (obvious)
+
+#### How do tests replace fetch?
+
+- Context: the happy-dom preload makes `globalThis.fetch` an accessor, which `spyOn` cannot wrap in a full run.
+- Decision: `convex/_test/fetch.ts` `stubFetch`, defineProperty-based, with no `bun:test` import because Convex bundles that folder.
+- Who: agent (obvious)
+
+#### How is the inventory work split?
+
+- Decision: device types first (#34), then devices as site inventory (identity, optional placement), then the inventory page, then ports and cables, then the workers.
+- Why: each layer is green on its own and the types are needed by every later one.
+- Who: agent (judgement call)
+
+#### Device types without a hotbar
+
+- Context: the device hotbar was removed in 9723bf4; the registry still declared a toolbar entry and a key per type, read by nothing.
+- Decision: #34 adds `patch-panel` and `endpoint` to the demo seed to be visible; #35 removes the dead toolbar and key config. Placement comes back from the inventory page.
+- Why: inventing a key for a tool nobody can reach is config for nothing.
+- Who: agent (obvious)
+
+#### Endpoint size and label
+
+- Decision: 80×80 with a wrapping uppercase label, like a workstation.
+- Why: at 60×60 a hostname was cut after five characters.
+- Who: agent (obvious, seen in the browser)
+
+#### What happens to a floor's devices when the floor is removed?
+
+- Decision: they lose their placement and stay in the site inventory, with their MACs and identity.
+- Why: a device exists apart from where it stands (ADR 0022); removing a floor plan does not remove the hardware.
+- Who: agent (follows from ADR 0022)
+
+#### What does the dev "Clear map" do to devices?
+
+- Context: with unplacing, reseeding after a clear collided with the leftover demo devices' ids and MACs.
+- Decision: `clearMap` deletes the site's devices that no integration owns, with their MACs; sourced ones are only unplaced.
+- Why: it is a reset of drawn data; a sourced device would come back at the next sync anyway.
+- Who: agent (judgement call)
+
+#### How is per-site MAC uniqueness enforced?
+
+- Decision: a `deviceMacs` table, one row per (site, MAC) pointing at its device, written in the same mutation as the device; MACs canonical `aa:bb:cc:dd:ee:ff`, at most 32 per device.
+- Why: Convex has no unique constraint or array index; one indexed lookup also serves the collectors' sightings later.
+- Who: agent (obvious)
+
+#### Are MACs visible to a Lecteur?
+
+- Decision: yes, they are part of a device's public shape, shown in the drawer.
+- Why: finding a machine by its MAC is a reader's main task; nothing about a MAC is secret within the organisation.
+- Who: agent (judgement call)
+
+#### Where are place and unplace?
+
+- Decision: `device.place`/`device.unplace` arrive with the inventory page (PR C); B1 only makes placement optional and keeps `device.patch` to position and size.
+- Why: without a list of unplaced devices, nothing could use them.
+- Who: agent (obvious)
+
+#### How does the server learn a floor's site?
+
+- Decision: point lookups floor → building → site for the floors an operation touches, instead of collecting every floor.
+- Why: the planner needs the site for MAC uniqueness; collecting all floors grew with the deployment.
+- Who: agent (obvious)
+
+#### Length limits on identity text
+
+- Decision: B2 (identity mutations) bounds name, hostname, serial, model, IP and notes; B1 keeps the existing unbounded name and hostname.
+- Why: one place validates identity text, the mutations that edit it.
+- Who: agent (obvious)
+
+#### Is an identity edit undoable from the map history?
+
+- Decision: no; `devices.updateIdentity` is an Éditeur mutation outside the map's undo stack, as ADR 0022 sets for site facts. Cancelling the dialog is the way back before saving.
+- Why: identity belongs to the site inventory, shared by every floor and by integrations; the per-floor history cannot own it.
+- Who: agent (follows ADR 0022)
+
+#### Can the drawer change a device's type?
+
+- Decision: not in B2; the dialog edits name, hostname, IP, model, serial, MACs and notes.
+- Why: a type change resizes the node and changes which ports and links make sense; it belongs with ports and cables.
+- Who: agent (judgement call)
+
+#### When is a source-owned field refused?
+
+- Decision: only when the edit changes it; sending its current value is accepted.
+- Why: a form can submit the whole identity without knowing which fields the source owns, and a sync between opening and saving does not turn a hostname edit into an error.
+- Who: agent (obvious)
+
+#### What does `device.place` carry?
+
+- Decision: the whole device, so the map shows it at once and undo can rebuild it; the server takes only floor, position and size, and keeps the inventory's identity.
+- Why: the client already has the device; trusting its identity would let a stale tab overwrite an identity edit.
+- Who: agent (obvious)
+
+#### May a sourced device leave the map?
+
+- Decision: yes; "Retirer du plan" works for every device, "Supprimer" only for devices no integration owns.
+- Why: the next sync would bring a deleted sourced device back, but where it stands is Netplan's own fact.
+- Who: agent (follows ADR 0022)
+
+#### What do unplace and delete mean in the UI?
+
+- Decision: "Retirer du plan" (U, drawer, context menu) keeps the device in the site inventory; "Supprimer" removes it for good. The context menu's "Supprimer de la carte" became "Supprimer".
+- Why: with an inventory, "de la carte" now describes unplacing, not deleting.
+- Who: agent (judgement call)
+
+#### Who names a device created from the inventory?
+
+- Decision: the client, with `createStandaloneObjectId("device")`, as buildings and floors already do; the server checks the shape and that the id is free.
+- Why: Convex mutations have no cryptographic random source, and a client id makes a retry, or the "Annuler" of a deletion, bring back the same device.
+- Who: agent (forced by Convex)
+
+#### Which devices can be deleted from the inventory?
+
+- Decision: only unplaced manual ones; a placed device is deleted from the map (its links and undo live there), a sourced one is not deleted in Netplan.
+- Why: one place per kind of deletion keeps link cleanup and undo where they already are.
+- Who: agent (judgement call)
+
+#### How is an inventory deletion undone?
+
+- Decision: a 10-second Sonner toast with "Annuler" recreates the device with the same id and fields; Sonner was added as the app's toast library.
+- Why: the inventory has no undo stack, and a toast is the usual way back from a one-row deletion.
+- Who: agent (judgement call)
+
+#### How does an inventory device get onto the map?
+
+- Decision: a picker on the map (toolbar "Placer", shortcut P) lists the site's unplaced devices; the chosen one goes on the current floor at its type's default size, centred on the view or at the nearest free spot, through the existing `device.place` operation.
+- Why: placement needs a floor and a position, which only the map has; reusing `device.place` gives undo (`device.unplace`) and server validation for free. Drag-from-list was left for later.
+- Who: agent (judgement call)
+
+#### Where do ports and cables live, and what happens to them when a device moves?
+
+- Decision: `ports` and `cables` are site-level Convex tables keyed by the device. Unplacing keeps them; a floor or building removal unplaces devices with their cabling; deleting a device (map, inventory, map clear, site removal) deletes its ports and cables, and the undo of a deletion carries them back on `device.create`.
+- Why: a cable belongs to the inventory, not to the drawing; a device stored in a cupboard is still cabled to its panel.
+- Who: agent (follows ADR 0022)
+
+#### How does a floor's map see a cable whose other end is elsewhere?
+
+- Decision: a floor document carries every cable touching one of its devices' ports, and the ports of both ends; the drawer lists only connected devices on the same floor, as links did. The port table of the next pull request shows each cable's far end wherever it is.
+- Why: a cable may cross floors; the drawer can only jump to a device on the map being shown.
+- Who: agent (judgement call)
+
+#### What ports does a new manual device get?
+
+- Decision: defaults by type (24 interfaces for a switch, 24 front ports with their rear ports for a panel, one front port for a socket, one interface for a PC or endpoint, none for a rack); an operation may carry its own list. Port ids are `port:<deviceId>:<kind>:<n>`, so they cannot collide across devices.
+- Why: an Éditeur cables a new switch immediately; the source's real interface names replace the defaults when an integration owns the device.
+- Who: agent (judgement call)
+
+#### What if a deleted device's cable no longer fits when it is brought back?
+
+- Decision: `device.create` (map undo, inventory "Annuler") still brings the device and its ports back and leaves out each cable whose far port has gone, is in another site, or holds another cable since. A malformed list (bad id, a cable that misses the device, a port id another device has) is still refused.
+- Why: cables cross floors, so each floor's undo history can delete one end before the other is restored; refusing the whole device would lose it for good.
+- Who: agent (found in self-review)
+
+#### How does an Éditeur change cables, and how is a change undone?
+
+- Decision: a "Câbles" dialog (drawer button, shortcut K, inventory menu) lists a device's ports, each cable's far end wherever it is, and where the trace ends. `cables.connect` and `cables.disconnect` are direct Éditeur mutations; unplugging shows a 10-second toast naming the device and port whose "Annuler" reconnects the same cable. Source cables are read-only.
+- Why: a cable crosses floors, so it does not belong in one floor's undo history (ADR 0022); the toast matches the inventory deletion.
+- Who: agent (follows ADR 0022)
+
+#### Where does a trace stop?
+
+- Decision: from a port, follow the cable; on a patch panel cross front to rear (or rear to front) and follow the next cable; stop at an uncabled port, an interface, a socket, or a port already visited.
+- Why: that is the question a technician asks ("which switch port is this socket on?"); a loop through a miscabled panel must not hang.
+- Who: agent (judgement call)
+
+#### Why can a toast's "Annuler" be pressed with the cable dialog open?
+
+- Decision: the dialog traps focus (`modal="trap-focus"`) without blocking presses outside it, and a press on the toaster does not close it.
+- Why: Base UI's fully modal dialog blocks every outside press, the toast's button included.
+- Who: agent (found in browser verification)
+
+#### Where does a site's collection cycle live, and what stops two at once?
+
+- Decision: a `siteCycles` row per site holds the next run, the consecutive failures, the cycle running (with a 15-minute lease and its id) and the last cycle's outcome per source. A cron every minute starts each due site; "Lancer une collecte" starts one at once unless one is running. A cycle whose lease ran out may be taken over; its late report is ignored. A failure retries 5, 10, 20… up to 120 minutes later, never sooner than the cadence. Changing the cadence to a shorter one brings the next cycle forward.
+- Why: keeping it apart from `sites` means a cycle's bookkeeping does not wake every reader of the site's settings; the lease survives a crashed action without a manual unlock.
+- Who: agent (follows ADR 0023)
+
+#### How is collection stopped on a whole server?
+
+- Decision: `NETPLAN_COLLECTION_PAUSED=true` on the deployment stops every cycle, automatic or manual; each site's admin page says so.
+- Why: ADR 0010 keeps an environment kill switch as the fallback when a source suffers under Netplan's load, without editing every site.
+- Who: agent (follows ADR 0010)
+
+#### Where do a site's NetBox settings live, and what survives a change of NetBox?
+
+- Decision: on the NetBox integration row, as the chosen NetBox site and the Netplan type of each mapped role, keyed by NetBox id; a role left out is ignored. Saving the connection with another address forgets them. Roles map to switch, patch panel, wall socket, workstation or terminal (the real NetBox models wall sockets as devices with a role). The lists are read page by page with offsets, never by following NetBox's `next`.
+- Why: ids survive a rename in NetBox but mean nothing in another NetBox; `next` is built from request headers and could send the token to another host behind a proxy.
+- Who: agent (follows ADR 0023)
+
+#### How does a NetBox import merge into the inventory, and how often does it run?
+
+- Decision: a collection cycle reads the mapped site's devices (filtered by the mapped roles; with none mapped it reads nothing from NetBox and still merges an empty import, which retires what NetBox brought) and their interfaces' MAC addresses, then one mutation merges them under ADR 0022: a bound device is updated; a new one binds to the one manual device sharing a MAC or serial without contradiction; a hostname-only match (NetBox name against a device's hostname or name, domain ignored) becomes an Éditeur suggestion; several matches, a contradiction or two NetBox devices claiming one manual device become an admin conflict; the rest are created unplaced. Suggestions and conflicts are recomputed by each import. A MAC address a device outside the import holds stays with it. An automatic cycle imports at most every 15 minutes; a manual one always does. A device is written only when NetBox changed what it owns, and `syncedAt` records that change.
+- Why: one transactional mutation means a failure half-way changes nothing; skipping unchanged devices keeps an import from waking every page.
+- Who: agent (follows ADR 0022 and ADR 0023)
+
+#### When does a sighting move a device on the map?
+
+- Decision: a pc or endpoint is placed next to the socket it is seen at when it is on no floor, or when none of the sockets its MACs are seen at now is one where its latest sighting, through any of its MACs, saw it (or that sighting was at no socket). Seen at several sockets, it goes to the first one read. The first sighting of a device a person already placed keeps it where it is. The spot is the free one nearest to the socket, clear of devices and walls, and on the socket's side of every wall; with none within 200 units the device stays where it was. The move goes through the map's operations (`device.place`, `device.patch`, or `device.unplace` then `device.place` across floors) with the client id `librenms`, so the server validates and records it like a person's; it is outside any person's undo history.
+- Why: ADR 0022 keeps a person's position while the socket stays the same; a first sighting is not evidence that the person's placement is wrong. Without the wall rule the nearest free spot was often in the next room, since sockets sit against walls.
+- Who: agent (follows ADR 0022; wall rule found in browser verification)
+
+#### What does "Créer l'équipement" make from an unknown MAC, and who sees the list?
+
+- Decision: the inventory lists, for Éditeurs and admins, the MACs LibreNMS sees on edge ports that no device of the site carries, newest first, ten at a time, with the socket (or "Sans prise"), the switch port and when it was seen. "Créer l'équipement" asks only for a name and creates an endpoint carrying that MAC, online as its sighting says, placed next to its socket with the same search the cycle uses; seen on an uncabled port, it is created on no floor. The list checks ownership live, so a MAC a device gained since the last cycle disappears at once.
+- Why: ADR 0022 makes it an endpoint next to its socket. A Lecteur cannot act on the list, like the import reviews beside it. Asking for the name alone keeps the action one step; the rest is edited afterwards like any device.
+- Who: agent (follows ADR 0008 and 0022)
+
+#### How is the LibreNMS collection validated when the real LibreNMS cannot be reached?
+
+- Decision: the worker is built and tested against payload fixtures and a fake LibreNMS. Real validation is a separate step: `scripts/check-librenms.ts` checks a real instance with the cycle's own requests, retries and readers. It reports whether the answers read, whether forwarding entries are on known ports and carry a readable `updated_at`, and, with `--discover`, whether one discovery moved the newest entry. It prints counts and digit-masked formats only. `docs/operations/integrations.md` adds the in-app checklist. Until someone runs both against the real LibreNMS, it stays open.
+- Why: the real LibreNMS was unreachable from this host for the whole lot. The cycle's freshness rule depends on how that instance timestamps its forwarding table, and fixtures cannot confirm that. A script that shares the cycle's code checks the assumptions themselves, and its output can be pasted into an issue without leaking names or addresses.
+- Who: Kinan (validate the worker against fixtures, real validation as a separate step); agent (the script and its checks)
+
+#### What do imported devices bring besides their identity?
+
+- Context: ADR 0022 imports ports and cables from NetBox; Netplan has one cable per port.
+- Decision: the import also reads interfaces, front ports, rear ports and cables, in the same cycle and mutation as the devices. An imported device gets NetBox's ports in NetBox's order; a port already from that NetBox port keeps its id, and on a manual device NetBox now owns, a manual port with the same kind and name keeps its id and its cable. Other ports go with their cables. A front port points at its rear port. A NetBox cable between two imported ports replaces a manual cable on either end and goes when NetBox drops it. Breakouts and a second cable on one port are skipped. Leaving a NetBox turns its ports and cables manual with its devices.
+- Why: keeping the id of a matching manual port keeps the cabling a person drew; skipping what the one-cable-per-port model cannot hold is safer than approximating it.
+- Who: agent (follows ADR 0022)
+
+#### How is an import suggestion or conflict settled?
+
+- Decision: the inventory shows the pending reviews to Éditeurs and admins. An Éditeur settles a suggestion with "Rattacher" (bind to the manual device, which keeps its placement, notes and cables) or "Garder séparés" (create a new device bound to NetBox). Only an admin settles a conflict: bind one candidate or create a new device; an Éditeur sees "Un administrateur doit trancher." and the server refuses them. Settling binds at once, so the next import treats the device like any other and the planner stores no decision. Candidates bound or deleted since are no longer offered; settling twice is refused.
+- Why: a binding is the decision, so nothing extra can drift or make a review come back. ADR 0008 gives conflicts to admins.
+- Who: agent (follows ADR 0008 and 0022)
+
+#### What happens when an admin unmaps every NetBox role?
+
+- Context: zipzoup (P2, #49): with no role mapped the import returned early, leaving what NetBox had brought in place forever.
+- Decision: with no role mapped the cycle reads nothing from NetBox, since an unfiltered request would list every device, and still merges an empty import: unplaced imported devices go, placed ones become manual, reviews and NetBox cables are cleared.
+- Why: unmapping the last role must mean the same as unmapping one.
+- Who: agent (obvious)
+
+#### What id does an imported port get when its usual id is taken?
+
+- Context: zipzoup (P2, #49): a port released as manual keeps its generated id, so a later import could generate the same id for another port and overwrite it.
+- Decision: the plan matches every port first, then gives each unmatched port an id no existing or kept port holds, adding `:2`, `:3`… when the generated one is taken.
+- Who: agent (obvious)
+
+#### How does a site know which LibreNMS device each switch is?
+
+- Decision: the LibreNMS integration row stores, per Netplan switch, the LibreNMS device it stands for, or none to skip it; several switches may share one device, as a stack's members do. The admin page lists the mapping and its form reads LibreNMS's device list; a switch never configured starts on the only device named like its hostname or name, domain and case ignored, IPv4 names kept whole. The server refuses an impossible id, a switch mapped twice, a device that is not a switch of the site, and a form read from an address that has since changed. Changing the address clears the mapping.
+- Why: names differ between NetBox and LibreNMS too often to match silently every cycle; a suggestion the admin confirms once is predictable. Ids mean nothing in another LibreNMS.
+- Who: agent (follows ADR 0023)
+
+#### How does a cycle tell a MAC seen now from one LibreNMS merely remembers?
+
+- Context: the 2026-07 audit found that LibreNMS keeps forwarding entries that discovery no longer refreshes.
+- Decision: at most every five minutes per site the cycle asks each polled device to rediscover, once and never retried, since a retry could ask twice, then waits up to two minutes for `last_discovered` to change. An entry counts only if its `updated_at` is within two minutes of the newest in its switch's table. A discovery that finished without moving that newest entry refreshed nothing: entries up to it stay unseen, in that cycle and later ones (`staleUpTo`), until a discovery brings newer ones. A table without timestamps cannot be judged and counts whole. Sightings live in `macSightings`, apart from devices, with the switch, port, socket, misses and the device whose status the MAC last set (`ownerId`), so a cycle writes a device only when its status changes and a device that drops a MAC still has its status settled. A switch LibreNMS fails to read counts no miss.
+- Why: without the freshness rule a PC switched off yesterday would stay online; an outage of LibreNMS must not take everybody offline.
+- Who: agent (follows ADR 0022 and 0023)
+
+#### How was the lot actually split?
+
+- Decision: twenty-five pull requests before this closing one, each green on its own:
+  - the design ADRs (#22) and the legacy pipeline's removal (#23);
+  - sites (#28) and their encrypted integrations (#32);
+  - patch panels and endpoints (#34, after a cleanup in #35);
+  - the site inventory and identity (#36, #38), unplacing (#39), the inventory page (#41) and placing from it (#42);
+  - ports and cables (#43, #45);
+  - collection cycles (#46, with a CI fix in #44 and a test fix in #51);
+  - the NetBox settings, import, cabling and reviews (#47 to #50);
+  - the LibreNMS mapping, cycle, placement and unknown MACs (#52 to #55);
+  - the real-validation script (#56), then this closing docs change.
+- Why: each step landed something a person can use and verify, and reviews stayed small enough to settle in one or two rounds.
+- Who: agent (judgement call)

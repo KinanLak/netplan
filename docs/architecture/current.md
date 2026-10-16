@@ -6,10 +6,10 @@ description: Netplan as it stands now, partway through the rebuild.
 # Current architecture
 
 Netplan is a collaborative map editor for buildings: floors, walls and network
-devices (racks, switches, PCs, wall sockets) with the cables between them.
-Lot 2 is replacing the old NetBox/LibreNMS localization pipeline (deleted) with
-a site inventory and a collection cycle inside Convex (ADRs 0022 and 0023).
-The cycle runs and imports devices from NetBox; LibreNMS is only probed.
+devices (racks, switches, patch panels, PCs, endpoints, wall sockets) with the
+cables between them. Each site owns an inventory of devices, placed on a floor
+or not, which a collection cycle inside Convex fills from NetBox and keeps
+online or offline from LibreNMS (ADRs 0022 and 0023).
 
 ## Pieces
 
@@ -89,27 +89,72 @@ A gesture previews through a Zustand draft and commits one patch, so it is one
 undo step. The viewport sets `pointer-events: none` and the portal inherits
 it, so anything clickable placed there needs `pointer-events-auto`.
 
-## Sites
+## Sites and integrations
 
-Admins create, configure and remove sites under `/admin` (ADR 0023). A site
-holds its name, unique ignoring case, its time zone and the cadence of its
-collection cycle; `src/sites/settings.ts` holds the rules both the
-form and the server apply. A site with a building cannot be removed. The map
-shows the site the `?site=` parameter names, the first one by name otherwise,
-and the sidebar switches between them. A site may connect one NetBox and one
-LibreNMS: the admin enters an address and a token, which actions encrypt with
-`NETPLAN_SECRET_KEY` before storing and no function returns, and the page tests
-the connection.
+Built by lot 2 (ADR 0023). Admins create, configure and remove sites under
+`/admin`. A site holds its name, unique ignoring case, its time zone and the
+cadence of its collection cycle; `src/sites/settings.ts` holds the rules both
+the form and the server apply. A site with a building cannot be removed. The
+map shows the site the `?site=` parameter names, the first one by name
+otherwise, and the sidebar switches between them.
 
-Each site's collection cycle (`convex/collection.ts`) runs on that cadence or on
-demand, one cycle at a time per site, and records what each
-source answered. With a NetBox site and role types chosen, the cycle imports
-the devices of those roles at most every 15 minutes (always on a manual run)
-and merges them into the inventory by the rules of ADR 0022: an import is one
-mutation, discarded if the address, site or roles changed while NetBox was
-read. Bindings are to one NetBox: changing its address or removing it turns
-its devices back into manual ones. The
-plan of the deleted localization pipeline is frozen in
+A site may connect one NetBox and one LibreNMS (`integrations`): an address
+and a token, which actions encrypt with `NETPLAN_SECRET_KEY` before storing
+and no function returns. The admin tests the connection, then maps the
+NetBox site and the Netplan type of each NetBox role, and each Netplan switch
+to its LibreNMS device. Settings are keyed by the source's ids, so changing
+an address forgets them, and a source's devices, ports and cables become
+manual. [`docs/operations/integrations.md`](../operations/integrations.md)
+says how to check a real LibreNMS.
+
+## Inventory, ports and cables
+
+Built by lot 2 (ADRs 0005, 0007 and 0022). A device belongs to its site;
+its placement (floor, position, size) is optional. Placing, unplacing and
+moving are map operations (`device.place`, `device.unplace`,
+`device.patch`), so they are undoable and an operation touches one floor.
+Identity (name, hostname, serial, MACs, model, IP) is edited through
+site-scoped mutations from the drawer or the inventory page
+(`/inventory`), which also creates, deletes and places unplaced devices. A
+MAC belongs to at most one device of a site (`deviceMacs`). A device a
+source brought records it, and the fields that source owns
+(`src/devices/identity.ts`) are read-only in the UI and refused by the
+server.
+
+Devices have ports (`ports`), and a cable joins two ports, one cable per
+port (`cables`). A front port of a patch panel points at its rear port, so
+the device drawer's port table traces a switch port through patch panels
+to its wall socket. Éditeurs cable and unplug ports from that table; a
+floor's document carries the cables of its devices, including those whose
+other end is elsewhere.
+
+## Collection
+
+Each site's collection cycle (`convex/collection.ts`) runs on its cadence or
+on demand, one at a time per site under a lease (`siteCycles`), and records
+what each source answered for the admin page. `NETPLAN_COLLECTION_PAUSED`
+stops every cycle on a server.
+
+- **NetBox** (`convex/netbox*.ts`, the merge in `src/sites/netboxImport.ts`):
+  at most every 15 minutes, always on a manual run, the cycle reads the
+  devices of the mapped roles with their MACs, ports and cables, and one
+  mutation merges them into the inventory. A MAC or serial match without
+  contradiction binds a manual device; a hostname-only match waits as an
+  Éditeur suggestion, an ambiguous one as an admin conflict
+  (`importReviews`), both settled from the inventory page. A device NetBox
+  drops is deleted if unplaced, made manual otherwise.
+- **LibreNMS** (`convex/librenmsCycle.ts`, the pure rules in
+  `src/sites/librenmsCycle.ts`): at most every 5 minutes the cycle asks each
+  polled switch to rediscover, then reads its ports and forwarding table.
+  Only entries the discovery refreshed count, and only on edge ports: a port
+  cabled to a wall socket, or an uncabled one with at most four MACs. Each
+  MAC seen goes to `macSightings`. A pc or endpoint is online when one of its
+  MACs is seen and offline after two cycles without; one seen at a new
+  socket, or while on no floor, is placed next to it through
+  `applyMapOperation` with the client id `librenms`. A MAC no device carries
+  is listed in the inventory, where an Éditeur turns it into an endpoint.
+
+The plan of the deleted localization pipeline is frozen in
 [`docs/history/2026-07-computer-location-refresh/`](../history/2026-07-computer-location-refresh/README.md).
 
 ## Deployment
