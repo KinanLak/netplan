@@ -37,3 +37,4 @@ record's Source section points to its questions in the
 - **[0024 — The calque is a raster image in Convex storage, placed by map operations, and the plan has a fixed scale of 100 units per metre](0024-floor-overlay-implementation.md)**
 - **[0025 — The map shows observed ports and statuses that expire, cable paths on hover or on demand, and draws cables within a floor](0025-map-ports-statuses-cables.md)**
 - **[0026 — Freshness is shown to everyone and refreshed by Éditeurs, errors are French toasts, and the inventory carries the offline, coverage and ignored-MAC views](0026-experience.md)**
+- **[0027 — History is recorded by the collection cycle as events and five daily MAC snapshots, purged after 30 days, and the NetBox push follows each cycle](0027-history-and-location-push.md)**
