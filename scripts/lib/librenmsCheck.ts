@@ -3,6 +3,7 @@
 // table as the cycle assumes (ADR 0022). Messages carry counts and the shape
 // of values, never a name or a MAC address.
 import {
+  ethernetNames,
   FDB_FRESH_MS,
   freshFdb,
   readLastDiscovered,
@@ -87,6 +88,19 @@ export function switchChecks({
       : {
           level: "ok",
           message: `${portList.length} ports read, ${named} with a name to match.`,
+        },
+  );
+  const ethernet = ethernetNames(portList).length;
+  checks.push(
+    ethernet === 0
+      ? {
+          level: "warn",
+          message:
+            "No port reads as Ethernet with an ifIndex: a manual switch keeps its default port names.",
+        }
+      : {
+          level: "ok",
+          message: `${ethernet} Ethernet ports, whose names a manual switch would take.`,
         },
   );
 

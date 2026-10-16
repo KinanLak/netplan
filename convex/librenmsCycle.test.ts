@@ -43,6 +43,31 @@ function fakeLibreNMS() {
     discoveries: 0,
     /** LibreNMS's `status`: 1 while the device answers its polls. */
     deviceStatus: 1,
+    ports: [
+      {
+        port_id: 101,
+        ifIndex: 10101,
+        ifName: "Gi1/0/1",
+        ifDescr: "GigabitEthernet1/0/1",
+        ifType: "ethernetCsmacd",
+        ifOperStatus: "up",
+      },
+      {
+        port_id: 102,
+        ifIndex: 10102,
+        ifName: "Gi1/0/2",
+        ifType: "ethernetCsmacd",
+        ifOperStatus: "down",
+      },
+      {
+        port_id: "103",
+        ifIndex: "10103",
+        ifName: "Gi1/0/3",
+        ifType: "ethernetCsmacd",
+        ifOperStatus: "up",
+      },
+      { port_id: 100, ifIndex: 1, ifName: "Vl1", ifType: "l3ipvlan" },
+    ] as Array<Record<string, unknown>>,
   };
   const handler = (url: string) => {
     const path = new URL(url).pathname;
@@ -75,19 +100,7 @@ function fakeLibreNMS() {
         : new Response("", { status: state.discoverStatus });
     }
     if (path === `/api/v0/devices/${STACK}/ports`) {
-      return Response.json({
-        status: "ok",
-        ports: [
-          {
-            port_id: 101,
-            ifName: "Gi1/0/1",
-            ifDescr: "GigabitEthernet1/0/1",
-            ifOperStatus: "up",
-          },
-          { port_id: 102, ifName: "Gi1/0/2", ifOperStatus: "down" },
-          { port_id: "103", ifName: "Gi1/0/3", ifOperStatus: "up" },
-        ],
-      });
+      return Response.json({ status: "ok", ports: state.ports });
     }
     if (path === `/api/v0/devices/${STACK}/fdb`) {
       return state.fdbStatus === 200
@@ -132,7 +145,7 @@ const port = (deviceId: string, n: number, name: string) => ({
  * A switch whose first port is cabled to a wall socket, its second free and
  * its third cabled to the core; a pc and a printer; LibreNMS mapped.
  */
-async function siteWithLibreNMS() {
+async function siteWithLibreNMS({ defaultPorts = false } = {}) {
   const t = testBackend();
   // A session lasts a minute: a test that moves the clock signs in again.
   const signIn = async () =>
@@ -152,13 +165,21 @@ async function siteWithLibreNMS() {
       identity: { name: deviceId.replace("device:", ""), macs },
       ...extra,
     });
-  await create("device:sw", "switch", [], {
-    ports: [
-      port("device:sw", 1, "GigabitEthernet1/0/1"),
-      port("device:sw", 2, "GigabitEthernet1/0/2"),
-      port("device:sw", 3, "GigabitEthernet1/0/3"),
-    ],
-  });
+  // Without ports, the switch has the 24 a manual one starts with.
+  await create(
+    "device:sw",
+    "switch",
+    [],
+    defaultPorts
+      ? {}
+      : {
+          ports: [
+            port("device:sw", 1, "GigabitEthernet1/0/1"),
+            port("device:sw", 2, "GigabitEthernet1/0/2"),
+            port("device:sw", 3, "GigabitEthernet1/0/3"),
+          ],
+        },
+  );
   await create("device:core", "switch", [], {
     ports: [port("device:core", 1, "uplink")],
     cables: [
@@ -391,6 +412,76 @@ describe("the LibreNMS step", () => {
         seen: undefined,
       })),
     );
+  });
+
+  it("names a manual switch's ports after LibreNMS's, keeping their ids and cables", async () => {
+    const { admin, siteId } = await siteWithLibreNMS({ defaultPorts: true });
+    const ports = async () =>
+      await admin.run(async (ctx) =>
+        (
+          await ctx.db
+            .query("ports")
+            .withIndex("by_device", (q) => q.eq("deviceId", "device:sw"))
+            .collect()
+        )
+          .sort((a, b) => a.order - b.order)
+          .map(({ objectId, name }) => [objectId.split(":").at(-1), name]),
+      );
+    const cables = async () =>
+      await admin.run(async (ctx) =>
+        (await ctx.db.query("cables").collect())
+          .map(({ objectId }) => objectId)
+          .sort(),
+      );
+    expect(await ports()).toHaveLength(24);
+    librenms.state.fdb = [{ port_id: 101, mac_address: PC }];
+
+    // The VLAN interface is not a port; the 21 uncabled ports LibreNMS does
+    // not have go.
+    await cycle(admin, siteId);
+    expect(await ports()).toEqual([
+      ["1", "Gi1/0/1"],
+      ["2", "Gi1/0/2"],
+      ["3", "Gi1/0/3"],
+    ]);
+    expect(await cables()).toEqual(["cable:desk", "cable:uplink"]);
+    // The read matches the names it just gave.
+    expect(await portFacts(admin)).toEqual([
+      { status: "up", seen: true },
+      { status: "down", seen: undefined },
+      { status: "up", seen: undefined },
+    ]);
+    expect(await statusOf(admin, "device:pc")).toBe("up");
+
+    // Once named, the ports keep their names.
+    librenms.state.ports = librenms.state.ports.map((one) => ({
+      ...one,
+      ifName: `Te${String(one.ifName)}`,
+    }));
+    await cycle(admin, siteId);
+    expect((await ports()).map(([, name]) => name)).toEqual([
+      "Gi1/0/1",
+      "Gi1/0/2",
+      "Gi1/0/3",
+    ]);
+  });
+
+  it("keeps a switch's default names when LibreNMS has no Ethernet port for it", async () => {
+    const { admin, siteId } = await siteWithLibreNMS({ defaultPorts: true });
+    librenms.state.ports = librenms.state.ports.map((one) => ({
+      ...one,
+      ifType: "propVirtual",
+    }));
+    await cycle(admin, siteId);
+    const names = await admin.run(async (ctx) =>
+      (
+        await ctx.db
+          .query("ports")
+          .withIndex("by_device", (q) => q.eq("deviceId", "device:sw"))
+          .collect()
+      ).map(({ name }) => name),
+    );
+    expect(names).toHaveLength(24);
   });
 
   it("forgets the statuses a switch read long ago set, until it is read again", async () => {
@@ -1001,6 +1092,52 @@ describe("the LibreNMS step", () => {
     });
     expect(await ignored()).toEqual([]);
     expect(await unknown()).toEqual([]);
+  });
+
+  it("names no port of a switch mapped elsewhere during the read", async () => {
+    const { admin, siteId } = await siteWithLibreNMS({ defaultPorts: true });
+    await admin.mutation(api.collection.refresh, { siteId });
+    const cycleId = await admin.run(
+      async (ctx) =>
+        (await ctx.db.query("siteCycles").first())?.running?.cycleId,
+    );
+    if (!cycleId) throw new Error("expected a running cycle");
+    const adopt = async () =>
+      await admin.mutation(internal.librenmsCycle.adoptPortNames, {
+        siteId,
+        cycleId,
+        baseUrl: LIBRENMS,
+        switchId: "device:sw",
+        librenmsDeviceId: STACK,
+        names: ["Gi1/0/1"],
+      });
+    const remap = async (switchIds: Array<string>) =>
+      await admin.mutation(api.librenms.saveSettings, {
+        siteId,
+        baseUrl: LIBRENMS,
+        settings: {
+          switches: switchIds.map((switchId) => ({
+            switchId,
+            device: { id: STACK, name: "pile" },
+          })),
+        },
+      });
+
+    await admin.mutation(api.librenms.saveSettings, {
+      siteId,
+      baseUrl: LIBRENMS,
+      settings: {
+        switches: [
+          { switchId: "device:sw", device: { id: STACK + 1, name: "autre" } },
+        ],
+      },
+    });
+    expect(await adopt()).toBe(false);
+    // Nor one that now shares its LibreNMS device with another.
+    await remap(["device:sw", "device:core"]);
+    expect(await adopt()).toBe(false);
+    await remap(["device:sw"]);
+    expect(await adopt()).toBe(true);
   });
 
   it("records nothing once LibreNMS was removed during the read", async () => {

@@ -6,8 +6,8 @@ const device = (lastDiscovered: string) => ({
 });
 const ports = {
   ports: [
-    { port_id: 1, ifName: "Gi1/0/1" },
-    { port_id: 2, ifName: "Gi1/0/2" },
+    { port_id: 1, ifIndex: 1, ifName: "Gi1/0/1", ifType: "ethernetCsmacd" },
+    { port_id: 2, ifIndex: 2, ifName: "Gi1/0/2", ifType: "ethernetCsmacd" },
   ],
 };
 const fdb = (...entries: Array<[number, string, string?]>) => ({
@@ -42,6 +42,20 @@ describe("switchChecks", () => {
     expect(checks.every(({ level }) => level === "ok")).toBe(true);
     expect(levels(checks)).toContain(
       "ok 1 of 2 entries are within 2 min of the newest, and would count as seen.",
+    );
+    expect(levels(checks)).toContain(
+      "ok 2 Ethernet ports, whose names a manual switch would take.",
+    );
+  });
+
+  test("ports without an Ethernet type leave the default names", () => {
+    const checks = switchChecks({
+      device: device("2026-10-16 08:05:30"),
+      ports: { ports: [{ port_id: 1, ifName: "Gi1/0/1" }] },
+      fdb: fdb([1, "02:aa:00:00:00:01", "2026-10-16 08:05:10"]),
+    });
+    expect(levels(checks)).toContain(
+      "warn No port reads as Ethernet with an ifIndex: a manual switch keeps its default port names.",
     );
   });
 

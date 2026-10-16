@@ -1,7 +1,13 @@
-// What a collection cycle makes of LibreNMS (ADRs 0022 and 0023): its ports
-// matched to the inventory's by name, and the MAC addresses its forwarding
-// tables put on edge ports.
+// What a collection cycle makes of LibreNMS (ADRs 0022, 0023 and 0025): its
+// ports matched to the inventory's by name, or naming a manual switch's, and
+// the MAC addresses its forwarding tables put on edge ports.
 import { normalizeMac } from "../devices/mac";
+import {
+  MAX_PORTS_PER_DEVICE,
+  PORT_NAME_MAX_LENGTH,
+  portIdOf,
+} from "../devices/ports";
+import type { DeviceId, PortKind } from "../types/map";
 import { librenmsId } from "./librenms";
 
 /**
@@ -12,6 +18,8 @@ export type LibreNMSPort = {
   id: number;
   names: Array<string>;
   link?: "up" | "down";
+  /** Its interface index, when it is a physical Ethernet port. */
+  ethernetIndex?: number;
 };
 
 /**
@@ -97,6 +105,17 @@ const LINKS = new Map<string, "up" | "down">([
   ["notPresent", "down"],
 ]);
 
+/**
+ * The IF-MIB types of a physical Ethernet port; VLAN interfaces, aggregates
+ * and loopbacks have others.
+ */
+const ETHERNET = new Set([
+  "ethernetCsmacd",
+  "fastEther",
+  "fastEtherFX",
+  "gigabitEthernet",
+]);
+
 /** The ports of a `/api/v0/devices/:id/ports` answer. */
 export const readLibreNMSPorts = (body: unknown): Array<LibreNMSPort> =>
   listOf(body, "ports").flatMap((item) => {
@@ -107,7 +126,16 @@ export const readLibreNMSPorts = (body: unknown): Array<LibreNMSPort> =>
       (name): name is string => typeof name === "string" && name.trim() !== "",
     );
     const link = LINKS.get(String(fields.ifOperStatus));
-    return [{ id, names, ...(link && { link }) }];
+    const index = librenmsId(fields.ifIndex);
+    const ethernet = ETHERNET.has(String(fields.ifType)) && index !== null;
+    return [
+      {
+        id,
+        names,
+        ...(link && { link }),
+        ...(ethernet && { ethernetIndex: index }),
+      },
+    ];
   });
 
 /** The entries of a `/api/v0/devices/:id/fdb` answer. */
@@ -289,6 +317,99 @@ export const matchPorts = (
     if (portIds.length === 1) matched.set(only, ownId);
   }
   return matched;
+};
+
+/**
+ * LibreNMS's physical Ethernet ports' names, by interface index; an unnamed
+ * one is empty, so it still holds its position.
+ */
+export const ethernetNames = (
+  librenmsPorts: ReadonlyArray<LibreNMSPort>,
+): Array<string> =>
+  librenmsPorts
+    .flatMap(({ names, ethernetIndex }) =>
+      ethernetIndex === undefined
+        ? []
+        : [
+            {
+              index: ethernetIndex,
+              name: names.length > 0 ? names[0].trim() : "",
+            },
+          ],
+    )
+    .sort((a, b) => a.index - b.index)
+    .map(({ name }) => name);
+
+/** A switch's port, as adopting LibreNMS's names sees it. */
+export type OwnPort = {
+  id: string;
+  name: string;
+  kind: PortKind;
+  order: number;
+  cabled: boolean;
+  /** Whether a source such as NetBox provides it. */
+  sourced: boolean;
+};
+
+export type PortAdoption = {
+  rename: Array<{ id: string; name: string }>;
+  add: Array<{ id: string; name: string; order: number }>;
+  remove: Array<string>;
+};
+
+/**
+ * How a switch takes LibreNMS's port names (ADR 0025). While its ports are
+ * still the "1" to "n" a manual switch starts with, the port at each
+ * position takes the name of LibreNMS's Ethernet port there, so its id, and
+ * its cable, stay. Ports LibreNMS has beyond are added; uncabled ones beyond
+ * LibreNMS's are removed, cabled ones kept. `null` once a person or a source
+ * has named the ports, or when LibreNMS's names would not make a valid list.
+ */
+export const adoptedPorts = (
+  switchId: string,
+  own: ReadonlyArray<OwnPort>,
+  names: ReadonlyArray<string>,
+): PortAdoption | null => {
+  const ordered = [...own].sort((a, b) => a.order - b.order);
+  const isDefault =
+    ordered.length > 0 &&
+    ordered.every(
+      (port, i) =>
+        port.kind === "interface" &&
+        !port.sourced &&
+        port.order === i + 1 &&
+        port.name === String(i + 1),
+    );
+  if (!isDefault || names.length === 0) return null;
+  if (names.length > MAX_PORTS_PER_DEVICE) return null;
+  if (names.some((name) => !name || name.length > PORT_NAME_MAX_LENGTH)) {
+    return null;
+  }
+  // Name matching needs each name once.
+  if (new Set(names.map(key)).size !== names.length) return null;
+
+  const rename = ordered.slice(0, names.length).flatMap((port, i) => {
+    const name = names[i] ?? port.name;
+    return name === port.name ? [] : [{ id: port.id, name }];
+  });
+  const taken = new Set(own.map(({ id }) => id));
+  const add: PortAdoption["add"] = [];
+  let n = ordered.length;
+  for (const [i, name] of names.entries()) {
+    if (i < ordered.length) continue;
+    let id: string;
+    do {
+      n += 1;
+      id = portIdOf(switchId as DeviceId, "interface", n);
+    } while (taken.has(id));
+    taken.add(id);
+    add.push({ id, name, order: i + 1 });
+  }
+  const remove = ordered
+    .slice(names.length)
+    .filter(({ cabled }) => !cabled)
+    .map(({ id }) => id);
+  return { rename, add, remove };
 };
 
 const macsByPort = (
