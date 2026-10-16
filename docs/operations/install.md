@@ -69,7 +69,13 @@ as long as `INSTANCE_SECRET` does not change.
   obtains and renews certificates itself, keeping them in the `edge-data`
   volume. The names must resolve publicly and port 443 be reachable from the
   internet. A certificate from an internal CA needs a `tls` line in each site
-  of `deploy/Caddyfile`.
+  of `deploy/Caddyfile`, and the containers must trust that CA, since they
+  call the public URLs too: `app` through `NODE_EXTRA_CA_CERTS` (the CA's
+  certificate), `convex-backend` through `SSL_CERT_FILE` (the system bundle
+  with the CA appended), each mounted from a `compose.override.yaml`.
+  Without the latter, signing in works but the backend cannot fetch its
+  signing keys, so it refuses every session's token, no data loads, and its
+  log reports `Could not fetch JWKS`.
 - A reverse proxy already in front of the host must pass TLS through to the
   edge unterminated (TCP, routed by SNI). Terminating TLS before the edge does
   not work: the public URLs carry the scheme and port, and containers reach

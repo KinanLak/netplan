@@ -16,9 +16,9 @@ Zustand, `@xyflow/react`, Bun.
 - `docs/adr/`: decisions; `docs/architecture/`: current and target shape;
   `docs/history/`: frozen records, including the decision log.
 
-The project is mid-rebuild (ADR 0001): `docs/architecture/target.md` says
-where it is heading and in which lot. It is unreleased, so prefer the
-canonical change over compatibility shims.
+The rebuild of ADR 0001 is complete: `docs/architecture/current.md` describes
+the system, and `target.md` the next lot when there is one. It is unreleased,
+so prefer the canonical change over compatibility shims.
 
 ## Commands
 
