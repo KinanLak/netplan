@@ -179,6 +179,36 @@ export default defineSchema({
     .index("by_site_kind_at", ["siteId", "kind", "at"])
     .index("by_at", ["at"]),
 
+  // The five daily MAC snapshots of a site (ADR 0027): a slot is claimed by
+  // the cycle that reads the network in its window, which then writes where
+  // it saw each MAC. A slot no cycle took has no row.
+  historySlots: defineTable({
+    siteId: v.string(),
+    /** The site's calendar day, `YYYY-MM-DD`. */
+    day: v.string(),
+    /** One of `SNAPSHOT_TIMES`, in the site's time zone. */
+    time: v.string(),
+    at: v.number(),
+    takenAt: v.number(),
+    /** Set once every entry is written. */
+    entries: v.optional(v.number()),
+  })
+    .index("by_site_day", ["siteId", "day", "time"])
+    .index("by_at", ["at"]),
+
+  historySlotEntries: defineTable({
+    slotId: v.id("historySlots"),
+    siteId: v.string(),
+    slotAt: v.number(),
+    mac: v.string(),
+    /** The device that carried the MAC then, and its name then. */
+    deviceId: v.optional(v.string()),
+    deviceName: v.optional(v.string()),
+    place: historyPlace,
+  })
+    .index("by_slot_mac", ["slotId", "mac"])
+    .index("by_device_at", ["deviceId", "slotAt"]),
+
   /** Unknown MACs an Éditeur chose to ignore (ADR 0026). */
   ignoredMacs: defineTable({
     siteId: v.string(),

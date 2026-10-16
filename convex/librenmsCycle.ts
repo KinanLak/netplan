@@ -11,7 +11,14 @@ import { internalMutation, internalQuery } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
 import type { ActionCtx, MutationCtx, QueryCtx } from "./_generated/server";
 import { cycleOf } from "./lib/cycles";
-import { placeNamer, recordLocated, recordPresence } from "./history";
+import {
+  claimSlot,
+  placeNamer,
+  recordLocated,
+  recordPresence,
+  SNAPSHOT_PAGE,
+} from "./history";
+import { macSighting } from "./historyValidators";
 import { ignoredMacsOf } from "./lib/ignoredMacs";
 import { PRESENT_TYPES, staleAfterOf, statusFrom } from "./lib/statuses";
 import { toPublicDevice } from "./mapDocument";
@@ -65,13 +72,6 @@ type AtomicMapOperationInput =
     : never;
 
 const upOrDown = v.union(v.literal("up"), v.literal("down"));
-
-const sighting = v.object({
-  mac: v.string(),
-  portId: v.string(),
-  switchId: v.string(),
-  socketId: v.optional(v.string()),
-});
 
 export const deviceOf = async (ctx: QueryCtx, deviceId: string) =>
   await ctx.db
@@ -507,7 +507,7 @@ export const recordSightings = internalMutation({
         deviceId: v.optional(v.string()),
       }),
     ),
-    sightings: v.array(sighting),
+    sightings: v.array(macSighting),
     tables: v.array(v.object({ deviceId: v.number(), table: fdbTable })),
   },
   returns: v.union(
@@ -518,6 +518,8 @@ export const recordSightings = internalMutation({
       offline: v.number(),
       placed: v.number(),
       unknown: v.number(),
+      /** The snapshot slot the cycle took, for the action to write. */
+      snapshot: v.optional(v.id("historySlots")),
     }),
   ),
   handler: async (
@@ -713,7 +715,16 @@ export const recordSightings = internalMutation({
         );
       }
     }
-    return { seen: sightingOf.size, online, offline, placed, unknown };
+    const snapshot =
+      sightings.length > 0 ? await claimSlot(ctx, site, now) : null;
+    return {
+      seen: sightingOf.size,
+      online,
+      offline,
+      placed,
+      unknown,
+      ...(snapshot && { snapshot }),
+    };
   },
 });
 
@@ -949,17 +960,33 @@ export const collectFromLibreNMS = async (
     readCount += 1;
   }
 
-  const counts = await ctx.runMutation(internal.librenmsCycle.recordSightings, {
-    siteId,
-    cycleId,
-    baseUrl,
-    readSwitches,
-    links,
-    presence: portPresence(fdb, matched, ports),
-    sightings: edgeSightings(fdb, matched, ports),
-    tables,
-  });
-  if (!counts) return { ok: true, message: "" };
+  const sightings = edgeSightings(fdb, matched, ports);
+  const recorded = await ctx.runMutation(
+    internal.librenmsCycle.recordSightings,
+    {
+      siteId,
+      cycleId,
+      baseUrl,
+      readSwitches,
+      links,
+      presence: portPresence(fdb, matched, ports),
+      sightings,
+      tables,
+    },
+  );
+  if (!recorded) return { ok: true, message: "" };
+  const { snapshot, ...counts } = recorded;
+  if (snapshot) {
+    // From what this cycle read, so a later cycle cannot mix into it.
+    for (let start = 0; start < sightings.length; start += SNAPSHOT_PAGE) {
+      const end = start + SNAPSHOT_PAGE;
+      await ctx.runMutation(internal.history.captureSlot, {
+        slotId: snapshot,
+        sightings: sightings.slice(start, end),
+        ...(end >= sightings.length && { total: sightings.length }),
+      });
+    }
+  }
   if (plan.devices.length === 0) {
     return { ok: true, message: "Aucun switch n'est interrogé." };
   }

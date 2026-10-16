@@ -537,6 +537,73 @@ describe("the LibreNMS step", () => {
     ).toEqual([onFreePort, onFreePort]);
   });
 
+  it("takes each daily snapshot from the first cycle in its window", async () => {
+    const { siteId, signIn } = await siteWithLibreNMS();
+    // 14:03 in Paris: inside the 14:00 slot's window.
+    setSystemTime(new Date("2026-10-16T12:03:00Z"));
+    let admin = await signIn();
+    // More MACs than one snapshot page writes, behind the socket's port.
+    const strangers = Array.from({ length: 600 }, (_, n) => ({
+      port_id: 101,
+      mac_address: `02:00:00:00:${[n >> 8, n & 255]
+        .map((byte) => byte.toString(16).padStart(2, "0"))
+        .join(":")}`,
+    }));
+    librenms.state.fdb = [
+      { port_id: 101, mac_address: PC },
+      { port_id: 102, mac_address: PRINTER },
+      ...strangers,
+    ];
+    await cycle(admin, siteId);
+    setSystemTime(new Date("2026-10-16T12:08:00Z"));
+    admin = await signIn();
+    librenms.state.fdb = [{ port_id: 102, mac_address: PC }];
+    await cycle(admin, siteId);
+
+    const taken = {
+      day: "2026-10-16",
+      time: "14:00",
+      at: Date.parse("2026-10-16T12:00:00Z"),
+      takenAt: Date.parse("2026-10-16T12:03:00Z"),
+      entries: 602,
+    };
+    expect(
+      await admin.query(api.history.slotsForDay, { siteId, day: "2026-10-16" }),
+    ).toEqual([taken]);
+    const entries = await admin.query(api.history.slotEntries, {
+      siteId,
+      day: "2026-10-16",
+      time: "14:00",
+      paginationOpts: { numItems: 1_000, cursor: null },
+    });
+    expect(entries.page).toHaveLength(602);
+    // The 14:00 snapshot keeps where the first cycle saw it.
+    expect(
+      await admin.query(api.history.snapshotsForDevice, {
+        deviceId: "device:pc",
+        paginationOpts: { numItems: 10, cursor: null },
+      }),
+    ).toMatchObject({
+      page: [
+        {
+          slotAt: taken.at,
+          mac: PC,
+          deviceId: "device:pc",
+          deviceName: "pc",
+          place: { portName: "GigabitEthernet1/0/1", socketName: "socket" },
+        },
+      ],
+    });
+
+    // Outside every window, no slot is taken.
+    setSystemTime(new Date("2026-10-16T12:30:00Z"));
+    admin = await signIn();
+    await cycle(admin, siteId);
+    expect(
+      await admin.query(api.history.slotsForDay, { siteId, day: "2026-10-16" }),
+    ).toHaveLength(1);
+  });
+
   it("gives a switch the status LibreNMS has for it", async () => {
     const { admin, siteId } = await siteWithLibreNMS();
     expect(await statusOf(admin, "device:sw")).toBeNull();

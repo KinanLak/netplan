@@ -102,4 +102,58 @@ describe("history", () => {
       ),
     ).toBe(1);
   });
+
+  it("forgets snapshots older than 30 days with their entries, and shows none while one is written", async () => {
+    const t = testBackend();
+    const now = Date.now();
+    const place = {
+      switchId: "device:sw",
+      switchName: "sw",
+      portId: "port:1",
+      portName: "Gi1/0/1",
+    };
+    const addSlot = async (at: number, entries: number, complete = true) =>
+      await t.run(async (ctx) => {
+        const slotId = await ctx.db.insert("historySlots", {
+          siteId: "site:a",
+          day: new Date(at).toISOString().slice(0, 10),
+          time: "14:00",
+          at,
+          takenAt: at,
+          ...(complete && { entries }),
+        });
+        for (let n = 0; n < entries; n += 1) {
+          await ctx.db.insert("historySlotEntries", {
+            slotId,
+            siteId: "site:a",
+            slotAt: at,
+            mac: `mac:${n}`,
+            place,
+          });
+        }
+      });
+    await addSlot(now - RETENTION_MS - DAY, 700);
+    await addSlot(now - RETENTION_MS - 2 * DAY, 3);
+    const kept = now - RETENTION_MS + DAY;
+    await addSlot(kept, 2, false);
+
+    const editor = t.withIdentity(
+      (await createSignedInUser(t, "editor")).identity,
+    );
+    const writing = await editor.query(api.history.slotEntries, {
+      siteId: "site:a",
+      day: new Date(kept).toISOString().slice(0, 10),
+      time: "14:00",
+      paginationOpts: page,
+    });
+    expect(writing.page).toEqual([]);
+
+    await t.mutation(internal.history.purge, {});
+    await t.finishAllScheduledFunctions(() => {});
+    const left = await t.run(async (ctx) => ({
+      slots: (await ctx.db.query("historySlots").collect()).map(({ at }) => at),
+      entries: (await ctx.db.query("historySlotEntries").collect()).length,
+    }));
+    expect(left).toEqual({ slots: [kept], entries: 2 });
+  });
 });

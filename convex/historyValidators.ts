@@ -32,3 +32,31 @@ export const publicDeviceEvent = v.object({
   place: v.optional(historyPlace),
   lastSeenAt: v.optional(v.number()),
 });
+
+/** A MAC address a cycle saw on an edge port. */
+export const macSighting = v.object({
+  mac: v.string(),
+  portId: v.string(),
+  switchId: v.string(),
+  socketId: v.optional(v.string()),
+});
+
+/** One of a site's five daily snapshots, as queries return it. */
+export const publicSnapshotSlot = v.object({
+  day: v.string(),
+  time: v.string(),
+  at: v.number(),
+  /** When the cycle that took the slot read the network. */
+  takenAt: v.number(),
+  /** MAC addresses it holds; absent while it is being written. */
+  entries: v.optional(v.number()),
+});
+
+/** Where a MAC address was at a snapshot. */
+export const publicSnapshotEntry = v.object({
+  slotAt: v.number(),
+  mac: v.string(),
+  deviceId: v.optional(v.string()),
+  deviceName: v.optional(v.string()),
+  place: historyPlace,
+});
