@@ -80,6 +80,7 @@ export const cyclePlan = internalQuery({
           id: v.number(),
           name: v.string(),
           switchIds: v.array(v.string()),
+          fdbNewest: v.optional(v.number()),
         }),
       ),
     }),
@@ -104,15 +105,30 @@ export const cyclePlan = internalQuery({
         .filter((device) => device.type === "switch")
         .map((device) => device.objectId),
     );
+    const newest = new Map(
+      (cycle.librenmsTables ?? []).map((table) => [
+        table.deviceId,
+        table.newest,
+      ]),
+    );
     const devices = new Map<
       number,
-      { id: number; name: string; switchIds: Array<string> }
+      {
+        id: number;
+        name: string;
+        switchIds: Array<string>;
+        fdbNewest?: number;
+      }
     >();
     for (const { switchId, device } of polledSwitches(
       row.librenms ?? EMPTY_LIBRENMS_SETTINGS,
     )) {
       if (!switches.has(switchId)) continue;
-      const entry = devices.get(device.id) ?? { ...device, switchIds: [] };
+      const entry = devices.get(device.id) ?? {
+        ...device,
+        switchIds: [],
+        ...(newest.has(device.id) && { fdbNewest: newest.get(device.id) }),
+      };
       entry.switchIds.push(switchId);
       devices.set(device.id, entry);
     }
@@ -196,6 +212,7 @@ export const recordSightings = internalMutation({
     baseUrl: v.string(),
     failedSwitchIds: v.array(v.string()),
     sightings: v.array(sighting),
+    tables: v.array(v.object({ deviceId: v.number(), newest: v.number() })),
   },
   returns: v.union(
     v.null(),
@@ -208,7 +225,7 @@ export const recordSightings = internalMutation({
   ),
   handler: async (
     ctx,
-    { siteId, cycleId, baseUrl, failedSwitchIds, sightings },
+    { siteId, cycleId, baseUrl, failedSwitchIds, sightings, tables },
   ) => {
     const cycle = await cycleOf(ctx, siteId);
     if (cycle?.running?.cycleId !== cycleId) return null;
@@ -221,6 +238,16 @@ export const recordSightings = internalMutation({
       )
       .unique();
     if (integration?.baseUrl !== baseUrl) return null;
+
+    const read = new Set(tables.map(({ deviceId }) => deviceId));
+    await ctx.db.patch(cycle._id, {
+      librenmsTables: [
+        ...(cycle.librenmsTables ?? []).filter(
+          ({ deviceId }) => !read.has(deviceId),
+        ),
+        ...tables,
+      ],
+    });
 
     const now = Date.now();
     const rows = await sightingRowsOf(ctx, siteId);
@@ -291,11 +318,16 @@ export const recordSightings = internalMutation({
     let offline = 0;
     for (const device of owners.values()) {
       if (!PRESENT_TYPES.has(device.type)) continue;
-      const status = isOnline(
-        device.macs.flatMap((mac) => misses.get(mac) ?? []),
-      )
-        ? "up"
-        : "down";
+      const missed = device.macs.flatMap((mac) => misses.get(mac) ?? []);
+      // A device left with no MAC the network saw has no status from it any
+      // more, and no row would let a later release clear one.
+      if (missed.length === 0) {
+        if (device.metadata.status !== undefined) {
+          await setStatus(ctx, device, undefined);
+        }
+        continue;
+      }
+      const status = isOnline(missed) ? "up" : "down";
       if (device.metadata.status === status) continue;
       await setStatus(ctx, device, status);
       if (status === "up") online += 1;
@@ -325,6 +357,10 @@ export const releaseLibreNMS = async (ctx: MutationCtx, siteId: string) => {
     }
     await ctx.db.delete(row._id);
   }
+  const cycle = await cycleOf(ctx, siteId);
+  if (cycle?.librenmsTables) {
+    await ctx.db.patch(cycle._id, { librenmsTables: undefined });
+  }
 };
 
 /** Deletes a site's sightings along with the site. */
@@ -340,13 +376,18 @@ type LibreNMSRead = (path: string) => ReturnType<typeof sourceGet>;
  * Asks each device to rediscover and waits, up to two minutes, until
  * LibreNMS records a new discovery for each. LibreNMS clears a device's
  * `last_discovered` when asked and sets it once done. Returns why a device
- * could not be asked, and the devices that did not finish in time.
+ * could not be asked, the devices that did not finish in time, and those
+ * that did.
  */
 const rediscover = async (
   readOnce: LibreNMSRead,
   trigger: LibreNMSRead,
   devices: ReadonlyArray<{ id: number; name: string }>,
-): Promise<{ failures: Array<string>; unfinished: Array<string> }> => {
+): Promise<{
+  failures: Array<string>;
+  unfinished: Array<string>;
+  finished: Set<number>;
+}> => {
   const failures: Array<string> = [];
   const before = new Map<number, string | null>();
   for (const device of devices) {
@@ -367,6 +408,7 @@ const rediscover = async (
       !asked.ok && asked.status !== undefined && asked.status < 500;
     if (!refused) before.set(device.id, readLastDiscovered(current.body));
   }
+  const asked = new Set(before.keys());
   const deadline = Date.now() + DISCOVERY_WAIT_MS;
   while (before.size > 0) {
     for (const [id, last] of before) {
@@ -380,7 +422,8 @@ const rediscover = async (
   const unfinished = devices
     .filter((device) => before.has(device.id))
     .map((device) => device.name);
-  return { failures, unfinished };
+  const finished = new Set([...asked].filter((id) => !before.has(id)));
+  return { failures, unfinished, finished };
 };
 
 /** Reads the polled switches from LibreNMS and records what they saw. */
@@ -412,6 +455,7 @@ export const collectFromLibreNMS = async (
 
   const notes: Array<string> = [];
   let discoveryFailed = false;
+  let finished = new Set<number>();
   if (
     plan.discover &&
     plan.devices.length > 0 &&
@@ -420,11 +464,9 @@ export const collectFromLibreNMS = async (
       cycleId,
     }))
   ) {
-    const { failures, unfinished } = await rediscover(
-      readOnce,
-      trigger,
-      plan.devices,
-    );
+    const discovery = await rediscover(readOnce, trigger, plan.devices);
+    const { failures, unfinished } = discovery;
+    finished = discovery.finished;
     discoveryFailed = failures.length > 0;
     notes.push(
       ...failures,
@@ -436,6 +478,7 @@ export const collectFromLibreNMS = async (
 
   const failedSwitchIds: Array<string> = [];
   const fdb: Array<FdbEntry> = [];
+  const tables: Array<{ deviceId: number; newest: number }> = [];
   const matched = new Map<number, string>();
   const ports: Array<SwitchPort> = [];
   let readCount = 0;
@@ -460,7 +503,18 @@ export const collectFromLibreNMS = async (
     )) {
       matched.set(portId, ownId);
     }
-    fdb.push(...freshFdb(readLibreNMSFdb(fdbList.body)));
+    const entries = readLibreNMSFdb(fdbList.body);
+    const { fresh, newest } = freshFdb(entries, {
+      newest: device.fdbNewest,
+      discovered: finished.has(device.id),
+    });
+    if (newest !== null) tables.push({ deviceId: device.id, newest });
+    if (entries.length > 0 && fresh.length === 0) {
+      notes.push(
+        `« ${device.name} » : la découverte n'a rafraîchi aucune entrée.`,
+      );
+    }
+    fdb.push(...fresh);
     ports.push(...own);
     readCount += 1;
   }
@@ -471,6 +525,7 @@ export const collectFromLibreNMS = async (
     baseUrl,
     failedSwitchIds,
     sightings: edgeSightings(fdb, matched, ports),
+    tables,
   });
   if (!counts) return { ok: true, message: "" };
   if (plan.devices.length === 0) {

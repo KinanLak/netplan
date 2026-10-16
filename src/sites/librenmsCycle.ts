@@ -111,18 +111,28 @@ export function readLibreNMSTime(value: unknown): number | null {
 }
 
 /**
- * The entries of one switch's table that its latest discovery refreshed. A
- * table without timestamps cannot be judged and is kept whole.
+ * The entries of one switch's table that its latest discovery refreshed, and
+ * the table's newest timestamp, which the next read compares with. A
+ * discovery that finished without moving it refreshed nothing, so nothing in
+ * the table is seen. A table without timestamps cannot be judged and is kept
+ * whole.
  */
-export function freshFdb(entries: ReadonlyArray<FdbEntry>): Array<FdbEntry> {
+export function freshFdb(
+  entries: ReadonlyArray<FdbEntry>,
+  previous: { newest: number | undefined; discovered: boolean },
+): { fresh: Array<FdbEntry>; newest: number | null } {
   const times = entries.flatMap(({ updatedAt }) =>
     updatedAt === null ? [] : [updatedAt],
   );
-  if (times.length === 0) return [...entries];
-  const newest = Math.max(...times);
-  return entries.filter(
+  if (times.length === 0) return { fresh: [...entries], newest: null };
+  const newest = times.reduce((a, b) => Math.max(a, b));
+  if (previous.discovered && previous.newest === newest) {
+    return { fresh: [], newest };
+  }
+  const fresh = entries.filter(
     ({ updatedAt }) => updatedAt !== null && updatedAt >= newest - FDB_FRESH_MS,
   );
+  return { fresh, newest };
 }
 
 /** When LibreNMS last finished discovering a device, from `/devices/:id`. */

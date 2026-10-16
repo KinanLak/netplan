@@ -68,19 +68,36 @@ describe("freshFdb", () => {
     mac: `00:00:00:00:00:0${n}`,
     updatedAt: readLibreNMSTime(updatedAt),
   });
+  const table = [
+    entry(1, "2026-10-16 07:00:40"),
+    entry(2, "2026-10-16 07:00:02"),
+    // Left behind by the discovery five minutes earlier.
+    entry(3, "2026-10-16 06:55:30"),
+    entry(4, null),
+  ];
+  const newest = Date.UTC(2026, 9, 16, 7, 0, 40);
+  const ports = (read: { fresh: Array<{ portId: number }> }) =>
+    read.fresh.map(({ portId }) => portId);
 
   it("keeps what the latest discovery refreshed", () => {
-    expect(
-      freshFdb([
-        entry(1, "2026-10-16 07:00:40"),
-        entry(2, "2026-10-16 07:00:02"),
-        // Left behind by the discovery five minutes earlier.
-        entry(3, "2026-10-16 06:55:30"),
-        entry(4, null),
-      ]).map(({ portId }) => portId),
-    ).toEqual([1, 2]);
+    const first = freshFdb(table, { newest: undefined, discovered: true });
+    expect(ports(first)).toEqual([1, 2]);
+    expect(first.newest).toBe(newest);
+    // Read again before the next discovery: the same entries.
+    expect(ports(freshFdb(table, { newest, discovered: false }))).toEqual([
+      1, 2,
+    ]);
     // Without timestamps nothing can be told apart.
-    expect(freshFdb([entry(1, null), entry(2, null)])).toHaveLength(2);
+    expect(
+      freshFdb([entry(1, null), entry(2, null)], {
+        newest: undefined,
+        discovered: true,
+      }).fresh,
+    ).toHaveLength(2);
+  });
+
+  it("sees nothing once a discovery refreshed nothing", () => {
+    expect(ports(freshFdb(table, { newest, discovered: true }))).toEqual([]);
   });
 
   it("reads timestamps with or without a zone", () => {

@@ -332,15 +332,15 @@ describe("the LibreNMS step", () => {
     await cycle(admin, siteId);
     expect(await statusOf(admin, "device:pc")).toBe("up");
 
-    // Its new MAC is not seen: the network no longer sees this pc.
+    // Its new MAC was never seen: the network says nothing of this pc.
     await admin.mutation(api.devices.updateIdentity, {
       deviceId: "device:pc",
       edit: { macs: [macOf(9)] },
     });
     expect((await cycle(admin, siteId)).message).toContain(
-      "2 MAC vues (1 passé hors ligne, 1 inconnue).",
+      "2 MAC vues (1 inconnue).",
     );
-    expect(await statusOf(admin, "device:pc")).toBe("down");
+    expect(await statusOf(admin, "device:pc")).toBeNull();
 
     // Once offline, a deleted device's MAC is an unknown one to forget.
     librenms.state.fdb = [];
@@ -380,6 +380,32 @@ describe("the LibreNMS step", () => {
     expect(librenms.state.discoveries).toBe(1);
   });
 
+  it("sees nothing in a table a discovery did not refresh", async () => {
+    const { admin, siteId } = await siteWithLibreNMS();
+    librenms.state.fdb = [
+      { port_id: 101, mac_address: PC, updated_at: "2026-10-16 06:00:00" },
+    ];
+    const discoverAgain = async () =>
+      await admin.run(async (ctx) => {
+        const row = await ctx.db.query("siteCycles").first();
+        if (row) await ctx.db.patch(row._id, { librenmsDiscoveryAt: 0 });
+      });
+    await cycle(admin, siteId);
+    expect(await statusOf(admin, "device:pc")).toBe("up");
+
+    await discoverAgain();
+    expect((await cycle(admin, siteId)).message).toContain(
+      "« pile » : la découverte n'a rafraîchi aucune entrée.",
+    );
+    expect(await statusOf(admin, "device:pc")).toBe("up");
+    await discoverAgain();
+    expect((await cycle(admin, siteId)).message).toContain(
+      "0 MAC vue (1 passé hors ligne).",
+    );
+    expect(librenms.state.discoveries).toBe(3);
+    expect(await statusOf(admin, "device:pc")).toBe("down");
+  });
+
   it("records nothing once LibreNMS was removed during the read", async () => {
     const { admin, siteId } = await siteWithLibreNMS();
     await admin.mutation(api.collection.refresh, { siteId });
@@ -402,6 +428,7 @@ describe("the LibreNMS step", () => {
             switchId: "device:sw",
           },
         ],
+        tables: [],
       }),
     ).toBeNull();
     expect(await sightings(admin)).toEqual([]);
