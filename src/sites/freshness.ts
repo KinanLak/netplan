@@ -128,6 +128,26 @@ export const describeAge = (
   return `le ${formatSiteTime(at, now, timezone)}`;
 };
 
+export type FreshnessTone = "fresh" | "late" | "none";
+
+/** The freshness line every user reads, and the colour of its dot. */
+export const describeFreshness = (
+  freshness: SiteFreshness,
+  now: number,
+): { headline: string; tone: FreshnessTone } => {
+  const { timezone, lastSuccessAt } = freshness;
+  if (!freshness.hasSources) {
+    return { headline: "Plan dessiné à la main", tone: "none" };
+  }
+  if (lastSuccessAt === null) {
+    return { headline: "Aucune donnée collectée", tone: "none" };
+  }
+  const age = describeAge(lastSuccessAt, now, timezone);
+  return isLate(freshness, now)
+    ? { headline: `Données en retard : ${age}`, tone: "late" }
+    : { headline: `Données collectées ${age}`, tone: "fresh" };
+};
+
 const listSources = (sources: Array<IntegrationKind>) =>
   sources.map((source) => INTEGRATION_LABELS[source]).join(" et ");
 

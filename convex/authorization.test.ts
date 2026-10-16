@@ -35,6 +35,7 @@ const POLICY: Record<string, Role> = {
   "floors:listForBuilding": "reader",
   "floors:remove": "editor",
   "floors:rename": "editor",
+  "health:overview": "admin",
   "importReviews:listForSite": "editor",
   "importReviews:resolve": "editor",
   "integrations:listForSite": "admin",

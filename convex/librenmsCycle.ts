@@ -5,6 +5,7 @@
 // once none has been for two cycles; one seen at a new socket, or while on no
 // floor, is placed next to it.
 import { v } from "convex/values";
+import type { Infer } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalMutation, internalQuery } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
@@ -18,6 +19,7 @@ import type { OperationInput } from "./mapOperations";
 import { pause, SOURCE_RETRY } from "./lib/httpRetry";
 import { PROBE_RETRY, sourceGet } from "./lib/integrationProbe";
 import { cableRowAt, portRowsOf, traceRows } from "./lib/ports";
+import type { switchResult } from "./siteValidators";
 import { fdbTable } from "./siteValidators";
 import { DEFAULT_DEVICE_SIZES } from "../src/devices/deviceSizes";
 import { EMPTY_LIBRENMS_SETTINGS, polledSwitches } from "../src/sites/librenms";
@@ -731,6 +733,8 @@ export const deleteSightings = async (ctx: MutationCtx, siteId: string) => {
 
 type LibreNMSRead = (path: string) => ReturnType<typeof sourceGet>;
 
+type SwitchResult = Infer<typeof switchResult>;
+
 /**
  * Asks each device to rediscover and waits, up to two minutes, until
  * LibreNMS records a new discovery for each. LibreNMS clears a device's
@@ -743,22 +747,23 @@ const rediscover = async (
   trigger: LibreNMSRead,
   devices: ReadonlyArray<{ id: number; name: string }>,
 ): Promise<{
-  failures: Array<string>;
-  unfinished: Array<string>;
+  failures: Map<number, string>;
+  unfinished: Set<number>;
   finished: Set<number>;
 }> => {
-  const failures: Array<string> = [];
+  const failures = new Map<number, string>();
   const before = new Map<number, string | null>();
   for (const device of devices) {
     const current = await readOnce(`/api/v0/devices/${device.id}`);
     if (!current.ok) {
-      failures.push(`« ${device.name} » : ${current.message}`);
+      failures.set(device.id, current.message);
       continue;
     }
     const asked = await trigger(`/api/v0/devices/${device.id}/discover`);
     if (!asked.ok) {
-      failures.push(
-        `« ${device.name} » n'a pas pu lancer sa découverte : ${asked.message}`,
+      failures.set(
+        device.id,
+        `sa découverte n'a pas pu être lancée. ${asked.message}`,
       );
     }
     // An answer other than a server error says the request did not start
@@ -778,9 +783,7 @@ const rediscover = async (
     if (before.size === 0 || Date.now() + DISCOVERY_POLL_MS > deadline) break;
     await pause(DISCOVERY_POLL_MS);
   }
-  const unfinished = devices
-    .filter((device) => before.has(device.id))
-    .map((device) => device.name);
+  const unfinished = new Set(before.keys());
   const finished = new Set([...asked].filter((id) => !before.has(id)));
   return { failures, unfinished, finished };
 };
@@ -791,7 +794,11 @@ export const collectFromLibreNMS = async (
   siteId: string,
   cycleId: string,
   connection: { baseUrl: string; token: string },
-): Promise<{ ok: boolean; message: string }> => {
+): Promise<{
+  ok: boolean;
+  message: string;
+  switches?: Array<SwitchResult>;
+}> => {
   const plan = await ctx.runQuery(internal.librenmsCycle.cyclePlan, {
     siteId,
     cycleId,
@@ -812,8 +819,11 @@ export const collectFromLibreNMS = async (
       attempts: 1,
     });
 
-  const notes: Array<string> = [];
-  let discoveryFailed = false;
+  // What each device's line in the step says after its name.
+  const notes = new Map<number, Array<string>>();
+  const note = (deviceId: number, phrase: string) =>
+    notes.set(deviceId, [...(notes.get(deviceId) ?? []), phrase]);
+  const failed = new Set<number>();
   let finished = new Set<number>();
   if (
     plan.discover &&
@@ -824,18 +834,16 @@ export const collectFromLibreNMS = async (
     }))
   ) {
     const discovery = await rediscover(readOnce, trigger, plan.devices);
-    const { failures, unfinished } = discovery;
     finished = discovery.finished;
-    discoveryFailed = failures.length > 0;
-    notes.push(
-      ...failures,
-      ...unfinished.map(
-        (name) => `« ${name} » n'a pas fini sa découverte à temps.`,
-      ),
-    );
+    for (const [deviceId, reason] of discovery.failures) {
+      failed.add(deviceId);
+      note(deviceId, reason);
+    }
+    for (const deviceId of discovery.unfinished) {
+      note(deviceId, "sa découverte n'a pas fini à temps.");
+    }
   }
 
-  const failedSwitchIds: Array<string> = [];
   const readSwitches: Array<{ switchId: string; status?: "up" | "down" }> = [];
   const fdb: Array<FdbEntry> = [];
   const tables: Array<{ deviceId: number; table: FdbTable }> = [];
@@ -852,11 +860,11 @@ export const collectFromLibreNMS = async (
       read(`/api/v0/devices/${device.id}/fdb`),
     ]);
     if (!state.ok || !portList.ok || !fdbList.ok) {
-      failedSwitchIds.push(...device.switchIds);
+      failed.add(device.id);
       const reason = [state, portList, fdbList].find(
         (answer): answer is Extract<typeof answer, { ok: false }> => !answer.ok,
       );
-      if (reason) notes.push(`« ${device.name} » : ${reason.message}`);
+      if (reason) note(device.id, reason.message);
       continue;
     }
     const status = readLibreNMSDeviceStatus(state.body) ?? undefined;
@@ -905,9 +913,7 @@ export const collectFromLibreNMS = async (
     );
     if (table) tables.push({ deviceId: device.id, table });
     if (entries.length > 0 && fresh.length === 0) {
-      notes.push(
-        `« ${device.name} » : sa dernière découverte n'a rafraîchi aucune entrée.`,
-      );
+      note(device.id, "sa dernière découverte n'a rafraîchi aucune entrée.");
     }
     fdb.push(...fresh);
     ports.push(...own);
@@ -928,11 +934,19 @@ export const collectFromLibreNMS = async (
   if (plan.devices.length === 0) {
     return { ok: true, message: "Aucun switch n'est interrogé." };
   }
+  const switches = plan.devices.map((device) => ({
+    name: device.name,
+    ok: !failed.has(device.id),
+    notes: notes.get(device.id) ?? [],
+  }));
   return {
-    ok: failedSwitchIds.length === 0 && !discoveryFailed,
+    ok: failed.size === 0,
     message: [
       sightingSummary({ switches: readCount, ...counts }),
-      ...notes,
+      ...switches.flatMap((entry) =>
+        entry.notes.map((phrase) => `« ${entry.name} » : ${phrase}`),
+      ),
     ].join(" "),
+    switches,
   };
 };

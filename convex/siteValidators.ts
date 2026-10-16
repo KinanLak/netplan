@@ -34,11 +34,23 @@ export const connectionCheck = v.object({
   at: v.number(),
 });
 
+/** How one polled LibreNMS device fared in a cycle (ADR 0026). */
+export const switchResult = v.object({
+  /** Its name in LibreNMS. */
+  name: v.string(),
+  /** False when it made the step fail: unread, or no discovery started. */
+  ok: v.boolean(),
+  /** What went wrong or looks off, each a phrase after its name. */
+  notes: v.array(v.string()),
+});
+
 /** What one source answered during a collection cycle. */
 export const cycleStep = v.object({
   source: integrationKind,
   ok: v.boolean(),
   message: v.string(),
+  /** LibreNMS only: each polled device, in the order they were read. */
+  switches: v.optional(v.array(switchResult)),
 });
 
 export const cycleRun = v.object({

@@ -8,13 +8,15 @@ import { useShortcutIntentEffect } from "@/hooks/use-shortcuts";
 import { useNow } from "@/hooks/use-now";
 import { isAdmin } from "@/lib/roles";
 import { cn } from "@/lib/utils";
-import {
-  describeAge,
-  describeNextRun,
-  isLate,
-  nextRun,
-} from "@/sites/freshness";
+import { describeFreshness, describeNextRun, nextRun } from "@/sites/freshness";
+import type { FreshnessTone } from "@/sites/freshness";
 import { useSiteRefresh } from "@/sites/useSiteRefresh";
+
+export const FRESHNESS_DOT: Record<FreshnessTone, string> = {
+  fresh: "bg-up",
+  late: "bg-down",
+  none: "bg-muted-foreground",
+};
 
 /** Only where a `ShortcutIntentProvider` listens: the map. */
 function RefreshShortcut({ run }: { run: () => void }) {
@@ -45,35 +47,19 @@ export function CollectionFreshness({
   const me = useCurrentUser();
   if (!freshness) return null;
 
-  const { timezone, lastSuccessAt } = freshness;
-  const late = isLate(freshness, now);
-  const age =
-    lastSuccessAt === null ? null : describeAge(lastSuccessAt, now, timezone);
-  const headline = !freshness.hasSources
-    ? "Plan dessiné à la main"
-    : age === null
-      ? "Aucune donnée collectée"
-      : late
-        ? `Données en retard : ${age}`
-        : `Données collectées ${age}`;
+  const { headline, tone } = describeFreshness(freshness, now);
+  const late = tone === "late";
 
   return (
     <div className={cn("flex items-center gap-2 text-sm", className)}>
       <span
         aria-hidden
-        className={cn(
-          "size-2 shrink-0 rounded-full",
-          late
-            ? "bg-down"
-            : !freshness.hasSources || age === null
-              ? "bg-muted-foreground"
-              : "bg-up",
-        )}
+        className={cn("size-2 shrink-0 rounded-full", FRESHNESS_DOT[tone])}
       />
       <div className="min-w-0 flex-1">
         <p className={cn("text-pretty", late && "text-down")}>{headline}</p>
         <p className="text-xs text-pretty text-muted-foreground">
-          {describeNextRun(nextRun(freshness, now), now, timezone)}
+          {describeNextRun(nextRun(freshness, now), now, freshness.timezone)}
           {!freshness.hasSources && linkToSettings && me && isAdmin(me.role) ? (
             <>
               {" · "}
