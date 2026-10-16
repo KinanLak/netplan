@@ -154,8 +154,38 @@ stops every cycle on a server.
   `applyMapOperation` with the client id `librenms`. A MAC no device carries
   is listed in the inventory, where an Éditeur turns it into an endpoint.
 
+A LibreNMS step keeps each polled switch's result (`switches`: name, ok,
+notes) next to its message; the message alone stays readable on the site
+page, and the admin health page reads the list.
+
 The plan of the deleted localization pipeline is frozen in
 [`docs/history/2026-07-computer-location-refresh/`](../history/2026-07-computer-location-refresh/README.md).
+
+## Experience
+
+Built by lot 4 (ADR 0026).
+
+- **Freshness.** `collection.freshness` is a reader query; the client ages
+  it against its own clock with the pure rules of `src/sites/freshness.ts`
+  (`siteCycles.lastSuccessAt`, the cadence, failures in a row), so a page
+  turns late without a query re-running. One `CollectionFreshness` block
+  shows it on the map and in the inventory, with "Actualiser" and its
+  shortcut for Éditeurs.
+- **Messages.** Every refusal is a French sentence, map-operation
+  rejections included, and `failureMessage` (`src/lib/errors.ts`) turns any
+  failure into one. The authenticated layout holds the app's only toaster,
+  bottom centre.
+- **Inventory views.** Per-type coverage cards filter to what is left to
+  place; a status filter, also reached by `?status=`, backs the sidebar's
+  "Hors ligne" group. An Éditeur ignores an unknown MAC in `ignoredMacs`,
+  undone or restored by the inverse mutation.
+- **Buildings and floors.** Éditeurs create, rename and remove them through
+  `convex/buildings.ts` and `convex/floors.ts`, outside the map's undo, so
+  removal is refused unless nothing stands on the floor. Names are unique
+  among siblings, ignoring case and accents.
+- **Admin health.** `/admin/health`, the admin's landing page, reads
+  `health.overview`: every site's freshness, last cycle, NetBox import age,
+  switch counts by status and per-switch LibreNMS results.
 
 ## Deployment
 
