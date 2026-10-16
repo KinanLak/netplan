@@ -1,9 +1,6 @@
-import { useMutation, useQuery } from "convex/react";
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { FieldError } from "@/components/ui/field";
-import { adminErrorMessage } from "@/admin/errors";
+import { useQuery } from "convex/react";
 import { cn } from "@/lib/utils";
+import { CollectionFreshness } from "@/sites/CollectionFreshness";
 import { INTEGRATION_LABELS } from "@/sites/integrations";
 import { api } from "../../convex/_generated/api";
 
@@ -15,33 +12,13 @@ const when = (at: number) =>
 
 const origin = (manual: boolean) => (manual ? "manuelle" : "automatique");
 
-/** What the site's collection cycles did last and when the next one runs. */
-export function CollectionSection({
-  siteId,
-  automaticRefresh,
-  manualRefresh,
-}: {
-  siteId: string;
-  automaticRefresh: boolean;
-  manualRefresh: boolean;
-}) {
+/**
+ * What the site's collection cycles did last, source by source, under the
+ * freshness every user sees.
+ */
+export function CollectionSection({ siteId }: { siteId: string }) {
   const status = useQuery(api.collection.status, { siteId });
-  const refresh = useMutation(api.collection.refresh);
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   if (status === undefined) return null;
-
-  const start = async () => {
-    setPending(true);
-    setError(null);
-    try {
-      await refresh({ siteId });
-    } catch (failure) {
-      setError(adminErrorMessage(failure));
-    } finally {
-      setPending(false);
-    }
-  };
 
   return (
     <section className="space-y-4 border-t pt-6">
@@ -51,12 +28,12 @@ export function CollectionSection({
           Chaque collecte interroge les intégrations actives, NetBox d'abord.
         </p>
       </div>
-      <div className="space-y-2 text-sm" role="status">
-        {status.paused ? (
-          <p className="text-destructive">
-            La collecte est suspendue sur ce serveur.
-          </p>
-        ) : null}
+      <CollectionFreshness
+        siteId={siteId}
+        linkToSettings={false}
+        className="max-w-md"
+      />
+      <div className="space-y-2 text-sm">
         {status.running ? (
           <p>
             Collecte {origin(status.running.manual)} en cours depuis{" "}
@@ -94,30 +71,12 @@ export function CollectionSection({
             Aucune collecte pour l'instant.
           </p>
         )}
-        <p className="text-muted-foreground">
-          {!automaticRefresh
-            ? "La collecte automatique est désactivée."
-            : status.nextRunAt === null
-              ? "La première collecte démarre dans la minute où une intégration est active."
-              : `Prochaine collecte automatique : ${when(status.nextRunAt)}.`}
-          {status.failures > 1
-            ? ` ${status.failures} échecs de suite : les essais s'espacent.`
-            : null}
-        </p>
+        {status.failures > 1 ? (
+          <p className="text-muted-foreground">
+            {status.failures} échecs de suite : les essais s'espacent.
+          </p>
+        ) : null}
       </div>
-      {manualRefresh ? (
-        <div className="flex flex-wrap items-center gap-3">
-          <Button
-            type="button"
-            variant="outline"
-            disabled={pending || status.running !== null || status.paused}
-            onClick={() => void start()}
-          >
-            {status.running ? "Collecte en cours…" : "Lancer une collecte"}
-          </Button>
-          {error ? <FieldError>{error}</FieldError> : null}
-        </div>
-      ) : null}
     </section>
   );
 }

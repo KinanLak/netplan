@@ -20,7 +20,7 @@ import {
   FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { adminErrorMessage } from "@/admin/errors";
+import { failureMessage } from "@/lib/errors";
 import { TimeZoneField } from "@/admin/TimeZoneField";
 import { DEFAULT_TIMEZONE, siteNameError } from "@/sites/settings";
 import { api } from "../../../../../convex/_generated/api";
@@ -126,7 +126,7 @@ function CreateSiteDialog({
       close(false);
       await navigate({ to: "/admin/sites/$siteId", params: { siteId } });
     } catch (failure) {
-      setError(adminErrorMessage(failure));
+      setError(failureMessage(failure, "admin"));
     } finally {
       setPending(false);
     }

@@ -45,6 +45,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { CollectionFreshness } from "@/sites/CollectionFreshness";
 import { deviceKinds, getDeviceKindLabel } from "@/devices/deviceKindRegistry";
 import {
   IDENTITY_TEXT_LIMITS,
@@ -52,7 +53,7 @@ import {
   normalizeIdentityEdit,
 } from "@/devices/identity";
 import { parseMacList } from "@/devices/mac";
-import { deviceMutationError } from "@/devices/mutationError";
+import { failureMessage } from "@/lib/errors";
 import { useCanEdit } from "@/hooks/use-current-user";
 import { createStandaloneObjectId } from "@/lib/identity";
 import { asBuildingId, asDeviceId, asFloorId } from "@/lib/objectIds";
@@ -160,6 +161,10 @@ function SiteInventory({ site }: { site: SiteSummary }) {
           <p className="text-sm text-muted-foreground">
             Les équipements de {site.name}, sur le plan ou non.
           </p>
+          <CollectionFreshness
+            siteId={site.id}
+            className="mt-3 w-fit max-w-sm"
+          />
         </div>
         {canEdit ? (
           <Button onClick={() => setCreating(true)}>
@@ -299,7 +304,7 @@ function InventoryItem({
             ...removed,
           });
         } catch (error) {
-          toast.error(deviceMutationError(error));
+          toast.error(failureMessage(error, "editor"));
         }
       };
       toast(`« ${device.name} » supprimé`, {
@@ -308,7 +313,7 @@ function InventoryItem({
         duration: 10_000,
       });
     } catch (error) {
-      toast.error(deviceMutationError(error));
+      toast.error(failureMessage(error, "editor"));
     }
   };
 
@@ -494,7 +499,7 @@ function CreateDeviceForm({
       await createDevice({ siteId: site.id, deviceId, type, identity });
       onDone();
     } catch (caught) {
-      setError(deviceMutationError(caught));
+      setError(failureMessage(caught, "editor"));
     } finally {
       setSaving(false);
     }

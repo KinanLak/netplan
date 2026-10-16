@@ -63,6 +63,7 @@ const shortcutRoutingPriority: Array<ShortcutAction> = [
   "redo",
   "show-shortcuts",
   "cycle-theme",
+  "refresh-site",
   "sidebar-toggle",
   "toggle-edit-mode",
   "toggle-wall-debug",

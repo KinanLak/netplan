@@ -23,7 +23,7 @@ import {
   FieldSet,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { adminErrorMessage } from "@/admin/errors";
+import { failureMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import {
   INTEGRATION_KINDS,
@@ -123,7 +123,7 @@ function IntegrationForm({
       });
       setToken("");
     } catch (failure) {
-      setError(adminErrorMessage(failure));
+      setError(failureMessage(failure, "admin"));
     } finally {
       setPending(null);
     }
@@ -135,7 +135,7 @@ function IntegrationForm({
     try {
       await test({ siteId, kind });
     } catch (failure) {
-      setError(adminErrorMessage(failure));
+      setError(failureMessage(failure, "admin"));
     } finally {
       setPending(null);
     }

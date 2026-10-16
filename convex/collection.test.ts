@@ -34,18 +34,22 @@ afterEach(() => {
   delete process.env.NETPLAN_COLLECTION_PAUSED;
 });
 
-/** An admin and an éditeur on one backend. */
+/** An admin, an éditeur and a lecteur on one backend. */
 async function team() {
   const t = testBackend();
-  const as = async (role: "admin" | "editor") =>
+  const as = async (role: "admin" | "editor" | "reader") =>
     t.withIdentity((await createSignedInUser(t, role)).identity);
-  return { admin: await as("admin"), editor: await as("editor") };
+  return {
+    admin: await as("admin"),
+    editor: await as("editor"),
+    reader: await as("reader"),
+  };
 }
 
 /** A site with an enabled NetBox, as an admin sets it up. */
 async function siteWithNetBox(given?: TestClient) {
-  const { admin, editor } = given
-    ? { admin: given, editor: given }
+  const { admin, editor, reader } = given
+    ? { admin: given, editor: given, reader: given }
     : await team();
   const siteId = await createTestSite(admin);
   await admin.action(api.integrations.save, {
@@ -55,7 +59,7 @@ async function siteWithNetBox(given?: TestClient) {
     enabled: true,
     token: TOKEN,
   });
-  return { admin, editor, siteId };
+  return { admin, editor, reader, siteId };
 }
 
 // Real timers: this only yields until the scheduled cycles have run.
@@ -182,6 +186,46 @@ describe("collection cycles", () => {
     await expect(
       admin.mutation(api.collection.refresh, { siteId }),
     ).rejects.toThrow("suspendue");
+  });
+
+  it("tells a lecteur how fresh the site is, and an éditeur when their cycle started", async () => {
+    const { admin, editor, reader, siteId } = await siteWithNetBox();
+    const freshness = () => reader.query(api.collection.freshness, { siteId });
+
+    expect(await freshness()).toMatchObject({
+      hasSources: true,
+      automaticRefresh: true,
+      running: null,
+      last: null,
+      lastSuccessAt: null,
+      nextRunAt: null,
+    });
+
+    const startedAt = await editor.mutation(api.collection.refresh, {
+      siteId,
+    });
+    expect((await freshness())?.running).toEqual({ startedAt, manual: true });
+    await settle(admin);
+    expect(await freshness()).toMatchObject({
+      running: null,
+      last: { startedAt, failed: [] },
+      lastSuccessAt: startedAt,
+    });
+
+    // A failed cycle leaves the data as fresh as the last good one.
+    fetchStub.restore();
+    fetchStub = stubFetch(() => new Response("", { status: 403 }));
+    const failedAt = await editor.mutation(api.collection.refresh, { siteId });
+    await settle(admin);
+    expect(await freshness()).toMatchObject({
+      last: { startedAt: failedAt, failed: ["netbox"] },
+      lastSuccessAt: startedAt,
+      failures: 1,
+    });
+
+    expect(
+      await reader.query(api.collection.freshness, { siteId: "site:gone" }),
+    ).toBeNull();
   });
 
   it("records a source's refusal and backs off", async () => {

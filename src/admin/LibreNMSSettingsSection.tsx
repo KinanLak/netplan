@@ -11,7 +11,7 @@ import {
   ComboboxList,
 } from "@/components/ui/combobox";
 import { FieldError } from "@/components/ui/field";
-import { adminErrorMessage } from "@/admin/errors";
+import { failureMessage } from "@/lib/errors";
 import { polledSwitches, suggestDevice } from "@/sites/librenms";
 import type { LibreNMSDevice } from "@/sites/librenms";
 import { api } from "../../convex/_generated/api";
@@ -45,7 +45,7 @@ export function LibreNMSSettingsSection({ siteId }: { siteId: string }) {
       if ("error" in answer) setError(answer.error);
       else setOptions(answer);
     } catch (failure) {
-      setError(adminErrorMessage(failure));
+      setError(failureMessage(failure, "admin"));
     } finally {
       setLoading(false);
     }
@@ -179,7 +179,7 @@ function SettingsForm({
       });
       onDone();
     } catch (failure) {
-      setError(adminErrorMessage(failure));
+      setError(failureMessage(failure, "admin"));
     } finally {
       setPending(false);
     }

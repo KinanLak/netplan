@@ -15,7 +15,7 @@ import {
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { IDENTITY_TEXT_LIMITS } from "@/devices/identity";
-import { deviceMutationError } from "@/devices/mutationError";
+import { failureMessage } from "@/lib/errors";
 import { createStandaloneObjectId } from "@/lib/identity";
 import { api } from "../../convex/_generated/api";
 
@@ -160,7 +160,7 @@ function CreateForm({
       );
       onDone();
     } catch (caught) {
-      setError(deviceMutationError(caught));
+      setError(failureMessage(caught, "editor"));
     } finally {
       setSaving(false);
     }

@@ -40,7 +40,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { adminErrorMessage } from "@/admin/errors";
+import { failureMessage } from "@/lib/errors";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { ROLE_LABELS } from "@/lib/roles";
 import { api } from "../../../../convex/_generated/api";
@@ -112,7 +112,7 @@ function UserItem({ user, isMe }: { user: UserRow; isMe: boolean }) {
       await change();
       if (done) setNotice({ error: false, text: done });
     } catch (failure) {
-      setNotice({ error: true, text: adminErrorMessage(failure) });
+      setNotice({ error: true, text: failureMessage(failure, "admin") });
     } finally {
       setPending(false);
     }
@@ -296,7 +296,7 @@ function RoleMappingForm({
         text: "Correspondance enregistrée. Elle s'applique à la prochaine connexion de chaque compte Keycloak.",
       });
     } catch (failure) {
-      setNotice({ error: true, text: adminErrorMessage(failure) });
+      setNotice({ error: true, text: failureMessage(failure, "admin") });
     } finally {
       setPending(false);
     }
@@ -363,7 +363,7 @@ function TestMail() {
       const to = await send({});
       setNotice({ error: false, text: `E-mail de test envoyé à ${to}.` });
     } catch (failure) {
-      setNotice({ error: true, text: adminErrorMessage(failure) });
+      setNotice({ error: true, text: failureMessage(failure, "admin") });
     } finally {
       setPending(false);
     }
@@ -442,7 +442,7 @@ function InviteDialog({
       await invite({ ...fields, role });
       close(false);
     } catch (failure) {
-      setError(adminErrorMessage(failure));
+      setError(failureMessage(failure, "admin"));
     } finally {
       setPending(false);
     }
