@@ -37,11 +37,39 @@ clients use to reconcile.
 Walls are stored as one 20×20 block per grid cell (`src/walls/`), keyed by a
 geometry key so that two blocks never occupy the same cell.
 
-Every page needs a better-auth login (ADR 0021), and every public Convex
-function checks the caller's role (Lecteur, Éditeur, Admin; ADR 0004) on the
-server; `convex/authorization.test.ts` lists the level of each one. A
-Lecteur's map is read-only, and presence (`convex/presences.ts`) shows each
-signed-in user's name, one entry per user however many tabs they have open.
+## Accounts
+
+Built by lot 1 (ADRs 0003, 0004 and 0021). better-auth runs inside Convex as
+a locally installed component (`convex/betterAuth/`, `convex/auth.ts`); the
+app server proxies `/api/auth/*` to the Convex site and sends a visitor
+without a session to `/login` before any page loads. There is no sign-up and
+a session lasts 24 hours from login, never extended.
+
+- **Roles.** `reader`, `editor` and `admin` on the better-auth user, shown as
+  Lecteur, Éditeur and Admin. Public Convex functions are built only with the
+  role builders of `convex/lib/functions.ts` (a lint rule forbids the raw
+  ones), which refuse a missing, expired or banned session;
+  `convex/authorization.test.ts` lists the level of each function. A
+  Lecteur's map is read-only, and presence (`convex/presences.ts`) shows each
+  signed-in user's name, one entry per user however many tabs they have open.
+- **Local accounts.** Sign-in by email or username and password. An admin
+  invites a user from **Administration › Utilisateurs**: the account is
+  created without a password and the mail carries a seven-day password-reset
+  link. Forgotten password reuses that page with a one-hour link, which never
+  goes to a Keycloak account. Disabling is a better-auth ban. The first admin
+  comes from `BOOTSTRAP_ADMIN_*` at deploy time.
+- **Keycloak.** Generic OAuth with PKCE, on when `KEYCLOAK_ISSUER`,
+  `_CLIENT_ID` and `_CLIENT_SECRET` are set; the login page asks
+  `/api/auth/sign-in-options` whether to offer it. At each Keycloak login a
+  session hook sets the role from the token's roles and groups and the two
+  names an admin stores in `authSettings` from the users page (Admin wins, no
+  match is Lecteur), so the users page never edits a Keycloak account's role.
+  A Keycloak identity never links to a local account: the same email is
+  refused and the linking routes are disabled. OAuth errors land on `/login`,
+  which explains them in French. Signing out does not end the Keycloak
+  session.
+- **Mail.** A Node action sends invitations, reset links and the admin's test
+  mail through the `SMTP_*` relay.
 
 ## Floor overlay
 

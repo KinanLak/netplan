@@ -7,17 +7,8 @@ description: The shape the rebuild lots are building towards.
 
 The rebuild replaces the current design in place, with no transitional layers
 and data restarting from zero (ADR 0001). Order: F, then lots 0 and 1 in
-parallel, then lot 2 alongside lot 3a, then 3b, 4 and 5. Lots F, 0 and 3a
-are done and described in [Current](current.md).
-
-## Accounts (lot 1)
-
-- better-auth inside Convex: password accounts invited by an admin, and
-  Keycloak OIDC; no sign-up, 24-hour sessions, login required everywhere
-  (ADR 0003).
-- Global roles Lecteur, Éditeur and Admin checked by every Convex function;
-  the SSO role comes from a Keycloak role name chosen by the admin (ADR 0004).
-- An admin page for users, invitations and role mapping, and SMTP for mail.
+parallel, then lot 2 alongside lot 3a, then 3b, 4 and 5. Lots F, 0, 1 and
+3a are done and described in [Current](current.md).
 
 ## Domain model (lot 2)
 
