@@ -1094,6 +1094,52 @@ describe("the LibreNMS step", () => {
     expect(await unknown()).toEqual([]);
   });
 
+  it("names no port of a switch mapped elsewhere during the read", async () => {
+    const { admin, siteId } = await siteWithLibreNMS({ defaultPorts: true });
+    await admin.mutation(api.collection.refresh, { siteId });
+    const cycleId = await admin.run(
+      async (ctx) =>
+        (await ctx.db.query("siteCycles").first())?.running?.cycleId,
+    );
+    if (!cycleId) throw new Error("expected a running cycle");
+    const adopt = async () =>
+      await admin.mutation(internal.librenmsCycle.adoptPortNames, {
+        siteId,
+        cycleId,
+        baseUrl: LIBRENMS,
+        switchId: "device:sw",
+        librenmsDeviceId: STACK,
+        names: ["Gi1/0/1"],
+      });
+    const remap = async (switchIds: Array<string>) =>
+      await admin.mutation(api.librenms.saveSettings, {
+        siteId,
+        baseUrl: LIBRENMS,
+        settings: {
+          switches: switchIds.map((switchId) => ({
+            switchId,
+            device: { id: STACK, name: "pile" },
+          })),
+        },
+      });
+
+    await admin.mutation(api.librenms.saveSettings, {
+      siteId,
+      baseUrl: LIBRENMS,
+      settings: {
+        switches: [
+          { switchId: "device:sw", device: { id: STACK + 1, name: "autre" } },
+        ],
+      },
+    });
+    expect(await adopt()).toBe(false);
+    // Nor one that now shares its LibreNMS device with another.
+    await remap(["device:sw", "device:core"]);
+    expect(await adopt()).toBe(false);
+    await remap(["device:sw"]);
+    expect(await adopt()).toBe(true);
+  });
+
   it("records nothing once LibreNMS was removed during the read", async () => {
     const { admin, siteId } = await siteWithLibreNMS();
     await admin.mutation(api.collection.refresh, { siteId });

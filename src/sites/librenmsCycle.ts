@@ -319,15 +319,23 @@ export const matchPorts = (
   return matched;
 };
 
-/** LibreNMS's physical Ethernet ports' names, by interface index. */
+/**
+ * LibreNMS's physical Ethernet ports' names, by interface index; an unnamed
+ * one is empty, so it still holds its position.
+ */
 export const ethernetNames = (
   librenmsPorts: ReadonlyArray<LibreNMSPort>,
 ): Array<string> =>
   librenmsPorts
     .flatMap(({ names, ethernetIndex }) =>
-      ethernetIndex === undefined || names.length === 0
+      ethernetIndex === undefined
         ? []
-        : [{ index: ethernetIndex, name: names[0].trim() }],
+        : [
+            {
+              index: ethernetIndex,
+              name: names.length > 0 ? names[0].trim() : "",
+            },
+          ],
     )
     .sort((a, b) => a.index - b.index)
     .map(({ name }) => name);

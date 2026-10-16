@@ -405,12 +405,13 @@ const heldCycle = async (
       q.eq("siteId", siteId).eq("kind", "librenms"),
     )
     .unique();
-  return integration?.baseUrl === baseUrl ? cycle : null;
+  return integration?.baseUrl === baseUrl ? { cycle, integration } : null;
 };
 
 /**
- * Gives a switch whose ports still carry their default names LibreNMS's
- * (`adoptedPorts`); whether its ports changed.
+ * Gives a switch whose ports still carry their default names those of the
+ * LibreNMS device it alone stands for (`adoptedPorts`); whether its ports
+ * changed.
  */
 export const adoptPortNames = internalMutation({
   args: {
@@ -418,11 +419,21 @@ export const adoptPortNames = internalMutation({
     cycleId: v.string(),
     baseUrl: v.string(),
     switchId: v.string(),
+    librenmsDeviceId: v.number(),
     names: v.array(v.string()),
   },
   returns: v.boolean(),
-  handler: async (ctx, { siteId, cycleId, baseUrl, switchId, names }) => {
-    if (!(await heldCycle(ctx, siteId, cycleId, baseUrl))) return false;
+  handler: async (
+    ctx,
+    { siteId, cycleId, baseUrl, switchId, librenmsDeviceId, names },
+  ) => {
+    const held = await heldCycle(ctx, siteId, cycleId, baseUrl);
+    if (!held) return false;
+    // An admin may have mapped the switch elsewhere while it was read.
+    const mapped = polledSwitches(
+      held.integration.librenms ?? EMPTY_LIBRENMS_SETTINGS,
+    ).filter(({ device }) => device.id === librenmsDeviceId);
+    if (mapped.length !== 1 || mapped[0]?.switchId !== switchId) return false;
     const device = await deviceOf(ctx, switchId);
     if (device?.siteId !== siteId || device.type !== "switch") return false;
     const rows = await portRowsOf(ctx, switchId);
@@ -518,8 +529,9 @@ export const recordSightings = internalMutation({
       tables,
     },
   ) => {
-    const cycle = await heldCycle(ctx, siteId, cycleId, baseUrl);
-    if (!cycle) return null;
+    const held = await heldCycle(ctx, siteId, cycleId, baseUrl);
+    if (!held) return null;
+    const { cycle } = held;
 
     const site = await ctx.db
       .query("sites")
@@ -870,6 +882,7 @@ export const collectFromLibreNMS = async (
         cycleId,
         baseUrl,
         switchId: sole,
+        librenmsDeviceId: device.id,
         names,
       }))
     ) {

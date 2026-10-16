@@ -211,7 +211,7 @@ describe("adopting LibreNMS's port names", () => {
         { id: 3, names: [" Gi1/0/1 "], ethernetIndex: 1 },
         { id: 4, names: [], ethernetIndex: 3 },
       ]),
-    ).toEqual(["Gi1/0/1", "Gi1/0/2"]);
+    ).toEqual(["Gi1/0/1", "Gi1/0/2", ""]);
   });
 
   const defaults = (count: number, cabled: Array<number> = []) =>
@@ -261,6 +261,8 @@ describe("adopting LibreNMS's port names", () => {
 
   it("adopts nothing LibreNMS cannot name each port with once", () => {
     expect(adoptedPorts("sw", defaults(2), [])).toBeNull();
+    // An unnamed port would shift every name after it.
+    expect(adoptedPorts("sw", defaults(2), ["", "Gi2"])).toBeNull();
     expect(adoptedPorts("sw", defaults(2), ["Gi1", "gi1"])).toBeNull();
     expect(adoptedPorts("sw", defaults(2), ["x".repeat(65)])).toBeNull();
     expect(adoptedPorts("sw", [], ["a"])).toBeNull();
