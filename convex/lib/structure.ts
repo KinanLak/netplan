@@ -82,7 +82,8 @@ export async function floorContent(
 
 /**
  * Removes a floor known to be empty, with what only described it: who was
- * looking at it, its revision and its operation receipts.
+ * looking at it and its revision. Operation receipts stay: they are keyed by
+ * operation, so a retried operation still finds its answer.
  */
 export async function deleteEmptyFloor(ctx: MutationCtx, floor: Doc<"floors">) {
   const floorId = floor.objectId;
@@ -97,12 +98,6 @@ export async function deleteEmptyFloor(ctx: MutationCtx, floor: Doc<"floors">) {
     .withIndex("by_floor", (q) => q.eq("floorId", floorId))
     .collect();
   for (const revision of revisions) await ctx.db.delete(revision._id);
-
-  const operations = await ctx.db
-    .query("clientOperations")
-    .filter((q) => q.eq(q.field("floorId"), floorId))
-    .collect();
-  for (const operation of operations) await ctx.db.delete(operation._id);
 
   await ctx.db.delete(floor._id);
 }

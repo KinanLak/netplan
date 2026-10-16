@@ -94,7 +94,7 @@ export const rename = editorMutation({
   },
 });
 
-/** Only an empty floor goes; its devices, walls and calque are taken off first. */
+/** Only an empty floor goes: a user takes its devices, walls and calque off first. */
 export const remove = editorMutation({
   args: { id: v.string() },
   returns: v.null(),
