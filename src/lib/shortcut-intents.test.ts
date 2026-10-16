@@ -10,7 +10,7 @@ import type {
   ShortcutIntentRuntime,
 } from "@/lib/shortcut-intents";
 import type { ShortcutAction } from "@/lib/shortcuts";
-import type { DeviceId } from "@/types/map";
+import type { Cable, CableId, DeviceId, PortId } from "@/types/map";
 
 const did = (s: string) => s as DeviceId;
 
@@ -285,14 +285,16 @@ describe("shortcut intents", () => {
   });
 
   it("computes connection highlights for selected and hovered devices", () => {
-    const links = [
-      { fromDeviceId: did("a"), toDeviceId: did("b") },
-      { fromDeviceId: did("a"), toDeviceId: did("c") },
-    ];
+    const cable = (id: string, from: string, to: string): Cable => ({
+      id: `cable:${id}` as CableId,
+      a: { deviceId: did(from), portId: `port:${from}:1` as PortId },
+      b: { deviceId: did(to), portId: `port:${to}:1` as PortId },
+    });
+    const cables = [cable("ab", "a", "b"), cable("ca", "c", "a")];
 
     expect(
       getNextConnectionHighlightIds({
-        links,
+        cables,
         highlightedDeviceIds: [],
         hoveredDeviceId: null,
         selectedDeviceId: did("a"),
@@ -301,7 +303,7 @@ describe("shortcut intents", () => {
 
     expect(
       getNextConnectionHighlightIds({
-        links,
+        cables,
         highlightedDeviceIds: [],
         hoveredDeviceId: did("a"),
         selectedDeviceId: null,
@@ -310,7 +312,7 @@ describe("shortcut intents", () => {
 
     expect(
       getNextConnectionHighlightIds({
-        links,
+        cables,
         highlightedDeviceIds: [did("a"), did("b"), did("c")],
         hoveredDeviceId: did("a"),
         selectedDeviceId: null,
@@ -319,7 +321,7 @@ describe("shortcut intents", () => {
 
     expect(
       getNextConnectionHighlightIds({
-        links,
+        cables,
         highlightedDeviceIds: [did("a"), did("b"), did("c")],
         hoveredDeviceId: did("b"),
         selectedDeviceId: null,

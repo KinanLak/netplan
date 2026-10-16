@@ -31,7 +31,7 @@ import {
 
 const serverDocument = buildBenchDocument();
 
-group("materializeDocument (150 devices, 200 walls, 30 links)", () => {
+group("materializeDocument (150 devices, 200 walls, 30 cables)", () => {
   for (const pendingCount of [1, 10, 50, 100]) {
     const operations = buildBenchPatchOperations(pendingCount);
     bench(`${pendingCount} pending ops`, () => {

@@ -1,5 +1,13 @@
 import { describe, expect, it } from "bun:test";
-import type { Device, DeviceId, FloorId, LinkId, WallId } from "@/types/map";
+import type {
+  Cable,
+  CableId,
+  Device,
+  DeviceId,
+  FloorId,
+  WallId,
+} from "@/types/map";
+import { defaultPorts, portIdOf } from "@/devices/ports";
 import { applyOperation } from "./applyOperation";
 import { buildInverseOperation } from "./buildInverseOperation";
 import type { MapOperation } from "./types";
@@ -7,7 +15,6 @@ import type { MapOperation } from "./types";
 const floorId = "floor:a" as FloorId;
 const deviceId = (value: string) => value as DeviceId;
 const wallId = (value: string) => value as WallId;
-const linkId = (value: string) => value as LinkId;
 const meta = (seq: number): MapOperation["meta"] => ({
   opId: `op:test:${seq}` as MapOperation["meta"]["opId"],
   clientId: "client:test" as MapOperation["meta"]["clientId"],
@@ -26,6 +33,30 @@ const device = (id: DeviceId): Device => ({
   metadata: {},
 });
 
+const cabledPair = () => {
+  const a = device(deviceId("device:a"));
+  const b = { ...device(deviceId("device:b")), position: { x: 200, y: 0 } };
+  const cable: Cable = {
+    id: "cable:a" as CableId,
+    a: { deviceId: a.id, portId: portIdOf(a.id, "interface", 1) },
+    b: { deviceId: b.id, portId: portIdOf(b.id, "interface", 1) },
+  };
+  return {
+    a,
+    b,
+    cable,
+    snapshot: {
+      floorId,
+      revision: 0,
+      devices: [a, b],
+      walls: [],
+      ports: [...defaultPorts(a.id, "pc"), ...defaultPorts(b.id, "pc")],
+      cables: [cable],
+      overlay: null,
+    },
+  };
+};
+
 describe("buildInverseOperation", () => {
   it("builds a move inverse that patches only position", () => {
     const original = device(deviceId("device:a"));
@@ -34,7 +65,8 @@ describe("buildInverseOperation", () => {
       revision: 0,
       devices: [original],
       walls: [],
-      links: [],
+      ports: [],
+      cables: [],
       overlay: null,
     };
     const move: MapOperation = {
@@ -54,55 +86,27 @@ describe("buildInverseOperation", () => {
     });
   });
 
-  it("restores deleted devices and connected links as a batch", () => {
-    const a = device(deviceId("device:a"));
-    const b = device(deviceId("device:b"));
-    const link = {
-      id: linkId("link:a"),
-      floorId,
-      fromDeviceId: a.id,
-      toDeviceId: b.id,
-    };
-    const snapshot = {
-      floorId,
-      revision: 0,
-      devices: [a, b],
-      walls: [],
-      links: [link],
-      overlay: null,
-    };
-
-    const inverse = buildInverseOperation(snapshot, {
+  it("brings a deleted device back with its ports and cables", () => {
+    const { a, snapshot } = cabledPair();
+    const remove: MapOperation = {
       kind: "device.delete",
       meta: meta(1),
       deviceId: a.id,
-    });
+    };
 
-    expect(inverse?.kind).toBe("batch");
-    if (inverse?.kind !== "batch") return;
-    expect(inverse.operations.map((operation) => operation.kind)).toEqual([
-      "device.create",
-      "link.create",
-    ]);
+    const inverse = buildInverseOperation(snapshot, remove);
+    const deleted = applyOperation(snapshot, remove).snapshot;
+
+    expect(inverse?.kind).toBe("device.create");
+    if (!inverse) return;
+    const restored = applyOperation(deleted, inverse).snapshot;
+    expect(restored.devices).toContainEqual(a);
+    expect(new Set(restored.ports)).toEqual(new Set(snapshot.ports));
+    expect(restored.cables).toEqual(snapshot.cables);
   });
 
-  it("puts an unplaced device back with its links, and takes a placed one off", () => {
-    const a = device(deviceId("device:a"));
-    const b = { ...device(deviceId("device:b")), position: { x: 200, y: 0 } };
-    const link = {
-      id: linkId("link:a"),
-      floorId,
-      fromDeviceId: a.id,
-      toDeviceId: b.id,
-    };
-    const snapshot = {
-      floorId,
-      revision: 0,
-      devices: [a, b],
-      walls: [],
-      links: [link],
-      overlay: null,
-    };
+  it("puts an unplaced device back, and takes a placed one off", () => {
+    const { a, snapshot } = cabledPair();
     const unplace: MapOperation = {
       kind: "device.unplace",
       meta: meta(1),
@@ -112,17 +116,15 @@ describe("buildInverseOperation", () => {
     const inverse = buildInverseOperation(snapshot, unplace);
     const unplaced = applyOperation(snapshot, unplace).snapshot;
 
-    expect(inverse?.kind).toBe("batch");
+    // Its cables stayed with it in the inventory: placing it is enough.
+    expect(inverse).toEqual({ kind: "device.place", meta: meta(1), device: a });
     if (!inverse) return;
     const restored = applyOperation(unplaced, inverse).snapshot;
     expect(restored.devices).toContainEqual(a);
-    expect(restored.links).toEqual([link]);
-    expect(buildInverseOperation(unplaced, inverse)).toMatchObject({
-      kind: "batch",
-      operations: [
-        { kind: "link.delete", linkId: link.id },
-        { kind: "device.unplace", deviceId: a.id },
-      ],
+    expect(buildInverseOperation(unplaced, inverse)).toEqual({
+      kind: "device.unplace",
+      meta: meta(1),
+      deviceId: a.id,
     });
   });
 
@@ -133,7 +135,8 @@ describe("buildInverseOperation", () => {
       revision: 0,
       devices: [a],
       walls: [],
-      links: [],
+      ports: [],
+      cables: [],
       overlay: null,
     };
     const batch: MapOperation = {
@@ -178,7 +181,8 @@ describe("buildInverseOperation", () => {
         revision: 0,
         devices: [],
         walls: [wall],
-        links: [],
+        ports: [],
+        cables: [],
         overlay: null,
       },
       { kind: "walls.delete", meta: meta(5), wallIds: [wall.id] },

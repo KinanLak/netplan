@@ -5,7 +5,10 @@ import {
   deviceMetadata,
   devicePlacement,
   deviceSource,
+  deviceStatus,
+  portKind,
   position,
+  sourceRef,
   wallColor,
 } from "./mapValidators";
 import {
@@ -96,21 +99,40 @@ export default defineSchema({
     .index("by_floor", ["floorId"])
     .index("by_floor_geometry", ["floorId", "geometryKey"]),
 
-  links: defineTable({
+  // A device's ports (ADR 0022). Netplan names the ports of a manual device;
+  // a source's come with their external id.
+  ports: defineTable({
     objectId: v.string(),
-    floorId: v.string(),
-    fromDeviceId: v.string(),
-    fromPort: v.optional(v.string()),
-    toDeviceId: v.string(),
-    toPort: v.optional(v.string()),
-    label: v.optional(v.string()),
+    siteId: v.string(),
+    deviceId: v.string(),
+    name: v.string(),
+    kind: portKind,
+    order: v.number(),
+    rearPortId: v.optional(v.string()),
+    status: v.optional(deviceStatus),
+    source: v.optional(sourceRef),
+  })
+    .index("by_object_id", ["objectId"])
+    .index("by_device", ["deviceId"]),
+
+  // One cable per port. Each end repeats its device, so a floor finds the
+  // cables of its devices without reading their ports first.
+  cables: defineTable({
+    objectId: v.string(),
+    siteId: v.string(),
+    aDeviceId: v.string(),
+    aPortId: v.string(),
+    bDeviceId: v.string(),
+    bPortId: v.string(),
+    source: v.optional(sourceRef),
     updatedAt: v.number(),
     updatedBy: v.string(),
   })
     .index("by_object_id", ["objectId"])
-    .index("by_floor", ["floorId"])
-    .index("by_from_device", ["fromDeviceId"])
-    .index("by_to_device", ["toDeviceId"]),
+    .index("by_a_device", ["aDeviceId"])
+    .index("by_b_device", ["bDeviceId"])
+    .index("by_a_port", ["aPortId"])
+    .index("by_b_port", ["bPortId"]),
 
   // One calque per floor (ADR 0024); `fileId` is a `floorOverlayFiles` object id.
   floorOverlays: defineTable({

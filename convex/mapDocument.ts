@@ -1,6 +1,13 @@
 import { v } from "convex/values";
 import { readerQuery } from "./lib/functions";
-import { floorOverlay, link, placedDevice, wallSegment } from "./mapValidators";
+import { cableRowsOf, portRowsOf, toCable, toPort } from "./lib/ports";
+import {
+  cable,
+  floorOverlay,
+  placedDevice,
+  port,
+  wallSegment,
+} from "./mapValidators";
 import type { Doc } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 
@@ -48,16 +55,6 @@ const toWall = (row: Doc<"walls">) => ({
   geometryKey: row.geometryKey,
 });
 
-const toLink = (row: Doc<"links">) => ({
-  id: row.objectId,
-  floorId: row.floorId,
-  fromDeviceId: row.fromDeviceId,
-  fromPort: row.fromPort,
-  toDeviceId: row.toDeviceId,
-  toPort: row.toPort,
-  label: row.label,
-});
-
 // The floor document is split into one query per collection so an edit only
 // re-sends the collection it touched to subscribed clients (moving a device
 // does not re-transmit every wall). Convex updates all subscribed queries at
@@ -81,15 +78,38 @@ export const getFloorWalls = readerQuery({
   },
 });
 
-export const getFloorLinks = readerQuery({
+const placedDeviceIdsOf = async (ctx: QueryCtx, floorId: string) =>
+  (
+    await ctx.db
+      .query("devices")
+      .withIndex("by_floor", (q) => q.eq("placement.floorId", floorId))
+      .collect()
+  ).map((row) => row.objectId);
+
+/** The ports of the floor's devices. */
+export const getFloorPorts = readerQuery({
   args: { floorId: v.string() },
-  returns: v.array(link),
+  returns: v.array(port),
   handler: async (ctx, { floorId }) => {
-    const rows = await ctx.db
-      .query("links")
-      .withIndex("by_floor", (q) => q.eq("floorId", floorId))
-      .collect();
-    return rows.map(toLink);
+    const deviceIds = await placedDeviceIdsOf(ctx, floorId);
+    const rows = await Promise.all(
+      deviceIds.map((deviceId) => portRowsOf(ctx, deviceId)),
+    );
+    return rows.flat().map(toPort);
+  },
+});
+
+/** The cables with at least one end on the floor, each once. */
+export const getFloorCables = readerQuery({
+  args: { floorId: v.string() },
+  returns: v.array(cable),
+  handler: async (ctx, { floorId }) => {
+    const deviceIds = await placedDeviceIdsOf(ctx, floorId);
+    const rows = await Promise.all(
+      deviceIds.map((deviceId) => cableRowsOf(ctx, deviceId)),
+    );
+    const byId = new Map(rows.flat().map((row) => [row.objectId, row]));
+    return [...byId.values()].map(toCable);
   },
 });
 

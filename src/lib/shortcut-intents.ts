@@ -1,7 +1,8 @@
 import { isMac, shortcuts } from "@/lib/shortcuts";
 import type { ShortcutAction, ShortcutScope } from "@/lib/shortcuts";
 import type { ShortcutKeyBinding } from "@/lib/shortcut-types";
-import type { DeviceId, DrawTool, LinkDoc } from "@/types/map";
+import { cabledDeviceIds } from "@/devices/ports";
+import type { Cable, DeviceId, DrawTool } from "@/types/map";
 
 export type ShortcutIntentEvent = Pick<
   KeyboardEvent,
@@ -32,7 +33,7 @@ export type ShortcutIntentMatch = {
 };
 
 export type ConnectionHighlightShortcutState = {
-  links: ReadonlyArray<Pick<LinkDoc, "fromDeviceId" | "toDeviceId">>;
+  cables: ReadonlyArray<Cable>;
   highlightedDeviceIds: ReadonlyArray<DeviceId>;
   hoveredDeviceId: DeviceId | null;
   selectedDeviceId: DeviceId | null;
@@ -332,7 +333,7 @@ export const isPlainShortcutEvent = (event: ShortcutIntentEvent): boolean => {
 };
 
 export const getNextConnectionHighlightIds = ({
-  links,
+  cables,
   highlightedDeviceIds,
   hoveredDeviceId,
   selectedDeviceId,
@@ -343,20 +344,7 @@ export const getNextConnectionHighlightIds = ({
     return highlightedDeviceIds.length > 0 ? [] : null;
   }
 
-  const seen = new Set<DeviceId>();
-  const connectedDeviceIds: Array<DeviceId> = [];
-  for (const link of links) {
-    let other: DeviceId | null = null;
-    if (link.fromDeviceId === targetDeviceId) {
-      other = link.toDeviceId;
-    } else if (link.toDeviceId === targetDeviceId) {
-      other = link.fromDeviceId;
-    }
-    if (other && !seen.has(other)) {
-      seen.add(other);
-      connectedDeviceIds.push(other);
-    }
-  }
+  const connectedDeviceIds = cabledDeviceIds(cables, targetDeviceId);
 
   if (connectedDeviceIds.length === 0) {
     return highlightedDeviceIds.length > 0 ? [] : null;

@@ -7,16 +7,18 @@ import type {
   DeviceMetadata,
   DrawTool,
   FloorId,
-  PortInfo,
+  Port,
   Position,
   Size,
 } from "@/types/map";
 import { useDevicePlacement } from "@/devices/useDevicePlacement";
 import { toDeviceNodes } from "@/devices/reactFlowDeviceAdapter";
 import type { DeviceNode } from "@/devices/reactFlowDeviceAdapter";
+import { portsByDevice } from "@/devices/ports";
 
 interface UseCanvasDeviceNodesParams {
   devices: Array<Device>;
+  ports: Array<Port>;
   currentFloorId: FloorId | null;
   selectedDeviceId: DeviceId | null;
   selectedDeviceIdSet: ReadonlySet<DeviceId>;
@@ -52,25 +54,21 @@ const arePositionsEqual = (a: Position, b: Position) =>
 const areSizesEqual = (a: Size, b: Size) =>
   a.width === b.width && a.height === b.height;
 
-const arePortsEqual = (a?: Array<PortInfo>, b?: Array<PortInfo>) => {
+const arePortsEqual = (a: ReadonlyArray<Port>, b: ReadonlyArray<Port>) => {
   if (a === b) return true;
-  if (!a || !b || a.length !== b.length) return false;
+  if (a.length !== b.length) return false;
   return a.every((port, index) => {
     const other = b[index];
     return (
       port.id === other.id &&
-      port.number === other.number &&
+      port.name === other.name &&
       port.status === other.status
     );
   });
 };
 
 const areMetadataEqual = (a: DeviceMetadata, b: DeviceMetadata) => {
-  return (
-    a.status === b.status &&
-    a.lastUser === b.lastUser &&
-    arePortsEqual(a.ports, b.ports)
-  );
+  return a.status === b.status && a.lastUser === b.lastUser;
 };
 
 const areNodeDataEqual = (a: DeviceNode["data"], b: DeviceNode["data"]) => {
@@ -84,7 +82,8 @@ const areNodeDataEqual = (a: DeviceNode["data"], b: DeviceNode["data"]) => {
     a.floorId === b.floorId &&
     arePositionsEqual(a.position, b.position) &&
     areSizesEqual(a.size, b.size) &&
-    areMetadataEqual(a.metadata, b.metadata)
+    areMetadataEqual(a.metadata, b.metadata) &&
+    arePortsEqual(a.ports, b.ports)
   );
 };
 
@@ -117,6 +116,7 @@ const areNodeListsEqual = (a: Array<DeviceNode>, b: Array<DeviceNode>) => {
 
 export function useCanvasDeviceNodes({
   devices,
+  ports,
   currentFloorId,
   selectedDeviceId,
   selectedDeviceIdSet,
@@ -145,6 +145,7 @@ export function useCanvasDeviceNodes({
       selectedDeviceId,
       canEditDevices,
       selectedDeviceIdSet,
+      portsByDevice(ports),
     );
 
     setNodes((currentNodes) => {
@@ -177,6 +178,7 @@ export function useCanvasDeviceNodes({
     });
   }, [
     devices,
+    ports,
     currentFloorId,
     selectedDeviceId,
     selectedDeviceIdSet,

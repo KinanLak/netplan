@@ -1,13 +1,13 @@
 import type {
+  Cable,
   Device,
   DeviceId,
   FloorId,
   FloorOverlay,
-  LinkDoc,
-  LinkId,
   MapDocumentSnapshot,
   NewDevice,
   OperationMeta,
+  Port,
   Position,
   Size,
   WallId,
@@ -29,7 +29,15 @@ export interface OverlayPatch {
 }
 
 export type AtomicMapOperation =
-  | { kind: "device.create"; meta: OperationMeta; device: NewDevice }
+  | {
+      kind: "device.create";
+      meta: OperationMeta;
+      device: NewDevice;
+      /** Its ports; without them, the defaults of its type (`defaultPorts`). */
+      ports?: Array<Port>;
+      /** Cables from its ports, as when undo brings a deleted device back. */
+      cables?: Array<Cable>;
+    }
   | {
       kind: "device.patch";
       meta: OperationMeta;
@@ -47,13 +55,11 @@ export type AtomicMapOperation =
       device: Device;
     }
   | {
-      /** Takes a device off its floor, with its links; it stays in the inventory. */
+      /** Takes a device off its floor; it stays in the inventory, cables included. */
       kind: "device.unplace";
       meta: OperationMeta;
       deviceId: DeviceId;
     }
-  | { kind: "link.create"; meta: OperationMeta; link: LinkDoc }
-  | { kind: "link.delete"; meta: OperationMeta; linkId: LinkId }
   | { kind: "walls.add"; meta: OperationMeta; walls: Array<WallSegment> }
   | { kind: "walls.delete"; meta: OperationMeta; wallIds: Array<WallId> }
   | {
@@ -86,10 +92,8 @@ export type ApplyOperationReason =
   | "already-exists"
   | "conflict"
   | "missing-device"
-  | "missing-link"
   | "missing-wall"
-  | "missing-endpoint"
-  | "cross-floor-link"
+  | "invalid-ports"
   | "duplicate-wall-geometry"
   | "missing-overlay"
   | "overlay-locked"
@@ -110,4 +114,4 @@ export interface HistoryEntry {
   affectedObjectIds: Array<string>;
 }
 
-export type { Device, FloorOverlay, LinkDoc, MapDocumentSnapshot, WallSegment };
+export type { Device, FloorOverlay, MapDocumentSnapshot, WallSegment };

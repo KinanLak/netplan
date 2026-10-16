@@ -20,15 +20,15 @@ import {
 import type { LocalIdentity } from "@/lib/identity";
 import { rectanglesOverlap } from "@/lib/geometry";
 import type {
+  Cable,
   Device,
   NewDevice,
   DeviceDraft,
   DeviceId,
   FloorId,
   FloorOverlay,
-  LinkDoc,
-  LinkId,
   MapDocumentSnapshot,
+  Port,
   Position,
   RoomDraft,
   Size,
@@ -90,8 +90,6 @@ export interface MapDocumentCommands {
   unplaceDevice: (deviceId: DeviceId) => void;
   /** Puts an inventory device on the current floor; false when it cannot. */
   placeDevice: (device: Device) => boolean;
-  createLink: (link: Omit<LinkDoc, "id">) => LinkId | null;
-  deleteLink: (linkId: LinkId) => void;
   checkCollision: (
     floorId: FloorId,
     deviceId: DeviceId,
@@ -169,7 +167,8 @@ const emptyDocument = (floorId: FloorId): MapDocumentSnapshot => ({
   revision: 0,
   devices: [],
   walls: [],
-  links: [],
+  ports: [],
+  cables: [],
   overlay: null,
 });
 
@@ -219,8 +218,6 @@ const operationFloorId = (
     case "device.create":
     case "device.place":
       return operation.device.floorId;
-    case "link.create":
-      return operation.link.floorId;
     case "walls.add":
       return operation.walls[0]?.floorId ?? fallbackFloorId;
     case "overlay.set":
@@ -231,7 +228,6 @@ const operationFloorId = (
       const first = operation.operations[0];
       if (first.kind === "device.create" || first.kind === "device.place")
         return first.device.floorId;
-      if (first.kind === "link.create") return first.link.floorId;
       if (first.kind === "walls.add")
         return first.walls[0]?.floorId ?? fallbackFloorId;
       if (first.kind === "overlay.set" || first.kind === "overlay.patch")
@@ -241,7 +237,6 @@ const operationFloorId = (
     case "device.patch":
     case "device.delete":
     case "device.unplace":
-    case "link.delete":
     case "walls.delete":
       return fallbackFloorId;
   }
@@ -477,27 +472,6 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
     if (!meta) return false;
     dispatchOperation({ kind: "device.place", meta, device });
     return true;
-  };
-
-  const createLink = (linkWithoutId: Omit<LinkDoc, "id">): LinkId | null => {
-    const identity = identityRef.current;
-    if (!isReadyRef.current || !identity) return null;
-    const id = createObjectId("link", identity) as LinkId;
-    const meta = freshMeta();
-    if (!meta) return null;
-    dispatchOperation({
-      kind: "link.create",
-      meta,
-      link: { id, ...linkWithoutId },
-    });
-    return id;
-  };
-
-  const deleteLink = (linkId: LinkId) => {
-    if (!isReadyRef.current) return;
-    const meta = freshMeta();
-    if (!meta) return;
-    dispatchOperation({ kind: "link.delete", meta, linkId });
   };
 
   // The engine runs first so a refused or empty change never reaches the
@@ -816,8 +790,6 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
       deleteDevice,
       unplaceDevice,
       placeDevice,
-      createLink,
-      deleteLink,
       checkCollision,
       addWallLine,
       addWallRoom,
@@ -853,7 +825,8 @@ export function MapDocumentProvider({
   const queryArgs = floorId ? { floorId } : ("skip" as const);
   const queriedDevices = useQuery(api.mapDocument.getFloorDevices, queryArgs);
   const queriedWalls = useQuery(api.mapDocument.getFloorWalls, queryArgs);
-  const queriedLinks = useQuery(api.mapDocument.getFloorLinks, queryArgs);
+  const queriedPorts = useQuery(api.mapDocument.getFloorPorts, queryArgs);
+  const queriedCables = useQuery(api.mapDocument.getFloorCables, queryArgs);
   const queriedRevision = useQuery(api.mapDocument.getFloorRevision, queryArgs);
   const queriedOverlay = useQuery(api.mapDocument.getFloorOverlay, queryArgs);
 
@@ -880,7 +853,8 @@ export function MapDocumentProvider({
     () =>
       queriedDevices !== undefined &&
       queriedWalls !== undefined &&
-      queriedLinks !== undefined &&
+      queriedPorts !== undefined &&
+      queriedCables !== undefined &&
       queriedRevision !== undefined &&
       queriedOverlay !== undefined
         ? ({
@@ -888,14 +862,16 @@ export function MapDocumentProvider({
             revision: queriedRevision,
             devices: queriedDevices as Array<Device>,
             walls: queriedWalls as Array<WallSegment>,
-            links: queriedLinks as Array<LinkDoc>,
+            ports: queriedPorts as Array<Port>,
+            cables: queriedCables as Array<Cable>,
             overlay: queriedOverlay as FloorOverlay | null,
           } satisfies MapDocumentSnapshot)
         : undefined,
     [
       queriedDevices,
       queriedWalls,
-      queriedLinks,
+      queriedPorts,
+      queriedCables,
       queriedRevision,
       queriedOverlay,
       activeFloorId,

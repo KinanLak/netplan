@@ -6,9 +6,7 @@ import type { MapOperation } from "./types";
 export type ValidationError =
   | "device-collision"
   | "wall-collision"
-  | "missing-device"
-  | "missing-endpoint"
-  | "cross-floor-link";
+  | "missing-device";
 
 export interface ValidationResult {
   valid: boolean;
@@ -96,23 +94,6 @@ export function validateOperation(
       return validateDevicePlacement(snapshot, { ...device, position, size });
     }
 
-    case "link.create": {
-      const from = snapshot.devices.find(
-        (device) => device.id === operation.link.fromDeviceId,
-      );
-      const to = snapshot.devices.find(
-        (device) => device.id === operation.link.toDeviceId,
-      );
-      if (!from || !to) return invalid("missing-endpoint");
-      if (
-        from.floorId !== operation.link.floorId ||
-        to.floorId !== operation.link.floorId
-      ) {
-        return invalid("cross-floor-link");
-      }
-      return valid();
-    }
-
     case "batch": {
       for (const subOperation of operation.operations) {
         const result = validateOperation(snapshot, {
@@ -126,7 +107,6 @@ export function validateOperation(
 
     case "device.delete":
     case "device.unplace":
-    case "link.delete":
     case "walls.add":
     case "walls.delete":
     case "overlay.set":

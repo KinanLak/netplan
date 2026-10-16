@@ -50,11 +50,6 @@ export const availableDevicesCatalog: Record<
       size: { width: 200, height: 60 },
       metadata: {
         status: "unknown",
-        ports: Array.from({ length: 24 }, (_, i) => ({
-          id: `port-${i + 1}`,
-          number: i + 1,
-          status: "unknown" as const,
-        })),
       },
     },
     {
@@ -66,11 +61,6 @@ export const availableDevicesCatalog: Record<
       size: { width: 200, height: 60 },
       metadata: {
         status: "unknown",
-        ports: Array.from({ length: 48 }, (_, i) => ({
-          id: `port-${i + 1}`,
-          number: i + 1,
-          status: "unknown" as const,
-        })),
       },
     },
     {
@@ -82,11 +72,6 @@ export const availableDevicesCatalog: Record<
       size: { width: 200, height: 60 },
       metadata: {
         status: "unknown",
-        ports: Array.from({ length: 24 }, (_, i) => ({
-          id: `port-${i + 1}`,
-          number: i + 1,
-          status: "unknown" as const,
-        })),
       },
     },
     {
@@ -98,11 +83,6 @@ export const availableDevicesCatalog: Record<
       size: { width: 160, height: 40 },
       metadata: {
         status: "unknown",
-        ports: Array.from({ length: 8 }, (_, i) => ({
-          id: `port-${i + 1}`,
-          number: i + 1,
-          status: "unknown" as const,
-        })),
       },
     },
   ],

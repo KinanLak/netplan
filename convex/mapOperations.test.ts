@@ -15,13 +15,14 @@ const meta = (seq: number) => ({
 });
 
 async function getFloorDocument(t: TestClient, floorId: string) {
-  const [devices, walls, links, revision] = await Promise.all([
+  const [devices, walls, ports, cables, revision] = await Promise.all([
     t.query(api.mapDocument.getFloorDevices, { floorId }),
     t.query(api.mapDocument.getFloorWalls, { floorId }),
-    t.query(api.mapDocument.getFloorLinks, { floorId }),
+    t.query(api.mapDocument.getFloorPorts, { floorId }),
+    t.query(api.mapDocument.getFloorCables, { floorId }),
     t.query(api.mapDocument.getFloorRevision, { floorId }),
   ]);
-  return { floorId, revision, devices, walls, links };
+  return { floorId, revision, devices, walls, ports, cables };
 }
 
 async function freshFloor(t: TestClient, siteId?: string) {
@@ -54,6 +55,22 @@ const device = (
   size: { width: 80, height: 80 },
   macs,
   metadata: {},
+});
+
+const portOf = (deviceId: string) => `port:${deviceId}:interface:1`;
+
+/** A cable between the only interface of two PCs. */
+const cable = (id: string, from: string, to: string) => ({
+  id,
+  a: { deviceId: from, portId: portOf(from) },
+  b: { deviceId: to, portId: portOf(to) },
+});
+
+/** A PC created with a cable to one already there. */
+const cabledTo = (id: string, floorId: string, x: number, to: string) => ({
+  kind: "device.create" as const,
+  device: device(id, floorId, x),
+  cables: [cable(`cable:${id}`, id, to)],
 });
 
 const wall = (id: string, floorId: string, x: number, y: number) => ({
@@ -213,10 +230,12 @@ describe("mapOperations.apply", () => {
     expect(result.error).toContain("wall");
   });
 
-  it("rejects linking across floors", async () => {
+  it("lays a cable to another floor of the site, shown on both, never to another site", async () => {
     const t = await signedInTest();
-    const floorA = await freshFloor(t);
-    const floorB = await freshFloor(t);
+    const siteId = await createTestSite(t);
+    const floorA = await freshFloor(t, siteId);
+    const floorB = await freshFloor(t, siteId);
+    const otherSite = await freshFloor(t);
     await t.mutation(api.mapOperations.apply, {
       operation: {
         kind: "device.create",
@@ -224,32 +243,33 @@ describe("mapOperations.apply", () => {
         device: device("device:a", floorA, 0),
       },
     });
-    await t.mutation(api.mapOperations.apply, {
+
+    const across = await t.mutation(api.mapOperations.apply, {
       operation: {
-        kind: "device.create",
+        ...cabledTo("device:b", floorB, 0, "device:a"),
         meta: meta(12),
-        device: device("device:b", floorB, 0),
       },
     });
-
-    const result = await t.mutation(api.mapOperations.apply, {
+    const elsewhere = await t.mutation(api.mapOperations.apply, {
       operation: {
-        kind: "link.create",
+        ...cabledTo("device:c", otherSite, 0, "device:a"),
         meta: meta(13),
-        link: {
-          id: "link:cross",
-          floorId: floorA,
-          fromDeviceId: "device:a",
-          toDeviceId: "device:b",
-        },
       },
     });
 
-    expect(result.status).toBe("rejected");
-    expect(result.error).toContain("same floor");
+    expect(across.status).toBe("applied");
+    const [docA, docB] = await Promise.all([
+      getFloorDocument(t, floorA),
+      getFloorDocument(t, floorB),
+    ]);
+    expect(docA.cables.map((item) => item.id)).toEqual(["cable:device:b"]);
+    expect(docB.cables.map((item) => item.id)).toEqual(["cable:device:b"]);
+    expect(docA.ports.map((item) => item.id)).toEqual([portOf("device:a")]);
+    expect(elsewhere.status).toBe("rejected");
+    expect(elsewhere.error).toContain("Cable port not found");
   });
 
-  it("deleting a device removes connected links", async () => {
+  it("refuses ports that are not the device's and cables it cannot hold", async () => {
     const t = await signedInTest();
     const floorId = await freshFloor(t);
     await t.mutation(api.mapOperations.apply, {
@@ -257,26 +277,73 @@ describe("mapOperations.apply", () => {
         kind: "batch",
         meta: meta(14),
         operations: [
-          {
-            kind: "device.create",
-            device: device("device:a", floorId, 0),
-          },
-          {
-            kind: "device.create",
-            device: device("device:b", floorId, 200),
-          },
-          {
-            kind: "link.create",
-            link: {
-              id: "link:ab",
-              floorId,
-              fromDeviceId: "device:a",
-              toDeviceId: "device:b",
-            },
-          },
+          { kind: "device.create", device: device("device:hub", floorId, 0) },
+          cabledTo("device:first", floorId, 200, "device:hub"),
         ],
       },
     });
+    const foreignPort = () => ({
+      id: portOf("device:hub"),
+      deviceId: "device:hub",
+      name: "1",
+      kind: "interface" as const,
+      order: 1,
+    });
+    const attempt = (
+      seq: number,
+      extra: {
+        ports?: Array<ReturnType<typeof foreignPort>>;
+        cables?: Array<ReturnType<typeof cable>>;
+      },
+    ) =>
+      t.mutation(api.mapOperations.apply, {
+        operation: {
+          kind: "device.create",
+          meta: meta(seq),
+          device: device(`device:try-${seq}`, floorId, seq * 100),
+          ...extra,
+        },
+      });
+
+    const stolenPort = await attempt(5, { ports: [foreignPort()] });
+    const occupied = await attempt(6, {
+      cables: [cable("cable:occupied", "device:try-6", "device:hub")],
+    });
+    const badId = await attempt(7, {
+      cables: [cable("link:7", "device:try-7", "device:first")],
+    });
+    const notPlugged = await attempt(8, {
+      cables: [cable("cable:8", "device:first", "device:hub")],
+    });
+
+    expect(stolenPort.error).toContain("Invalid port id");
+    expect(occupied.error).toContain("Port already cabled");
+    expect(badId.error).toContain("Invalid cable id");
+    expect(notPlugged.error).toContain("does not plug into");
+    const document = await getFloorDocument(t, floorId);
+    expect(document.devices.map((item) => item.id).sort()).toEqual([
+      "device:first",
+      "device:hub",
+    ]);
+    expect(document.cables.map((item) => item.id)).toEqual([
+      "cable:device:first",
+    ]);
+  });
+
+  it("deleting a device removes its ports and cables, and undo brings them back", async () => {
+    const t = await signedInTest();
+    const floorId = await freshFloor(t);
+    await t.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "batch",
+        meta: meta(15),
+        operations: [
+          { kind: "device.create", device: device("device:a", floorId, 0) },
+          cabledTo("device:b", floorId, 200, "device:a"),
+        ],
+      },
+    });
+    const before = await getFloorDocument(t, floorId);
 
     await t.mutation(api.mapOperations.apply, {
       operation: {
@@ -288,7 +355,25 @@ describe("mapOperations.apply", () => {
 
     const document = await getFloorDocument(t, floorId);
     expect(document.devices.map((item) => item.id)).toEqual(["device:b"]);
-    expect(document.links).toEqual([]);
+    expect(document.ports.map((item) => item.id)).toEqual([portOf("device:b")]);
+    expect(document.cables).toEqual([]);
+
+    // What the engine's inverse sends: the device with its ports and cables.
+    const undo = await t.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "device.create",
+        meta: meta(19),
+        device: device("device:a", floorId, 0),
+        ports: before.ports.filter((item) => item.deviceId === "device:a"),
+        cables: before.cables.map(({ source: _, ...item }) => item),
+      },
+    });
+    expect(undo.status).toBe("applied");
+    const restored = await getFloorDocument(t, floorId);
+    expect(restored.ports.map((item) => item.id).sort()).toEqual(
+      before.ports.map((item) => item.id).sort(),
+    );
+    expect(restored.cables).toEqual(before.cables);
   });
 
   it("rejects walls.add atomically without inserting earlier valid walls", async () => {
@@ -346,24 +431,17 @@ describe("mapOperations.apply", () => {
             kind: "device.create",
             device: device("device:batch-created", floorId, 0),
           },
-          {
-            kind: "link.create",
-            link: {
-              id: "link:invalid-batch",
-              floorId,
-              fromDeviceId: "device:batch-created",
-              toDeviceId: "device:missing",
-            },
-          },
+          cabledTo("device:batch-cabled", floorId, 200, "device:missing"),
         ],
       },
     });
 
     expect(result.status).toBe("rejected");
-    expect(result.error).toContain("endpoint");
+    expect(result.error).toContain("Cable port not found");
     const document = await getFloorDocument(t, floorId);
     expect(document.devices).toEqual([]);
-    expect(document.links).toEqual([]);
+    expect(document.ports).toEqual([]);
+    expect(document.cables).toEqual([]);
   });
 
   it("applies all writes for a valid batch", async () => {
@@ -378,19 +456,7 @@ describe("mapOperations.apply", () => {
           kind: "device.create" as const,
           device: device("device:batch-a", floorId, 0),
         },
-        {
-          kind: "device.create" as const,
-          device: device("device:batch-b", floorId, 200),
-        },
-        {
-          kind: "link.create" as const,
-          link: {
-            id: "link:batch-ab",
-            floorId,
-            fromDeviceId: "device:batch-a",
-            toDeviceId: "device:batch-b",
-          },
-        },
+        cabledTo("device:batch-b", floorId, 200, "device:batch-a"),
       ],
     };
 
@@ -405,7 +471,9 @@ describe("mapOperations.apply", () => {
       "device:batch-a",
       "device:batch-b",
     ]);
-    expect(document.links.map((item) => item.id)).toEqual(["link:batch-ab"]);
+    expect(document.cables.map((item) => item.id)).toEqual([
+      "cable:device:batch-b",
+    ]);
   });
 
   it("rejects batch sub-operations with hidden metadata", async () => {
@@ -463,15 +531,7 @@ describe("mapOperations.apply", () => {
           kind: "device.create" as const,
           device: device("device:retry-rejected", floorId, 0),
         },
-        {
-          kind: "link.create" as const,
-          link: {
-            id: "link:retry-rejected",
-            floorId,
-            fromDeviceId: "device:retry-rejected",
-            toDeviceId: "device:missing",
-          },
-        },
+        cabledTo("device:retry-cabled", floorId, 200, "device:missing"),
       ],
     };
 
@@ -483,7 +543,8 @@ describe("mapOperations.apply", () => {
     await t.run(async (ctx) => {
       expect(await ctx.db.query("clientOperations").collect()).toHaveLength(1);
       expect(await ctx.db.query("devices").collect()).toHaveLength(0);
-      expect(await ctx.db.query("links").collect()).toHaveLength(0);
+      expect(await ctx.db.query("ports").collect()).toHaveLength(0);
+      expect(await ctx.db.query("cables").collect()).toHaveLength(0);
     });
   });
 
@@ -765,19 +826,6 @@ describe("mapOperations.apply", () => {
             kind: "device.create",
             device: device("device:delete", floorId, 0),
           },
-          {
-            kind: "device.create",
-            device: device("device:link-target", floorId, 200),
-          },
-          {
-            kind: "link.create",
-            link: {
-              id: "link:delete",
-              floorId,
-              fromDeviceId: "device:delete",
-              toDeviceId: "device:link-target",
-            },
-          },
           { kind: "walls.add", walls: [wall("wall:delete", floorId, 0, 200)] },
         ],
       },
@@ -801,9 +849,6 @@ describe("mapOperations.apply", () => {
         deviceId: "device:delete",
       },
     });
-    const missingLink = await t.mutation(api.mapOperations.apply, {
-      operation: { kind: "link.delete", meta: meta(83), linkId: "link:delete" },
-    });
     const missingWall = await t.mutation(api.mapOperations.apply, {
       operation: {
         kind: "walls.delete",
@@ -816,8 +861,6 @@ describe("mapOperations.apply", () => {
     expect(replayDelete).toEqual(firstDelete);
     expect(missingDevice.status).toBe("rejected");
     expect(missingDevice.error).toContain("Device not found");
-    expect(missingLink.status).toBe("rejected");
-    expect(missingLink.error).toContain("Link not found");
     expect(missingWall.status).toBe("rejected");
     expect(missingWall.error).toContain("Wall not found");
   });
@@ -1097,7 +1140,7 @@ describe("mapOperations.apply on the site inventory", () => {
         .unique(),
     );
 
-  it("takes a device off its floor with its links, and keeps it in the inventory", async () => {
+  it("takes a device off its floor, and keeps it in the inventory with its cables", async () => {
     const t = await signedInTest();
     const floorId = await freshFloor(t);
     await t.mutation(api.mapOperations.apply, {
@@ -1109,19 +1152,7 @@ describe("mapOperations.apply on the site inventory", () => {
             kind: "device.create",
             device: device("device:kept", floorId, 0, 0, [MAC]),
           },
-          {
-            kind: "device.create",
-            device: device("device:peer", floorId, 200),
-          },
-          {
-            kind: "link.create",
-            link: {
-              id: "link:kept",
-              floorId,
-              fromDeviceId: "device:kept",
-              toDeviceId: "device:peer",
-            },
-          },
+          cabledTo("device:peer", floorId, 200, "device:kept"),
         ],
       },
     });
@@ -1133,7 +1164,11 @@ describe("mapOperations.apply on the site inventory", () => {
     const after = await getFloorDocument(t, floorId);
     expect(after.revision).toBeGreaterThan(before.revision);
     expect(after.devices.map((item) => item.id)).toEqual(["device:peer"]);
-    expect(after.links).toEqual([]);
+    expect(after.ports.map((item) => item.id)).toEqual([portOf("device:peer")]);
+    // Its far end is still on the floor, so the cable stays in view.
+    expect(after.cables).toEqual(before.cables);
+    const ports = await t.run((ctx) => ctx.db.query("ports").collect());
+    expect(ports).toHaveLength(2);
     const row = await deviceRow(t, "device:kept");
     expect(row?.placement).toBeUndefined();
     expect(row?.macs).toEqual([MAC]);
@@ -1141,44 +1176,24 @@ describe("mapOperations.apply on the site inventory", () => {
     expect(macs.map((item) => item.deviceId)).toEqual(["device:kept"]);
   });
 
-  it("puts an unplaced device back, and its links with it as undo does", async () => {
+  it("puts an unplaced device back, its ports and cables with it", async () => {
     const t = await signedInTest();
     const floorId = await freshFloor(t);
     await create(t, 1, device("device:back", floorId, 0));
-    await create(t, 2, device("device:other", floorId, 200));
     await t.mutation(api.mapOperations.apply, {
       operation: {
-        kind: "link.create",
-        meta: meta(3),
-        link: {
-          id: "link:back",
-          floorId,
-          fromDeviceId: "device:back",
-          toDeviceId: "device:other",
-        },
+        ...cabledTo("device:other", floorId, 200, "device:back"),
+        meta: meta(2),
       },
     });
+    const before = await getFloorDocument(t, floorId);
     await unplace(t, 4, "device:back");
 
     const result = await t.mutation(api.mapOperations.apply, {
       operation: {
-        kind: "batch",
+        kind: "device.place",
         meta: meta(5),
-        operations: [
-          {
-            kind: "device.place",
-            device: device("device:back", floorId, 0),
-          },
-          {
-            kind: "link.create",
-            link: {
-              id: "link:back",
-              floorId,
-              fromDeviceId: "device:back",
-              toDeviceId: "device:other",
-            },
-          },
-        ],
+        device: device("device:back", floorId, 0),
       },
     });
 
@@ -1188,7 +1203,8 @@ describe("mapOperations.apply on the site inventory", () => {
       "device:back",
       "device:other",
     ]);
-    expect(document.links.map((item) => item.id)).toEqual(["link:back"]);
+    expect(document.ports).toEqual(before.ports);
+    expect(document.cables).toEqual(before.cables);
   });
 
   it("takes only where a placed device stands, never its identity", async () => {

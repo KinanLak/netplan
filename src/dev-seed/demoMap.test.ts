@@ -24,7 +24,8 @@ const seededSnapshot = (floor: ReturnType<typeof buildDemoFloors>[number]) => {
     revision: 0,
     devices: [],
     walls: [],
-    links: [],
+    ports: [],
+    cables: [],
     overlay: null,
   };
   return applyOperation(empty, {
@@ -48,16 +49,16 @@ describe("demo map", () => {
     }
   });
 
-  it("applies cleanly with walls, devices and links on its own floor", () => {
+  it("applies cleanly with walls, devices and cables on its own floor", () => {
     for (const floor of floors) {
       const result = seededSnapshot(floor);
       expect(result.applied).toBe(true);
       expect(result.reason).toBeUndefined();
-      const { devices, walls, links } = result.snapshot;
+      const { devices, walls, cables } = result.snapshot;
       expect(walls.length).toBeGreaterThan(0);
       expect(devices.length).toBeGreaterThan(0);
-      expect(links.length).toBeGreaterThan(0);
-      for (const item of [...devices, ...walls, ...links]) {
+      expect(cables.length).toBeGreaterThan(0);
+      for (const item of [...devices, ...walls]) {
         expect(item.floorId).toBe(floor.id);
       }
     }
@@ -86,25 +87,16 @@ describe("demo map", () => {
     }
   });
 
-  it("cables switch ports that exist", () => {
+  it("lays each cable between two free ports of the devices it names", () => {
     for (const floor of floors) {
-      const { devices, links } = seededSnapshot(floor).snapshot;
-      const portsByDevice = new Map(
-        devices.map((device) => [
-          device.id,
-          new Set(device.metadata.ports?.map((port) => port.id)),
-        ]),
-      );
-      for (const link of links) {
-        if (link.fromPort) {
-          expect(portsByDevice.get(link.fromDeviceId)?.has(link.fromPort)).toBe(
-            true,
-          );
-        }
-        if (link.toPort) {
-          expect(portsByDevice.get(link.toDeviceId)?.has(link.toPort)).toBe(
-            true,
-          );
+      const { ports, cables } = seededSnapshot(floor).snapshot;
+      const portById = new Map(ports.map((port) => [port.id, port]));
+      const cabled = new Set<string>();
+      for (const cable of cables) {
+        for (const end of [cable.a, cable.b]) {
+          expect(portById.get(end.portId)?.deviceId).toBe(end.deviceId);
+          expect(cabled.has(end.portId)).toBe(false);
+          cabled.add(end.portId);
         }
       }
     }

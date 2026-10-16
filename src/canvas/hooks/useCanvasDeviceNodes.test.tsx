@@ -26,6 +26,7 @@ describe("useCanvasDeviceNodes", () => {
       ({ devices }: { devices: Array<Device> }) =>
         useCanvasDeviceNodes({
           devices,
+          ports: [],
           currentFloorId: floorId,
           selectedDeviceId: null,
           selectedDeviceIdSet: new Set(),
@@ -80,6 +81,7 @@ describe("useCanvasDeviceNodes", () => {
       ({ isMultiSelectMode }: { isMultiSelectMode: boolean }) =>
         useCanvasDeviceNodes({
           devices: [device],
+          ports: [],
           currentFloorId: floorId,
           selectedDeviceId: null,
           selectedDeviceIdSet: selectedDeviceIds,

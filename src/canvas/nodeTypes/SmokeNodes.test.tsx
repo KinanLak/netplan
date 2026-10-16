@@ -4,7 +4,8 @@ import { ReactFlowProvider } from "@xyflow/react";
 import RackNode from "./RackNode";
 import SwitchNode from "./SwitchNode";
 import WallPortNode from "./WallPortNode";
-import type { Device, DeviceId } from "@/types/map";
+import type { Device, DeviceId, Port } from "@/types/map";
+import { numberedPorts } from "@/devices/ports";
 import type { DeviceNodeData } from "@/devices/reactFlowDeviceAdapter";
 import { buildDevice, seedMapStore } from "../../../test/storeHarness";
 
@@ -18,10 +19,10 @@ const renderWithFlow = (node: React.ReactElement) => {
   return render(<ReactFlowProvider>{node}</ReactFlowProvider>);
 };
 
-const nodeProps = (device: Device) => ({
+const nodeProps = (device: Device, ports: Array<Port> = []) => ({
   id: device.id,
   type: device.type,
-  data: device as DeviceNodeData,
+  data: { ...device, ports } satisfies DeviceNodeData,
   positionAbsoluteX: 0,
   positionAbsoluteY: 0,
   selected: false,
@@ -50,7 +51,7 @@ describe("device node smoke renders", () => {
     expect(screen.getByText("Rack-A")).toBeTruthy();
   });
 
-  it("SwitchNode renders the 24 default ports when no ports metadata", () => {
+  it("SwitchNode shows its first 24 interfaces with their status", () => {
     const device = buildDevice({
       id: "switch-1" as DeviceId,
       type: "switch",
@@ -60,11 +61,23 @@ describe("device node smoke renders", () => {
       metadata: { status: "up" },
     });
 
-    const { container } = renderWithFlow(<SwitchNode {...nodeProps(device)} />);
+    const ports = numberedPorts(
+      device.id,
+      "interface",
+      48,
+      (n) => `Gi1/0/${n}`,
+    );
+    ports[0] = { ...ports[0], status: "up" };
+
+    const { container } = renderWithFlow(
+      <SwitchNode {...nodeProps(device, ports)} />,
+    );
     expect(screen.getByText("sw-a")).toBeTruthy();
 
-    const ports = container.querySelectorAll('[title^="Port "]');
-    expect(ports.length).toBe(24);
+    expect(container.querySelectorAll('[title^="Gi1/0/"]').length).toBe(24);
+    expect(
+      container.querySelector('[title="Gi1/0/1 : En ligne"]'),
+    ).toBeTruthy();
   });
 
   it("WallPortNode renders the device name", () => {

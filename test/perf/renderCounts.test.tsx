@@ -24,7 +24,8 @@ const { BenchTree, RenderStats, createBenchHandles } = await import("./probes");
 
 const DEVICES_QUERY = getFunctionName(api.mapDocument.getFloorDevices);
 const WALLS_QUERY = getFunctionName(api.mapDocument.getFloorWalls);
-const LINKS_QUERY = getFunctionName(api.mapDocument.getFloorLinks);
+const PORTS_QUERY = getFunctionName(api.mapDocument.getFloorPorts);
+const CABLES_QUERY = getFunctionName(api.mapDocument.getFloorCables);
 const REVISION_QUERY = getFunctionName(api.mapDocument.getFloorRevision);
 const OVERLAY_QUERY = getFunctionName(api.mapDocument.getFloorOverlay);
 const OBSERVE_QUERY = getFunctionName(api.mapOperations.observePending);
@@ -35,7 +36,8 @@ const OBSERVE_QUERY = getFunctionName(api.mapOperations.observePending);
 const setFloorDocument = (doc: MapDocumentSnapshot) => {
   backend.setQueryResult(DEVICES_QUERY, doc.devices);
   backend.setQueryResult(WALLS_QUERY, doc.walls);
-  backend.setQueryResult(LINKS_QUERY, doc.links);
+  backend.setQueryResult(PORTS_QUERY, doc.ports);
+  backend.setQueryResult(CABLES_QUERY, doc.cables);
   backend.setQueryResult(REVISION_QUERY, doc.revision);
   backend.setQueryResult(OVERLAY_QUERY, doc.overlay);
 };

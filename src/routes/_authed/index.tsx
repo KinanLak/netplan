@@ -197,7 +197,7 @@ function MapWorkspace({ sortedFloors }: { sortedFloors: Array<Floor> }) {
   const highlightConnections = () => {
     const { hoveredDeviceId, highlightedDeviceIds } = useMapStore.getState();
     const next = getNextConnectionHighlightIds({
-      links: getDocument().links,
+      cables: getDocument().cables,
       highlightedDeviceIds,
       hoveredDeviceId,
       selectedDeviceId,

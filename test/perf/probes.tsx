@@ -109,6 +109,7 @@ function CanvasShellProbe({
 
   const { nodes } = useCanvasDeviceNodes({
     devices: document.devices,
+    ports: document.ports,
     currentFloorId,
     selectedDeviceId,
     selectedDeviceIdSet: useMapStore.getState().selectedDeviceIdSet,

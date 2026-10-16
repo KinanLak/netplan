@@ -37,7 +37,8 @@ const snapshot = (current: FloorOverlay | null): MapDocumentSnapshot => ({
   revision: 0,
   devices: [],
   walls: [],
-  links: [],
+  ports: [],
+  cables: [],
   overlay: current,
 });
 

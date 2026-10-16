@@ -22,7 +22,8 @@ describe("reconcileEphemeralState", () => {
         revision: 0,
         devices: [device("device:a")],
         walls: [],
-        links: [],
+        ports: [],
+        cables: [],
         overlay: null,
       },
       {
@@ -47,7 +48,8 @@ describe("reconcileEphemeralState", () => {
           revision: 0,
           devices: [device("device:a")],
           walls: [],
-          links: [],
+          ports: [],
+          cables: [],
           overlay: null,
         },
         {

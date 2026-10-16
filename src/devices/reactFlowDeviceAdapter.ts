@@ -3,13 +3,17 @@ import {
   createDeviceKindRecord,
   deviceKindRegistry,
 } from "@/devices/deviceKindRegistry";
-import type { Device, DeviceId, FloorId } from "@/types/map";
+import type { Device, DeviceId, FloorId, Port } from "@/types/map";
 
-export type DeviceNodeData = Device & Record<string, unknown>;
+/** A device as its node draws it, with its ports in display order. */
+export type DeviceNodeData = Device & {
+  ports: ReadonlyArray<Port>;
+} & Record<string, unknown>;
 export type DeviceNode = Node<DeviceNodeData>;
 
 interface DeviceNodeInput {
   device: Device;
+  ports?: ReadonlyArray<Port>;
   selectedDeviceId: DeviceId | null;
   selectedDeviceIdSet?: ReadonlySet<DeviceId>;
   canEditDevices: boolean;
@@ -19,8 +23,11 @@ export const deviceNodeTypes: NodeTypes = createDeviceKindRecord(
   (type) => deviceKindRegistry[type].nodeAdapter,
 );
 
+const NO_PORTS: ReadonlyArray<Port> = [];
+
 export const toDeviceNode = ({
   device,
+  ports = NO_PORTS,
   selectedDeviceId,
   selectedDeviceIdSet,
   canEditDevices,
@@ -29,7 +36,7 @@ export const toDeviceNode = ({
     id: device.id,
     type: device.type,
     position: device.position,
-    data: device as DeviceNodeData,
+    data: { ...device, ports },
     selected:
       device.id === selectedDeviceId ||
       Boolean(selectedDeviceIdSet?.has(device.id)),
@@ -43,6 +50,7 @@ export const toDeviceNodes = (
   selectedDeviceId: DeviceId | null,
   canEditDevices: boolean,
   selectedDeviceIdSet?: ReadonlySet<DeviceId>,
+  portsByDevice?: ReadonlyMap<DeviceId, ReadonlyArray<Port>>,
 ): Array<DeviceNode> => {
   return devices.reduce<Array<DeviceNode>>((acc, device) => {
     if (device.floorId !== currentFloorId) {
@@ -52,6 +60,7 @@ export const toDeviceNodes = (
     acc.push(
       toDeviceNode({
         device,
+        ports: portsByDevice?.get(device.id),
         selectedDeviceId,
         selectedDeviceIdSet,
         canEditDevices,

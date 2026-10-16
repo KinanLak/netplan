@@ -32,7 +32,8 @@ describe("materializeDocument", () => {
         revision: 0,
         devices: [device],
         walls: [],
-        links: [],
+        ports: [],
+        cables: [],
         overlay: null,
       },
       [

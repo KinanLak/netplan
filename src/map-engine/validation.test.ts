@@ -33,7 +33,8 @@ describe("validation", () => {
         revision: 0,
         devices: [existing],
         walls: [],
-        links: [],
+        ports: [],
+        cables: [],
         overlay: null,
       },
       {
@@ -62,7 +63,8 @@ describe("validation", () => {
             geometryKey: "0:40:80:40",
           },
         ],
-        links: [],
+        ports: [],
+        cables: [],
         overlay: null,
       },
       {

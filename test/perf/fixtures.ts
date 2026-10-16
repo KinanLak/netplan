@@ -1,19 +1,21 @@
 import type {
+  Cable,
+  CableId,
   ClientId,
   Device,
   DeviceId,
   DeviceType,
   FloorId,
-  LinkDoc,
-  LinkId,
   MapDocumentSnapshot,
   OperationId,
   OperationMeta,
+  Port,
   WallId,
   WallSegment,
 } from "@/types/map";
 import type { MapOperation } from "@/map-engine/types";
 import { GRID_SIZE } from "@/lib/grid";
+import { numberedPorts, portIdOf } from "@/devices/ports";
 
 export const BENCH_FLOOR_ID = "floor:bench-1" as FloorId;
 
@@ -54,15 +56,23 @@ export const buildBenchWall = (
   };
 };
 
-export const buildBenchLink = (
-  index: number,
-  deviceCount: number,
-): LinkDoc => ({
-  id: `link:bench-${index}` as LinkId,
-  floorId: BENCH_FLOOR_ID,
-  fromDeviceId: `device:bench-${index % deviceCount}` as DeviceId,
-  toDeviceId: `device:bench-${(index + 1) % deviceCount}` as DeviceId,
-});
+const benchDeviceId = (index: number) => `device:bench-${index}` as DeviceId;
+
+/** Two interfaces per device, so each can be cabled to both neighbours. */
+export const buildBenchPorts = (deviceCount: number): Array<Port> =>
+  Array.from({ length: deviceCount }, (_, index) =>
+    numberedPorts(benchDeviceId(index), "interface", 2),
+  ).flat();
+
+export const buildBenchCable = (index: number, deviceCount: number): Cable => {
+  const from = benchDeviceId(index % deviceCount);
+  const to = benchDeviceId((index + 1) % deviceCount);
+  return {
+    id: `cable:bench-${index}` as CableId,
+    a: { deviceId: from, portId: portIdOf(from, "interface", 2) },
+    b: { deviceId: to, portId: portIdOf(to, "interface", 1) },
+  };
+};
 
 /**
  * Perimeter wall blocks for room-like floorplans spread across a large map —
@@ -119,7 +129,7 @@ export interface BenchDocumentOptions {
   walls?: number;
   /** Rooms of spread perimeter walls (≈26 blocks each) instead of `walls`. */
   rooms?: number;
-  links?: number;
+  cables?: number;
   revision?: number;
 }
 
@@ -127,7 +137,7 @@ export const buildBenchDocument = ({
   devices = 150,
   walls = 200,
   rooms,
-  links = 30,
+  cables = 30,
   revision = 1,
 }: BenchDocumentOptions = {}): MapDocumentSnapshot => ({
   floorId: BENCH_FLOOR_ID,
@@ -139,8 +149,9 @@ export const buildBenchDocument = ({
     rooms !== undefined
       ? buildBenchRoomWalls(rooms)
       : Array.from({ length: walls }, (_, index) => buildBenchWall(index)),
-  links: Array.from({ length: links }, (_, index) =>
-    buildBenchLink(index, devices),
+  ports: buildBenchPorts(devices),
+  cables: Array.from({ length: cables }, (_, index) =>
+    buildBenchCable(index, devices),
   ),
   overlay: null,
 });

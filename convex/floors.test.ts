@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { api, internal } from "./_generated/api";
 import { signedInTest, createTestSite } from "./_test/auth.setup";
 import type { TestClient } from "./_test/auth.setup";
+import { insertCabledPcs } from "./_test/cabling";
 
 let counter = 0;
 
@@ -90,7 +91,7 @@ describe("floors", () => {
     expect(after[0]?.name).toBe("Renamed");
   });
 
-  it("remove unplaces the devices of the floor and cascades its walls, links and presences", async () => {
+  it("remove unplaces the devices of the floor, cables kept, and cascades its walls and presences", async () => {
     const t = await signedInTest();
     const buildingId = await freshBuilding(t);
     const floorId = await t.mutation(api.floors.create, {
@@ -125,14 +126,8 @@ describe("floors", () => {
         updatedAt: 0,
         updatedBy: "test",
       });
-      await ctx.db.insert("links", {
-        objectId: "link:a",
-        floorId,
-        fromDeviceId: "device:a",
-        toDeviceId: "device:a",
-        updatedAt: 0,
-        updatedBy: "test",
-      });
+      // Its far end is on another floor.
+      await insertCabledPcs(ctx, "site:test", "device:a", "device:far");
       await ctx.db.insert("presences", {
         clientId: "client:alice",
         userId: "user:a",
@@ -152,7 +147,7 @@ describe("floors", () => {
       expect(devices.map((device) => device.objectId)).toEqual(["device:a"]);
       expect(devices.every((device) => !device.placement)).toBe(true);
       expect(await ctx.db.query("walls").collect()).toHaveLength(0);
-      expect(await ctx.db.query("links").collect()).toHaveLength(0);
+      expect(await ctx.db.query("cables").collect()).toHaveLength(1);
       expect(await ctx.db.query("presences").collect()).toHaveLength(0);
       expect(await ctx.db.query("buildings").collect()).toHaveLength(1);
     });

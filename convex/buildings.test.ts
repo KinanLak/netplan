@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { api, internal } from "./_generated/api";
 import { signedInTest, createTestSite } from "./_test/auth.setup";
 import type { TestClient } from "./_test/auth.setup";
+import { insertCabledPcs } from "./_test/cabling";
 
 const SITE_ID = "site:main";
 
@@ -158,14 +159,7 @@ describe("buildings", () => {
         updatedAt: 0,
         updatedBy: "test",
       });
-      await ctx.db.insert("links", {
-        objectId: "link:clear",
-        floorId,
-        fromDeviceId: "device:clear:a",
-        toDeviceId: "device:clear:b",
-        updatedAt: 0,
-        updatedBy: "test",
-      });
+      await insertCabledPcs(ctx, SITE_ID, "device:clear:a", "device:clear:b");
       await ctx.db.insert("presences", {
         clientId: "client:clear",
         userId: "user:a",
@@ -198,7 +192,11 @@ describe("buildings", () => {
       expect(devices[0]?.placement).toBeUndefined();
       expect(await ctx.db.query("deviceMacs").collect()).toHaveLength(0);
       expect(await ctx.db.query("walls").collect()).toHaveLength(0);
-      expect(await ctx.db.query("links").collect()).toHaveLength(0);
+      // The deleted device takes its ports and cables; the sourced one keeps
+      // its ports.
+      const ports = await ctx.db.query("ports").collect();
+      expect(ports.map((port) => port.deviceId)).toEqual(["device:clear:b"]);
+      expect(await ctx.db.query("cables").collect()).toHaveLength(0);
       expect(await ctx.db.query("presences").collect()).toHaveLength(0);
       expect(await ctx.db.query("clientOperations").collect()).toHaveLength(0);
     });
@@ -217,7 +215,7 @@ describe("buildings", () => {
     expect(buildings[0]?.name).toBe("New");
   });
 
-  it("remove cascades floors, walls and links and unplaces devices", async () => {
+  it("remove cascades floors and walls, and unplaces devices with their cables", async () => {
     const t = await signedInTest();
     await ensureSite(t);
     const buildingId = await t.mutation(api.buildings.create, {
@@ -272,14 +270,7 @@ describe("buildings", () => {
         updatedAt: 0,
         updatedBy: "test",
       });
-      await ctx.db.insert("links", {
-        objectId: "link:a",
-        floorId,
-        fromDeviceId: "device:a",
-        toDeviceId: "device:b",
-        updatedAt: 0,
-        updatedBy: "test",
-      });
+      await insertCabledPcs(ctx, SITE_ID, "device:a", "device:b");
     });
 
     await t.mutation(internal.buildings.remove, { id: buildingId });
@@ -295,7 +286,9 @@ describe("buildings", () => {
       ]);
       expect(devices.every((device) => !device.placement)).toBe(true);
       expect(await ctx.db.query("walls").collect()).toHaveLength(0);
-      expect(await ctx.db.query("links").collect()).toHaveLength(0);
+      // Their ports and cables stay with them.
+      expect(await ctx.db.query("ports").collect()).toHaveLength(2);
+      expect(await ctx.db.query("cables").collect()).toHaveLength(1);
     });
   });
 });

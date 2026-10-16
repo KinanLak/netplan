@@ -17,7 +17,6 @@ export const modules: Record<string, () => Promise<Record<string, any>>> = {
   "./floors.ts": () => import("../floors"),
   "./http.ts": () => import("../http"),
   "./integrations.ts": () => import("../integrations"),
-  "./links.ts": () => import("../links"),
   "./mapDocument.ts": () => import("../mapDocument"),
   "./mapOperations.ts": () => import("../mapOperations"),
   "./mapValidators.ts": () => import("../mapValidators"),

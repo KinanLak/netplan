@@ -10,7 +10,8 @@ export type DeviceId = Brand<string, "DeviceId">;
 export type WallId = Brand<string, "WallId">;
 export type FloorId = Brand<string, "FloorId">;
 export type BuildingId = Brand<string, "BuildingId">;
-export type LinkId = Brand<string, "LinkId">;
+export type PortId = Brand<string, "PortId">;
+export type CableId = Brand<string, "CableId">;
 export type SiteId = Brand<string, "SiteId">;
 /** A calque image file, the object id of its `floorOverlayFiles` row. */
 export type OverlayFileId = Brand<string, "OverlayFileId">;
@@ -20,9 +21,10 @@ export type ObjectId =
   | WallId
   | FloorId
   | BuildingId
-  | LinkId
+  | PortId
+  | CableId
   | SiteId;
-export type ObjectKind = "building" | "floor" | "device" | "wall" | "link";
+export type ObjectKind = "building" | "floor" | "device" | "wall" | "cable";
 
 // ── Domain enums ─────────────────────────────────────────────────────────────
 
@@ -47,16 +49,9 @@ export interface Size {
   height: number;
 }
 
-export interface PortInfo {
-  id: string;
-  number: number;
-  status: DeviceStatus;
-}
-
 /** What the network last reported about a device, as opposed to its identity. */
 export interface DeviceMetadata {
   status?: DeviceStatus;
-  ports?: Array<PortInfo>;
   lastUser?: string;
 }
 
@@ -126,17 +121,43 @@ export interface WallSegment {
   geometryKey: string;
 }
 
-export interface LinkDoc {
-  id: LinkId;
-  floorId: FloorId;
-  fromDeviceId: DeviceId;
-  fromPort?: string;
-  toDeviceId: DeviceId;
-  toPort?: string;
-  label?: string;
+/**
+ * An interface of an active device, or a front or rear port of a passive one
+ * (patch panel, wall socket); a front port passes through to its rear port.
+ */
+export type PortKind = "interface" | "front" | "rear";
+
+/** The object of an integration that a port or a cable comes from. */
+export interface SourceRef {
+  integration: IntegrationKind;
+  externalId: string;
 }
 
-export type Link = LinkDoc;
+export interface Port {
+  id: PortId;
+  deviceId: DeviceId;
+  name: string;
+  kind: PortKind;
+  /** Position among the device's ports of the same kind. */
+  order: number;
+  rearPortId?: PortId;
+  /** Operational state last observed, absent until a source reports it. */
+  status?: DeviceStatus;
+  source?: SourceRef;
+}
+
+export interface CableEnd {
+  deviceId: DeviceId;
+  portId: PortId;
+}
+
+/** Joins two ports of the site, possibly on different floors (ADR 0022). */
+export interface Cable {
+  id: CableId;
+  a: CableEnd;
+  b: CableEnd;
+  source?: SourceRef;
+}
 
 /**
  * The floor's background image (ADR 0024). The image is drawn centred on
@@ -160,7 +181,10 @@ export interface MapDocumentSnapshot {
   revision: number;
   devices: Array<Device>;
   walls: Array<WallSegment>;
-  links: Array<LinkDoc>;
+  /** The ports of the floor's devices. */
+  ports: Array<Port>;
+  /** The cables with at least one end on a device of the floor. */
+  cables: Array<Cable>;
   overlay: FloorOverlay | null;
 }
 
