@@ -47,6 +47,8 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { CollectionFreshness } from "@/sites/CollectionFreshness";
+import { coverageByType } from "@/devices/coverage";
+import type { TypeCoverage } from "@/devices/coverage";
 import { deviceKinds, getDeviceKindLabel } from "@/devices/deviceKindRegistry";
 import {
   IDENTITY_TEXT_LIMITS,
@@ -76,6 +78,7 @@ import { api } from "../../../convex/_generated/api";
 type InventoryRow = FunctionReturnType<typeof api.devices.listForSite>[number];
 type Placement = "all" | "placed" | "unplaced";
 type StatusFilter = "all" | DeviceStatus;
+type TypeFilter = "all" | DeviceType;
 
 const isStatus = (value: unknown): value is DeviceStatus =>
   typeof value === "string" && Object.hasOwn(DEVICE_STATUS_LABELS, value);
@@ -162,6 +165,7 @@ function SiteInventory({ site }: { site: SiteSummary }) {
   const [query, setQuery] = useState("");
   const [placement, setPlacement] = useState<Placement>("all");
   const [status, setStatus] = useState<StatusFilter>(search.status ?? "all");
+  const [chosenType, setType] = useState<TypeFilter>("all");
   const [creating, setCreating] = useState(false);
 
   const sorted = devices
@@ -178,13 +182,35 @@ function SiteInventory({ site }: { site: SiteSummary }) {
     down: sorted.filter((device) => statusOf(device) === "down").length,
     unknown: sorted.filter((device) => statusOf(device) === "unknown").length,
   };
+  const coverage = coverageByType(sorted);
+  // A type whose last device went away, here or in another tab, filters nothing.
+  const type = coverage.some((entry) => entry.type === chosenType)
+    ? chosenType
+    : "all";
+  const typeFilters = [
+    { value: "all" as const, label: "Tous les types" },
+    ...coverage.map((entry) => ({
+      value: entry.type,
+      label: getDeviceKindLabel(entry.type),
+    })),
+  ];
   const shown = sorted.filter(
     (device) =>
       (placement === "all" ||
         (placement === "placed") === Boolean(device.location)) &&
       (status === "all" || statusOf(device) === status) &&
+      (type === "all" || device.type === type) &&
       matchesDeviceSearch(device, query),
   );
+
+  // A coverage count shows what is left to draw, so no other filter may hide it.
+  const showUnplaced = (next: TypeFilter) => {
+    const active = type === next && placement === "unplaced";
+    setQuery("");
+    setStatus("all");
+    setType(active ? "all" : next);
+    setPlacement(active ? "all" : "unplaced");
+  };
 
   return (
     <div className="space-y-6">
@@ -199,7 +225,8 @@ function SiteInventory({ site }: { site: SiteSummary }) {
             className="mt-3 w-fit max-w-sm"
           />
         </div>
-        {canEdit ? (
+        {/* An empty inventory offers the same button in its message. */}
+        {canEdit && sorted.length > 0 ? (
           <Button onClick={() => setCreating(true)}>
             <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
             Nouvel équipement
@@ -210,101 +237,130 @@ function SiteInventory({ site }: { site: SiteSummary }) {
       {canEdit ? <ImportReviews siteId={site.id} /> : null}
       {canEdit ? <UnknownMacs siteId={site.id} /> : null}
 
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative min-w-60 flex-1">
-          <HugeiconsIcon
-            icon={Search01Icon}
-            size={16}
-            strokeWidth={1.5}
-            className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-muted-foreground"
-          />
-          <Input
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Nom, hostname, MAC, IP, n° de série…"
-            aria-label="Rechercher un équipement"
-            className="pl-8"
-          />
-        </div>
-        <div
-          role="group"
-          aria-label="Emplacement"
-          className="flex gap-1 rounded-lg border p-1"
-        >
-          {PLACEMENT_FILTERS.map(({ value, label }) => (
-            <Button
-              key={value}
-              size="sm"
-              variant={placement === value ? "secondary" : "ghost"}
-              aria-pressed={placement === value}
-              onClick={() => setPlacement(value)}
-            >
-              {label}
-              <span className="text-muted-foreground tabular-nums">
-                {counts[value]}
-              </span>
-            </Button>
-          ))}
-        </div>
-        <div
-          role="group"
-          aria-label="État"
-          className="flex gap-1 rounded-lg border p-1"
-        >
-          {STATUS_FILTERS.map(({ value, label }) => (
-            <Button
-              key={value}
-              size="sm"
-              variant={status === value ? "secondary" : "ghost"}
-              aria-pressed={status === value}
-              onClick={() => setStatus(value)}
-            >
-              {label}
-              <span className="text-muted-foreground tabular-nums">
-                {statusCounts[value]}
-              </span>
-            </Button>
-          ))}
-        </div>
-      </div>
+      {coverage.length > 0 ? (
+        <PlanCoverage
+          coverage={coverage}
+          active={placement === "unplaced" ? type : null}
+          canEdit={canEdit}
+          onSelect={showUnplaced}
+        />
+      ) : null}
 
       {devices === undefined ? null : sorted.length === 0 ? (
-        <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-          Aucun équipement dans ce site.
-        </p>
-      ) : shown.length === 0 ? (
-        <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-          Aucun équipement ne correspond.
-        </p>
+        <InventoryEmpty canEdit={canEdit} onCreate={() => setCreating(true)} />
       ) : (
-        <div className="overflow-x-auto rounded-lg border">
-          <table className="w-full text-sm">
-            <thead className="border-b bg-muted text-left text-xs text-muted-foreground">
-              <tr>
-                <th className="px-4 py-2 font-medium">Nom</th>
-                <th className="px-4 py-2 font-medium">Type</th>
-                <th className="px-4 py-2 font-medium">État</th>
-                <th className="px-4 py-2 font-medium">Adresses MAC</th>
-                <th className="px-4 py-2 font-medium">Adresse IP</th>
-                <th className="px-4 py-2 font-medium">Emplacement</th>
-                <th className="w-10 px-2 py-2">
-                  <span className="sr-only">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {shown.map((device) => (
-                <InventoryItem
-                  key={device.id}
-                  device={device}
-                  site={site}
-                  canEdit={canEdit}
-                />
+        <>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative min-w-60 flex-1">
+              <HugeiconsIcon
+                icon={Search01Icon}
+                size={16}
+                strokeWidth={1.5}
+                className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-muted-foreground"
+              />
+              <Input
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Nom, hostname, MAC, IP, n° de série…"
+                aria-label="Rechercher un équipement"
+                className="pl-8"
+              />
+            </div>
+            <div
+              role="group"
+              aria-label="Emplacement"
+              className="flex gap-1 rounded-lg border p-1"
+            >
+              {PLACEMENT_FILTERS.map(({ value, label }) => (
+                <Button
+                  key={value}
+                  size="sm"
+                  variant={placement === value ? "secondary" : "ghost"}
+                  aria-pressed={placement === value}
+                  onClick={() => setPlacement(value)}
+                >
+                  {label}
+                  <span className="text-muted-foreground tabular-nums">
+                    {counts[value]}
+                  </span>
+                </Button>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </div>
+            <div
+              role="group"
+              aria-label="État"
+              className="flex gap-1 rounded-lg border p-1"
+            >
+              {STATUS_FILTERS.map(({ value, label }) => (
+                <Button
+                  key={value}
+                  size="sm"
+                  variant={status === value ? "secondary" : "ghost"}
+                  aria-pressed={status === value}
+                  onClick={() => setStatus(value)}
+                >
+                  {label}
+                  <span className="text-muted-foreground tabular-nums">
+                    {statusCounts[value]}
+                  </span>
+                </Button>
+              ))}
+            </div>
+            <Select
+              items={typeFilters}
+              value={type}
+              onValueChange={(value) => {
+                if (value) setType(value);
+              }}
+            >
+              <SelectTrigger aria-label="Type" className="w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {typeFilters.map(({ value, label }) => (
+                  <SelectItem key={value} value={value}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {shown.length === 0 ? (
+            <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+              Aucun équipement ne correspond.
+            </p>
+          ) : (
+            <div className="overflow-x-auto rounded-lg border">
+              <table className="w-full text-sm">
+                <thead className="border-b bg-muted text-left text-xs text-muted-foreground">
+                  <tr>
+                    <th className="px-4 py-2 font-medium">Nom</th>
+                    <th className="px-4 py-2 font-medium">Type</th>
+                    <th className="px-4 py-2 font-medium">État</th>
+                    <th className="px-4 py-2 font-medium">Adresses MAC</th>
+                    <th className="px-4 py-2 font-medium">Adresse IP</th>
+                    <th className="px-4 py-2 font-medium">Emplacement</th>
+                    <th className="w-10 px-2 py-2">
+                      <span className="sr-only">Actions</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {shown.map((device) => (
+                    <InventoryItem
+                      key={device.id}
+                      device={device}
+                      site={site}
+                      canEdit={canEdit}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
       )}
 
       {canEdit ? (
@@ -313,6 +369,104 @@ function SiteInventory({ site }: { site: SiteSummary }) {
           open={creating}
           onOpenChange={setCreating}
         />
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Per type, how many devices stand on the plan; each count opens the ones
+ * still to draw (ADR 0026).
+ */
+function PlanCoverage({
+  coverage,
+  active,
+  canEdit,
+  onSelect,
+}: {
+  coverage: Array<TypeCoverage>;
+  active: TypeFilter | null;
+  canEdit: boolean;
+  onSelect: (type: DeviceType) => void;
+}) {
+  const id = useId();
+  return (
+    <section aria-labelledby={id} className="space-y-2">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4">
+        <h2 id={id} className="text-sm font-medium">
+          Couverture du plan
+        </h2>
+        {canEdit ? (
+          <p className="text-xs text-muted-foreground">
+            Un équipement hors plan se place depuis la carte, avec « Placer ».
+          </p>
+        ) : null}
+      </div>
+      <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-6">
+        {coverage.map(({ type, placed, total }) => {
+          const missing = total - placed;
+          return (
+            <button
+              key={type}
+              type="button"
+              disabled={missing === 0}
+              aria-pressed={active === type}
+              onClick={() => onSelect(type)}
+              className={cn(
+                "flex flex-col gap-2 rounded-lg border p-3 text-left text-sm outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 enabled:hover:bg-muted",
+                active === type && "border-primary bg-muted",
+              )}
+            >
+              <span className="flex grow items-baseline justify-between gap-2">
+                <span className="font-medium">{getDeviceKindLabel(type)}</span>
+                <span className="text-muted-foreground tabular-nums">
+                  {placed}/{total}
+                </span>
+              </span>
+              <span className="h-1.5 overflow-hidden rounded-full bg-muted">
+                <span
+                  className="block h-full bg-primary"
+                  style={{ width: `${(placed / total) * 100}%` }}
+                />
+              </span>
+              <span
+                className={cn(
+                  "text-xs",
+                  missing === 0 ? "text-muted-foreground" : "text-foreground",
+                )}
+              >
+                {missing === 0
+                  ? "Tout est sur le plan"
+                  : `${missing} hors plan`}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function InventoryEmpty({
+  canEdit,
+  onCreate,
+}: {
+  canEdit: boolean;
+  onCreate: () => void;
+}) {
+  return (
+    <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed p-8 text-center">
+      <h2 className="text-base font-semibold">Aucun équipement dans ce site</h2>
+      <p className="max-w-md text-sm text-muted-foreground">
+        {canEdit
+          ? "Créez-en un ici, hors plan, ou dessinez-le directement sur la carte."
+          : "Un éditeur peut en créer ici ou les dessiner sur la carte."}
+      </p>
+      {canEdit ? (
+        <Button onClick={onCreate}>
+          <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+          Nouvel équipement
+        </Button>
       ) : null}
     </div>
   );
