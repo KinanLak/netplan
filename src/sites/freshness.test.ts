@@ -122,6 +122,15 @@ describe("describeFreshness", () => {
       describeFreshness(site({ lastSuccessAt: null }), WEDNESDAY_10H),
     ).toEqual({ headline: "Aucune donnée collectée", tone: "none" });
   });
+
+  it("warns of a site whose cycles keep failing before any succeeded", () => {
+    expect(
+      describeFreshness(
+        site({ lastSuccessAt: null, failures: 2 }),
+        WEDNESDAY_10H,
+      ),
+    ).toEqual({ headline: "Aucune donnée collectée", tone: "late" });
+  });
 });
 
 describe("refreshOutcome", () => {

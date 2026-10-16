@@ -139,11 +139,16 @@ export const describeFreshness = (
   if (!freshness.hasSources) {
     return { headline: "Plan dessiné à la main", tone: "none" };
   }
+  const late = isLate(freshness, now);
+  // Failing cycles make a site late before it ever succeeded.
   if (lastSuccessAt === null) {
-    return { headline: "Aucune donnée collectée", tone: "none" };
+    return {
+      headline: "Aucune donnée collectée",
+      tone: late ? "late" : "none",
+    };
   }
   const age = describeAge(lastSuccessAt, now, timezone);
-  return isLate(freshness, now)
+  return late
     ? { headline: `Données en retard : ${age}`, tone: "late" }
     : { headline: `Données collectées ${age}`, tone: "fresh" };
 };
