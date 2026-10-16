@@ -42,6 +42,7 @@ export type ShortcutAction =
   | "wall-eraser-size-increase"
   | "wall-eraser-size-decrease"
   | "tool-room"
+  | "place-device"
   // Calque
   | "toggle-overlay-panel"
   | "toggle-overlay-visibility"
@@ -242,6 +243,13 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
     ],
     label: "Gomme -",
     description: "Réduire la zone de gomme",
+    scope: "canvas",
+  },
+
+  "place-device": {
+    keys: ["P"],
+    label: "Placer un équipement",
+    description: "Placer sur l'étage un équipement de l'inventaire",
     scope: "canvas",
   },
 

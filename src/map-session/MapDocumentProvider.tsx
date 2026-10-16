@@ -88,6 +88,8 @@ export interface MapDocumentCommands {
   deleteDevice: (deviceId: DeviceId) => void;
   /** Takes a device off the map; it stays in the site inventory. */
   unplaceDevice: (deviceId: DeviceId) => void;
+  /** Puts an inventory device on the current floor; false when it cannot. */
+  placeDevice: (device: Device) => boolean;
   createLink: (link: Omit<LinkDoc, "id">) => LinkId | null;
   deleteLink: (linkId: LinkId) => void;
   checkCollision: (
@@ -465,6 +467,18 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
     dispatchOperation({ kind: "device.unplace", meta, deviceId });
   };
 
+  const placeDevice = (device: Device): boolean => {
+    if (!isReadyRef.current) return false;
+    if (device.floorId !== activeFloorIdRef.current) return false;
+    if (documentRef.current.devices.some((item) => item.id === device.id)) {
+      return false;
+    }
+    const meta = freshMeta();
+    if (!meta) return false;
+    dispatchOperation({ kind: "device.place", meta, device });
+    return true;
+  };
+
   const createLink = (linkWithoutId: Omit<LinkDoc, "id">): LinkId | null => {
     const identity = identityRef.current;
     if (!isReadyRef.current || !identity) return null;
@@ -801,6 +815,7 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
       updateDevicePositions,
       deleteDevice,
       unplaceDevice,
+      placeDevice,
       createLink,
       deleteLink,
       checkCollision,

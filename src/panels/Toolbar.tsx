@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Layers01Icon } from "@hugeicons/core-free-icons";
+import { Layers01Icon, PackageIcon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
 import { ShortcutHintAbsolute } from "@/components/ui/shortcut-hint";
 import {
@@ -22,6 +22,7 @@ import {
 } from "@/store/selectors";
 import { useMapStore } from "@/store/useMapStore";
 import { useMapDocumentReady } from "@/map-session/useMapDocument";
+import { PlaceDeviceDialog } from "@/panels/PlaceDeviceDialog";
 import { drawToolbarActions } from "@/panels/toolbar-actions";
 import type { DrawToolbarAction } from "@/panels/toolbar-actions";
 import type { DrawTool } from "@/types/map";
@@ -46,6 +47,7 @@ export default function Toolbar() {
   );
   const setOverlayPanelOpen = useMapStore((state) => state.setOverlayPanelOpen);
   const [flashType, setFlashType] = useState<"undo" | "redo" | null>(null);
+  const [placing, setPlacing] = useState(false);
 
   useEffect(() => {
     let timeout: ReturnType<typeof setTimeout> | null = null;
@@ -89,6 +91,15 @@ export default function Toolbar() {
     setOverlayPanelOpen(!isOverlayPanelOpen);
   };
   useShortcutIntentEffect("toggle-overlay-panel", toggleOverlayPanel);
+
+  const openPlaceDevice = () => {
+    if (!currentFloorId || !isReady) return;
+    // A draw tool would swallow the click that selects the placed device.
+    if (isMultiSelectMode) toggleMultiSelectMode();
+    setActiveDrawTool("device");
+    setPlacing(true);
+  };
+  useShortcutIntentEffect("place-device", openPlaceDevice);
 
   if (!isEditMode) return null;
 
@@ -207,6 +218,24 @@ export default function Toolbar() {
         <div className="relative">
           <Button
             type="button"
+            variant="ghost"
+            size="sm"
+            onClick={openPlaceDevice}
+            disabled={!currentFloorId || !isReady}
+            className="gap-2"
+            title="Placer sur l'étage un équipement de l'inventaire"
+          >
+            <HugeiconsIcon icon={PackageIcon} strokeWidth={2} />
+            Placer
+          </Button>
+          <ShortcutHintAbsolute
+            action="place-device"
+            position="bottom-center"
+          />
+        </div>
+        <div className="relative">
+          <Button
+            type="button"
             variant={isOverlayPanelOpen ? "secondary" : "ghost"}
             size="sm"
             onClick={toggleOverlayPanel}
@@ -224,6 +253,7 @@ export default function Toolbar() {
           />
         </div>
       </div>
+      <PlaceDeviceDialog open={placing} onOpenChange={setPlacing} />
     </div>
   );
 }

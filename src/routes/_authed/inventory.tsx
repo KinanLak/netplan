@@ -60,6 +60,7 @@ import { createStandaloneObjectId } from "@/lib/identity";
 import { asBuildingId, asDeviceId, asFloorId } from "@/lib/objectIds";
 import { cn } from "@/lib/utils";
 import { DeviceIdentityDialog } from "@/panels/drawer/DeviceIdentityDialog";
+import { matchesDeviceSearch } from "@/devices/search";
 import { INTEGRATION_LABELS } from "@/sites/integrations";
 import { SiteSwitcher } from "@/sites/SiteSwitcher";
 import { siteSearch, useCurrentSite } from "@/sites/useCurrentSite";
@@ -137,28 +138,6 @@ const PLACEMENT_FILTERS: Array<{ value: Placement; label: string }> = [
 
 const byName = new Intl.Collator("fr", { numeric: true, sensitivity: "base" });
 
-/** Whether a device answers a search, MACs matched in any notation. */
-function matches(device: InventoryRow, query: string): boolean {
-  const needle = query.trim().toLowerCase();
-  if (!needle) return true;
-  const text = [
-    device.name,
-    device.hostname,
-    device.ip,
-    device.serial,
-    device.model,
-  ]
-    .filter(Boolean)
-    .join("\n")
-    .toLowerCase();
-  if (text.includes(needle)) return true;
-  const hex = needle.replaceAll(/[\s:.-]/g, "");
-  return (
-    hex !== "" &&
-    device.macs.some((mac) => mac.replaceAll(":", "").includes(hex))
-  );
-}
-
 function SiteInventory({ site }: { site: SiteSummary }) {
   const devices = useQuery(api.devices.listForSite, { siteId: site.id });
   const canEdit = useCanEdit();
@@ -178,7 +157,7 @@ function SiteInventory({ site }: { site: SiteSummary }) {
     (device) =>
       (placement === "all" ||
         (placement === "placed") === Boolean(device.location)) &&
-      matches(device, query),
+      matchesDeviceSearch(device, query),
   );
 
   return (
