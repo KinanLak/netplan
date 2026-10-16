@@ -47,6 +47,7 @@ const POLICY: Record<string, Role> = {
   "mapDocument:getFloorCables": "reader",
   "mapDocument:getFloorDevices": "reader",
   "mapDocument:getFloorOverlay": "reader",
+  "mapDocument:getFloorPathEnds": "reader",
   "mapDocument:getFloorPorts": "reader",
   "mapDocument:getFloorRevision": "reader",
   "mapDocument:getFloorWalls": "reader",

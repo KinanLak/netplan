@@ -230,13 +230,13 @@ export const traceRows = async (ctx: QueryCtx, start: Doc<"ports">) =>
         );
       },
       portOf: async (portId) => traced(await portRowOf(ctx, portId)),
-      frontOf: async (rearPortId) =>
-        traced(
+      frontsOf: async (rearPortId) =>
+        (
           await ctx.db
             .query("ports")
             .withIndex("by_rear_port", (q) => q.eq("rearPortId", rearPortId))
-            .first(),
-        ),
+            .take(2)
+        ).map((row) => ({ ...row, id: row.objectId })),
       isSocket: async (deviceId) =>
         (
           await ctx.db
