@@ -165,7 +165,7 @@ function SiteInventory({ site }: { site: SiteSummary }) {
   const [query, setQuery] = useState("");
   const [placement, setPlacement] = useState<Placement>("all");
   const [status, setStatus] = useState<StatusFilter>(search.status ?? "all");
-  const [type, setType] = useState<TypeFilter>("all");
+  const [chosenType, setType] = useState<TypeFilter>("all");
   const [creating, setCreating] = useState(false);
 
   const sorted = devices
@@ -183,6 +183,10 @@ function SiteInventory({ site }: { site: SiteSummary }) {
     unknown: sorted.filter((device) => statusOf(device) === "unknown").length,
   };
   const coverage = coverageByType(sorted);
+  // A type whose last device went away, here or in another tab, filters nothing.
+  const type = coverage.some((entry) => entry.type === chosenType)
+    ? chosenType
+    : "all";
   const typeFilters = [
     { value: "all" as const, label: "Tous les types" },
     ...coverage.map((entry) => ({
