@@ -1784,3 +1784,132 @@ Questions of 2026-10-16, in the order they came up.
 - Decision: eight pull requests: one toaster and French map-operation refusals (#59); freshness and "Actualiser" for everyone who may (#61); ignored MACs (#63); the offline group and status filter (#64); building and floor management with the empty states (#66); the coverage view (#68); the admin health page (#70); then this closing docs change.
 - Why: each landed something a user can see and verify alone, so each review stayed within one or two rounds.
 - Who: agent (judgement call)
+
+### L3b — Map polish
+
+Questions of 2026-10-16, in the order they came up; the last sections record the judgement calls of each pull request.
+
+#### Is "stale" a new status value?
+
+- Context: L2 leftover: a device no longer seen keeps its last status forever, because a switch that fails to read counts no miss and a stopped cycle changes nothing. L4's health view needs to know where statuses live.
+- Decision: no new value. `metadata.status` stays online, offline or absent ("Inconnu"). Each switch's last successful read is recorded; when it is older than twice the site's longest interval plus the lease, the minute cron removes the statuses that rest on it: the switch's, its ports' and those of devices last seen on it.
+- Why: one field for the map, the inventory and the health view; the rule holds when LibreNMS or the cycles stop, since the minute cron always runs.
+- Who: agent (judgement call)
+
+#### Does an offline device become unknown after a while?
+
+- Context: a device the switch was read without seeing is offline for as long as it stays unseen.
+- Decision: no. Offline is a fact while the switch is read; only a stale read makes statuses unknown.
+- Why: an offline PC for a week is useful information (lot 4's offline section), not uncertainty.
+- Who: agent (obvious)
+
+#### Where does a switch's status come from?
+
+- Context: ADR 0009 / Q27: a switch's state from LibreNMS when available, unknown otherwise.
+- Decision: the cycle reads each polled LibreNMS device and writes up/down to `metadata.status` of the Netplan switches it stands for. Unpolled switches have none.
+- Why: same field as pcs; L4 reads it for the health view.
+- Who: agent (obvious)
+
+#### What colours a port?
+
+- Context: Q27: colour a port where a device has been seen; LibreNMS also knows each port's link state.
+- Decision: two facts written on change: the link (LibreNMS operational status) and whether a site MAC is seen on the port. Colour: "Appareil vu" > "Lien actif" > "Lien inactif" > "Inconnu". Both expire with the switch's read.
+- Why: a network team spots both where a PC is and which ports are dead; writing only on change keeps cycles from rewriting every port.
+- Who: agent (judgement call)
+
+#### Which ports does a switch show, given real NetBox data?
+
+- Context: the real NetBox models switch ports as rear ports (sw-access-01/02: 96 rear ports, no interfaces cabled); every cable is rear ↔ rear, every rear port has one position, no breakouts.
+- Decision: a switch shows all its ports in order, whatever their kind; a patch panel shows its front ports.
+- Why: a filter on `interface` would show real switches with no ports.
+- Who: agent (obvious)
+
+#### Default switch port names (1..24) never match LibreNMS
+
+- Context: L2 leftover. Matching ignores case and abbreviated leading words; "1" never matches "Gi1/0/1".
+- Decision: when LibreNMS polls a manual switch whose ports still all carry the default names in order, the cycle adopts LibreNMS's physical Ethernet ports by interface index: renames by position, adds the extra ones, removes uncabled default ports beyond. Never renames ports a person or a source named.
+- Why: positional numbering is what a person meant by "port 3"; vendor-specific number matching would be ambiguous (Gi1/0/1 vs Te1/1/1).
+- Who: agent (judgement call)
+
+#### Are moves made by the cycle undoable?
+
+- Context: L2 leftover: the cycle places a device next to its socket through `applyMapOperation` with its own client id.
+- Decision: they stay outside every undo history. A person's undo or redo that would move a device someone else (the cycle included) has moved since is refused with a message.
+- Why: an observation is not a person's edit; undoing a person's earlier move must not silently put a PC back where the network says it no longer is.
+- Who: agent (judgement call)
+
+#### Breakout and rear-to-rear cables
+
+- Context: L2 leftover. The server trace picks the first front of a rear port (`.first()`), so a multi-position rear would guess.
+- Decision: a trace stops at a rear port several fronts share, on both client and server; rear ↔ rear cables need nothing special. Rendering never assumes a port kind.
+- Why: the real site has none today; stopping is honest and cannot draw a wrong path.
+- Who: agent (obvious)
+
+#### How does hovering a PC show a path when PCs are not cabled?
+
+- Context: a PC is located by sightings, not cables.
+- Decision: the device carries the socket it was last seen at; its path starts with a dashed segment to that socket, then the socket's cables. A hop off the floor ends on a label with the far device and floor.
+- Why: the path the user wants is "where is this PC plugged"; the dashed segment shows it is observed, not cabled.
+- Who: agent (judgement call)
+
+#### Is drawing a cable on the map a map operation?
+
+- Context: L2 made cables site facts (Éditeur mutations with an "Annuler" toast, outside the floor's undo).
+- Decision: drawing on the map uses the same `cables.connect` / `cables.disconnect` and toast.
+- Why: one model for both screens (Q32bis: both edit the same data); a cable can cross floors, a map operation cannot.
+- Who: agent (obvious)
+
+#### What status does a device brought back by an undo carry?
+
+- Context: zipzoup on #60. The cron expires a read once and never revisits it, so a status restored afterwards (map undo of a deletion, drawer "Annuler", an endpoint made from an unknown MAC) would stay forever.
+- Decision: a device or port entering the inventory never keeps a status it brings along: it gets only what a fresh read gives it now (a pc/endpoint from its sightings on fresh switches, a switch and its ports only while its read is fresh). Expiry also finds a MAC's current owner, not only the one a cycle recorded. The demo seed, standing in for cycles that never ran, writes its statuses and port facts itself.
+- Why: a first version kept statuses nothing observed, and zipzoup found the holes (sightings deleted since, LibreNMS released since). "Only a read sets a status" (ADR 0025) at the insert closes them all without a cron rescanning every device.
+- Who: agent (judgement call)
+
+#### What does "a device is seen on this port" count?
+
+- Context: zipzoup on #62. Presence came from the placement sightings, which keep one port per MAC and only edge ports.
+- Decision: computed apart, from every fresh FDB entry on a matched port: an edge port counts any site device, a port cabled to a device counts only that device, busy uncabled ports count nothing.
+- Why: an uplink carries every downstream MAC, so "any site MAC" would light every uplink; the cabled device is the one actually behind the port.
+- Who: agent (judgement call)
+
+#### Which LibreNMS ports does a manual switch take the names of, and when?
+
+- Context: ADR 0025 says physical Ethernet ports by interface index, while the ports still carry "1".."n" in order.
+- Decision: "physical Ethernet" is `ifType` ethernetCsmacd, fastEther, fastEtherFX or gigabitEthernet, with an `ifIndex`; the first name (`ifName`, else `ifDescr`). No adoption when the LibreNMS device stands for several Netplan switches, when any port has a source, or when LibreNMS's names would be empty, too long, repeated (case aside) or more than 256. Cabled default ports beyond LibreNMS's stay under their number.
+- Why: one LibreNMS device for two switches does not say which port is whose; refusing an awkward list keeps the defaults rather than writing a half-valid one. A management Ethernet port or a deleted LibreNMS port would shift positions: to check on the real LibreNMS (`check-librenms` now counts the Ethernet ports).
+- Who: agent (judgement call)
+
+#### Show cables on demand (#69)
+
+- "Until another device's display": a second explicit "Afficher" on another switch or panel replaces the first. Hovered or selected PC/socket paths draw on top without hiding it.
+- H toggles the selected device, else the hovered one; on a non-switch/panel (or none) it hides. The old connection highlight is removed and H is retargeted to this.
+- Escape order: overlay calibration > overlay panel > hide cables > leave edit mode.
+- Port labels on one device fold into one label: up to 3 names, else "n ports" (a patch panel stacked 10 labels under its switch otherwise).
+- zipzoup #67 P2: a trace ending on a port it cannot pass (a switch NetBox models with rear ports) now names that port, like `traceFrom`.
+
+#### Draw cables on the map (#71)
+
+- Grips: a switch's or patch panel's port squares, and a wall socket's icon, in edit mode only, and only with the device tool (not while drawing walls, calibrating the overlay or multi-selecting). PCs and endpoints are neither grips nor targets: sightings locate them.
+- A drop: on a free port, that port; on a device with one free port, that one; with several, a picker (rear ports of a panel included); on the starting device or nothing, nothing.
+- Starting from a cabled port is refused with a toast pointing to the port table, until deleting from the map lands.
+- Escape abandons the cable inside the existing close-drawer and escape handlers: the shortcut registry forbids a second Escape action in a scope.
+- After drawing, the cables of the switch or panel end are shown, so the new cable is visible at once.
+- The port table's "cabler" now gets the same "Câblé : A ↔ B" toast with Annuler (it had none): one `useCableCommands` for both screens.
+- ADR 0025's "for patch-panel paths, the port table": read as a whole path through a panel. The map draws one cable at a time, to a panel too.
+
+#### Unplug cables from the map
+
+- "A drawn cable can be deleted from the map" (ADR 0025): pressing a cabled port grip in edit mode opens a menu under the port, naming both ends, with "Débrancher". It unplugs through the port table's mutation, with the same Annuler toast. No click target on the path lines: they run from device centre to device centre, so a clickable line would steal presses on the devices themselves.
+- A cable an integration made is refused with a toast (the server refuses to unplug it too); so is a cable to another floor, which ADR 0025 leaves to the port table.
+- What a press does (draw, unplug, refuse) is settled at the press, so another person's edit mid-gesture does not turn a drawing into a menu; a cable unplugged elsewhere meanwhile makes "Débrancher" a no-op, as in the port table.
+- The menu opens on release, not on press, so the release is not read as a press outside it.
+
+#### Undo after the cycle moves a device (#74)
+
+- ADR 0025's "an undo or a redo that would move a device someone else has moved since, the cycle included, is refused": a precondition `expected` (position, size) on `device.patch` and `device.unplace`, set only by inverses, checked by the engine (local refusal) and the server (a cycle move between the check and the mutation).
+- Applies to undo and redo alike; a redo refusal now says "Impossible de rétablir" (it said "d'annuler").
+- `device.unplace` too: undoing a placement would take away a device the cycle has since moved next to its socket. `device.place` was already refused once the device is on a floor again.
+- Not extended to deletions, walls or the overlay: the ADR is about moves; the existing conflict checks cover the rest.
+- The message names "la collecte", the UI's word for the cycle.
+- To check on a real LibreNMS: a PC the cycle moves after an Éditeur dragged it; undo is refused. Here, a second tab's move stood in for the cycle (both go through `applyMapOperation`).
