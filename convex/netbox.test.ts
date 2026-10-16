@@ -6,6 +6,7 @@ import { stubFetch } from "./_test/fetch";
 import type { TestClient } from "./_test/auth.setup";
 
 const TOKEN = "a-token-for-tests"; // gitleaks:allow
+const NETBOX = "https://netbox.test";
 
 /** A NetBox list endpoint's page, as NetBox answers `limit` and `offset`. */
 const page = (url: string, all: Array<Record<string, unknown>>) => {
@@ -55,7 +56,7 @@ afterEach(() => {
 const connect = async (
   admin: TestClient,
   siteId: string,
-  baseUrl = "https://netbox.test",
+  baseUrl = NETBOX,
   enabled = true,
 ) =>
   await admin.action(api.integrations.save, {
@@ -83,7 +84,7 @@ describe("NetBox settings", () => {
       error: "NetBox n'est pas configuré.",
     });
 
-    await connect(admin, siteId, "https://netbox.test", false);
+    await connect(admin, siteId, NETBOX, false);
     const before = fetchStub.calls.length;
     const options = await admin.action(api.netbox.options, { siteId });
     if ("error" in options) throw new Error(options.error);
@@ -119,7 +120,11 @@ describe("NetBox settings", () => {
     const admin = await signedInTest("admin");
     const siteId = await createTestSite(admin);
     await expect(
-      admin.mutation(api.netbox.saveSettings, { siteId, settings: SETTINGS }),
+      admin.mutation(api.netbox.saveSettings, {
+        siteId,
+        baseUrl: NETBOX,
+        settings: SETTINGS,
+      }),
     ).rejects.toThrow("Configurez d'abord");
 
     await connect(admin, siteId);
@@ -130,6 +135,7 @@ describe("NetBox settings", () => {
     await expect(
       admin.mutation(api.netbox.saveSettings, {
         siteId,
+        baseUrl: NETBOX,
         settings: {
           ...SETTINGS,
           roles: [...SETTINGS.roles, { id: 1, name: "Switch", type: "pc" }],
@@ -139,6 +145,7 @@ describe("NetBox settings", () => {
 
     await admin.mutation(api.netbox.saveSettings, {
       siteId,
+      baseUrl: NETBOX,
       settings: SETTINGS,
     });
     expect(await admin.query(api.netbox.settings, { siteId })).toEqual(
@@ -149,7 +156,7 @@ describe("NetBox settings", () => {
     await admin.action(api.integrations.save, {
       siteId,
       kind: "netbox",
-      baseUrl: "https://netbox.test",
+      baseUrl: NETBOX,
       enabled: false,
     });
     expect(await admin.query(api.netbox.settings, { siteId })).toEqual(
@@ -161,5 +168,13 @@ describe("NetBox settings", () => {
       site: null,
       roles: [],
     });
+    // A form opened on the first NetBox cannot save its ids on the other.
+    await expect(
+      admin.mutation(api.netbox.saveSettings, {
+        siteId,
+        baseUrl: NETBOX,
+        settings: SETTINGS,
+      }),
+    ).rejects.toThrow("a changé");
   });
 });

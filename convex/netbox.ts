@@ -32,14 +32,23 @@ export const settings = adminQuery({
   },
 });
 
+/**
+ * `baseUrl` is the NetBox the form's choices came from: another NetBox has
+ * other sites and roles under the same ids.
+ */
 export const saveSettings = adminMutation({
-  args: { siteId: v.string(), settings: netboxSettings },
+  args: { siteId: v.string(), baseUrl: v.string(), settings: netboxSettings },
   returns: v.null(),
   handler: async (ctx, args) => {
     await requireSite(ctx, args.siteId);
     const row = await netboxRow(ctx, args.siteId);
     if (!row)
       throw new ConvexError("Configurez d'abord la connexion à NetBox.");
+    if (row.baseUrl !== args.baseUrl) {
+      throw new ConvexError(
+        "L'adresse de NetBox a changé : rouvrez ce formulaire.",
+      );
+    }
     const refused = netboxSettingsError(args.settings);
     if (refused) throw new ConvexError(refused);
     await ctx.db.patch(row._id, { netbox: args.settings });
@@ -55,6 +64,7 @@ export const options = adminAction({
   returns: v.union(
     v.object({ error: v.string() }),
     v.object({
+      baseUrl: v.string(),
       sites: v.array(choice),
       roles: v.array(v.object({ ...choice.fields, depth: v.number() })),
     }),
@@ -84,6 +94,7 @@ export const options = adminAction({
       return id === null ? [] : [more(id)];
     };
     return {
+      baseUrl,
       sites: sites.items
         .flatMap((item) =>
           picked(item, (id): NetBoxSite => ({ id, name: nameOf(item) })),

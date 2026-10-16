@@ -26,6 +26,7 @@ type Options = Exclude<
 >;
 
 const IGNORE = "ignore";
+const NO_SITE = "none";
 type RoleChoice = NetBoxRoleType | typeof IGNORE;
 
 const typeItems: Array<{ value: RoleChoice; label: string }> = [
@@ -146,11 +147,16 @@ function SettingsForm({
 
   const listed = new Set(options.roles.map((role) => role.id));
   const gone = settings.roles.filter((role) => !listed.has(role.id));
-  const siteGone = settings.site !== null && site === null;
-  const siteItems = options.sites.map((choice) => ({
-    value: String(choice.id),
-    label: choice.name,
-  }));
+  const siteGone =
+    settings.site !== null &&
+    !options.sites.some((choice) => choice.id === settings.site?.id);
+  const siteItems = [
+    { value: NO_SITE, label: "Aucun" },
+    ...options.sites.map((choice) => ({
+      value: String(choice.id),
+      label: choice.name,
+    })),
+  ];
 
   const submit = async () => {
     setPending(true);
@@ -158,6 +164,7 @@ function SettingsForm({
     try {
       await save({
         siteId,
+        baseUrl: options.baseUrl,
         settings: {
           site,
           roles: options.roles.flatMap((role) => {
@@ -189,7 +196,7 @@ function SettingsForm({
         <FieldLabel htmlFor="netbox-site">Site NetBox</FieldLabel>
         <Select
           items={siteItems}
-          value={site ? String(site.id) : null}
+          value={site ? String(site.id) : NO_SITE}
           onValueChange={(value) =>
             setSite(
               options.sites.find((choice) => String(choice.id) === value) ??
@@ -198,7 +205,7 @@ function SettingsForm({
           }
         >
           <SelectTrigger id="netbox-site" className="w-full sm:w-80">
-            <SelectValue placeholder="Choisir un site" />
+            <SelectValue />
           </SelectTrigger>
           <SelectContent>
             {siteItems.map(({ value, label }) => (
