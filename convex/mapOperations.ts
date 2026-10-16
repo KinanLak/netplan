@@ -13,6 +13,7 @@ import {
 import { isAsExpected } from "../src/map-engine/devicePatch";
 import { deleteDeviceMacs } from "./lib/deviceMacs";
 import { observedMetadata, observedPort } from "./lib/statuses";
+import { recordArrival } from "./history";
 import { syncOverlayFileReleases } from "./lib/overlayFiles";
 import {
   identityEditError,
@@ -1385,6 +1386,7 @@ const executePlan = async (ctx: MutationCtx, plan: WritePlan) => {
             deviceId: write.value.objectId,
           });
         }
+        await recordArrival(ctx, write.value.objectId, Date.now());
         break;
       }
       case "patchDevice":

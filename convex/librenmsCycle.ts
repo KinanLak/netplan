@@ -11,6 +11,7 @@ import { internalMutation, internalQuery } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
 import type { ActionCtx, MutationCtx, QueryCtx } from "./_generated/server";
 import { cycleOf } from "./lib/cycles";
+import { placeNamer, recordLocated, recordPresence } from "./history";
 import { ignoredMacsOf } from "./lib/ignoredMacs";
 import { PRESENT_TYPES, staleAfterOf, statusFrom } from "./lib/statuses";
 import { toPublicDevice } from "./mapDocument";
@@ -33,6 +34,7 @@ import {
   freshSwitches,
   matchPorts,
   MISSES_OFFLINE,
+  portMoves,
   readLastDiscovered,
   readLibreNMSDeviceStatus,
   readLibreNMSFdb,
@@ -671,6 +673,19 @@ export const recordSightings = internalMutation({
       const device = owners.get(deviceId);
       if (device && (await placeNextTo(ctx, device, socketId))) placed += 1;
     }
+    const placeOf = placeNamer(ctx);
+    for (const [deviceId, { seen, first }] of portMoves(
+      sightings,
+      presentOwners,
+      rows,
+    )) {
+      const device = owners.get(deviceId);
+      if (device) {
+        await recordLocated(ctx, device, await placeOf(seen), now, {
+          unlessLast: first,
+        });
+      }
+    }
 
     let online = 0;
     let offline = 0;
@@ -681,8 +696,22 @@ export const recordSightings = internalMutation({
       const status = statusFrom(device.macs, seenOn, fresh);
       if (device.metadata.status === status) continue;
       await setStatus(ctx, device, status);
-      if (status === "up") online += 1;
-      else if (status === "down") offline += 1;
+      if (status === "up") {
+        online += 1;
+        await recordPresence(ctx, device, "online", now);
+      } else if (status === "down") {
+        offline += 1;
+        const lastSeenAt = Math.max(
+          ...device.macs.map((mac) => rowOf.get(mac)?.seenAt ?? 0),
+        );
+        await recordPresence(
+          ctx,
+          device,
+          "offline",
+          now,
+          lastSeenAt > 0 ? lastSeenAt : undefined,
+        );
+      }
     }
     return { seen: sightingOf.size, online, offline, placed, unknown };
   },

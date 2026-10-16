@@ -362,6 +362,181 @@ describe("the LibreNMS step", () => {
     expect(await sightings(admin)).toEqual([]);
   });
 
+  it("records where devices were seen and when they came online or went offline", async () => {
+    const { admin, siteId } = await siteWithLibreNMS();
+    const buildingId = await admin.mutation(api.buildings.create, {
+      siteId,
+      objectId: "building:history",
+      name: "Bâtiment",
+    });
+    const floorId = await admin.mutation(api.floors.create, {
+      objectId: "floor:history",
+      buildingId,
+      name: "RDC",
+    });
+    await admin.run(async (ctx) => {
+      const socket = await ctx.db
+        .query("devices")
+        .withIndex("by_object_id", (q) => q.eq("objectId", "device:socket"))
+        .unique();
+      if (socket) {
+        await ctx.db.patch(socket._id, {
+          placement: {
+            floorId,
+            position: { x: 400, y: 400 },
+            size: { width: 40, height: 40 },
+          },
+        });
+      }
+    });
+    const history = async (deviceId: string) =>
+      (
+        await admin.query(api.history.forDevice, {
+          deviceId,
+          paginationOpts: { numItems: 20, cursor: null },
+        })
+      ).page.toReversed();
+    const atSocket = {
+      switchId: "device:sw",
+      switchName: "sw",
+      portId: "port:device:sw:interface:1",
+      portName: "GigabitEthernet1/0/1",
+      socketId: "device:socket",
+      socketName: "socket",
+      floorId,
+      floorName: "RDC",
+      buildingName: "Bâtiment",
+    };
+    const onFreePort = {
+      switchId: "device:sw",
+      switchName: "sw",
+      portId: "port:device:sw:interface:2",
+      portName: "GigabitEthernet1/0/2",
+    };
+
+    librenms.state.fdb = [
+      { port_id: 101, mac_address: PC },
+      { port_id: 102, mac_address: PRINTER },
+      { port_id: 101, mac_address: STRANGER },
+    ];
+    await cycle(admin, siteId);
+    // Seen again where it was: nothing new.
+    await cycle(admin, siteId);
+    expect(await history("device:pc")).toEqual([
+      expect.objectContaining({ kind: "located", place: atSocket }),
+      expect.objectContaining({ kind: "online", deviceName: "pc" }),
+    ]);
+    expect(await history("device:printer")).toEqual([
+      expect.objectContaining({ kind: "located", place: onFreePort }),
+      expect.objectContaining({ kind: "online" }),
+    ]);
+
+    // A device made from a MAC already seen starts its history where it is.
+    await admin.mutation(api.unknownMacs.createDevice, {
+      siteId,
+      mac: STRANGER,
+      deviceId: "device:stranger",
+      name: "Imprimante",
+    });
+    await cycle(admin, siteId);
+    expect(await history("device:stranger")).toEqual([
+      expect.objectContaining({ kind: "located", place: atSocket }),
+      expect.objectContaining({ kind: "online", deviceName: "Imprimante" }),
+    ]);
+    // Deleted from the map and brought back by undo: it did not move.
+    const stranger = await admin.run(
+      async (ctx) =>
+        await ctx.db
+          .query("devices")
+          .withIndex("by_object_id", (q) => q.eq("objectId", "device:stranger"))
+          .unique(),
+    );
+    if (!stranger?.placement) throw new Error("device:stranger is not placed");
+    const meta = (clientSeq: number) => ({
+      opId: `op:undo:${clientSeq}`,
+      clientId: "client:undo",
+      clientSeq,
+      createdAt: Date.now(),
+    });
+    await admin.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "device.delete",
+        meta: meta(1),
+        deviceId: "device:stranger",
+      },
+    });
+    await admin.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "device.create",
+        meta: meta(2),
+        device: {
+          id: "device:stranger",
+          floorId: stranger.placement.floorId,
+          type: stranger.type,
+          name: stranger.name,
+          position: stranger.placement.position,
+          size: stranger.placement.size,
+          macs: stranger.macs,
+          metadata: stranger.metadata,
+        },
+      },
+    });
+    expect(await history("device:stranger")).toHaveLength(2);
+
+    // Seen on another port, then not at all for two cycles.
+    librenms.state.fdb = [
+      { port_id: 102, mac_address: PC },
+      { port_id: 102, mac_address: PRINTER },
+    ];
+    await cycle(admin, siteId);
+    librenms.state.fdb = [{ port_id: 102, mac_address: PRINTER }];
+    await cycle(admin, siteId);
+    await cycle(admin, siteId);
+    const events = await history("device:pc");
+    expect(events.map(({ kind }) => kind)).toEqual([
+      "located",
+      "online",
+      "located",
+      "offline",
+    ]);
+    expect(events[2]?.place).toEqual(onFreePort);
+    expect(events[3]?.lastSeenAt).toBe(events[2]?.at);
+
+    // The site's history holds both devices, a kind at a time if asked.
+    const located = await admin.query(api.history.forSite, {
+      siteId,
+      kind: "located",
+      paginationOpts: { numItems: 20, cursor: null },
+    });
+    expect(located.page.map(({ deviceId }) => deviceId)).toEqual([
+      "device:pc",
+      "device:stranger",
+      "device:printer",
+      "device:pc",
+    ]);
+
+    // Seen through two MACs on both ports, then only the other, then back:
+    // the way back is a move, though its last `located` event names it.
+    await admin.mutation(api.devices.updateIdentity, {
+      deviceId: "device:printer",
+      edit: { macs: [PRINTER, macOf(4)] },
+    });
+    librenms.state.fdb = [
+      { port_id: 102, mac_address: PRINTER },
+      { port_id: 101, mac_address: macOf(4) },
+    ];
+    await cycle(admin, siteId);
+    librenms.state.fdb = [{ port_id: 101, mac_address: macOf(4) }];
+    await cycle(admin, siteId);
+    librenms.state.fdb = [{ port_id: 102, mac_address: PRINTER }];
+    await cycle(admin, siteId);
+    expect(
+      (await history("device:printer"))
+        .filter(({ kind }) => kind === "located")
+        .map(({ place }) => place),
+    ).toEqual([onFreePort, onFreePort]);
+  });
+
   it("gives a switch the status LibreNMS has for it", async () => {
     const { admin, siteId } = await siteWithLibreNMS();
     expect(await statusOf(admin, "device:sw")).toBeNull();

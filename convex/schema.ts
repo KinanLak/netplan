@@ -11,6 +11,7 @@ import {
   sourceRef,
   wallColor,
 } from "./mapValidators";
+import { deviceEventKind, historyPlace } from "./historyValidators";
 import {
   connectionCheck,
   cycleRun,
@@ -157,6 +158,26 @@ export default defineSchema({
      */
     ownerId: v.optional(v.string()),
   }).index("by_site_mac", ["siteId", "mac"]),
+
+  // What the network observed of each pc and endpoint, kept 30 days (ADR
+  // 0027): where it was first seen and seen again elsewhere, and when it went
+  // online or offline. Written only by the collection cycle.
+  deviceEvents: defineTable({
+    siteId: v.string(),
+    deviceId: v.string(),
+    /** The device's name when the event was recorded. */
+    deviceName: v.string(),
+    at: v.number(),
+    kind: deviceEventKind,
+    /** Where it was seen (`located`). */
+    place: v.optional(historyPlace),
+    /** When it was last seen (`offline`). */
+    lastSeenAt: v.optional(v.number()),
+  })
+    .index("by_device_at", ["deviceId", "at"])
+    .index("by_site_at", ["siteId", "at"])
+    .index("by_site_kind_at", ["siteId", "kind", "at"])
+    .index("by_at", ["at"]),
 
   /** Unknown MACs an Éditeur chose to ignore (ADR 0026). */
   ignoredMacs: defineTable({
