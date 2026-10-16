@@ -33,3 +33,25 @@ export const connectionCheck = v.object({
   message: v.string(),
   at: v.number(),
 });
+
+/** What one source answered during a collection cycle. */
+export const cycleStep = v.object({
+  source: integrationKind,
+  ok: v.boolean(),
+  message: v.string(),
+});
+
+export const cycleRun = v.object({
+  startedAt: v.number(),
+  finishedAt: v.number(),
+  manual: v.boolean(),
+  steps: v.array(cycleStep),
+});
+
+export const runningCycle = v.object({
+  cycleId: v.string(),
+  startedAt: v.number(),
+  /** Past this, the cycle is taken for dead and another may start. */
+  leaseUntil: v.number(),
+  manual: v.boolean(),
+});

@@ -25,3 +25,5 @@ SMTP_FROM
 # only decrypts, during a rotation.
 NETPLAN_SECRET_KEY
 NETPLAN_SECRET_KEY_PREVIOUS
+# `true` stops every collection cycle; `false` lets them run again.
+NETPLAN_COLLECTION_PAUSED

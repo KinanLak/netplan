@@ -56,6 +56,13 @@ current value alone, so a variable set from the dashboard survives until
 | `SMTP_USER`, `SMTP_PASSWORD`                                                | The relay's login, when it needs one.                                                                                                                                                                              |
 | `SMTP_FROM`                                                                 | The sender, as `Name <address>`. Defaults to `Netplan <netplan@<domain>>`.                                                                                                                                         |
 | `NETPLAN_SECRET_KEY`, `NETPLAN_SECRET_KEY_PREVIOUS`                         | Encrypt the integration tokens; the previous key only decrypts, during a rotation (below).                                                                                                                         |
+| `NETPLAN_COLLECTION_PAUSED`                                                 | `true` stops every NetBox and LibreNMS collection cycle (below).                                                                                                                                                   |
+
+`NETPLAN_COLLECTION_PAUSED=true` stops every collection cycle on the server,
+automatic or manual, without touching any site's settings: the switch for a
+source that misbehaves under Netplan's load. Set it to `false` to resume; an
+empty value leaves the deployment's value as it is. Each site's admin page
+says when it is on.
 
 `NETPLAN_SECRET_KEY` (base64 of 32 random bytes, `openssl rand -base64 32`)
 encrypts the NetBox and LibreNMS tokens admins enter for each site; no

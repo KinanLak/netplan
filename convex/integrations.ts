@@ -21,7 +21,11 @@ import {
   encryptedSecret,
   integrationKind,
 } from "./siteValidators";
-import { normalizeBaseUrl, tokenError } from "../src/sites/integrations";
+import {
+  INTEGRATION_LABELS,
+  normalizeBaseUrl,
+  tokenError,
+} from "../src/sites/integrations";
 import type { IntegrationKind } from "../src/sites/integrations";
 
 const integrationSummary = v.object({
@@ -157,6 +161,34 @@ const runCheck = async (
     check: { ...result, at: Date.now() },
   });
   return result;
+};
+
+/**
+ * The address and clear token a collection cycle calls a source with, or a
+ * French reason it cannot.
+ */
+export const openConnection = async (
+  ctx: ActionCtx,
+  siteId: string,
+  kind: IntegrationKind,
+): Promise<{ baseUrl: string; token: string } | { error: string }> => {
+  const stored = await ctx.runQuery(internal.integrations.credentials, {
+    siteId,
+    kind,
+  });
+  if (!stored?.enabled) {
+    return { error: `${INTEGRATION_LABELS[kind]} est désactivé.` };
+  }
+  let token: string | null;
+  try {
+    token = await decryptStored(stored, stored.token);
+  } catch (error) {
+    if (error instanceof ConvexError) return { error: String(error.data) };
+    throw error;
+  }
+  return token
+    ? { baseUrl: stored.baseUrl, token }
+    : { error: UNREADABLE_TOKEN.message };
 };
 
 export const remove = adminMutation({

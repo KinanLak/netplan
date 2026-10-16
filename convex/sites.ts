@@ -1,4 +1,5 @@
 import { ConvexError, v } from "convex/values";
+import { deleteCycle, rescheduleCycle } from "./lib/cycles";
 import { deleteDeviceMacs } from "./lib/deviceMacs";
 import { deleteDeviceCabling } from "./lib/ports";
 import { adminMutation, adminQuery, readerQuery } from "./lib/functions";
@@ -177,12 +178,13 @@ export const update = adminMutation({
     assertSettings(settings);
     await assertNameFree(ctx, settings.name, siteId);
     await ctx.db.patch(site._id, { ...settings, updatedAt: Date.now() });
+    await rescheduleCycle(ctx, { ...site, ...settings });
     return null;
   },
 });
 
 // Removing a site never takes a plan with it: its buildings go first. Its
-// integrations go with it.
+// integrations and its collection cycle go with it.
 export const remove = adminMutation({
   args: { siteId: v.string() },
   returns: v.null(),
@@ -200,6 +202,7 @@ export const remove = adminMutation({
     for (const integration of integrations) {
       await ctx.db.delete(integration._id);
     }
+    await deleteCycle(ctx, siteId);
     const devices = await ctx.db
       .query("devices")
       .withIndex("by_site", (q) => q.eq("siteId", siteId))

@@ -20,6 +20,8 @@ const POLICY: Record<string, Role> = {
   "cables:connect": "editor",
   "cables:disconnect": "editor",
   "cables:portTable": "reader",
+  "collection:refresh": "editor",
+  "collection:status": "admin",
   "devices:create": "editor",
   "devices:listForFloor": "reader",
   "devices:listForSite": "reader",
