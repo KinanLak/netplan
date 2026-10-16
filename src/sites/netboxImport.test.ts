@@ -397,4 +397,35 @@ describe("planDevicePorts", () => {
       "port:device:a:front:1",
     ]);
   });
+
+  it("never gives a new port the id of a port another NetBox left behind", () => {
+    const plan = planDevicePorts(
+      "device:a",
+      [
+        {
+          id: "port:device:a:nb:interface:11",
+          name: "eth1",
+          kind: "interface",
+          netboxId: null,
+        },
+        {
+          id: "port:device:a:nb:interface:12",
+          name: "old",
+          kind: "interface",
+          netboxId: null,
+        },
+      ],
+      [
+        wanted("interface:11", "eth2"),
+        wanted("interface:10", "eth1"),
+        wanted("interface:12", "eth3"),
+      ],
+    );
+    expect(plan.ports.map(({ id }) => id)).toEqual([
+      "port:device:a:nb:interface:11:2",
+      "port:device:a:nb:interface:11",
+      "port:device:a:nb:interface:12:2",
+    ]);
+    expect(plan.remove).toEqual(["port:device:a:nb:interface:12"]);
+  });
 });

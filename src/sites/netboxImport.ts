@@ -486,14 +486,26 @@ export function planDevicePorts(
     if (port.netboxId === null && !manual.has(key)) manual.set(key, port.id);
   }
   const used = new Set<string>();
-  const ports = wanted.map((port, index) => {
-    const key = nameKey(port.kind, port.name);
-    const matched = bySource.get(port.externalId) ?? manual.get(key);
+  const matched = wanted.map((port) => {
     const id =
-      matched && !used.has(matched)
-        ? matched
-        : `port:${deviceId}:nb:${port.externalId}`;
+      bySource.get(port.externalId) ??
+      manual.get(nameKey(port.kind, port.name));
+    if (!id || used.has(id)) return null;
     used.add(id);
+    return id;
+  });
+  // A released port keeps its generated id, so a new port's id may already
+  // be taken by a port that stays or that is about to go with its cable.
+  const taken = new Set(existing.map((port) => port.id));
+  const ports = wanted.map((port, index) => {
+    let id = matched[index];
+    if (!id) {
+      const base = `port:${deviceId}:nb:${port.externalId}`;
+      id = base;
+      for (let n = 2; taken.has(id) || used.has(id); n += 1)
+        id = `${base}:${n}`;
+      used.add(id);
+    }
     // Netplan numbers its own ports from 1.
     return { id, port, order: index + 1 };
   });

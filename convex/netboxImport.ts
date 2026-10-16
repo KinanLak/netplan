@@ -96,23 +96,21 @@ export const importFromNetBox = async (
   }
   const { baseUrl, token } = connection;
 
-  // Without a role NetBox would list every device of the site.
-  if (settings.roles.length === 0) {
-    return {
-      ok: true,
-      message: "Aucun rôle NetBox n'a de type : rien n'est importé.",
-    };
-  }
+  // Without a role NetBox would list every device of the site, so nothing is
+  // read, and the empty import still retires what earlier roles brought.
+  const noRole = settings.roles.length === 0;
   const roleFilter = settings.roles.map((role) => `&role_id=${role.id}`);
-  const lists = await Promise.all(
-    [
-      `/api/dcim/devices/?site_id=${site.id}${roleFilter.join("")}`,
-      `/api/dcim/interfaces/?site_id=${site.id}`,
-      `/api/dcim/front-ports/?site_id=${site.id}`,
-      `/api/dcim/rear-ports/?site_id=${site.id}`,
-      `/api/dcim/cables/?site_id=${site.id}`,
-    ].map((path) => netboxList(baseUrl, token, path, SOURCE_RETRY)),
-  );
+  const lists = noRole
+    ? []
+    : await Promise.all(
+        [
+          `/api/dcim/devices/?site_id=${site.id}${roleFilter.join("")}`,
+          `/api/dcim/interfaces/?site_id=${site.id}`,
+          `/api/dcim/front-ports/?site_id=${site.id}`,
+          `/api/dcim/rear-ports/?site_id=${site.id}`,
+          `/api/dcim/cables/?site_id=${site.id}`,
+        ].map((path) => netboxList(baseUrl, token, path, SOURCE_RETRY)),
+      );
   const items = [];
   for (const list of lists) {
     if (!list.ok) return { ok: false, message: list.message };
@@ -141,6 +139,12 @@ export const importFromNetBox = async (
     }),
   });
   if (!counts) return { ok: true, message: "" };
+  if (noRole && counts.removed === 0) {
+    return {
+      ok: true,
+      message: "Aucun rôle NetBox n'a de type : rien n'est importé.",
+    };
+  }
   return { ok: true, message: importSummary(counts) };
 };
 

@@ -245,6 +245,38 @@ describe("NetBox import", () => {
     ).toEqual([]);
   });
 
+  it("retires what NetBox brought once no role has a type, without reading NetBox", async () => {
+    const source = netbox([device(12, "pc-0012"), device(13, "PC-0013")], []);
+    const { t, admin, editor, siteId } = await importingSite(source);
+    await editor.mutation(api.devices.create, {
+      siteId,
+      deviceId: "device:manual",
+      type: "pc",
+      identity: { name: "Accueil", hostname: "pc-0013", macs: [] },
+    });
+    await refresh(editor, siteId);
+    expect(await inventory(editor, siteId)).toHaveLength(2);
+
+    await admin.mutation(api.netbox.saveSettings, {
+      siteId,
+      baseUrl: NETBOX,
+      settings: { site: { id: 7, name: "Siège" }, roles: [] },
+    });
+    source.reads.length = 0;
+    await refresh(editor, siteId);
+
+    expect(source.reads).toEqual(["/api/status/"]);
+    expect(
+      (await inventory(editor, siteId)).map((d) => [d.name, d.source ?? null]),
+    ).toEqual([["Accueil", null]]);
+    expect(
+      await t.run(async (ctx) => await ctx.db.query("importReviews").collect()),
+    ).toEqual([]);
+    expect((await lastSteps(admin, siteId))?.[0]?.message).toContain(
+      "(1 retiré)",
+    );
+  });
+
   it("releases NetBox's devices when the site leaves that NetBox", async () => {
     const source = netbox([device(12, "pc-0012"), device(13, "PC-0013")], []);
     const { t, admin, editor, siteId } = await importingSite(source);
