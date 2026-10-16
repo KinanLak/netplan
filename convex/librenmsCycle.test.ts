@@ -510,6 +510,104 @@ describe("the LibreNMS step", () => {
     expect(distance(moved.position, { x: 2000, y: 400 })).toBeLessThan(150);
   });
 
+  it("lists unknown MACs and makes an endpoint of one, next to its socket", async () => {
+    const { admin, siteId } = await siteWithLibreNMS();
+    const buildingId = await admin.mutation(api.buildings.create, {
+      siteId,
+      objectId: "building:cycle",
+      name: "Bâtiment",
+    });
+    const floorId = await admin.mutation(api.floors.create, {
+      objectId: "floor:cycle",
+      buildingId,
+      name: "RDC",
+    });
+    await admin.run(async (ctx) => {
+      const socket = await ctx.db
+        .query("devices")
+        .withIndex("by_object_id", (q) => q.eq("objectId", "device:socket"))
+        .unique();
+      if (socket) {
+        await ctx.db.patch(socket._id, {
+          placement: {
+            floorId,
+            position: { x: 400, y: 400 },
+            size: { width: 40, height: 40 },
+          },
+        });
+      }
+    });
+    const LOOSE = macOf(4);
+    librenms.state.fdb = [
+      { port_id: 101, mac_address: STRANGER },
+      // Port 2 is cabled to nothing.
+      { port_id: 102, mac_address: LOOSE },
+    ];
+    expect((await cycle(admin, siteId)).message).toContain("2 inconnues");
+
+    const unknown = await admin.query(api.unknownMacs.listForSite, { siteId });
+    expect(unknown).toHaveLength(2);
+    expect(unknown.find(({ mac }) => mac === STRANGER)).toMatchObject({
+      switchName: "sw",
+      portName: "GigabitEthernet1/0/1",
+      socket: { id: "device:socket", name: "socket", placed: true },
+    });
+    expect(unknown.find(({ mac }) => mac === LOOSE)?.socket).toBeNull();
+
+    expect(
+      await admin.mutation(api.unknownMacs.createDevice, {
+        siteId,
+        mac: STRANGER,
+        deviceId: "device:stranger",
+        name: "  Imprimante  ",
+      }),
+    ).toEqual({ placed: true });
+    const created = await admin.run(
+      async (ctx) =>
+        await ctx.db
+          .query("devices")
+          .withIndex("by_object_id", (q) => q.eq("objectId", "device:stranger"))
+          .unique(),
+    );
+    expect(created).toMatchObject({
+      type: "endpoint",
+      name: "Imprimante",
+      macs: [STRANGER],
+      metadata: { status: "up" },
+      placement: { floorId },
+    });
+    const position = created?.placement?.position;
+    if (!position) throw new Error("expected the endpoint on the floor");
+    expect(Math.hypot(position.x - 400, position.y - 400)).toBeLessThan(150);
+    expect(
+      (await admin.query(api.unknownMacs.listForSite, { siteId })).map(
+        ({ mac }) => mac,
+      ),
+    ).toEqual([LOOSE]);
+
+    // Already carried now.
+    await expect(
+      admin.mutation(api.unknownMacs.createDevice, {
+        siteId,
+        mac: STRANGER,
+        deviceId: "device:again",
+        name: "Encore",
+      }),
+    ).rejects.toThrow("déjà celle de Imprimante");
+    // Seen at no socket: created on no floor.
+    expect(
+      await admin.mutation(api.unknownMacs.createDevice, {
+        siteId,
+        mac: LOOSE,
+        deviceId: "device:loose",
+        name: "Portable",
+      }),
+    ).toEqual({ placed: false });
+
+    const next = (await cycle(admin, siteId)).message;
+    expect(next).toContain("2 MAC vues.");
+  });
+
   it("records nothing once LibreNMS was removed during the read", async () => {
     const { admin, siteId } = await siteWithLibreNMS();
     await admin.mutation(api.collection.refresh, { siteId });

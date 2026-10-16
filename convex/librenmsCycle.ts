@@ -55,13 +55,13 @@ const sighting = v.object({
   socketId: v.optional(v.string()),
 });
 
-const deviceOf = async (ctx: QueryCtx, deviceId: string) =>
+export const deviceOf = async (ctx: QueryCtx, deviceId: string) =>
   await ctx.db
     .query("devices")
     .withIndex("by_object_id", (q) => q.eq("objectId", deviceId))
     .unique();
 
-const ownerOf = async (ctx: QueryCtx, siteId: string, mac: string) => {
+export const ownerOf = async (ctx: QueryCtx, siteId: string, mac: string) => {
   const row = await ctx.db
     .query("deviceMacs")
     .withIndex("by_site_mac", (q) => q.eq("siteId", siteId).eq("mac", mac))
@@ -214,10 +214,11 @@ const setStatus = async (
  * socket's floor, at the free spot nearest to it on its side of the walls.
  * Returns whether it moved; a socket on no floor places nothing.
  */
-const placeNextTo = async (
+export const placeNextTo = async (
   ctx: MutationCtx,
   device: Doc<"devices">,
   socketId: string,
+  by = SIGHTED_BY,
 ): Promise<boolean> => {
   const socket = await deviceOf(ctx, socketId);
   if (!socket?.placement) return false;
@@ -249,7 +250,7 @@ const placeNextTo = async (
   await ctx.db.patch(device._id, {
     placement: { floorId, position: spot, size },
     updatedAt: now,
-    updatedBy: SIGHTED_BY,
+    updatedBy: by,
   });
   await bumpDocumentRevisions(
     ctx,

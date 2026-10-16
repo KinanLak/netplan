@@ -53,6 +53,7 @@ import type * as netboxImport from "../netboxImport.js";
 import type * as presences from "../presences.js";
 import type * as siteValidators from "../siteValidators.js";
 import type * as sites from "../sites.js";
+import type * as unknownMacs from "../unknownMacs.js";
 import type * as users from "../users.js";
 import type * as walls from "../walls.js";
 
@@ -108,6 +109,7 @@ declare const fullApi: ApiFromModules<{
   presences: typeof presences;
   siteValidators: typeof siteValidators;
   sites: typeof sites;
+  unknownMacs: typeof unknownMacs;
   users: typeof users;
   walls: typeof walls;
 }>;

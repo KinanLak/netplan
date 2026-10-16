@@ -65,6 +65,7 @@ import { matchesDeviceSearch } from "@/devices/search";
 import { ImportReviews } from "@/sites/ImportReviews";
 import { INTEGRATION_LABELS } from "@/sites/integrations";
 import { SiteSwitcher } from "@/sites/SiteSwitcher";
+import { UnknownMacs } from "@/sites/UnknownMacs";
 import { siteSearch, useCurrentSite } from "@/sites/useCurrentSite";
 import type { SiteSummary } from "@/sites/useCurrentSite";
 import { useMapStore } from "@/store/useMapStore";
@@ -180,6 +181,7 @@ function SiteInventory({ site }: { site: SiteSummary }) {
       </header>
 
       {canEdit ? <ImportReviews siteId={site.id} /> : null}
+      {canEdit ? <UnknownMacs siteId={site.id} /> : null}
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="relative flex-1">

@@ -62,6 +62,8 @@ const POLICY: Record<string, Role> = {
   "sites:listSettings": "admin",
   "sites:remove": "admin",
   "sites:update": "admin",
+  "unknownMacs:createDevice": "editor",
+  "unknownMacs:listForSite": "editor",
   "users:invite": "admin",
   "users:list": "admin",
   "users:me": "reader",
