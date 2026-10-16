@@ -80,3 +80,19 @@ export const observedMetadata = async (
   }
   return status === undefined ? rest : { ...rest, status };
 };
+
+/**
+ * A port entering the inventory, as an undo brings back a switch: what a read
+ * observed on it stays only while that read still vouches for it.
+ */
+export const observedPort = async <
+  Row extends Pick<Doc<"ports">, "siteId" | "deviceId" | "status" | "seen">,
+>(
+  ctx: QueryCtx,
+  port: Row,
+): Promise<Row> => {
+  if (port.status === undefined && port.seen === undefined) return port;
+  const fresh = await freshSwitchesOf(ctx, port.siteId);
+  if (fresh.has(port.deviceId)) return port;
+  return { ...port, status: undefined, seen: undefined };
+};

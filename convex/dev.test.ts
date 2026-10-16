@@ -66,23 +66,35 @@ describe("dev seed", () => {
       }
       expect(await countFloor(t, floor.id)).toEqual(expected);
 
-      // The demo stands in for a cycle, so its statuses stay.
-      const statusOf = (
-        devices: ReadonlyArray<{ id: string; metadata: { status?: string } }>,
-      ) =>
+      // The demo stands in for a cycle, so what it observed stays.
+      const created = floor.operations.flatMap((operation) =>
+        operation.kind === "device.create" ? [operation] : [],
+      );
+      const [devices, ports] = await Promise.all([
+        t.query(api.mapDocument.getFloorDevices, { floorId: floor.id }),
+        t.query(api.mapDocument.getFloorPorts, { floorId: floor.id }),
+      ]);
+      expect(
         Object.fromEntries(
           devices.map((device) => [device.id, device.metadata.status]),
-        );
-      expect(
-        statusOf(
-          await t.query(api.mapDocument.getFloorDevices, { floorId: floor.id }),
         ),
       ).toEqual(
-        statusOf(
-          floor.operations.flatMap((operation) =>
-            operation.kind === "device.create" ? [operation.device] : [],
-          ),
+        Object.fromEntries(
+          created.map(({ device }) => [device.id, device.metadata.status]),
         ),
+      );
+      const factsOf = (
+        list: ReadonlyArray<{ id: string; status?: string; seen?: true }>,
+      ) =>
+        Object.fromEntries(
+          list.flatMap(({ id, status, seen }) =>
+            status === undefined && seen === undefined
+              ? []
+              : [[id, { status, seen }]],
+          ),
+        );
+      expect(factsOf(ports)).toEqual(
+        factsOf(created.flatMap((operation) => operation.ports ?? [])),
       );
     }
   });

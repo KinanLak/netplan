@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import {
   edgeSightings,
+  portPresence,
   freshFdb,
   isOnline,
   matchPorts,
@@ -19,14 +20,23 @@ describe("reading LibreNMS", () => {
     expect(
       readLibreNMSPorts({
         ports: [
-          { port_id: 5, ifName: "Gi1/0/1", ifDescr: "GigabitEthernet1/0/1" },
+          {
+            port_id: 5,
+            ifName: "Gi1/0/1",
+            ifDescr: "GigabitEthernet1/0/1",
+            ifOperStatus: "up",
+          },
           { port_id: "6", ifName: "", ifDescr: "Vlan10" },
+          { port_id: 7, ifName: "Gi1/0/2", ifOperStatus: "lowerLayerDown" },
+          { port_id: 8, ifName: "Gi1/0/3", ifOperStatus: "unknown" },
           { ifName: "no-id" },
         ],
       }),
     ).toEqual([
-      { id: 5, names: ["Gi1/0/1", "GigabitEthernet1/0/1"] },
+      { id: 5, names: ["Gi1/0/1", "GigabitEthernet1/0/1"], link: "up" },
       { id: 6, names: ["Vlan10"] },
+      { id: 7, names: ["Gi1/0/2"], link: "down" },
+      { id: 8, names: ["Gi1/0/3"] },
     ]);
     expect(
       readLibreNMSFdb({
@@ -182,10 +192,11 @@ describe("edgeSightings", () => {
     id: string,
     socketId: string | null,
     cabled: boolean,
-  ): SwitchPort => ({ id, switchId: "sw", name: id, socketId, cabled });
+    endId: string | null = socketId,
+  ): SwitchPort => ({ id, switchId: "sw", name: id, socketId, endId, cabled });
   const ports = [
     port("to-socket", "socket", true),
-    port("uplink", null, true),
+    port("uplink", null, true, "core"),
     port("loose", null, false),
     port("busy", null, false),
   ];
@@ -222,6 +233,24 @@ describe("edgeSightings", () => {
     ];
     expect(edgeSightings(fdb, matched, ports)).toEqual([
       { mac: mac(1), portId: "to-socket", switchId: "sw", socketId: "socket" },
+    ]);
+  });
+
+  it("tells where a device may be behind a port, apart from where to place it", () => {
+    const fdb = [
+      { portId: 3, mac: mac(1), updatedAt: null },
+      { portId: 1, mac: mac(1), updatedAt: null },
+      { portId: 2, mac: mac(2), updatedAt: null },
+      ...[10, 11, 12, 13, 14].map((n) => ({
+        portId: 4,
+        mac: mac(n),
+        updatedAt: null,
+      })),
+    ];
+    expect(portPresence(fdb, matched, ports)).toEqual([
+      { portId: "loose", macs: [mac(1)] },
+      { portId: "to-socket", macs: [mac(1)] },
+      { portId: "uplink", macs: [mac(2)], deviceId: "core" },
     ]);
   });
 });

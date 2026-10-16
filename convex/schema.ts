@@ -193,6 +193,9 @@ export default defineSchema({
     order: v.number(),
     rearPortId: v.optional(v.string()),
     status: v.optional(deviceStatus),
+    // Whether a device of the site was seen on the port by its switch's last
+    // read (ADR 0025).
+    seen: v.optional(v.literal(true)),
     source: v.optional(sourceRef),
   })
     .index("by_object_id", ["objectId"])

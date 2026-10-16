@@ -6,17 +6,20 @@ import type { Node, NodeProps } from "@xyflow/react";
 import type { DeviceStatus } from "@/types/map";
 import type { DeviceNodeData } from "@/devices/reactFlowDeviceAdapter";
 import { StatusDot } from "@/components/StatusDot";
-import { DEVICE_STATUS_LABELS } from "@/devices/status";
+import {
+  PORT_STATE_CLASSES,
+  PORT_STATE_LABELS,
+  portColumns,
+  portState,
+  shownPorts,
+} from "@/devices/portState";
 import { cn } from "@/lib/utils";
 
 type SwitchNodeType = Node<DeviceNodeData>;
 
 function SwitchNode({ data: device, id }: NodeProps<SwitchNodeType>) {
   const status: DeviceStatus = device.metadata.status ?? "unknown";
-  // Two rows of twelve fit the node; the drawer lists them all.
-  const shownPorts = device.ports
-    .filter((port) => port.kind === "interface")
-    .slice(0, 24);
+  const ports = shownPorts(device.ports);
 
   return (
     <NetworkNode
@@ -36,23 +39,19 @@ function SwitchNode({ data: device, id }: NodeProps<SwitchNodeType>) {
 
       {/* Ports grid */}
       <div
-        className="nodrag gap-0.5 p-1"
+        className="nodrag grid justify-items-center gap-0.5 overflow-hidden p-1"
         style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(12, minmax(0, 1fr))",
-          gridTemplateRows: "repeat(2, minmax(0, 1fr))",
+          gridTemplateColumns: `repeat(${portColumns(ports.length)}, minmax(0, 1fr))`,
         }}
       >
-        {shownPorts.map((port) => (
+        {ports.map((port) => (
           <div
             key={port.id}
             className={cn(
-              "h-3 w-3 cursor-pointer rounded-xs shadow-sm transition-transform hover:scale-125",
-              port.status === "up" && "bg-up",
-              port.status === "down" && "bg-down",
-              (port.status ?? "unknown") === "unknown" && "bg-unknown",
+              "aspect-square w-full max-w-3 rounded-xs shadow-sm transition-transform hover:scale-125",
+              PORT_STATE_CLASSES[portState(port)],
             )}
-            title={`${port.name} : ${DEVICE_STATUS_LABELS[port.status ?? "unknown"]}`}
+            title={`${port.name} : ${PORT_STATE_LABELS[portState(port)]}`}
           />
         ))}
       </div>

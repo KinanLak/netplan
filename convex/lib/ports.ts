@@ -3,6 +3,7 @@ import type { Infer } from "convex/values";
 import type { Doc } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import type { cable, newCable, newPort, port } from "../mapValidators";
+import { observedPort } from "./statuses";
 import {
   MAX_PORTS_PER_DEVICE,
   cablesToLay,
@@ -34,6 +35,7 @@ export const toPort = (row: Doc<"ports">): PortValue => ({
   order: row.order,
   rearPortId: row.rearPortId,
   status: row.status,
+  seen: row.seen,
   source: row.source,
 });
 
@@ -53,6 +55,7 @@ export const portRow = (siteId: string, value: NewPort) => ({
   order: value.order,
   rearPortId: value.rearPortId,
   status: value.status,
+  seen: value.seen,
 });
 
 export const cableRow = (
@@ -189,7 +192,10 @@ export const insertDeviceCabling = async (
   }
   const now = Date.now();
   for (const value of ports) {
-    await ctx.db.insert("ports", portRow(device.siteId, value));
+    await ctx.db.insert(
+      "ports",
+      await observedPort(ctx, portRow(device.siteId, value)),
+    );
   }
   for (const value of result.cables) {
     await ctx.db.insert(

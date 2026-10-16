@@ -95,11 +95,11 @@ const lastSeedSeq = async (ctx: MutationCtx) => {
 };
 
 /**
- * Writes the statuses of the demo's devices. A device enters the inventory
- * with only what a fresh switch read vouches for (ADR 0025), and the demo
- * stands in for cycles that never ran.
+ * Writes what the demo's devices and ports observed. A device or port enters
+ * the inventory with only what a fresh switch read vouches for (ADR 0025),
+ * and the demo stands in for cycles that never ran.
  */
-const writeSeededStatuses = async (
+const writeSeededFacts = async (
   ctx: MutationCtx,
   operations: ReadonlyArray<BatchSubOperation>,
 ) => {
@@ -109,8 +109,21 @@ const writeSeededStatuses = async (
       .query("devices")
       .withIndex("by_object_id", (q) => q.eq("objectId", operation.device.id))
       .unique();
-    if (row)
+    if (row) {
       await ctx.db.patch(row._id, { metadata: operation.device.metadata });
+    }
+    for (const port of operation.ports ?? []) {
+      const portRow = await ctx.db
+        .query("ports")
+        .withIndex("by_object_id", (q) => q.eq("objectId", port.id))
+        .unique();
+      if (portRow) {
+        await ctx.db.patch(portRow._id, {
+          status: port.status,
+          seen: port.seen,
+        });
+      }
+    }
   }
 };
 
@@ -151,7 +164,7 @@ export const seed = internalMutation({
           `The seed of ${floor.id} was rejected: ${result.error ?? "unknown error"}`,
         );
       }
-      await writeSeededStatuses(ctx, floor.operations);
+      await writeSeededFacts(ctx, floor.operations);
     }
     return {
       buildingId: DEMO_BUILDING.id,

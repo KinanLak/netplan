@@ -62,7 +62,9 @@ const arePortsEqual = (a: ReadonlyArray<Port>, b: ReadonlyArray<Port>) => {
     return (
       port.id === other.id &&
       port.name === other.name &&
-      port.status === other.status
+      port.status === other.status &&
+      port.seen === other.seen &&
+      port.rearPortId === other.rearPortId
     );
   });
 };

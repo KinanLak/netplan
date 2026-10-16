@@ -142,8 +142,10 @@ export interface Port {
   /** Position among the device's ports of the same kind. */
   order: number;
   rearPortId?: PortId;
-  /** Operational state last observed, absent until a source reports it. */
+  /** The link last observed, absent until a source reports it. */
   status?: DeviceStatus;
+  /** A device of the site was seen on the port by its switch's last read. */
+  seen?: true;
   source?: SourceRef;
 }
 

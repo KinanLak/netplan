@@ -4,8 +4,15 @@
 import { normalizeMac } from "../devices/mac";
 import { librenmsId } from "./librenms";
 
-/** A LibreNMS port and the names a person may know it by. */
-export type LibreNMSPort = { id: number; names: Array<string> };
+/**
+ * A LibreNMS port, the names a person may know it by, and its link when
+ * LibreNMS knows it.
+ */
+export type LibreNMSPort = {
+  id: number;
+  names: Array<string>;
+  link?: "up" | "down";
+};
 
 /**
  * A forwarding table entry: a MAC address learnt on a LibreNMS port, and
@@ -24,7 +31,20 @@ export type SwitchPort = {
   name: string;
   /** The wall socket a trace from the port reaches, if any. */
   socketId: string | null;
+  /** The device a trace from the port ends at, if cabled. */
+  endId: string | null;
   cabled: boolean;
+};
+
+/**
+ * The MACs a read saw on a port where they tell whether a device is behind it
+ * (ADR 0025): an edge port, where any device of the site counts, or a port
+ * cabled to a device, which counts only when it carries one of them.
+ */
+export type PortPresence = {
+  portId: string;
+  macs: Array<string>;
+  deviceId?: string;
 };
 
 /** A MAC address seen on an edge port during a cycle. */
@@ -65,6 +85,18 @@ const fieldsOf = (item: unknown): Record<string, unknown> =>
     ? (item as Record<string, unknown>)
     : {};
 
+/**
+ * A port's link from its IF-MIB operational status; `testing` and `unknown`
+ * say nothing about it.
+ */
+const LINKS = new Map<string, "up" | "down">([
+  ["up", "up"],
+  ["down", "down"],
+  ["lowerLayerDown", "down"],
+  ["dormant", "down"],
+  ["notPresent", "down"],
+]);
+
 /** The ports of a `/api/v0/devices/:id/ports` answer. */
 export const readLibreNMSPorts = (body: unknown): Array<LibreNMSPort> =>
   listOf(body, "ports").flatMap((item) => {
@@ -74,7 +106,8 @@ export const readLibreNMSPorts = (body: unknown): Array<LibreNMSPort> =>
     const names = [fields.ifName, fields.ifDescr].filter(
       (name): name is string => typeof name === "string" && name.trim() !== "",
     );
-    return [{ id, names }];
+    const link = LINKS.get(String(fields.ifOperStatus));
+    return [{ id, names, ...(link && { link }) }];
   });
 
 /** The entries of a `/api/v0/devices/:id/fdb` answer. */
@@ -258,10 +291,27 @@ export const matchPorts = (
   return matched;
 };
 
+const macsByPort = (
+  fdb: ReadonlyArray<FdbEntry>,
+  matched: ReadonlyMap<number, string>,
+) => {
+  const macs = new Map<string, Set<string>>();
+  for (const entry of fdb) {
+    const portId = matched.get(entry.portId);
+    if (portId === undefined) continue;
+    macs.set(portId, (macs.get(portId) ?? new Set<string>()).add(entry.mac));
+  }
+  return macs;
+};
+
+/** A port whose cabling reaches a wall socket, or uncabled with few MACs. */
+const isEdge = (port: SwitchPort, macs: ReadonlySet<string>) =>
+  port.socketId !== null ||
+  (!port.cabled && macs.size <= MAX_UNCABLED_EDGE_MACS);
+
 /**
- * The MAC addresses seen on edge ports (ADR 0022): ports whose cabling
- * reaches a wall socket, and uncabled ports with few addresses. A MAC seen
- * on several is placed at a socket when one of them has one.
+ * The MAC addresses seen on edge ports (ADR 0022). A MAC seen on several is
+ * placed at a socket when one of them has one.
  */
 export const edgeSightings = (
   fdb: ReadonlyArray<FdbEntry>,
@@ -269,23 +319,10 @@ export const edgeSightings = (
   switchPorts: ReadonlyArray<SwitchPort>,
 ): Array<Sighting> => {
   const portsById = new Map(switchPorts.map((port) => [port.id, port]));
-  const macsByPort = new Map<string, Set<string>>();
-  for (const entry of fdb) {
-    const portId = matched.get(entry.portId);
-    if (portId === undefined) continue;
-    macsByPort.set(
-      portId,
-      (macsByPort.get(portId) ?? new Set<string>()).add(entry.mac),
-    );
-  }
   const sightings = new Map<string, Sighting>();
-  for (const [portId, macs] of macsByPort) {
+  for (const [portId, macs] of macsByPort(fdb, matched)) {
     const port = portsById.get(portId);
-    if (!port) continue;
-    const edge =
-      port.socketId !== null ||
-      (!port.cabled && macs.size <= MAX_UNCABLED_EDGE_MACS);
-    if (!edge) continue;
+    if (!port || !isEdge(port, macs)) continue;
     for (const mac of macs) {
       if (sightings.get(mac)?.socketId !== undefined) continue;
       sightings.set(mac, {
@@ -297,6 +334,22 @@ export const edgeSightings = (
     }
   }
   return [...sightings.values()];
+};
+
+/** Where a read may have seen a device behind a port (`PortPresence`). */
+export const portPresence = (
+  fdb: ReadonlyArray<FdbEntry>,
+  matched: ReadonlyMap<number, string>,
+  switchPorts: ReadonlyArray<SwitchPort>,
+): Array<PortPresence> => {
+  const portsById = new Map(switchPorts.map((port) => [port.id, port]));
+  return [...macsByPort(fdb, matched)].flatMap(([portId, macs]) => {
+    const port = portsById.get(portId);
+    if (!port) return [];
+    if (isEdge(port, macs)) return [{ portId, macs: [...macs] }];
+    if (port.endId === null) return [];
+    return [{ portId, macs: [...macs], deviceId: port.endId }];
+  });
 };
 
 /** Whether a device whose MAC addresses missed these many cycles is online. */

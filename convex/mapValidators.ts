@@ -59,6 +59,7 @@ export const newPort = v.object({
   order: v.number(),
   rearPortId: v.optional(v.string()),
   status: v.optional(deviceStatus),
+  seen: v.optional(v.literal(true)),
 });
 
 export const port = v.object({

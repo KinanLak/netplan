@@ -24,6 +24,7 @@ import { EMPTY_LIBRENMS_SETTINGS, polledSwitches } from "../src/sites/librenms";
 import { spotNextToSocket } from "../src/sites/socketPlacement";
 import {
   edgeSightings,
+  portPresence,
   freshFdb,
   freshSwitches,
   matchPorts,
@@ -57,6 +58,8 @@ type AtomicMapOperationInput =
       : never
     : never;
 
+const upOrDown = v.union(v.literal("up"), v.literal("down"));
+
 const sighting = v.object({
   mac: v.string(),
   portId: v.string(),
@@ -76,6 +79,18 @@ export const ownerOf = async (ctx: QueryCtx, siteId: string, mac: string) => {
     .withIndex("by_site_mac", (q) => q.eq("siteId", siteId).eq("mac", mac))
     .unique();
   return row ? await deviceOf(ctx, row.deviceId) : null;
+};
+
+/** Whether a device of the site carries one of these MACs. */
+const someOwned = async (
+  ctx: QueryCtx,
+  siteId: string,
+  macs: ReadonlyArray<string>,
+) => {
+  for (const mac of macs) {
+    if (await ownerOf(ctx, siteId, mac)) return true;
+  }
+  return false;
 };
 
 const sightingRowsOf = async (ctx: QueryCtx, siteId: string) =>
@@ -182,6 +197,7 @@ export const switchPorts = internalQuery({
       switchId: v.string(),
       name: v.string(),
       socketId: v.union(v.null(), v.string()),
+      endId: v.union(v.null(), v.string()),
       cabled: v.boolean(),
     }),
   ),
@@ -197,6 +213,7 @@ export const switchPorts = internalQuery({
           switchId,
           name: port.name,
           socketId: socket?.type === "wall-port" ? socket.objectId : null,
+          endId: end?.deviceId ?? null,
           cabled,
         });
       }
@@ -220,10 +237,26 @@ const setStatus = async (
 };
 
 /**
+ * Sets what a switch's read observed on each of its ports (ADR 0025), only
+ * where it changed: nothing clears both facts.
+ */
+const setPortFacts = async (
+  ctx: MutationCtx,
+  switchId: string,
+  factsOf: (port: Doc<"ports">) => { status?: "up" | "down"; seen?: true },
+) => {
+  for (const port of await portRowsOf(ctx, switchId)) {
+    const { status, seen } = factsOf(port);
+    if (port.status === status && port.seen === seen) continue;
+    await ctx.db.patch(port._id, { status, seen });
+  }
+};
+
+/**
  * Removes what rests on a switch read that has grown too old (ADR 0025): the
- * switch's status, and the status of devices last seen on it unless another
- * switch still vouches for them. Run every minute, so it holds when LibreNMS
- * fails, the switch is no longer polled, or cycles stop.
+ * switch's status and its ports' facts, and the status of devices last seen
+ * on it unless another switch still vouches for them. Run every minute, so it
+ * holds when LibreNMS fails, the switch is no longer polled, or cycles stop.
  */
 export const expireStaleReads = async (
   ctx: MutationCtx,
@@ -248,6 +281,7 @@ export const expireStaleReads = async (
   for (const switchId of stale) {
     const device = await deviceOf(ctx, switchId);
     if (device) await setStatus(ctx, device, undefined);
+    await setPortFacts(ctx, switchId, () => ({}));
   }
   const rows = await sightingRowsOf(ctx, site.objectId);
   const rowOf = new Map(rows.map((row) => [row.mac, row]));
@@ -368,7 +402,16 @@ export const recordSightings = internalMutation({
     readSwitches: v.array(
       v.object({
         switchId: v.string(),
-        status: v.optional(v.union(v.literal("up"), v.literal("down"))),
+        status: v.optional(upOrDown),
+      }),
+    ),
+    /** The links LibreNMS knows of the read switches' ports. */
+    links: v.array(v.object({ portId: v.string(), link: upOrDown })),
+    presence: v.array(
+      v.object({
+        portId: v.string(),
+        macs: v.array(v.string()),
+        deviceId: v.optional(v.string()),
       }),
     ),
     sightings: v.array(sighting),
@@ -386,7 +429,16 @@ export const recordSightings = internalMutation({
   ),
   handler: async (
     ctx,
-    { siteId, cycleId, baseUrl, readSwitches, sightings, tables },
+    {
+      siteId,
+      cycleId,
+      baseUrl,
+      readSwitches,
+      links,
+      presence,
+      sightings,
+      tables,
+    },
   ) => {
     const cycle = await cycleOf(ctx, siteId);
     if (cycle?.running?.cycleId !== cycleId) return null;
@@ -509,6 +561,24 @@ export const recordSightings = internalMutation({
       if (device) owners.set(deviceId, device);
     }
 
+    const seenPorts = new Set<string>();
+    for (const { portId, macs, deviceId } of presence) {
+      const device =
+        deviceId === undefined ? null : await deviceOf(ctx, deviceId);
+      const seen =
+        deviceId === undefined
+          ? await someOwned(ctx, siteId, macs)
+          : device !== null && macs.some((mac) => device.macs.includes(mac));
+      if (seen) seenPorts.add(portId);
+    }
+    const linkOf = new Map(links.map(({ portId, link }) => [portId, link]));
+    for (const switchId of readIds) {
+      await setPortFacts(ctx, switchId, (port) => ({
+        status: linkOf.get(port.objectId),
+        ...(seenPorts.has(port.objectId) && { seen: true }),
+      }));
+    }
+
     let placed = 0;
     for (const [deviceId, socketId] of socketMoves(
       sightings,
@@ -561,6 +631,7 @@ export const releaseLibreNMS = async (ctx: MutationCtx, siteId: string) => {
   for (const { switchId } of cycle.switchReads ?? []) {
     const device = await deviceOf(ctx, switchId);
     if (device) await setStatus(ctx, device, undefined);
+    await setPortFacts(ctx, switchId, () => ({}));
   }
   if (cycle.librenmsTables || cycle.switchReads) {
     await ctx.db.patch(cycle._id, {
@@ -688,12 +759,15 @@ export const collectFromLibreNMS = async (
   const fdb: Array<FdbEntry> = [];
   const tables: Array<{ deviceId: number; table: FdbTable }> = [];
   const matched = new Map<number, string>();
+  const links: Array<{ portId: string; link: "up" | "down" }> = [];
   const ports: Array<SwitchPort> = [];
   let readCount = 0;
   for (const device of plan.devices) {
     const [state, portList, fdbList] = await Promise.all([
       read(`/api/v0/devices/${device.id}`),
-      read(`/api/v0/devices/${device.id}/ports?columns=port_id,ifName,ifDescr`),
+      read(
+        `/api/v0/devices/${device.id}/ports?columns=port_id,ifName,ifDescr,ifOperStatus`,
+      ),
       read(`/api/v0/devices/${device.id}/fdb`),
     ]);
     if (!state.ok || !portList.ok || !fdbList.ok) {
@@ -711,12 +785,13 @@ export const collectFromLibreNMS = async (
     const own = await ctx.runQuery(internal.librenmsCycle.switchPorts, {
       switchIds: device.switchIds,
     });
+    const librenmsPorts = readLibreNMSPorts(portList.body);
+    const linkOf = new Map(librenmsPorts.map(({ id, link }) => [id, link]));
     // LibreNMS numbers ports across all its devices, so the maps merge.
-    for (const [portId, ownId] of matchPorts(
-      readLibreNMSPorts(portList.body),
-      own,
-    )) {
+    for (const [portId, ownId] of matchPorts(librenmsPorts, own)) {
       matched.set(portId, ownId);
+      const link = linkOf.get(portId);
+      if (link) links.push({ portId: ownId, link });
     }
     const entries = readLibreNMSFdb(fdbList.body);
     const { fresh, table } = freshFdb(
@@ -740,6 +815,8 @@ export const collectFromLibreNMS = async (
     cycleId,
     baseUrl,
     readSwitches,
+    links,
+    presence: portPresence(fdb, matched, ports),
     sightings: edgeSightings(fdb, matched, ports),
     tables,
   });

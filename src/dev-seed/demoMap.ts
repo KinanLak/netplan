@@ -118,7 +118,10 @@ const createFloorBuilder = (floorId: FloorId, slug: string) => {
       });
     },
 
-    /** The first `activePorts` ports are up, the others down. */
+    /**
+     * The first `activePorts` ports are up, the others down, and a device is
+     * seen on the first `seenPorts`.
+     */
     switch(
       key: string,
       name: string,
@@ -129,6 +132,7 @@ const createFloorBuilder = (floorId: FloorId, slug: string) => {
         portCount: number;
         portName: (n: number) => string;
         activePorts: number;
+        seenPorts: number;
       },
     ) {
       const compact = options.portCount <= 8;
@@ -151,6 +155,7 @@ const createFloorBuilder = (floorId: FloorId, slug: string) => {
           (port) => ({
             ...port,
             status: port.order <= options.activePorts ? "up" : "down",
+            ...(port.order <= options.seenPorts && { seen: true as const }),
           }),
         ),
       );
@@ -278,6 +283,7 @@ const groundFloor = (floorId: FloorId): Array<BatchSubOperation> => {
       portCount: 24,
       portName: cisco,
       activePorts: 1,
+      seenPorts: 0,
     },
   );
   const access = floor.switch(
@@ -290,6 +296,7 @@ const groundFloor = (floorId: FloorId): Array<BatchSubOperation> => {
       portCount: 48,
       portName: cisco,
       activePorts: 10,
+      seenPorts: 6,
     },
   );
   floor.cable(end(core, "interface", 1), end(access, "interface", 48));
@@ -408,6 +415,7 @@ const firstFloor = (floorId: FloorId): Array<BatchSubOperation> => {
       portCount: 8,
       portName: (n) => `Port ${n}`,
       activePorts: 6,
+      seenPorts: 4,
     },
   );
   const users = [

@@ -1,7 +1,13 @@
 import type { Port } from "@/types/map";
 import { Button } from "@/components/ui/button";
 import { ShortcutHintInline } from "@/components/ui/shortcut-hint";
-import { DEVICE_STATUS_LABELS } from "@/devices/status";
+import {
+  PORT_STATE_CLASSES,
+  PORT_STATE_LABELS,
+  portState,
+  shownPorts,
+} from "@/devices/portState";
+import type { PortState } from "@/devices/portState";
 import { cn } from "@/lib/utils";
 
 interface DrawerPortsSectionProps {
@@ -10,15 +16,25 @@ interface DrawerPortsSectionProps {
   onShowCables: () => void;
 }
 
-/** A patch panel's rear ports mirror its front ones, so only those show. */
+const LEGEND: ReadonlyArray<PortState> = ["seen", "up", "down"];
+
+// The port number reads on the filled colours, and in the status colour on
+// the outlined ones.
+const ON_STATE: Record<PortState, string> = {
+  seen: "text-primary-foreground",
+  up: "text-up",
+  down: "text-muted-foreground",
+  unknown: "text-primary-foreground",
+};
+
 export function DrawerPortsSection({
   ports,
   onShowCables,
 }: DrawerPortsSectionProps) {
-  const shown = ports.filter((port) => port.kind !== "rear");
+  const shown = shownPorts(ports);
   if (shown.length === 0) return null;
-  const count = (status: Port["status"]) =>
-    shown.filter((port) => port.status === status).length;
+  const count = (state: PortState) =>
+    shown.filter((port) => portState(port) === state).length;
   return (
     <section>
       <div className="mb-2 flex items-center justify-between">
@@ -42,26 +58,24 @@ export function DrawerPortsSection({
             key={port.id}
             className={cn(
               "flex h-4 w-4 items-center justify-center rounded-sm text-[8px]",
-              port.status === "up" && "bg-up text-primary-foreground",
-              port.status === "down" && "bg-down text-primary-foreground",
-              (port.status ?? "unknown") === "unknown" &&
-                "bg-unknown text-primary-foreground",
+              PORT_STATE_CLASSES[portState(port)],
+              ON_STATE[portState(port)],
             )}
-            title={`${port.name} : ${DEVICE_STATUS_LABELS[port.status ?? "unknown"]}`}
+            title={`${port.name} : ${PORT_STATE_LABELS[portState(port)]}`}
           >
             {port.order}
           </div>
         ))}
       </div>
-      <div className="mt-2 flex gap-3 text-xs text-muted-foreground">
-        <span className="flex items-center gap-1">
-          <span className="h-2 w-2 rounded-sm bg-up" />
-          {count("up")} actifs
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="h-2 w-2 rounded-sm bg-down" />
-          {count("down")} down
-        </span>
+      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+        {LEGEND.map((state) => (
+          <span key={state} className="flex items-center gap-1">
+            <span
+              className={cn("h-2 w-2 rounded-sm", PORT_STATE_CLASSES[state])}
+            />
+            {PORT_STATE_LABELS[state]} : {count(state)}
+          </span>
+        ))}
       </div>
     </section>
   );

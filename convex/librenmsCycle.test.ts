@@ -78,9 +78,14 @@ function fakeLibreNMS() {
       return Response.json({
         status: "ok",
         ports: [
-          { port_id: 101, ifName: "Gi1/0/1", ifDescr: "GigabitEthernet1/0/1" },
-          { port_id: 102, ifName: "Gi1/0/2" },
-          { port_id: "103", ifName: "Gi1/0/3" },
+          {
+            port_id: 101,
+            ifName: "Gi1/0/1",
+            ifDescr: "GigabitEthernet1/0/1",
+            ifOperStatus: "up",
+          },
+          { port_id: 102, ifName: "Gi1/0/2", ifOperStatus: "down" },
+          { port_id: "103", ifName: "Gi1/0/3", ifOperStatus: "up" },
         ],
       });
     }
@@ -225,6 +230,19 @@ const statusOf = async (admin: TestClient, deviceId: string) =>
       )?.metadata.status ?? null,
   );
 
+/** What the switch's ports show, by port number. */
+const portFacts = async (admin: TestClient) =>
+  await admin.run(async (ctx) =>
+    (
+      await ctx.db
+        .query("ports")
+        .withIndex("by_device", (q) => q.eq("deviceId", "device:sw"))
+        .collect()
+    )
+      .sort((a, b) => a.order - b.order)
+      .map(({ status, seen }) => ({ status, seen })),
+  );
+
 const sightings = async (admin: TestClient) =>
   await admin.run(async (ctx) =>
     (await ctx.db.query("macSightings").collect())
@@ -331,6 +349,50 @@ describe("the LibreNMS step", () => {
     expect(await statusOf(admin, "device:core")).toBeNull();
   });
 
+  it("shows each port's link, and where a device of the site is seen", async () => {
+    const { admin, siteId } = await siteWithLibreNMS();
+    librenms.state.fdb = [
+      { port_id: 101, mac_address: PC },
+      // Nobody carries the stranger's MAC: the port only shows its link.
+      { port_id: 102, mac_address: STRANGER },
+    ];
+    await cycle(admin, siteId);
+    expect(await portFacts(admin)).toEqual([
+      { status: "up", seen: true },
+      { status: "down", seen: undefined },
+      { status: "up", seen: undefined },
+    ]);
+
+    // A MAC on two edge ports shows a device behind both; one passing
+    // through to the core shows none behind the uplink.
+    librenms.state.fdb = [
+      { port_id: 101, mac_address: PC },
+      { port_id: 102, mac_address: PC },
+      { port_id: 103, mac_address: PRINTER },
+    ];
+    await cycle(admin, siteId);
+    expect((await portFacts(admin)).map(({ seen }) => seen)).toEqual([
+      true,
+      true,
+      undefined,
+    ]);
+
+    librenms.state.fdb = [];
+    await cycle(admin, siteId);
+    expect((await portFacts(admin))[0]).toEqual({
+      status: "up",
+      seen: undefined,
+    });
+
+    await admin.mutation(api.integrations.remove, { siteId, kind: "librenms" });
+    expect(await portFacts(admin)).toEqual(
+      Array.from({ length: 3 }, () => ({
+        status: undefined,
+        seen: undefined,
+      })),
+    );
+  });
+
   it("forgets the statuses a switch read long ago set, until it is read again", async () => {
     setSystemTime(new Date("2026-10-16T08:00:00Z"));
     const { admin, siteId, signIn } = await siteWithLibreNMS();
@@ -367,6 +429,10 @@ describe("the LibreNMS step", () => {
     await tick(admin);
     expect(await statusOf(admin, "device:pc")).toBeNull();
     expect(await statusOf(admin, "device:sw")).toBeNull();
+    expect((await portFacts(admin))[0]).toEqual({
+      status: undefined,
+      seen: undefined,
+    });
 
     // A cycle that reads no switch brings nothing back; one that reads it
     // does.
@@ -434,9 +500,23 @@ describe("the LibreNMS step", () => {
       baseUrl: LIBRENMS,
       settings: { switches: [{ switchId: "device:sw", device: null }] },
     });
+    const sw = await removed(admin, "device:sw");
+    expect(sw.ports[0]).toMatchObject({ status: "up", seen: true });
     setSystemTime(new Date("2026-10-16T10:16:00Z"));
     const later = await signIn();
     await tick(later);
+    await later.mutation(api.devices.create, {
+      siteId,
+      deviceId: "device:sw",
+      ...sw,
+    });
+    expect(await statusOf(later, "device:sw")).toBeNull();
+    expect(await portFacts(later)).toEqual(
+      Array.from({ length: 3 }, () => ({
+        status: undefined,
+        seen: undefined,
+      })),
+    );
 
     // The cycle no longer looks at the expired read, so nothing would
     // remove a status brought back from before.
@@ -938,6 +1018,8 @@ describe("the LibreNMS step", () => {
         cycleId,
         baseUrl: LIBRENMS,
         readSwitches: [{ switchId: "device:sw", status: "up" }],
+        links: [{ portId: "port:device:sw:interface:2", link: "up" }],
+        presence: [],
         sightings: [
           {
             mac: PC,

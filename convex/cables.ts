@@ -39,6 +39,7 @@ const portTableRow = v.object({
   kind: portKind,
   order: v.number(),
   status: v.optional(deviceStatus),
+  seen: v.optional(v.literal(true)),
   source: v.optional(sourceRef),
   cable: v.union(
     v.null(),
@@ -127,6 +128,7 @@ export const portTable = readerQuery({
           kind: row.kind,
           order: row.order,
           status: row.status,
+          seen: row.seen,
           source: row.source,
           cable:
             cable && far
