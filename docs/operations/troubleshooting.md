@@ -108,13 +108,18 @@ answer is final.
 ## LibreNMS switches
 
 The list names LibreNMS devices, so one row may stand for several Netplan
-switches. A row without notes reads "Lu". A red row was not read: its
-statuses stay as they were until they expire.
+switches. A row without notes reads "Lu". A row turns red when either the
+discovery or the read failed, and the note says which:
 
-- **An error from the table above**: reading the switch, its ports or its
-  forwarding table failed.
+- **An error from the table above**: LibreNMS failed to answer for this
+  switch, before asking for its discovery or while reading the switch, its
+  ports or its forwarding table. A failed read leaves its statuses as they
+  were until they expire. An error from the discovery step alone does not:
+  the read that follows it still updates them.
 - **"Sa découverte n'a pas pu être lancée."**: the token may not ask for a
-  discovery; a 4xx means it surely did not start.
+  discovery; a 4xx means it surely did not start. The switch is still read
+  and its statuses updated, from a table that may be as old as its last
+  discovery.
 - **"Sa découverte n'a pas fini à temps."** (not red): `last_discovered` did
   not change within 2 minutes. A slow poller, or a LibreNMS that does not
   report it ([Integrations](integrations.md)).
