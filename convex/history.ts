@@ -175,7 +175,9 @@ export const recordPresence = async (
 /**
  * Records where and how the network sees a device entering the inventory with
  * a MAC it already sighted: the device starts with the status that sighting
- * gives it, so the cycle, which records changes, would find none.
+ * gives it, so the cycle, which records changes, would find none. Where it
+ * was seen is recorded even when no read vouches for a status any more: the
+ * cycle that reads it on that port again would find no move.
  */
 export const recordArrival = async (
   ctx: MutationCtx,
@@ -186,10 +188,7 @@ export const recordArrival = async (
     .query("devices")
     .withIndex("by_object_id", (q) => q.eq("objectId", deviceId))
     .unique();
-  const status = device?.metadata.status;
-  if (!device || !PRESENT_TYPES.has(device.type) || status === undefined) {
-    return;
-  }
+  if (!device || !PRESENT_TYPES.has(device.type)) return;
   let latest: Doc<"macSightings"> | null = null;
   for (const mac of device.macs) {
     const row = await ctx.db
@@ -201,10 +200,18 @@ export const recordArrival = async (
     if (row && (!latest || row.seenAt > latest.seenAt)) latest = row;
   }
   if (!latest) return;
-  // A device brought back by undo where it was has not moved.
-  await recordLocated(ctx, device, await placeNamer(ctx)(latest), at, {
-    unlessLast: true,
-  });
+  // When the network saw it, which an expired read leaves hours back. A
+  // device brought back by undo where it was has not moved.
+  await recordLocated(
+    ctx,
+    device,
+    await placeNamer(ctx)(latest),
+    latest.seenAt,
+    {
+      unlessLast: true,
+    },
+  );
+  const status = device.metadata.status;
   if (status === "up") {
     await recordPresence(ctx, device, "online", at);
   } else if (status === "down") {

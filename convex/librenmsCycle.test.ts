@@ -805,6 +805,48 @@ describe("the LibreNMS step", () => {
     expect(await statusOf(later, "device:sw")).toBe("up");
   });
 
+  it("starts the history of a device made from a MAC seen before its read expired", async () => {
+    setSystemTime(new Date("2026-10-16T08:00:00Z"));
+    const { admin, siteId, signIn } = await siteWithLibreNMS();
+    librenms.state.fdb = [{ port_id: 101, mac_address: STRANGER }];
+    await cycle(admin, siteId);
+    // LibreNMS refuses the reads that follow, until the first one expires.
+    librenms.state.fdbStatus = 403;
+    setSystemTime(new Date("2026-10-16T10:16:00Z"));
+    const later = await signIn();
+    await tick(later);
+    await later.mutation(api.unknownMacs.createDevice, {
+      siteId,
+      mac: STRANGER,
+      deviceId: "device:stranger",
+      name: "Inconnu",
+    });
+    const history = async () =>
+      (
+        await later.query(api.history.forDevice, {
+          deviceId: "device:stranger",
+          paginationOpts: { numItems: 20, cursor: null },
+        })
+      ).page.toReversed();
+    // No read vouches for a status, but the network did see it there.
+    expect(await statusOf(later, "device:stranger")).toBeNull();
+    expect(await history()).toEqual([
+      expect.objectContaining({
+        kind: "located",
+        at: Date.parse("2026-10-16T08:00:00Z"),
+        place: expect.objectContaining({ portName: "GigabitEthernet1/0/1" }),
+      }),
+    ]);
+
+    // Read again on the same port: it did not move, it came online.
+    librenms.state.fdbStatus = 200;
+    await cycle(later, siteId);
+    expect((await history()).map(({ kind }) => kind)).toEqual([
+      "located",
+      "online",
+    ]);
+  });
+
   it("forgets the statuses a failing LibreNMS can no longer vouch for", async () => {
     setSystemTime(new Date("2026-10-16T08:00:00Z"));
     const { admin, siteId, signIn } = await siteWithLibreNMS();
