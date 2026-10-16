@@ -15,6 +15,7 @@ import {
   connectionCheck,
   cycleRun,
   encryptedSecret,
+  importedDevice,
   integrationKind,
   netboxSettings,
   runningCycle,
@@ -55,6 +56,8 @@ export default defineSchema({
     failures: v.number(),
     running: v.optional(runningCycle),
     last: v.optional(cycleRun),
+    /** NetBox changes slowly: it is imported every 15 minutes (ADR 0023). */
+    netboxImportedAt: v.optional(v.number()),
   }).index("by_site", ["siteId"]),
 
   buildings: defineTable({
@@ -89,7 +92,23 @@ export default defineSchema({
   })
     .index("by_object_id", ["objectId"])
     .index("by_site", ["siteId"])
-    .index("by_floor", ["placement.floorId"]),
+    .index("by_floor", ["placement.floorId"])
+    .index("by_site_source", [
+      "siteId",
+      "source.integration",
+      "source.externalId",
+    ]),
+
+  // Imported devices that wait for a person (ADR 0022): a suggestion when
+  // only a hostname matches, a conflict when the match is ambiguous.
+  importReviews: defineTable({
+    siteId: v.string(),
+    integration: integrationKind,
+    kind: v.union(v.literal("suggestion"), v.literal("conflict")),
+    device: importedDevice,
+    candidateIds: v.array(v.string()),
+    updatedAt: v.number(),
+  }).index("by_site", ["siteId", "integration", "device.externalId"]),
 
   // One row per MAC address of a device, so a MAC belongs to at most one
   // device of a site and a sighting finds its device in one lookup.
