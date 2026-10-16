@@ -22,8 +22,8 @@ import { getDeviceKindLabel } from "@/devices/deviceKindRegistry";
 import { matchesDeviceSearch } from "@/devices/search";
 import { createStandaloneObjectId } from "@/lib/identity";
 import { INTEGRATION_LABELS } from "@/sites/integrations";
-import { portLabel } from "@/devices/portState";
-import { endLabel, useCableCommands } from "@/devices/useCableCommands";
+import { endLabel, portLabel } from "@/devices/portState";
+import { useCableCommands } from "@/devices/useCableCommands";
 import { api } from "../../../convex/_generated/api";
 
 type PortTable = NonNullable<FunctionReturnType<typeof api.cables.portTable>>;

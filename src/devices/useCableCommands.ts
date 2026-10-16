@@ -1,20 +1,12 @@
 import { useMutation } from "convex/react";
 import { toast } from "sonner";
-import { portLabel } from "@/devices/portState";
 import { failureMessage } from "@/lib/errors";
-import type { Port } from "@/types/map";
 import { api } from "../../convex/_generated/api";
 
 type CableEnd = { deviceId: string; portId: string };
 type NewCable = { id: string; a: CableEnd; b: CableEnd };
 
 const UNDO_TOAST_MS = 10_000;
-
-/** One end of a cable as a toast names it. */
-export const endLabel = (
-  deviceName: string,
-  port: Pick<Port, "name" | "kind">,
-): string => `« ${deviceName} » ${portLabel(port)}`;
 
 /**
  * Cabling and unplugging, from the port table or the map (ADR 0025). Cables

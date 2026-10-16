@@ -2,10 +2,11 @@ import { ViewportPortal, useReactFlow, useStore } from "@xyflow/react";
 import type { ReactFlowState } from "@xyflow/react";
 import { useEffect, useEffectEvent, useState } from "react";
 import { toast } from "sonner";
-import { cableDropResult, cableStartRefusal } from "@/canvas/cableDrawing";
+import { cableDropResult, cableStart } from "@/canvas/cableDrawing";
 import type { CableDrop } from "@/canvas/cableDrawing";
 import { TRACED_ON_ASK } from "@/canvas/cablePaths";
-import { portIdAt } from "@/canvas/hooks/useCableGrip";
+import { PORT_ID_ATTRIBUTE, portIdAt } from "@/canvas/hooks/useCableGrip";
+import { Button } from "@/components/ui/button";
 import {
   Command,
   CommandEmpty,
@@ -14,12 +15,12 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Popover, PopoverContent } from "@/components/ui/popover";
-import { portLabel } from "@/devices/portState";
-import { endLabel, useCableCommands } from "@/devices/useCableCommands";
+import { endLabel, portLabel } from "@/devices/portState";
+import { useCableCommands } from "@/devices/useCableCommands";
 import { createStandaloneObjectId } from "@/lib/identity";
 import { useMapDocumentActions } from "@/map-session/useMapDocument";
 import { useMapStore } from "@/store/useMapStore";
-import type { CableDraft, DeviceId, Port, Position } from "@/types/map";
+import type { Cable, CableDraft, DeviceId, Port, Position } from "@/types/map";
 
 // One toast however often a refusal is said, as a mount effect may run twice.
 const REFUSAL_TOAST = "cable-draft-refusal";
@@ -47,13 +48,105 @@ const dropAt = (client: Position): CableDrop | null => {
 };
 
 /**
- * A cable being drawn on the map (ADR 0025): a line from the device it
- * starts at to the pointer, until it is dropped on another device, then
- * the free port to cable there when the device has several.
+ * A port pressed on the map (ADR 0025): a free one draws a cable, a line
+ * from its device to the pointer until it is dropped on another device,
+ * then the free port to cable there when the device has several. A cabled
+ * one offers to unplug its cable.
  */
 export function CableDraftLayer() {
   const draft = useMapStore((s) => s.cableDraft);
-  return draft ? <DrawingCable key={draft.portId} draft={draft} /> : null;
+  return draft ? <PressedPort key={draft.portId} draft={draft} /> : null;
+}
+
+function PressedPort({ draft }: { draft: CableDraft }) {
+  const { getDocument } = useMapDocumentActions();
+  // What a press does is settled when it happens: another person's edit
+  // does not turn a cable being drawn into a menu.
+  const [start] = useState(() => cableStart(draft, getDocument()));
+  switch (start.kind) {
+    case "draw":
+      return <DrawingCable draft={draft} />;
+    case "unplug":
+      return (
+        <UnplugMenu
+          portId={draft.portId}
+          cable={start.cable}
+          label={start.label}
+        />
+      );
+    case "refused":
+      return <RefusedStart reason={start.reason} />;
+  }
+}
+
+function RefusedStart({ reason }: { reason: string }) {
+  const setCableDraft = useMapStore((s) => s.setCableDraft);
+  const refuse = useEffectEvent(() => {
+    toast(reason, { id: REFUSAL_TOAST });
+    setCableDraft(null);
+  });
+  useEffect(() => refuse(), []);
+  return null;
+}
+
+/** The cable plugged into a pressed port, and a way to unplug it. */
+function UnplugMenu({
+  portId,
+  cable,
+  label,
+}: {
+  portId: CableDraft["portId"];
+  cable: Cable;
+  label: string;
+}) {
+  const setCableDraft = useMapStore((s) => s.setCableDraft);
+  const { unplug } = useCableCommands();
+  const [anchor, setAnchor] = useState<Element | null>(null);
+
+  // The menu opens once the press is released, so that the release does not
+  // count as a press outside it.
+  const open = useEffectEvent(() => {
+    const port = window.document.querySelector(
+      `[${PORT_ID_ATTRIBUTE}="${CSS.escape(portId)}"]`,
+    );
+    if (port) setAnchor(port);
+    else setCableDraft(null);
+  });
+  const cancel = useEffectEvent(() => setCableDraft(null));
+  useEffect(() => {
+    const up = () => open();
+    const abandon = () => cancel();
+    window.addEventListener("pointerup", up, { once: true });
+    window.addEventListener("pointercancel", abandon, { once: true });
+    return () => {
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", abandon);
+    };
+  }, []);
+
+  if (!anchor) return null;
+  return (
+    <Popover
+      open
+      onOpenChange={(isOpen) => {
+        if (!isOpen) setCableDraft(null);
+      }}
+    >
+      <PopoverContent anchor={anchor} className="w-auto max-w-80 gap-3 p-3">
+        <p>{label}</p>
+        <Button
+          variant="destructive"
+          size="sm"
+          onClick={() => {
+            setCableDraft(null);
+            void unplug(cable.id, label);
+          }}
+        >
+          Débrancher
+        </Button>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 function DrawingCable({ draft }: { draft: CableDraft }) {
@@ -137,14 +230,6 @@ function DrawingCable({ draft }: { draft: CableDraft }) {
   });
 
   const onCancel = useEffectEvent(() => setCableDraft(null));
-
-  const refuseStart = useEffectEvent(() => {
-    const refusal = cableStartRefusal(draft, getDocument());
-    if (!refusal) return;
-    toast(refusal, { id: REFUSAL_TOAST });
-    setCableDraft(null);
-  });
-  useEffect(() => refuseStart(), []);
 
   // The pointer is followed across the whole window until the cable is
   // dropped; then the picker, if any, takes over.

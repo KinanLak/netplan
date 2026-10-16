@@ -15,8 +15,8 @@ export const portIdAt = (target: EventTarget | null): PortId | undefined => {
 
 /**
  * The pointer-down handler of a device's ports, and whether they are grips:
- * in edit mode, pressing a free port starts drawing a cable from it instead
- * of moving the device.
+ * in edit mode, pressing a port draws a cable from it, or unplugs the one
+ * there, instead of moving the device.
  */
 export const useCableGrip = (deviceId: DeviceId) => {
   const isEditMode = useIsEditMode();
@@ -33,7 +33,7 @@ export const useCableGrip = (deviceId: DeviceId) => {
     event.stopPropagation();
     // No text selection follows the cable across the plan.
     event.preventDefault();
-    // The cable layer refuses a port already cabled.
+    // The cable layer settles whether the press draws or unplugs.
     setCableDraft({ deviceId, portId });
   };
 
