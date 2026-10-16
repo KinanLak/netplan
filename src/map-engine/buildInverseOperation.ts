@@ -83,11 +83,12 @@ export function buildInverseOperation(
         kind: "device.create",
         meta: operation.meta,
         device,
-        ports: snapshotBeforeOperation.ports.filter(
-          (port) => port.deviceId === device.id,
-        ),
-        cables: snapshotBeforeOperation.cables.filter((cable) =>
-          cableTouches(cable, device.id),
+        ports: snapshotBeforeOperation.ports
+          .filter((port) => port.deviceId === device.id)
+          .map(({ source: _, ...port }) => port),
+        // A source's cable comes back with its next sync, not as a manual one.
+        cables: snapshotBeforeOperation.cables.filter(
+          (cable) => cableTouches(cable, device.id) && !cable.source,
         ),
       };
     }

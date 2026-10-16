@@ -17,7 +17,11 @@ import {
   macListProblem,
   MAX_MACS_PER_DEVICE,
 } from "../src/devices/identity";
-import { cableError, portListError } from "../src/devices/ports";
+import {
+  MAX_PORTS_PER_DEVICE,
+  cablesToLay,
+  portListError,
+} from "../src/devices/ports";
 import {
   cableRow,
   cableRowAt,
@@ -319,6 +323,8 @@ interface OperationScope {
   cablingDeviceIds: Set<string>;
   /** Ports created cables plug into, and created cable ids. */
   cablePortIds: Set<string>;
+  /** Ports created devices would have, which must not exist yet. */
+  newPortIds: Set<string>;
   cableIds: Set<string>;
   overlayFileIds: Set<string>;
 }
@@ -337,6 +343,7 @@ const collectOperationScope = (
     wallIds: new Set(),
     cablingDeviceIds: new Set(),
     cablePortIds: new Set(),
+    newPortIds: new Set(),
     cableIds: new Set(),
     overlayFileIds: new Set(),
   },
@@ -346,12 +353,23 @@ const collectOperationScope = (
       scope.floorIds.add(operation.device.floorId);
       scope.deviceIds.add(operation.device.id);
       scope.cablingDeviceIds.add(operation.device.id);
-      for (const value of operation.cables ?? []) {
-        scope.cableIds.add(value.id);
-        scope.cablePortIds.add(value.a.portId);
-        scope.cablePortIds.add(value.b.portId);
+      // Planning rejects longer lists before it would need these rows.
+      if ((operation.ports?.length ?? 0) <= MAX_PORTS_PER_DEVICE) {
+        for (const port of portsForNewDevice(
+          operation.device.id,
+          operation.device.type,
+          operation.ports,
+        )) {
+          scope.newPortIds.add(port.id);
+        }
       }
-      // Planning rejects a longer list before it would need the owners.
+      if ((operation.cables?.length ?? 0) <= MAX_PORTS_PER_DEVICE) {
+        for (const value of operation.cables ?? []) {
+          scope.cableIds.add(value.id);
+          scope.cablePortIds.add(value.a.portId);
+          scope.cablePortIds.add(value.b.portId);
+        }
+      }
       if (operation.device.macs.length <= MAX_MACS_PER_DEVICE) {
         for (const mac of operation.device.macs) {
           scope.createdMacs.push({ floorId: operation.device.floorId, mac });
@@ -435,40 +453,50 @@ const loadFloorSites = async (
 
 /** The ports and cables the scope names, with the cable in each port. */
 const loadCabling = async (ctx: MutationCtx, scope: OperationScope) => {
-  const [devicePorts, deviceCables, portRefs, portCables, cableRefs] =
-    await Promise.all([
-      Promise.all(
-        [...scope.cablingDeviceIds].map((deviceId) =>
-          portRowsOf(ctx, deviceId),
-        ),
+  const [
+    devicePorts,
+    deviceCables,
+    portRefs,
+    newPortRefs,
+    portCables,
+    cableRefs,
+  ] = await Promise.all([
+    Promise.all(
+      [...scope.cablingDeviceIds].map((deviceId) => portRowsOf(ctx, deviceId)),
+    ),
+    Promise.all(
+      [...scope.cablingDeviceIds].map((deviceId) => cableRowsOf(ctx, deviceId)),
+    ),
+    Promise.all(
+      [...scope.cablePortIds].map((objectId) =>
+        ctx.db
+          .query("ports")
+          .withIndex("by_object_id", (q) => q.eq("objectId", objectId))
+          .unique(),
       ),
-      Promise.all(
-        [...scope.cablingDeviceIds].map((deviceId) =>
-          cableRowsOf(ctx, deviceId),
-        ),
+    ),
+    Promise.all(
+      [...scope.newPortIds].map((objectId) =>
+        ctx.db
+          .query("ports")
+          .withIndex("by_object_id", (q) => q.eq("objectId", objectId))
+          .first(),
       ),
-      Promise.all(
-        [...scope.cablePortIds].map((objectId) =>
-          ctx.db
-            .query("ports")
-            .withIndex("by_object_id", (q) => q.eq("objectId", objectId))
-            .unique(),
-        ),
+    ),
+    Promise.all(
+      [...scope.cablePortIds].map((portId) => cableRowAt(ctx, portId)),
+    ),
+    Promise.all(
+      [...scope.cableIds].map((objectId) =>
+        ctx.db
+          .query("cables")
+          .withIndex("by_object_id", (q) => q.eq("objectId", objectId))
+          .unique(),
       ),
-      Promise.all(
-        [...scope.cablePortIds].map((portId) => cableRowAt(ctx, portId)),
-      ),
-      Promise.all(
-        [...scope.cableIds].map((objectId) =>
-          ctx.db
-            .query("cables")
-            .withIndex("by_object_id", (q) => q.eq("objectId", objectId))
-            .unique(),
-        ),
-      ),
-    ]);
+    ),
+  ]);
   const ports = new Map<string, PlannedPort>();
-  for (const row of [...devicePorts.flat(), ...portRefs]) {
+  for (const row of [...devicePorts.flat(), ...portRefs, ...newPortRefs]) {
     if (!row) continue;
     const { _id, _creationTime, ...value } = row;
     ports.set(row.objectId, { ...value, rowId: _id });
@@ -792,6 +820,11 @@ const planDeviceCreate = (
   if (identityEditError(operation.device)) return "Invalid device identity";
   const portsError = portListError(operation.device.id, ports);
   if (portsError) return portsError;
+  if (cables.length > MAX_PORTS_PER_DEVICE) return "Too many cables";
+  // Another device's ids may embed this one's, so a port id can be taken.
+  if (ports.some((port) => state.ports.has(port.id))) {
+    return "Port object id already exists";
+  }
 
   const placementError = validateDevicePlacement(state, {
     objectId: operation.device.id,
@@ -818,7 +851,14 @@ const planDeviceCreate = (
     state.ports.set(port.id, row);
     state.plan.push({ kind: "insertPort", value: row });
   }
-  return planCables(state, siteId, id, cables, operation.meta);
+  return planCables(
+    state,
+    siteId,
+    id,
+    new Set(ports.map((port) => port.id)),
+    cables,
+    operation.meta,
+  );
 };
 
 /** Whether a device's loaded ports and cables are the ones given. */
@@ -845,35 +885,28 @@ const sameCabling = (
 
 /**
  * Lays a new device's cables. Each plugs into one of its ports; the other
- * end may be any free port of the site, on a floor or not, and only the
- * device's floor is affected: the far floor's cables follow from its query.
+ * end may be any port of the site, on a floor or not, and only the device's
+ * floor is affected: the far floor's cables follow from its query. A cable
+ * that no longer fits is left out (`cablesToLay`).
  */
 const planCables = (
   state: PlanningState,
   siteId: string,
   deviceId: string,
+  ownPortIds: ReadonlySet<string>,
   cables: Array<NewCable>,
   meta: OperationInput["meta"],
 ): string | null => {
-  for (const value of cables) {
-    const plugsIn = [value.a, value.b].some(
-      (end) =>
-        end.deviceId === deviceId &&
-        state.ports.get(end.portId)?.deviceId === deviceId,
-    );
-    if (!plugsIn) return "Cable does not plug into the device";
-    if (state.cables.has(value.id)) {
-      return "Cable object id already exists with different payload";
-    }
-    const error = cableError(
-      value,
-      (portId) => {
-        const port = state.ports.get(portId);
-        return port?.siteId === siteId ? port : undefined;
-      },
-      (portId) => state.cabledPorts.has(portId),
-    );
-    if (error) return error;
+  const result = cablesToLay(deviceId, ownPortIds, cables, {
+    farPortOf: (end) => {
+      const port = state.ports.get(end.portId);
+      return port?.siteId === siteId ? port : undefined;
+    },
+    isCabled: (portId) => state.cabledPorts.has(portId),
+    cableExists: (cableId) => state.cables.has(cableId),
+  });
+  if ("error" in result) return result.error;
+  for (const value of result.cables) {
     const row = cableRow(siteId, value, meta.createdAt, meta.clientId);
     state.cables.set(value.id, row);
     state.cabledPorts.set(value.a.portId, value.id);

@@ -463,7 +463,7 @@ describe("the site inventory", () => {
     expect(after.cables).toEqual([cable.id]);
   });
 
-  it("refuses a cable into a port that already holds one", async () => {
+  it("leaves out a cable whose far port holds another since, and refuses a taken port id", async () => {
     const t = await signedInTest();
     const { siteId } = await siteWithFloor(t);
     const cableTo = (id: string, deviceId: string) => ({
@@ -485,23 +485,43 @@ describe("the site inventory", () => {
       cables: [cableTo("cable:first", "device:first")],
     });
 
+    await t.mutation(api.devices.create, {
+      siteId,
+      deviceId: "device:second",
+      type: "pc",
+      identity: identity("Second", []),
+      cables: [cableTo("cable:second", "device:second")],
+    });
+    // `device:hub:interface`'s own port 1 has the id of the hub's port 1.
     await expect(
       t.mutation(api.devices.create, {
         siteId,
-        deviceId: "device:second",
+        deviceId: "device:hub:interface",
         type: "pc",
-        identity: identity("Second", []),
-        cables: [cableTo("cable:second", "device:second")],
+        identity: identity("Imposteur", []),
+        ports: [
+          {
+            id: "port:device:hub:interface:1",
+            deviceId: "device:hub:interface",
+            name: "1",
+            kind: "interface",
+            order: 1,
+          },
+        ],
       }),
-    ).rejects.toThrow("rebranché");
-    expect(
-      await t.run(async (ctx) =>
-        ctx.db
-          .query("devices")
-          .withIndex("by_object_id", (q) => q.eq("objectId", "device:second"))
-          .unique(),
+    ).rejects.toThrow("ports");
+
+    const rows = await t.run(async (ctx) => ({
+      second: await ctx.db
+        .query("devices")
+        .withIndex("by_object_id", (q) => q.eq("objectId", "device:second"))
+        .unique(),
+      cables: (await ctx.db.query("cables").collect()).map(
+        (row) => row.objectId,
       ),
-    ).toBeNull();
+    }));
+    expect(rows.second).not.toBeNull();
+    expect(rows.cables).toEqual(["cable:first"]);
   });
 
   it("deletes neither a placed device nor one its integration owns", async () => {

@@ -105,6 +105,26 @@ describe("buildInverseOperation", () => {
     expect(restored.cables).toEqual(snapshot.cables);
   });
 
+  it("leaves a source's cable to its next sync when bringing a device back", () => {
+    const { a, snapshot } = cabledPair();
+    const source = { integration: "netbox" as const, externalId: "42" };
+    const sourced = {
+      ...snapshot,
+      ports: snapshot.ports.map((port) => ({ ...port, source })),
+      cables: snapshot.cables.map((cable) => ({ ...cable, source })),
+    };
+
+    const inverse = buildInverseOperation(sourced, {
+      kind: "device.delete",
+      meta: meta(1),
+      deviceId: a.id,
+    });
+
+    expect(inverse).toMatchObject({ kind: "device.create", cables: [] });
+    if (inverse?.kind !== "device.create") return;
+    expect(inverse.ports?.some((port) => "source" in port)).toBe(false);
+  });
+
   it("puts an unplaced device back, and takes a placed one off", () => {
     const { a, snapshot } = cabledPair();
     const unplace: MapOperation = {

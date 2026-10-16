@@ -1,5 +1,10 @@
-import type { Cable, Device, MapDocumentSnapshot } from "@/types/map";
-import { cableTouches, defaultPorts, portListError } from "@/devices/ports";
+import type { Device, MapDocumentSnapshot } from "@/types/map";
+import {
+  cableTouches,
+  cablesToLay,
+  defaultPorts,
+  portListError,
+} from "@/devices/ports";
 import {
   applyOverlayPatch,
   isPatchBlockedByLock,
@@ -129,26 +134,41 @@ export function applyOperation(
       }
       const { device } = operation;
       const ports = operation.ports ?? defaultPorts(device.id, device.type);
-      const cables = operation.cables ?? [];
-      // The far end of a cable may be on another floor, which only the
-      // server knows; here each cable must at least plug into this device.
-      const portIds = new Set<string>(ports.map((port) => port.id));
-      const plugsIn = (cable: Cable) =>
-        [cable.a, cable.b].some(
-          (end) => end.deviceId === device.id && portIds.has(end.portId),
-        );
-      if (portListError(device.id, ports) || !cables.every(plugsIn)) {
+      const ownPortIds = new Set<string>(ports.map((port) => port.id));
+      // Another floor's ports are the server's to check; a far end on this
+      // floor is checked here as it will be there.
+      const cabled = new Set<string>(
+        snapshot.cables.flatMap((cable) => [cable.a.portId, cable.b.portId]),
+      );
+      const result = cablesToLay(
+        device.id,
+        ownPortIds,
+        operation.cables ?? [],
+        {
+          farPortOf: (end) =>
+            snapshot.ports.find((port) => port.id === end.portId) ??
+            (snapshot.devices.some((item) => item.id === end.deviceId)
+              ? undefined
+              : end),
+          isCabled: (portId) => cabled.has(portId),
+          cableExists: (cableId) =>
+            snapshot.cables.some((cable) => cable.id === cableId),
+        },
+      );
+      if (
+        portListError(device.id, ports) ||
+        ports.some((port) =>
+          snapshot.ports.some((item) => item.id === port.id),
+        ) ||
+        "error" in result
+      ) {
         return unchanged(snapshot, "invalid-ports");
       }
-      const known = new Set(snapshot.cables.map((cable) => cable.id));
       return changed({
         ...snapshot,
         devices: [...snapshot.devices, device],
         ports: [...snapshot.ports, ...ports],
-        cables: [
-          ...snapshot.cables,
-          ...cables.filter((cable) => !known.has(cable.id)),
-        ],
+        cables: [...snapshot.cables, ...result.cables],
       });
     }
 

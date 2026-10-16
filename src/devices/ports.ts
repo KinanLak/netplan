@@ -187,22 +187,55 @@ export const cabledDeviceIds = (
   return [...seen];
 };
 
+type CableEnd = CableShape["a"];
+
 /**
- * Why a cable cannot be laid, or `null`. `portOf` knows the ports it may
- * plug into, `isCabled` those that already hold a cable.
+ * The cables a new device lays, or why its list is malformed. A cable must
+ * plug into one of the device's `ownPortIds`; one whose far end has gone,
+ * or holds another cable since, is left out rather than refused, so undoing
+ * a deletion always brings the device back with what still fits.
+ * `farPortOf` finds a port of another device, `isCabled` and `cableExists`
+ * describe the site as it stands.
  */
-export const cableError = (
-  cable: CableShape,
-  portOf: (id: string) => { deviceId: string } | undefined,
-  isCabled: (id: string) => boolean,
-): string | null => {
-  if (!CABLE_ID.test(cable.id)) return "Invalid cable id";
-  if (cable.a.portId === cable.b.portId) return "A cable joins two ports";
-  for (const end of [cable.a, cable.b]) {
-    if (portOf(end.portId)?.deviceId !== end.deviceId) {
-      return "Cable port not found";
+export const cablesToLay = <C extends CableShape>(
+  deviceId: string,
+  ownPortIds: ReadonlySet<string>,
+  cables: ReadonlyArray<C>,
+  site: {
+    farPortOf: (end: CableEnd) => { deviceId: string } | undefined;
+    isCabled: (portId: string) => boolean;
+    cableExists: (cableId: string) => boolean;
+  },
+): { error: string } | { cables: Array<C> } => {
+  if (cables.length > MAX_PORTS_PER_DEVICE) return { error: "Too many cables" };
+  const own = (end: CableEnd) => end.deviceId === deviceId;
+  const laid: Array<C> = [];
+  const taken = new Set<string>();
+  const laidIds = new Set<string>();
+  for (const cable of cables) {
+    if (!CABLE_ID.test(cable.id)) return { error: "Invalid cable id" };
+    const ends = [cable.a, cable.b];
+    if (cable.a.portId === cable.b.portId) {
+      return { error: "A cable joins two ports" };
     }
-    if (isCabled(end.portId)) return "Port already cabled";
+    if (!ends.some(own))
+      return { error: "Cable does not plug into the device" };
+    if (ends.some((end) => own(end) && !ownPortIds.has(end.portId))) {
+      return { error: "Cable port not found" };
+    }
+    const fits =
+      !site.cableExists(cable.id) &&
+      !laidIds.has(cable.id) &&
+      ends.every(
+        (end) =>
+          (own(end) || site.farPortOf(end)?.deviceId === end.deviceId) &&
+          !site.isCabled(end.portId) &&
+          !taken.has(end.portId),
+      );
+    if (!fits) continue;
+    for (const end of ends) taken.add(end.portId);
+    laidIds.add(cable.id);
+    laid.push(cable);
   }
-  return null;
+  return { cables: laid };
 };

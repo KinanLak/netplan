@@ -230,7 +230,7 @@ describe("mapOperations.apply", () => {
     expect(result.error).toContain("wall");
   });
 
-  it("lays a cable to another floor of the site, shown on both, never to another site", async () => {
+  it("lays a cable to another floor of the site, shown on both, and leaves out one to another site", async () => {
     const t = await signedInTest();
     const siteId = await createTestSite(t);
     const floorA = await freshFloor(t, siteId);
@@ -265,8 +265,10 @@ describe("mapOperations.apply", () => {
     expect(docA.cables.map((item) => item.id)).toEqual(["cable:device:b"]);
     expect(docB.cables.map((item) => item.id)).toEqual(["cable:device:b"]);
     expect(docA.ports.map((item) => item.id)).toEqual([portOf("device:a")]);
-    expect(elsewhere.status).toBe("rejected");
-    expect(elsewhere.error).toContain("Cable port not found");
+    expect(elsewhere.status).toBe("applied");
+    const docOther = await getFloorDocument(t, otherSite);
+    expect(docOther.devices.map((item) => item.id)).toEqual(["device:c"]);
+    expect(docOther.cables).toEqual([]);
   });
 
   it("refuses ports that are not the device's and cables it cannot hold", async () => {
@@ -306,6 +308,15 @@ describe("mapOperations.apply", () => {
       });
 
     const stolenPort = await attempt(5, { ports: [foreignPort()] });
+    // `device:hub:interface`'s own port 1 has the id of the hub's port 1.
+    const takenPort = await t.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "device.create",
+        meta: meta(9),
+        device: device("device:hub:interface", floorId, 900),
+        ports: [{ ...foreignPort(), deviceId: "device:hub:interface" }],
+      },
+    });
     const occupied = await attempt(6, {
       cables: [cable("cable:occupied", "device:try-6", "device:hub")],
     });
@@ -317,13 +328,16 @@ describe("mapOperations.apply", () => {
     });
 
     expect(stolenPort.error).toContain("Invalid port id");
-    expect(occupied.error).toContain("Port already cabled");
+    expect(takenPort.error).toContain("Port object id already exists");
     expect(badId.error).toContain("Invalid cable id");
     expect(notPlugged.error).toContain("does not plug into");
+    // A cable into a port that holds another is left out, not refused.
+    expect(occupied.status).toBe("applied");
     const document = await getFloorDocument(t, floorId);
     expect(document.devices.map((item) => item.id).sort()).toEqual([
       "device:first",
       "device:hub",
+      "device:try-6",
     ]);
     expect(document.cables.map((item) => item.id)).toEqual([
       "cable:device:first",
@@ -374,6 +388,52 @@ describe("mapOperations.apply", () => {
       before.ports.map((item) => item.id).sort(),
     );
     expect(restored.cables).toEqual(before.cables);
+  });
+
+  it("undo of a deletion brings the device back without a cable whose far end has gone", async () => {
+    const t = await signedInTest();
+    const siteId = await createTestSite(t);
+    const floorA = await freshFloor(t, siteId);
+    const floorB = await freshFloor(t, siteId);
+    await t.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "device.create",
+        meta: meta(40),
+        device: device("device:a", floorA, 0),
+      },
+    });
+    await t.mutation(api.mapOperations.apply, {
+      operation: {
+        ...cabledTo("device:b", floorB, 0, "device:a"),
+        meta: meta(41),
+      },
+    });
+    const before = await getFloorDocument(t, floorB);
+    for (const [seq, deviceId] of [
+      [42, "device:b"],
+      [43, "device:a"],
+    ] as const) {
+      await t.mutation(api.mapOperations.apply, {
+        operation: { kind: "device.delete", meta: meta(seq), deviceId },
+      });
+    }
+
+    // Undo on floor B, whose cable's far end left with `device:a`.
+    const undo = await t.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "device.create",
+        meta: meta(44),
+        device: device("device:b", floorB, 0),
+        ports: before.ports.filter((item) => item.deviceId === "device:b"),
+        cables: before.cables.map(({ source: _, ...item }) => item),
+      },
+    });
+
+    expect(undo.status).toBe("applied");
+    const restored = await getFloorDocument(t, floorB);
+    expect(restored.devices.map((item) => item.id)).toEqual(["device:b"]);
+    expect(restored.ports.map((item) => item.id)).toEqual([portOf("device:b")]);
+    expect(restored.cables).toEqual([]);
   });
 
   it("rejects walls.add atomically without inserting earlier valid walls", async () => {
@@ -431,13 +491,27 @@ describe("mapOperations.apply", () => {
             kind: "device.create",
             device: device("device:batch-created", floorId, 0),
           },
-          cabledTo("device:batch-cabled", floorId, 200, "device:missing"),
+          {
+            ...cabledTo(
+              "device:batch-cabled",
+              floorId,
+              200,
+              "device:batch-created",
+            ),
+            cables: [
+              cable(
+                "link:batch",
+                "device:batch-cabled",
+                "device:batch-created",
+              ),
+            ],
+          },
         ],
       },
     });
 
     expect(result.status).toBe("rejected");
-    expect(result.error).toContain("Cable port not found");
+    expect(result.error).toContain("Invalid cable id");
     const document = await getFloorDocument(t, floorId);
     expect(document.devices).toEqual([]);
     expect(document.ports).toEqual([]);
@@ -531,7 +605,12 @@ describe("mapOperations.apply", () => {
           kind: "device.create" as const,
           device: device("device:retry-rejected", floorId, 0),
         },
-        cabledTo("device:retry-cabled", floorId, 200, "device:missing"),
+        {
+          ...cabledTo("device:retry-cabled", floorId, 200, "device:missing"),
+          cables: [
+            cable("link:retry", "device:retry-cabled", "device:missing"),
+          ],
+        },
       ],
     };
 

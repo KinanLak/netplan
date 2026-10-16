@@ -4,7 +4,8 @@ import type { Doc } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import type { cable, newCable, newPort, port } from "../mapValidators";
 import {
-  cableError,
+  MAX_PORTS_PER_DEVICE,
+  cablesToLay,
   defaultPorts,
   portListError,
 } from "../../src/devices/ports";
@@ -119,10 +120,13 @@ export const deleteDeviceCabling = async (
       const { source: _, ...value } = toPort(row);
       return value;
     }),
-    cables: cables.map((row) => {
-      const { source: _, ...value } = toCable(row);
-      return value;
-    }),
+    // A source's cable comes back with its next sync, not as a manual one.
+    cables: cables
+      .filter((row) => row.source === undefined)
+      .map((row) => {
+        const { source: _, ...value } = toCable(row);
+        return value;
+      }),
   };
 };
 
@@ -137,13 +141,27 @@ export const insertDeviceCabling = async (
   updatedBy: string,
 ) => {
   const ports = portsForNewDevice(device.objectId, device.type, given.ports);
-  if (portListError(device.objectId, ports)) {
+  const cables = given.cables ?? [];
+  if (
+    portListError(device.objectId, ports) ||
+    cables.length > MAX_PORTS_PER_DEVICE
+  ) {
     throw new ConvexError("Les ports de cet équipement sont invalides.");
   }
-  const own = new Map(ports.map((value) => [value.id, value]));
+  const own = new Set(ports.map((value) => value.id));
+  for (const id of own) {
+    const taken = await ctx.db
+      .query("ports")
+      .withIndex("by_object_id", (q) => q.eq("objectId", id))
+      .first();
+    if (taken) {
+      throw new ConvexError("Les ports de cet équipement sont invalides.");
+    }
+  }
   const farPorts = new Map<string, Doc<"ports">>();
   const cabled = new Set<string>();
-  for (const value of given.cables ?? []) {
+  const existing = new Set<string>();
+  for (const value of cables) {
     for (const end of [value.a, value.b]) {
       if (own.has(end.portId) || farPorts.has(end.portId)) continue;
       const row = await ctx.db
@@ -154,33 +172,25 @@ export const insertDeviceCabling = async (
       farPorts.set(end.portId, row);
       if (await cableRowAt(ctx, end.portId)) cabled.add(end.portId);
     }
+    const cable = await ctx.db
+      .query("cables")
+      .withIndex("by_object_id", (q) => q.eq("objectId", value.id))
+      .unique();
+    if (cable) existing.add(value.id);
+  }
+  const result = cablesToLay(device.objectId, own, cables, {
+    farPortOf: (end) => farPorts.get(end.portId),
+    isCabled: (portId) => cabled.has(portId),
+    cableExists: (cableId) => existing.has(cableId),
+  });
+  if ("error" in result) {
+    throw new ConvexError("Les câbles de cet équipement sont invalides.");
   }
   const now = Date.now();
   for (const value of ports) {
     await ctx.db.insert("ports", portRow(device.siteId, value));
   }
-  for (const value of given.cables ?? []) {
-    const plugsIn = [value.a, value.b].some((end) => own.has(end.portId));
-    const error =
-      (plugsIn ? null : "Cable does not plug into the device") ??
-      cableError(
-        value,
-        (id) => own.get(id) ?? farPorts.get(id),
-        (id) => cabled.has(id),
-      );
-    if (
-      error ||
-      (await ctx.db
-        .query("cables")
-        .withIndex("by_object_id", (q) => q.eq("objectId", value.id))
-        .unique())
-    ) {
-      throw new ConvexError(
-        "Un câble de cet équipement ne peut pas être rebranché : son autre extrémité a changé.",
-      );
-    }
-    cabled.add(value.a.portId);
-    cabled.add(value.b.portId);
+  for (const value of result.cables) {
     await ctx.db.insert(
       "cables",
       cableRow(device.siteId, value, now, updatedBy),

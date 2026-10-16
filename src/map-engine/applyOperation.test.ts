@@ -170,6 +170,30 @@ describe("applyOperation", () => {
     ]);
   });
 
+  it("lays a new device's cables only where they still fit, trusting the server off this floor", () => {
+    const { a, b, snapshot } = cabledPair();
+    const c = device(deviceId("device:c"), 400);
+    const far = device(deviceId("device:far"));
+    const into = (other: Device) => ({
+      ...cableBetween(c, other),
+      id: `cable:c-${other.id}` as CableId,
+    });
+
+    const result = applyOperation(snapshot, {
+      kind: "device.create",
+      meta: meta(1),
+      device: c,
+      // `a`'s port already holds a cable; `far` is on another floor.
+      cables: [into(a), into(far)],
+    });
+
+    expect(result.applied).toBe(true);
+    expect(result.snapshot.cables.map((cable) => cable.id)).toEqual([
+      cableBetween(a, b).id,
+      into(far).id,
+    ]);
+  });
+
   it("deleting a device removes its ports and cables", () => {
     const { a, b, snapshot } = cabledPair();
 
