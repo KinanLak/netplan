@@ -30,6 +30,7 @@ export const modules: Record<string, () => Promise<Record<string, any>>> = {
   "./presences.ts": () => import("../presences"),
   "./schema.ts": () => import("../schema"),
   "./sites.ts": () => import("../sites"),
+  "./unknownMacs.ts": () => import("../unknownMacs"),
   "./users.ts": () => import("../users"),
   "./walls.ts": () => import("../walls"),
 };

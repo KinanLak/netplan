@@ -10,7 +10,9 @@ import { internalMutation, internalQuery } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
 import type { ActionCtx, MutationCtx, QueryCtx } from "./_generated/server";
 import { cycleOf } from "./lib/cycles";
-import { bumpDocumentRevisions, getWallCollisionRect } from "./mapOperations";
+import { toPublicDevice } from "./mapDocument";
+import { applyMapOperation, getWallCollisionRect } from "./mapOperations";
+import type { OperationInput } from "./mapOperations";
 import { pause, SOURCE_RETRY } from "./lib/httpRetry";
 import { PROBE_RETRY, sourceGet } from "./lib/integrationProbe";
 import { cableRowAt, portRowsOf, traceRows } from "./lib/ports";
@@ -43,6 +45,14 @@ const DISCOVERY_POLL_MS = 10_000;
 
 const SIGHTED_BY = "librenms";
 
+/** One of the map's operations, before the cycle names it. */
+type AtomicMapOperationInput =
+  Exclude<OperationInput, { kind: "batch" }> extends infer Operation
+    ? Operation extends unknown
+      ? Omit<Operation, "meta">
+      : never
+    : never;
+
 const PRESENT_TYPES: ReadonlySet<Doc<"devices">["type"]> = new Set([
   "pc",
   "endpoint",
@@ -55,13 +65,13 @@ const sighting = v.object({
   socketId: v.optional(v.string()),
 });
 
-const deviceOf = async (ctx: QueryCtx, deviceId: string) =>
+export const deviceOf = async (ctx: QueryCtx, deviceId: string) =>
   await ctx.db
     .query("devices")
     .withIndex("by_object_id", (q) => q.eq("objectId", deviceId))
     .unique();
 
-const ownerOf = async (ctx: QueryCtx, siteId: string, mac: string) => {
+export const ownerOf = async (ctx: QueryCtx, siteId: string, mac: string) => {
   const row = await ctx.db
     .query("deviceMacs")
     .withIndex("by_site_mac", (q) => q.eq("siteId", siteId).eq("mac", mac))
@@ -212,12 +222,15 @@ const setStatus = async (
 /**
  * Places a device next to the wall socket it was seen at (ADR 0022): on the
  * socket's floor, at the free spot nearest to it on its side of the walls.
+ * The move goes through the map's operations, so the server validates it as
+ * a person's and the floors' revisions move. `clientId` names who moved it.
  * Returns whether it moved; a socket on no floor places nothing.
  */
-const placeNextTo = async (
+export const placeNextTo = async (
   ctx: MutationCtx,
   device: Doc<"devices">,
   socketId: string,
+  clientId = SIGHTED_BY,
 ): Promise<boolean> => {
   const socket = await deviceOf(ctx, socketId);
   if (!socket?.placement) return false;
@@ -245,18 +258,41 @@ const placeNextTo = async (
     walls: walls.map(getWallCollisionRect),
   });
   if (!spot) return false;
-  const now = Date.now();
-  await ctx.db.patch(device._id, {
-    placement: { floorId, position: spot, size },
-    updatedAt: now,
-    updatedBy: SIGHTED_BY,
+
+  let seq = 0;
+  const apply = async (operation: AtomicMapOperationInput) => {
+    seq += 1;
+    const result = await applyMapOperation(ctx, {
+      ...operation,
+      meta: {
+        opId: `${clientId}:${crypto.randomUUID()}`,
+        clientId,
+        clientSeq: seq,
+        createdAt: Date.now(),
+      },
+    });
+    return result.status === "applied";
+  };
+  if (device.placement?.floorId === floorId) {
+    return await apply({
+      kind: "device.patch",
+      deviceId: device.objectId,
+      patch: { position: spot },
+    });
+  }
+  // An operation changes one floor, so another floor's device leaves it
+  // first. Should the place be refused, it stays in the inventory, and the
+  // next sighting places it again.
+  if (
+    device.placement &&
+    !(await apply({ kind: "device.unplace", deviceId: device.objectId }))
+  ) {
+    return false;
+  }
+  return await apply({
+    kind: "device.place",
+    device: toPublicDevice(device, { floorId, position: spot, size }),
   });
-  await bumpDocumentRevisions(
-    ctx,
-    new Set([floorId, device.placement?.floorId ?? floorId]),
-    now,
-  );
-  return true;
 };
 
 /**

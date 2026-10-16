@@ -1324,7 +1324,7 @@ const planOperation = (
   }
 };
 
-export const bumpDocumentRevisions = async (
+const bumpDocumentRevisions = async (
   ctx: MutationCtx,
   floorIds: ReadonlySet<string>,
   now: number,

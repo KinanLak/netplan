@@ -1,4 +1,5 @@
 import { ConvexError, v } from "convex/values";
+import type { Infer } from "convex/values";
 import { editorMutation, readerQuery } from "./lib/functions";
 import { placedDevicesOf } from "./mapDocument";
 import {
@@ -145,47 +146,69 @@ const removedDevice = {
 export const create = editorMutation({
   args: { siteId: v.string(), deviceId: v.string(), ...removedDevice },
   returns: v.null(),
-  handler: async (
-    ctx,
-    { siteId, deviceId, type, identity, metadata, ports, cables },
-  ) => {
-    await requireSite(ctx, siteId);
-    if (!DEVICE_ID.test(deviceId)) throw new ConvexError("Invalid device id");
-    if (await getDevice(ctx, deviceId)) {
-      throw new ConvexError("Cet identifiant d'équipement est déjà pris.");
-    }
-
-    const edit = normalizeIdentityEdit(identity);
-    if (!edit.name) throw new ConvexError("Le nom est obligatoire.");
-    const error = identityEditError(edit);
-    if (error) throw new ConvexError(error);
-
-    const macs = edit.macs ?? [];
-    await replaceDeviceMacs(ctx, { siteId, objectId: deviceId }, macs);
-    await ctx.db.insert("devices", {
-      objectId: deviceId,
-      siteId,
-      type,
-      name: edit.name,
-      hostname: edit.hostname ?? undefined,
-      serial: edit.serial ?? undefined,
-      macs,
-      model: edit.model ?? undefined,
-      ip: edit.ip ?? undefined,
-      notes: edit.notes ?? undefined,
-      metadata: metadata ?? {},
-      updatedAt: Date.now(),
-      updatedBy: ctx.user.id,
-    });
-    await insertDeviceCabling(
-      ctx,
-      { siteId, objectId: deviceId, type },
-      { ports, cables },
-      ctx.user.id,
-    );
+  handler: async (ctx, args) => {
+    await insertManualDevice(ctx, args, ctx.user.id);
     return null;
   },
 });
+
+/** Validates and inserts a manual device, on no floor, with its cabling. */
+export async function insertManualDevice(
+  ctx: MutationCtx,
+  {
+    siteId,
+    deviceId,
+    type,
+    identity,
+    metadata,
+    ports,
+    cables,
+  }: {
+    siteId: string;
+    deviceId: string;
+    type: Doc<"devices">["type"];
+    identity: IdentityEdit;
+    metadata?: Doc<"devices">["metadata"];
+    ports?: Array<Infer<typeof newPort>>;
+    cables?: Array<Infer<typeof newCable>>;
+  },
+  userId: string,
+) {
+  await requireSite(ctx, siteId);
+  if (!DEVICE_ID.test(deviceId)) throw new ConvexError("Invalid device id");
+  if (await getDevice(ctx, deviceId)) {
+    throw new ConvexError("Cet identifiant d'équipement est déjà pris.");
+  }
+
+  const edit = normalizeIdentityEdit(identity);
+  if (!edit.name) throw new ConvexError("Le nom est obligatoire.");
+  const error = identityEditError(edit);
+  if (error) throw new ConvexError(error);
+
+  const macs = edit.macs ?? [];
+  await replaceDeviceMacs(ctx, { siteId, objectId: deviceId }, macs);
+  await ctx.db.insert("devices", {
+    objectId: deviceId,
+    siteId,
+    type,
+    name: edit.name,
+    hostname: edit.hostname ?? undefined,
+    serial: edit.serial ?? undefined,
+    macs,
+    model: edit.model ?? undefined,
+    ip: edit.ip ?? undefined,
+    notes: edit.notes ?? undefined,
+    metadata: metadata ?? {},
+    updatedAt: Date.now(),
+    updatedBy: userId,
+  });
+  await insertDeviceCabling(
+    ctx,
+    { siteId, objectId: deviceId, type },
+    { ports, cables },
+    userId,
+  );
+}
 
 /**
  * Deletes a manual device that is on no floor. A placed one is deleted from
