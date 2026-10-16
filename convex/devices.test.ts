@@ -333,6 +333,43 @@ describe("the site inventory", () => {
     );
   });
 
+  it("lists a site's offline devices by name, with their floor", async () => {
+    const t = await signedInTest();
+    const { siteId, floorId } = await siteWithFloor(t);
+    const other = await siteWithFloor(t);
+    await createDevice(t, floorId, "device:up", "PC-Up", 0);
+    await createDevice(t, floorId, "device:down-placed", "PC-10", 100);
+    await createDevice(t, other.floorId, "device:elsewhere", "PC-Ailleurs", 0);
+    await t.mutation(api.devices.create, {
+      siteId,
+      deviceId: "device:down-stored",
+      type: "endpoint",
+      identity: identity("PC-9"),
+    });
+    // As a collection would write them: creation keeps no status unvouched.
+    await t.run(async (ctx) => {
+      for (const device of await ctx.db.query("devices").collect()) {
+        if (device.objectId === "device:up") continue;
+        await ctx.db.patch(device._id, {
+          metadata: { ...device.metadata, status: "down" },
+        });
+      }
+    });
+
+    expect(await t.query(api.devices.offlineForSite, { siteId })).toEqual([
+      { id: "device:down-stored", name: "PC-9", location: null },
+      {
+        id: "device:down-placed",
+        name: "PC-10",
+        location: {
+          buildingId: expect.any(String),
+          floorId,
+          floorName: "Étage 2",
+        },
+      },
+    ]);
+  });
+
   it("refuses a device whose MAC another device of the site carries", async () => {
     const t = await signedInTest();
     const { siteId, floorId } = await siteWithFloor(t);

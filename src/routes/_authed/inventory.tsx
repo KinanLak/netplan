@@ -13,6 +13,7 @@ import type { FormEvent } from "react";
 import { toast } from "sonner";
 import { ModeToggle } from "@/components/mode-toggle";
 import { NetplanLogo } from "@/components/netplan-logo";
+import { StatusDot } from "@/components/StatusDot";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -53,6 +54,7 @@ import {
   normalizeIdentityEdit,
 } from "@/devices/identity";
 import { parseMacList } from "@/devices/mac";
+import { DEVICE_STATUS_LABELS } from "@/devices/status";
 import { failureMessage } from "@/lib/errors";
 import { useCanEdit } from "@/hooks/use-current-user";
 import { createStandaloneObjectId } from "@/lib/identity";
@@ -68,15 +70,27 @@ import { UnknownMacs } from "@/sites/UnknownMacs";
 import { siteSearch, useCurrentSite } from "@/sites/useCurrentSite";
 import type { SiteSummary } from "@/sites/useCurrentSite";
 import { useMapStore } from "@/store/useMapStore";
-import type { DeviceType } from "@/types/map";
+import type { DeviceStatus, DeviceType } from "@/types/map";
 import { api } from "../../../convex/_generated/api";
 
 type InventoryRow = FunctionReturnType<typeof api.devices.listForSite>[number];
 type Placement = "all" | "placed" | "unplaced";
+type StatusFilter = "all" | DeviceStatus;
+
+const isStatus = (value: unknown): value is DeviceStatus =>
+  typeof value === "string" && Object.hasOwn(DEVICE_STATUS_LABELS, value);
+
+/** `status` opens the list filtered, as the map's offline list links it. */
+const inventorySearch = (
+  search: Record<string, unknown>,
+): { site?: string; status?: DeviceStatus } => ({
+  ...siteSearch(search),
+  ...(isStatus(search.status) && { status: search.status }),
+});
 
 export const Route = createFileRoute("/_authed/inventory")({
   ssr: false,
-  validateSearch: siteSearch,
+  validateSearch: inventorySearch,
   head: () => ({ meta: [{ title: "Inventaire · Netplan" }] }),
   component: InventoryPage,
 });
@@ -129,13 +143,25 @@ const PLACEMENT_FILTERS: Array<{ value: Placement; label: string }> = [
   { value: "unplaced", label: "Hors plan" },
 ];
 
+const STATUS_FILTERS: Array<{ value: StatusFilter; label: string }> = [
+  { value: "all", label: "Tous" },
+  { value: "up", label: DEVICE_STATUS_LABELS.up },
+  { value: "down", label: DEVICE_STATUS_LABELS.down },
+  { value: "unknown", label: DEVICE_STATUS_LABELS.unknown },
+];
+
+const statusOf = (device: InventoryRow): DeviceStatus =>
+  device.metadata.status ?? "unknown";
+
 const byName = new Intl.Collator("fr", { numeric: true, sensitivity: "base" });
 
 function SiteInventory({ site }: { site: SiteSummary }) {
   const devices = useQuery(api.devices.listForSite, { siteId: site.id });
   const canEdit = useCanEdit();
+  const search = Route.useSearch();
   const [query, setQuery] = useState("");
   const [placement, setPlacement] = useState<Placement>("all");
+  const [status, setStatus] = useState<StatusFilter>(search.status ?? "all");
   const [creating, setCreating] = useState(false);
 
   const sorted = devices
@@ -146,10 +172,17 @@ function SiteInventory({ site }: { site: SiteSummary }) {
     placed: sorted.filter((device) => device.location).length,
     unplaced: sorted.filter((device) => !device.location).length,
   };
+  const statusCounts: Record<StatusFilter, number> = {
+    all: sorted.length,
+    up: sorted.filter((device) => statusOf(device) === "up").length,
+    down: sorted.filter((device) => statusOf(device) === "down").length,
+    unknown: sorted.filter((device) => statusOf(device) === "unknown").length,
+  };
   const shown = sorted.filter(
     (device) =>
       (placement === "all" ||
         (placement === "placed") === Boolean(device.location)) &&
+      (status === "all" || statusOf(device) === status) &&
       matchesDeviceSearch(device, query),
   );
 
@@ -177,8 +210,8 @@ function SiteInventory({ site }: { site: SiteSummary }) {
       {canEdit ? <ImportReviews siteId={site.id} /> : null}
       {canEdit ? <UnknownMacs siteId={site.id} /> : null}
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative min-w-60 flex-1">
           <HugeiconsIcon
             icon={Search01Icon}
             size={16}
@@ -214,6 +247,26 @@ function SiteInventory({ site }: { site: SiteSummary }) {
             </Button>
           ))}
         </div>
+        <div
+          role="group"
+          aria-label="État"
+          className="flex gap-1 rounded-lg border p-1"
+        >
+          {STATUS_FILTERS.map(({ value, label }) => (
+            <Button
+              key={value}
+              size="sm"
+              variant={status === value ? "secondary" : "ghost"}
+              aria-pressed={status === value}
+              onClick={() => setStatus(value)}
+            >
+              {label}
+              <span className="text-muted-foreground tabular-nums">
+                {statusCounts[value]}
+              </span>
+            </Button>
+          ))}
+        </div>
       </div>
 
       {devices === undefined ? null : sorted.length === 0 ? (
@@ -231,6 +284,7 @@ function SiteInventory({ site }: { site: SiteSummary }) {
               <tr>
                 <th className="px-4 py-2 font-medium">Nom</th>
                 <th className="px-4 py-2 font-medium">Type</th>
+                <th className="px-4 py-2 font-medium">État</th>
                 <th className="px-4 py-2 font-medium">Adresses MAC</th>
                 <th className="px-4 py-2 font-medium">Adresse IP</th>
                 <th className="px-4 py-2 font-medium">Emplacement</th>
@@ -336,6 +390,19 @@ function InventoryItem({
       </td>
       <td className="px-4 py-2.5 whitespace-nowrap text-muted-foreground">
         {getDeviceKindLabel(device.type)}
+      </td>
+      <td className="px-4 py-2.5 whitespace-nowrap">
+        <span
+          className={cn(
+            "flex items-center gap-2",
+            statusOf(device) === "down"
+              ? "text-down"
+              : statusOf(device) === "unknown" && "text-muted-foreground",
+          )}
+        >
+          <StatusDot status={statusOf(device)} decorative />
+          {DEVICE_STATUS_LABELS[statusOf(device)]}
+        </span>
       </td>
       <td className="px-4 py-2.5 font-mono text-xs">
         {device.macs.length === 0 ? (

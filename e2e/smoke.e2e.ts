@@ -19,11 +19,13 @@ test("an editor signs in and the seeded demo map opens on both floors", async ({
 
   await expect(page.getByRole("button", { name: "Bâtiment A" })).toBeVisible();
 
-  await page.getByText("Rez-de-chaussée", { exact: true }).click();
+  // Offline devices also name their floor in the sidebar.
+  const floors = page.locator('[data-sidebar="menu-sub"]');
+  await floors.getByText("Rez-de-chaussée", { exact: true }).click();
   await expect(page.getByText("sw-demo-coeur", { exact: true })).toBeVisible();
   await expect(page.getByText("Prise B-01", { exact: true })).toBeVisible();
 
-  await page.getByText("Étage 1", { exact: true }).click();
+  await floors.getByText("Étage 1", { exact: true }).click();
   await expect(
     page.getByText("sw-demo-acces-e1", { exact: true }),
   ).toBeVisible();
