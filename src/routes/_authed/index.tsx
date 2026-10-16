@@ -3,9 +3,12 @@ import { ReactFlowProvider } from "@xyflow/react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Edit01Icon, Tick01Icon, ViewIcon } from "@hugeicons/core-free-icons";
 import { useEffect, useMemo } from "react";
+import type { ComponentProps } from "react";
 import { useQuery } from "convex/react";
 import FlowCanvas from "@/canvas/FlowCanvas";
 import AppSidebar from "@/panels/Sidebar";
+import { MapEmptyState } from "@/buildings/MapEmptyState";
+import { StructureDialog } from "@/buildings/StructureDialog";
 import Toolbar from "@/panels/Toolbar";
 import DeviceDrawer from "@/panels/DeviceDrawer";
 import { MapDocumentStatus } from "@/map-session/MapDocumentStatus";
@@ -120,18 +123,34 @@ function HomePageContent() {
     buildings === undefined ||
     (currentBuildingId !== null && floors === undefined);
 
+  // Only once loaded, so the map never flashes empty while it opens a floor.
+  const currentBuilding =
+    buildings?.find((building) => building.id === currentBuildingId) ?? null;
+  const empty =
+    site && buildings?.length === 0
+      ? { siteId: site.id, building: null }
+      : site && currentBuilding && floors?.length === 0
+        ? { siteId: site.id, building: currentBuilding }
+        : null;
+
   return (
     <SidebarProvider>
       {isBootstrappingMap ? (
         <div className="h-screen w-screen bg-background" />
       ) : (
-        <MapWorkspace sortedFloors={sortedFloors} />
+        <MapWorkspace sortedFloors={sortedFloors} empty={empty} />
       )}
     </SidebarProvider>
   );
 }
 
-function MapWorkspace({ sortedFloors }: { sortedFloors: Array<Floor> }) {
+function MapWorkspace({
+  sortedFloors,
+  empty,
+}: {
+  sortedFloors: Array<Floor>;
+  empty: ComponentProps<typeof MapEmptyState> | null;
+}) {
   const currentFloorId = useCurrentFloorId();
   const selectedDeviceId = useSelectedDeviceId();
   const isEditMode = useIsEditMode();
@@ -248,13 +267,16 @@ function MapWorkspace({ sortedFloors }: { sortedFloors: Array<Floor> }) {
           <FlowCanvas />
           <Toolbar />
           {selectedDeviceId ? <DeviceDrawer /> : null}
-          <MapDocumentStatus />
+          {/* With no floor there is no document to wait for. */}
+          {empty ? <MapEmptyState {...empty} /> : <MapDocumentStatus />}
 
           <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
             {canEdit ? (
               <button
                 onClick={toggleEditMode}
-                disabled={!currentFloorId || !isReady}
+                // Without a floor, edit mode still holds the building's own
+                // actions in the sidebar.
+                disabled={currentFloorId !== null && !isReady}
                 className={`relative flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium shadow-lg transition-all ${
                   isEditMode
                     ? "border-accent bg-accent text-accent-foreground"
@@ -308,6 +330,7 @@ function MapWorkspace({ sortedFloors }: { sortedFloors: Array<Floor> }) {
         </ReactFlowProvider>
 
         <ShortcutsDialog hasRightDrawerOpen={Boolean(selectedDeviceId)} />
+        <StructureDialog />
       </SidebarInset>
     </div>
   );

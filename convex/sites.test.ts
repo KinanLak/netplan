@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { api } from "./_generated/api";
-import { createTestSite, signedInTest } from "./_test/auth.setup";
+import { signedInTest } from "./_test/auth.setup";
 import { DEFAULT_CADENCE } from "../src/sites/settings";
 
 const arles = { name: "Arles", timezone: "Europe/Paris" };
@@ -121,21 +121,6 @@ describe("sites", () => {
         name: "Missing",
       }),
     ).rejects.toThrow("Ce site n'existe plus.");
-  });
-
-  it("rejects a default-map identity owned by another site", async () => {
-    const t = await signedInTest();
-    const siteA = await createTestSite(t);
-    const siteB = await createTestSite(t);
-    await t.mutation(api.buildings.create, {
-      siteId: siteB,
-      objectId: `building:${siteA}:default`,
-      name: "Collision",
-    });
-
-    await expect(
-      t.mutation(api.buildings.createDefaultMap, { siteId: siteA }),
-    ).rejects.toThrow("another site");
   });
 
   it("refuses to remove a site that still has buildings", async () => {

@@ -1,8 +1,7 @@
 import { describe, expect, it } from "bun:test";
-import { api, internal } from "./_generated/api";
+import { api } from "./_generated/api";
 import { signedInTest, createTestSite } from "./_test/auth.setup";
 import type { TestClient } from "./_test/auth.setup";
-import { insertCabledPcs } from "./_test/cabling";
 
 let counter = 0;
 
@@ -91,13 +90,43 @@ describe("floors", () => {
     expect(after[0]?.name).toBe("Renamed");
   });
 
-  it("remove unplaces the devices of the floor, cables kept, and cascades its walls and presences", async () => {
+  it("refuses a floor named like another of its building", async () => {
+    const t = await signedInTest();
+    const buildingId = await freshBuilding(t);
+    const other = await freshBuilding(t);
+    const create = (objectId: string, name: string, building = buildingId) =>
+      t.mutation(api.floors.create, { objectId, buildingId: building, name });
+    await create("floor:dup:1", "Étage 1");
+
+    await expect(create("floor:dup:2", "étage 1")).rejects.toThrow(
+      "Ce bâtiment a déjà un étage « étage 1 ».",
+    );
+    await expect(create("floor:dup:3", " ")).rejects.toThrow(
+      "Le nom de l'étage est obligatoire.",
+    );
+    await create("floor:dup:4", "Étage 1", other);
+    await expect(create("floor:dup:1", "Étage 9", other)).rejects.toThrow(
+      "Cet identifiant d'étage est déjà pris.",
+    );
+
+    await create("floor:dup:5", "Étage 2");
+    await expect(
+      t.mutation(api.floors.rename, { id: "floor:dup:5", name: "ÉTAGE 1" }),
+    ).rejects.toThrow("Ce bâtiment a déjà un étage « ÉTAGE 1 ».");
+  });
+
+  it("removes an empty floor, and refuses one that still holds a drawing", async () => {
     const t = await signedInTest();
     const buildingId = await freshBuilding(t);
     const floorId = await t.mutation(api.floors.create, {
-      objectId: "floor:cascade",
+      objectId: "floor:held",
       buildingId,
       name: "Floor",
+    });
+    const emptyId = await t.mutation(api.floors.create, {
+      objectId: "floor:empty",
+      buildingId,
+      name: "Empty",
     });
 
     await t.run(async (ctx) => {
@@ -116,58 +145,41 @@ describe("floors", () => {
         updatedAt: 0,
         updatedBy: "test",
       });
-      await ctx.db.insert("walls", {
-        objectId: "wall:a",
-        floorId,
-        start: { x: 0, y: 0 },
-        end: { x: 50, y: 0 },
-        color: "concrete",
-        geometryKey: "0:0:50:0",
-        updatedAt: 0,
-        updatedBy: "test",
-      });
-      // Its far end is on another floor.
-      await insertCabledPcs(ctx, "site:test", "device:a", "device:far");
       await ctx.db.insert("presences", {
         clientId: "client:alice",
         userId: "user:a",
         displayName: "A",
-        floorId,
+        floorId: emptyId,
         activeAt: Date.now(),
         updatedAt: Date.now(),
       });
     });
 
-    await t.mutation(internal.floors.remove, { id: floorId });
+    await expect(
+      t.mutation(api.floors.remove, { id: floorId }),
+    ).rejects.toThrow(
+      "L'étage « Floor » porte encore des équipements : videz-le avant de le supprimer.",
+    );
+    await t.mutation(api.floors.remove, { id: emptyId });
 
+    const left = await t.query(api.floors.listForBuilding, { buildingId });
+    expect(left.map((floor) => floor.id)).toEqual([floorId]);
     await t.run(async (ctx) => {
-      expect(await ctx.db.query("floors").collect()).toHaveLength(0);
-      // Devices stay in the site's inventory, off the map.
-      const devices = await ctx.db.query("devices").collect();
-      expect(devices.map((device) => device.objectId)).toEqual(["device:a"]);
-      expect(devices.every((device) => !device.placement)).toBe(true);
-      expect(await ctx.db.query("walls").collect()).toHaveLength(0);
-      expect(await ctx.db.query("cables").collect()).toHaveLength(1);
       expect(await ctx.db.query("presences").collect()).toHaveLength(0);
-      expect(await ctx.db.query("buildings").collect()).toHaveLength(1);
     });
   });
 
   it("rejects creates for deleted buildings", async () => {
     const t = await signedInTest();
     const buildingId = await freshBuilding(t);
-    await t.mutation(internal.buildings.remove, { id: buildingId });
+    await t.mutation(api.buildings.remove, { id: buildingId });
 
-    let message = "";
-    try {
-      await t.mutation(api.floors.create, {
+    await expect(
+      t.mutation(api.floors.create, {
         objectId: "floor:ghost",
         buildingId,
         name: "Ghost",
-      });
-    } catch (error) {
-      message = error instanceof Error ? error.message : String(error);
-    }
-    expect(message).toContain("Building not found");
+      }),
+    ).rejects.toThrow("Ce bâtiment n'existe plus.");
   });
 });

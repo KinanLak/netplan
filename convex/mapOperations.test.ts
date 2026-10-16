@@ -31,7 +31,7 @@ async function freshFloor(t: TestClient, siteId?: string) {
   const buildingId = await t.mutation(api.buildings.create, {
     siteId,
     objectId: `building:ops:${counter}`,
-    name: "Ops",
+    name: `Ops ${counter}`,
   });
   return await t.mutation(api.floors.create, {
     objectId: `floor:ops:${counter}`,

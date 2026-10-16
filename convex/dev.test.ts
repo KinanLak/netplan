@@ -130,8 +130,21 @@ describe("dev seed", () => {
     process.env.ALLOW_DEV_SEED = "true";
     const { floorIds } = await t.mutation(internal.dev.seed, {});
     const seeded = await Promise.all(floorIds.map((id) => countFloor(t, id)));
-    await t.mutation(api.buildings.clearMap, { siteId: "site:demo" });
     await t.run(async (ctx) => {
+      // The whole drawing gone, as from an empty backend.
+      for (const table of [
+        "buildings",
+        "floors",
+        "walls",
+        "devices",
+        "deviceMacs",
+        "ports",
+        "cables",
+      ] as const) {
+        for (const row of await ctx.db.query(table).collect()) {
+          await ctx.db.delete(row._id);
+        }
+      }
       const site = await ctx.db
         .query("sites")
         .withIndex("by_object_id", (q) => q.eq("objectId", "site:demo"))

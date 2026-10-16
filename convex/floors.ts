@@ -1,8 +1,14 @@
 import { ConvexError, v } from "convex/values";
-import { internalMutation } from "./_generated/server";
 import { readerQuery, editorMutation } from "./lib/functions";
 import type { Doc } from "./_generated/dataModel";
-import { cascadeRemoveFloor } from "./buildings";
+import {
+  buildingRow,
+  checkedName,
+  deleteEmptyFloor,
+  floorContent,
+  floorRow,
+  floorsOf,
+} from "./lib/structure";
 
 const floorValidator = v.object({
   id: v.string(),
@@ -39,6 +45,7 @@ export const listAll = readerQuery({
   },
 });
 
+/** A floor above the building's others. Retrying with the same id returns it. */
 export const create = editorMutation({
   args: {
     objectId: v.string(),
@@ -47,25 +54,26 @@ export const create = editorMutation({
   },
   returns: v.string(),
   handler: async (ctx, { objectId, buildingId, name }) => {
-    const building = await ctx.db
-      .query("buildings")
-      .withIndex("by_object_id", (q) => q.eq("objectId", buildingId))
-      .unique();
-    if (!building) throw new ConvexError("Building not found");
+    const building = await buildingRow(ctx, buildingId);
+    if (!building) throw new ConvexError("Ce bâtiment n'existe plus.");
 
-    const existing = await ctx.db
-      .query("floors")
-      .withIndex("by_object_id", (q) => q.eq("objectId", objectId))
-      .unique();
-    if (existing) return existing.objectId;
+    const existing = await floorRow(ctx, objectId);
+    if (existing) {
+      if (existing.buildingId !== buildingId) {
+        throw new ConvexError("Cet identifiant d'étage est déjà pris.");
+      }
+      return existing.objectId;
+    }
 
-    const siblings = await ctx.db
-      .query("floors")
-      .withIndex("by_building", (q) => q.eq("buildingId", buildingId))
-      .collect();
-    const maxOrder = Math.max(...siblings.map((f) => f.order), -1);
-    const order = maxOrder + 1;
-    await ctx.db.insert("floors", { objectId, buildingId, name, order });
+    const siblings = await floorsOf(ctx, buildingId);
+    const checked = checkedName("floor", name, siblings);
+    const order = Math.max(...siblings.map((f) => f.order), -1) + 1;
+    await ctx.db.insert("floors", {
+      objectId,
+      buildingId,
+      name: checked,
+      order,
+    });
     return objectId;
   },
 });
@@ -74,26 +82,32 @@ export const rename = editorMutation({
   args: { id: v.string(), name: v.string() },
   returns: v.null(),
   handler: async (ctx, { id, name }) => {
-    const floor = await ctx.db
-      .query("floors")
-      .withIndex("by_object_id", (q) => q.eq("objectId", id))
-      .unique();
-    if (!floor) throw new ConvexError("Floor not found");
-    await ctx.db.patch(floor._id, { name });
+    const floor = await floorRow(ctx, id);
+    if (!floor) throw new ConvexError("Cet étage n'existe plus.");
+    const others = (await floorsOf(ctx, floor.buildingId)).filter(
+      (other) => other._id !== floor._id,
+    );
+    await ctx.db.patch(floor._id, {
+      name: checkedName("floor", name, others),
+    });
     return null;
   },
 });
 
-export const remove = internalMutation({
+/** Only an empty floor goes; its devices, walls and calque are taken off first. */
+export const remove = editorMutation({
   args: { id: v.string() },
   returns: v.null(),
   handler: async (ctx, { id }) => {
-    const floor = await ctx.db
-      .query("floors")
-      .withIndex("by_object_id", (q) => q.eq("objectId", id))
-      .unique();
-    if (!floor) throw new ConvexError("Floor not found");
-    await cascadeRemoveFloor(ctx, id);
+    const floor = await floorRow(ctx, id);
+    if (!floor) return null;
+    const content = await floorContent(ctx, id);
+    if (content) {
+      throw new ConvexError(
+        `L'étage « ${floor.name} » porte encore ${content} : videz-le avant de le supprimer.`,
+      );
+    }
+    await deleteEmptyFloor(ctx, floor);
     return null;
   },
 });

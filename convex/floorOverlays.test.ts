@@ -323,7 +323,7 @@ describe("calque operations", () => {
     expect((await fileRow(editor, second.fileId))?.releasedAt).toBeUndefined();
   });
 
-  it("removes the calque with its floor and deletes files unused for a week", async () => {
+  it("releases a removed calque's file and deletes files unused for a week", async () => {
     const { editor, floorId } = await setup();
     const { fileId } = await editor.action(api.floorOverlays.upload, {
       bytes: png(1200, 800),
@@ -342,7 +342,14 @@ describe("calque operations", () => {
       },
     });
 
-    await editor.mutation(internal.floors.remove, { id: floorId });
+    // The calque holds the floor until it is taken off.
+    await expect(
+      editor.mutation(api.floors.remove, { id: floorId }),
+    ).rejects.toThrow("porte encore un calque");
+    await editor.mutation(api.mapOperations.apply, {
+      operation: { kind: "overlay.set", meta: meta(2), floorId, overlay: null },
+    });
+    await editor.mutation(api.floors.remove, { id: floorId });
     expect(
       await editor.run((ctx) => ctx.db.query("floorOverlays").collect()),
     ).toHaveLength(0);

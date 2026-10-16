@@ -43,6 +43,7 @@ import type * as lib_roles from "../lib/roles.js";
 import type * as lib_secrets from "../lib/secrets.js";
 import type * as lib_smtp from "../lib/smtp.js";
 import type * as lib_statuses from "../lib/statuses.js";
+import type * as lib_structure from "../lib/structure.js";
 import type * as lib_userAccounts from "../lib/userAccounts.js";
 import type * as librenms from "../librenms.js";
 import type * as librenmsCycle from "../librenmsCycle.js";
@@ -101,6 +102,7 @@ declare const fullApi: ApiFromModules<{
   "lib/secrets": typeof lib_secrets;
   "lib/smtp": typeof lib_smtp;
   "lib/statuses": typeof lib_statuses;
+  "lib/structure": typeof lib_structure;
   "lib/userAccounts": typeof lib_userAccounts;
   librenms: typeof librenms;
   librenmsCycle: typeof librenmsCycle;
