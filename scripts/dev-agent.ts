@@ -49,7 +49,7 @@ import {
 
 // Every function the seed runs, in order. Each one is idempotent and refuses
 // to run without ALLOW_DEV_SEED.
-const SEED_FUNCTIONS = ["dev:seed", "dev:seedAccounts"];
+const SEED_FUNCTIONS = ["dev:seed", "dev:seedAccounts", "dev:seedHistory"];
 
 // Where the last run served the app, for `--status`.
 const WEB_URL_KEY = "NETPLAN_DEV_WEB_URL";

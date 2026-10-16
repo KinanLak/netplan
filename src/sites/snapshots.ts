@@ -64,3 +64,22 @@ export const slotAt = (timezone: string, at: number): SnapshotSlot | null => {
   }
   return null;
 };
+
+/** The site's calendar day at `at`, `YYYY-MM-DD`. */
+export const siteDay = (timezone: string, at: number): string =>
+  wallClock(timezone, at).day;
+
+/**
+ * Whether a cycle may still take the slot `time` of `day`: once its window
+ * has closed, a slot no cycle took stays empty.
+ */
+export const slotStillOpen = (
+  timezone: string,
+  day: string,
+  time: string,
+  now: number,
+): boolean => {
+  const clock = wallClock(timezone, now);
+  if (clock.day !== day) return clock.day < day;
+  return clock.minute < minuteOf(time) + LATE_MINUTES;
+};

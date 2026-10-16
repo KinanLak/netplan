@@ -64,6 +64,10 @@ import { asBuildingId, asDeviceId, asFloorId } from "@/lib/objectIds";
 import { cn } from "@/lib/utils";
 import { DeviceIdentityDialog } from "@/panels/drawer/DeviceIdentityDialog";
 import { PortTableDialog } from "@/panels/drawer/PortTableDialog";
+import {
+  DeviceHistoryDialog,
+  HAS_HISTORY,
+} from "@/history/DeviceHistoryDialog";
 import { matchesDeviceSearch } from "@/devices/search";
 import { ImportReviews } from "@/sites/ImportReviews";
 import { INTEGRATION_LABELS } from "@/sites/integrations";
@@ -486,6 +490,8 @@ function InventoryItem({
   const removeDevice = useMutation(api.devices.remove);
   const [editing, setEditing] = useState(false);
   const [showingCables, setShowingCables] = useState(false);
+  const [showingHistory, setShowingHistory] = useState(false);
+  const hasHistory = canEdit && HAS_HISTORY.has(device.type);
   const { location, source } = device;
   const removable = canEdit && !location && !source;
 
@@ -594,6 +600,11 @@ function InventoryItem({
             <DropdownMenuItem onClick={() => setShowingCables(true)}>
               Câbles
             </DropdownMenuItem>
+            {hasHistory ? (
+              <DropdownMenuItem onClick={() => setShowingHistory(true)}>
+                Historique
+              </DropdownMenuItem>
+            ) : null}
             {canEdit ? (
               <DropdownMenuItem onClick={() => setEditing(true)}>
                 Modifier l'identité
@@ -615,6 +626,14 @@ function InventoryItem({
           open={showingCables}
           onOpenChange={setShowingCables}
         />
+        {hasHistory ? (
+          <DeviceHistoryDialog
+            device={device}
+            timezone={site.timezone}
+            open={showingHistory}
+            onOpenChange={setShowingHistory}
+          />
+        ) : null}
         {canEdit ? (
           <DeviceIdentityDialog
             device={{ ...device, id: asDeviceId(device.id) }}

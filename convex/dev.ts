@@ -6,12 +6,14 @@ import { components, internal } from "./_generated/api";
 import { internalAction, internalMutation } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
 import { applyMapOperation } from "./mapOperations";
+import { placeNamer } from "./history";
 import { insertSite } from "./sites";
 import { seedConnection } from "./integrations";
 import { createAuth } from "./auth";
 import { DEV_ACCOUNTS, DEV_PASSWORD } from "../src/dev-seed/accounts";
 import { DEMO_BUILDING, buildDemoFloors } from "../src/dev-seed/demoMap";
 import { INTEGRATION_KINDS } from "../src/sites/integrations";
+import { siteDay, slotAt } from "../src/sites/snapshots";
 import type { BatchSubOperation } from "../src/map-engine/types";
 
 const SEED_CLIENT_ID = "dev-seed";
@@ -170,6 +172,145 @@ export const seed = internalMutation({
       buildingId: DEMO_BUILDING.id,
       floorIds: floors.map((floor) => floor.id),
     };
+  },
+});
+
+const HOUR = 60 * 60_000;
+const DAY = 24 * HOUR;
+
+/** The instant `time` of `day` shows in `timezone`, a quarter hour at a time. */
+const instantOf = (timezone: string, day: string, time: string) => {
+  const guess = Date.parse(`${day}T${time}:00Z`);
+  for (let quarter = -14 * 4; quarter <= 14 * 4; quarter += 1) {
+    const slot = slotAt(timezone, guess + quarter * 15 * 60_000);
+    if (slot?.day === day && slot.time === time) return slot.at;
+  }
+  return null;
+};
+
+/**
+ * A week of history for the demo's workstations and printers, standing in
+ * for collection cycles that never ran: each was seen at one socket, went
+ * offline, and came back at the next one; the last three days have
+ * snapshots, with yesterday's 16:00 missing. Skipped once the demo site has
+ * any history.
+ */
+export const seedHistory = internalMutation({
+  args: {},
+  returns: v.number(),
+  handler: async (ctx) => {
+    assertSeedable();
+    const siteId = DEMO_SITE.objectId;
+    const site = await ctx.db
+      .query("sites")
+      .withIndex("by_object_id", (q) => q.eq("objectId", siteId))
+      .unique();
+    const existing = await ctx.db
+      .query("deviceEvents")
+      .withIndex("by_site_at", (q) => q.eq("siteId", siteId))
+      .first();
+    if (!site || existing) return 0;
+    const devices = await ctx.db
+      .query("devices")
+      .withIndex("by_site", (q) => q.eq("siteId", siteId))
+      .collect();
+    const present = devices.filter(
+      ({ type, macs }) => (type === "pc" || type === "endpoint") && macs[0],
+    );
+    const sockets = devices.filter(({ type }) => type === "wall-port");
+    const switchRow = devices.find(({ type }) => type === "switch");
+    if (!switchRow || sockets.length < 2) return 0;
+    const ports = (
+      await ctx.db
+        .query("ports")
+        .withIndex("by_device", (q) => q.eq("deviceId", switchRow.objectId))
+        .collect()
+    ).toSorted((a, b) => a.order - b.order);
+    const placeOf = placeNamer(ctx);
+    if (ports.length === 0) return 0;
+    const placeAt = async (n: number) =>
+      await placeOf({
+        switchId: switchRow.objectId,
+        portId: ports[n % ports.length].objectId,
+        socketId: sockets[n % sockets.length].objectId,
+      });
+
+    const now = Date.now();
+    let written = 0;
+    for (const [n, device] of present.entries()) {
+      const first = await placeAt(n);
+      const second = await placeAt(n + present.length);
+      const event = {
+        siteId,
+        deviceId: device.objectId,
+        deviceName: device.name,
+      };
+      const seenAt = now - 6 * DAY + n * HOUR;
+      const offAt = now - 3 * DAY + n * HOUR;
+      const backAt = now - 2 * DAY + n * HOUR;
+      await ctx.db.insert("deviceEvents", {
+        ...event,
+        at: seenAt,
+        kind: "located",
+        place: first,
+      });
+      await ctx.db.insert("deviceEvents", {
+        ...event,
+        at: seenAt,
+        kind: "online",
+      });
+      await ctx.db.insert("deviceEvents", {
+        ...event,
+        at: offAt,
+        kind: "offline",
+        lastSeenAt: offAt - 10 * 60_000,
+      });
+      await ctx.db.insert("deviceEvents", {
+        ...event,
+        at: backAt,
+        kind: "located",
+        place: second,
+      });
+      await ctx.db.insert("deviceEvents", {
+        ...event,
+        at: backAt,
+        kind: "online",
+      });
+      written += 5;
+    }
+
+    for (const daysAgo of [2, 1, 0]) {
+      const day = siteDay(site.timezone, now - daysAgo * DAY);
+      for (const time of ["08:00", "12:00", "14:00", "16:00"]) {
+        if (daysAgo === 1 && time === "16:00") continue;
+        const at = instantOf(site.timezone, day, time);
+        if (at === null || at > now) continue;
+        const slotId = await ctx.db.insert("historySlots", {
+          siteId,
+          day,
+          time,
+          at,
+          takenAt: at + 2 * 60_000,
+          entries: present.length,
+        });
+        for (const [n, device] of present.entries()) {
+          const place = await placeAt(
+            at < now - 2 * DAY ? n : n + present.length,
+          );
+          await ctx.db.insert("historySlotEntries", {
+            slotId,
+            siteId,
+            slotAt: at,
+            mac: device.macs[0] ?? "",
+            deviceId: device.objectId,
+            deviceName: device.name,
+            place,
+          });
+          written += 1;
+        }
+      }
+    }
+    return written;
   },
 });
 

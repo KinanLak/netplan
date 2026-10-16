@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { slotAt } from "./snapshots";
+import { siteDay, slotAt, slotStillOpen } from "./snapshots";
 
 const PARIS = "Europe/Paris";
 const at = (iso: string) => Date.parse(iso);
@@ -35,5 +35,17 @@ describe("snapshot slots", () => {
       time: "08:00",
       at: at("2026-06-15T23:00:00Z"),
     });
+  });
+
+  it("leaves a slot open until its window closes, in the site's day", () => {
+    const at14h09 = at("2026-06-16T12:09:00Z");
+    expect(slotStillOpen(PARIS, "2026-06-16", "14:00", at14h09)).toBe(true);
+    expect(slotStillOpen(PARIS, "2026-06-16", "14:00", at14h09 + 60_000)).toBe(
+      false,
+    );
+    expect(slotStillOpen(PARIS, "2026-06-17", "08:00", at14h09)).toBe(true);
+    expect(slotStillOpen(PARIS, "2026-06-15", "19:00", at14h09)).toBe(false);
+    // 23:30 UTC is already the next day in Paris.
+    expect(siteDay(PARIS, at("2026-06-16T23:30:00Z"))).toBe("2026-06-17");
   });
 });
