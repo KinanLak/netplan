@@ -187,6 +187,40 @@ Built by lot 4 (ADR 0026).
   `health.overview`: every site's freshness, last cycle, NetBox import age,
   switch counts by status and per-switch LibreNMS results.
 
+## Map
+
+Built by lot 3b (ADR 0025).
+
+- **Observed facts.** The LibreNMS step records each switch's last good
+  read (`siteCycles.switchReads`). A switch's status, its ports' link and
+  "Appareil vu", and the status of every device last seen on it rest on
+  that read. Past twice the longest cadence plus the lease, the minute cron
+  removes them (`expireStaleReads`), so a dead LibreNMS turns the map to
+  "Inconnu" rather than freezing it. `convex/lib/statuses.ts` drops what an
+  undo or a create brings back that no fresh read vouches for. A manual
+  switch whose ports still carry their default names takes LibreNMS's.
+- **Ports and dots.** Switches and patch panels draw their real ports, coloured
+  by `src/devices/portState.ts`. Every device with a status carries a dot.
+- **Paths.** `src/canvas/cablePaths.ts` traces, in the browser and from the
+  floor document, a path through patch panels to the switch port. A PC is
+  joined to the socket where it was last seen by a dashed segment. Hovering
+  or selecting a PC, endpoint or socket shows its path. A switch or panel
+  shows all of its paths only on demand (menu, drawer or H) until it is
+  hidden or another device's are shown. A trace stops rather than guess, at
+  a loop, a hop limit, or a shared rear port; a hop off the floor ends on a
+  label.
+- **Cable editing.** In edit mode a port is a grip
+  (`src/canvas/cableDrawing.ts`): a free one draws a cable to another device
+  of the floor, and a cabled one offers to unplug it. Both go through
+  `useCableCommands`, the port table's mutations and its "Annuler" toast,
+  outside the map's undo. Cables an integration made, and cables to another
+  floor, stay with the port table.
+- **Moves made by others.** The cycle moves devices through
+  `applyMapOperation`, so they reach every client and enter no history. An
+  undo or redo carries where it expects the device (`expected` on
+  `device.patch` and `device.unplace`), and the engine and server refuse it
+  once someone else, the cycle included, has moved the device since.
+
 ## Deployment
 
 Built by lot 0 (ADR 0020); procedures in [`docs/operations/`](../operations/index.md).
