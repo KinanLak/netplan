@@ -19,6 +19,7 @@ import { Route as AuthedAdminRouteImport } from './routes/_authed/admin'
 import { Route as AuthedInventoryRouteImport } from './routes/_authed/inventory'
 import { Route as AuthedLogoRouteImport } from './routes/_authed/logo'
 import { Route as AuthedAdminIndexRouteImport } from './routes/_authed/admin/index'
+import { Route as AuthedAdminHealthRouteImport } from './routes/_authed/admin/health'
 import { Route as AuthedAdminUsersRouteImport } from './routes/_authed/admin/users'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as AuthedAdminSitesIndexRouteImport } from './routes/_authed/admin/sites/index'
@@ -73,6 +74,11 @@ const AuthedAdminIndexRoute = AuthedAdminIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthedAdminRoute,
 } as any)
+const AuthedAdminHealthRoute = AuthedAdminHealthRouteImport.update({
+  id: '/health',
+  path: '/health',
+  getParentRoute: () => AuthedAdminRoute,
+} as any)
 const AuthedAdminUsersRoute = AuthedAdminUsersRouteImport.update({
   id: '/users',
   path: '/users',
@@ -103,6 +109,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AuthedAdminRouteWithChildren
   '/inventory': typeof AuthedInventoryRoute
   '/logo': typeof AuthedLogoRoute
+  '/admin/health': typeof AuthedAdminHealthRoute
   '/admin/users': typeof AuthedAdminUsersRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/admin/': typeof AuthedAdminIndexRoute
@@ -117,6 +124,7 @@ export interface FileRoutesByTo {
   '/inventory': typeof AuthedInventoryRoute
   '/logo': typeof AuthedLogoRoute
   '/': typeof AuthedIndexRoute
+  '/admin/health': typeof AuthedAdminHealthRoute
   '/admin/users': typeof AuthedAdminUsersRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/admin': typeof AuthedAdminIndexRoute
@@ -134,6 +142,7 @@ export interface FileRoutesById {
   '/_authed/inventory': typeof AuthedInventoryRoute
   '/_authed/logo': typeof AuthedLogoRoute
   '/_authed/': typeof AuthedIndexRoute
+  '/_authed/admin/health': typeof AuthedAdminHealthRoute
   '/_authed/admin/users': typeof AuthedAdminUsersRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/_authed/admin/': typeof AuthedAdminIndexRoute
@@ -151,6 +160,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/inventory'
     | '/logo'
+    | '/admin/health'
     | '/admin/users'
     | '/api/auth/$'
     | '/admin/'
@@ -165,6 +175,7 @@ export interface FileRouteTypes {
     | '/inventory'
     | '/logo'
     | '/'
+    | '/admin/health'
     | '/admin/users'
     | '/api/auth/$'
     | '/admin'
@@ -181,6 +192,7 @@ export interface FileRouteTypes {
     | '/_authed/inventory'
     | '/_authed/logo'
     | '/_authed/'
+    | '/_authed/admin/health'
     | '/_authed/admin/users'
     | '/api/auth/$'
     | '/_authed/admin/'
@@ -269,6 +281,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedAdminIndexRouteImport
       parentRoute: typeof AuthedAdminRoute
     }
+    '/_authed/admin/health': {
+      id: '/_authed/admin/health'
+      path: '/health'
+      fullPath: '/admin/health'
+      preLoaderRoute: typeof AuthedAdminHealthRouteImport
+      parentRoute: typeof AuthedAdminRoute
+    }
     '/_authed/admin/users': {
       id: '/_authed/admin/users'
       path: '/users'
@@ -301,6 +320,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthedAdminRouteChildren {
+  AuthedAdminHealthRoute: typeof AuthedAdminHealthRoute
   AuthedAdminUsersRoute: typeof AuthedAdminUsersRoute
   AuthedAdminIndexRoute: typeof AuthedAdminIndexRoute
   AuthedAdminSitesSiteIdRoute: typeof AuthedAdminSitesSiteIdRoute
@@ -308,6 +328,7 @@ interface AuthedAdminRouteChildren {
 }
 
 const AuthedAdminRouteChildren: AuthedAdminRouteChildren = {
+  AuthedAdminHealthRoute: AuthedAdminHealthRoute,
   AuthedAdminUsersRoute: AuthedAdminUsersRoute,
   AuthedAdminIndexRoute: AuthedAdminIndexRoute,
   AuthedAdminSitesSiteIdRoute: AuthedAdminSitesSiteIdRoute,

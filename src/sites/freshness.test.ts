@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import {
   describeAge,
+  describeFreshness,
   describeNextRun,
   isLate,
   nextRun,
@@ -98,6 +99,37 @@ describe("descriptions", () => {
     expect(describeAge(at, at + 4 * MINUTE, TZ)).toBe("il y a 4 min");
     expect(describeAge(at, at + 150 * MINUTE, TZ)).toBe("il y a 2 h");
     expect(describeAge(at, at + 48 * 60 * MINUTE, TZ)).toMatch(/^le mer\. 14/);
+  });
+});
+
+describe("describeFreshness", () => {
+  it("says how old the data is, late once it is", () => {
+    expect(describeFreshness(site(), WEDNESDAY_10H + 3 * MINUTE)).toEqual({
+      headline: "Données collectées il y a 3 min",
+      tone: "fresh",
+    });
+    expect(describeFreshness(site({ failures: 2 }), WEDNESDAY_10H)).toEqual({
+      headline: "Données en retard : à l'instant",
+      tone: "late",
+    });
+  });
+
+  it("tells a hand-drawn plan from one never collected", () => {
+    expect(
+      describeFreshness(site({ hasSources: false }), WEDNESDAY_10H).headline,
+    ).toBe("Plan dessiné à la main");
+    expect(
+      describeFreshness(site({ lastSuccessAt: null }), WEDNESDAY_10H),
+    ).toEqual({ headline: "Aucune donnée collectée", tone: "none" });
+  });
+
+  it("warns of a site whose cycles keep failing before any succeeded", () => {
+    expect(
+      describeFreshness(
+        site({ lastSuccessAt: null, failures: 2 }),
+        WEDNESDAY_10H,
+      ),
+    ).toEqual({ headline: "Aucune donnée collectée", tone: "late" });
   });
 });
 

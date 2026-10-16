@@ -3,6 +3,7 @@
 // together. Each cycle asks every enabled source in turn and records what
 // each answered for the admin.
 import { ConvexError, v } from "convex/values";
+import type { Infer } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalAction, internalMutation } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
@@ -37,7 +38,7 @@ const scheduleExpiry = async (
   });
 };
 
-type CycleStep = { source: IntegrationKind; ok: boolean; message: string };
+type CycleStep = Infer<typeof cycleStep>;
 
 /**
  * `NETPLAN_COLLECTION_PAUSED=true` stops every cycle, automatic or manual,
@@ -198,8 +199,8 @@ const collectFrom = async (
         ? await importFromNetBox(ctx, siteId, cycleId, connection)
         : await collectFromLibreNMS(ctx, siteId, cycleId, connection);
     return {
+      ...collected,
       source,
-      ok: collected.ok,
       message: [answer.message, collected.message].filter(Boolean).join(" "),
     };
   } catch (error) {
@@ -331,6 +332,64 @@ export const status = adminQuery({
   },
 });
 
+/** What `freshness` says of a site (`SiteFreshness`, ADR 0026). */
+export const siteFreshness = v.object({
+  paused: v.boolean(),
+  hasSources: v.boolean(),
+  automaticRefresh: v.boolean(),
+  manualRefresh: v.boolean(),
+  cadence: siteCadence,
+  timezone: v.string(),
+  running: v.union(
+    v.null(),
+    v.object({ startedAt: v.number(), manual: v.boolean() }),
+  ),
+  /** The last cycle that ended, and the sources that failed in it. */
+  last: v.union(
+    v.null(),
+    v.object({
+      startedAt: v.number(),
+      finishedAt: v.number(),
+      failed: v.array(integrationKind),
+    }),
+  ),
+  lastSuccessAt: v.union(v.null(), v.number()),
+  nextRunAt: v.union(v.null(), v.number()),
+  failures: v.number(),
+});
+
+export const freshnessOf = async (
+  ctx: QueryCtx,
+  site: Doc<"sites">,
+  cycle: Doc<"siteCycles"> | null,
+): Promise<Infer<typeof siteFreshness>> => {
+  const last = cycle?.last;
+  return {
+    paused: collectionPaused(),
+    hasSources: (await enabledSources(ctx, site.objectId)).length > 0,
+    automaticRefresh: site.automaticRefresh,
+    manualRefresh: site.manualRefresh,
+    cadence: site.cadence,
+    timezone: site.timezone,
+    running:
+      cycle?.running && isRunning(cycle, Date.now())
+        ? { startedAt: cycle.running.startedAt, manual: cycle.running.manual }
+        : null,
+    last: last
+      ? {
+          startedAt: last.startedAt,
+          finishedAt: last.finishedAt,
+          failed: last.steps
+            .filter((step) => !step.ok)
+            .map((step) => step.source),
+        }
+      : null,
+    lastSuccessAt: cycle?.lastSuccessAt ?? null,
+    nextRunAt: cycle ? cycle.nextRunAt : null,
+    failures: cycle?.failures ?? 0,
+  };
+};
+
 /**
  * How fresh a site's data is and when it is next collected, for everyone
  * who reads the site (ADR 0026). The client ages it against its own clock.
@@ -338,61 +397,10 @@ export const status = adminQuery({
  */
 export const freshness = readerQuery({
   args: { siteId: v.string() },
-  returns: v.union(
-    v.null(),
-    v.object({
-      paused: v.boolean(),
-      hasSources: v.boolean(),
-      automaticRefresh: v.boolean(),
-      manualRefresh: v.boolean(),
-      cadence: siteCadence,
-      timezone: v.string(),
-      running: v.union(
-        v.null(),
-        v.object({ startedAt: v.number(), manual: v.boolean() }),
-      ),
-      /** The last cycle that ended, and the sources that failed in it. */
-      last: v.union(
-        v.null(),
-        v.object({
-          startedAt: v.number(),
-          finishedAt: v.number(),
-          failed: v.array(integrationKind),
-        }),
-      ),
-      lastSuccessAt: v.union(v.null(), v.number()),
-      nextRunAt: v.union(v.null(), v.number()),
-      failures: v.number(),
-    }),
-  ),
+  returns: v.union(v.null(), siteFreshness),
   handler: async (ctx, { siteId }) => {
     const site = await siteOf(ctx, siteId);
     if (!site) return null;
-    const cycle = await cycleOf(ctx, siteId);
-    const last = cycle?.last;
-    return {
-      paused: collectionPaused(),
-      hasSources: (await enabledSources(ctx, siteId)).length > 0,
-      automaticRefresh: site.automaticRefresh,
-      manualRefresh: site.manualRefresh,
-      cadence: site.cadence,
-      timezone: site.timezone,
-      running:
-        cycle?.running && isRunning(cycle, Date.now())
-          ? { startedAt: cycle.running.startedAt, manual: cycle.running.manual }
-          : null,
-      last: last
-        ? {
-            startedAt: last.startedAt,
-            finishedAt: last.finishedAt,
-            failed: last.steps
-              .filter((step) => !step.ok)
-              .map((step) => step.source),
-          }
-        : null,
-      lastSuccessAt: cycle?.lastSuccessAt ?? null,
-      nextRunAt: cycle ? cycle.nextRunAt : null,
-      failures: cycle?.failures ?? 0,
-    };
+    return await freshnessOf(ctx, site, await cycleOf(ctx, siteId));
   },
 });

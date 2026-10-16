@@ -296,6 +296,7 @@ describe("the LibreNMS step", () => {
       message: expect.stringContaining(
         "1 switch lu, 3 MAC vues (2 passés en ligne, 1 inconnue).",
       ),
+      switches: [{ name: "pile", ok: true, notes: [] }],
     });
     expect(librenms.state.discoveries).toBe(1);
     expect(await statusOf(admin, "device:pc")).toBe("up");
@@ -349,6 +350,9 @@ describe("the LibreNMS step", () => {
     expect(failed.message).toContain(
       "« pile » : LibreNMS refuse ce jeton (403).",
     );
+    expect(failed.switches).toEqual([
+      { name: "pile", ok: false, notes: ["LibreNMS refuse ce jeton (403)."] },
+    ]);
     expect(await statusOf(admin, "device:printer")).toBe("up");
 
     // Without LibreNMS nothing would keep the statuses true.
@@ -751,7 +755,7 @@ describe("the LibreNMS step", () => {
     ).toHaveLength(1);
     expect(uncertain.ok).toBe(false);
     expect(uncertain.message).toContain(
-      "« pile » n'a pas pu lancer sa découverte : LibreNMS a répondu 503.",
+      "« pile » : sa découverte n'a pas pu être lancée. LibreNMS a répondu 503.",
     );
     // It ran anyway, so the tables are read.
     expect(await statusOf(admin, "device:pc")).toBe("up");
@@ -764,7 +768,7 @@ describe("the LibreNMS step", () => {
     librenms.state.discoverStatus = 403;
     const refused = await cycle(admin, siteId);
     expect(refused.message).toContain(
-      "« pile » n'a pas pu lancer sa découverte : LibreNMS refuse ce jeton (403).",
+      "« pile » : sa découverte n'a pas pu être lancée. LibreNMS refuse ce jeton (403).",
     );
     expect(librenms.state.discoveries).toBe(1);
   });

@@ -22,6 +22,7 @@ import type * as dev from "../dev.js";
 import type * as devices from "../devices.js";
 import type * as floorOverlays from "../floorOverlays.js";
 import type * as floors from "../floors.js";
+import type * as health from "../health.js";
 import type * as http from "../http.js";
 import type * as importReviews from "../importReviews.js";
 import type * as integrations from "../integrations.js";
@@ -81,6 +82,7 @@ declare const fullApi: ApiFromModules<{
   devices: typeof devices;
   floorOverlays: typeof floorOverlays;
   floors: typeof floors;
+  health: typeof health;
   http: typeof http;
   importReviews: typeof importReviews;
   integrations: typeof integrations;
