@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import { AuthBoundary } from "@convex-dev/better-auth/react";
 import { Outlet, createFileRoute, redirect } from "@tanstack/react-router";
+import { ThemeProvider } from "@/components/theme-provider";
+import { Toaster } from "@/components/ui/sonner";
 import { CurrentUserProvider } from "@/hooks/use-current-user";
 import { MapDocumentProvider } from "@/map-session/MapDocumentProvider";
 import { useCurrentFloorId } from "@/store/selectors";
@@ -36,11 +38,17 @@ function AuthedLayout() {
       isAuthError={isSessionLost}
       onUnauth={backToLogin}
     >
-      <CurrentUserProvider>
-        <MapSession>
-          <Outlet />
-        </MapSession>
-      </CurrentUserProvider>
+      <ThemeProvider defaultTheme="system" storageKey="netplan-ui-theme">
+        <CurrentUserProvider>
+          <MapSession>
+            <Outlet />
+          </MapSession>
+        </CurrentUserProvider>
+        {/* The only toaster, so a toast survives a change of page. Bottom
+            centre: every corner of the map is taken, and React Scan's toolbar
+            snaps to one in development. */}
+        <Toaster position="bottom-center" />
+      </ThemeProvider>
     </AuthBoundary>
   );
 }

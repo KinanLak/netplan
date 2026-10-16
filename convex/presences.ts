@@ -29,7 +29,7 @@ export const updateOnlineUser = readerMutation({
       .query("floors")
       .withIndex("by_object_id", (q) => q.eq("objectId", floorId))
       .unique();
-    if (!floor) throw new ConvexError("Floor not found");
+    if (!floor) throw new ConvexError("Cet étage n'existe plus.");
 
     const now = Date.now();
     const mine = await ctx.db

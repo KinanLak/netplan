@@ -195,7 +195,7 @@ export default function AppSidebar() {
       <SidebarHeader className="border-b py-4 pr-4 pl-0.5">
         <div className="flex items-center justify-between">
           <h1 className="rounded-sm bg-transparent pb-0.5 leading-none">
-            <Link to="/" aria-label="Retour a l'accueil">
+            <Link to="/" aria-label="Retour à l'accueil">
               <NetplanLogo size={34} />
             </Link>
           </h1>

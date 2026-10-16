@@ -3,7 +3,6 @@ import { ArrowLeft01Icon } from "@hugeicons/core-free-icons";
 import { Link, Outlet, createFileRoute } from "@tanstack/react-router";
 import { NetplanLogo } from "@/components/netplan-logo";
 import { ModeToggle } from "@/components/mode-toggle";
-import { ThemeProvider } from "@/components/theme-provider";
 import { buttonVariants } from "@/components/ui/button";
 import { ADMIN_SECTIONS } from "@/admin/sections";
 import { useCurrentUser } from "@/hooks/use-current-user";
@@ -12,16 +11,8 @@ import { isAdmin } from "@/lib/roles";
 export const Route = createFileRoute("/_authed/admin")({
   ssr: false,
   head: () => ({ meta: [{ title: "Administration · Netplan" }] }),
-  component: AdminLayout,
+  component: AdminShell,
 });
-
-function AdminLayout() {
-  return (
-    <ThemeProvider defaultTheme="system" storageKey="netplan-ui-theme">
-      <AdminShell />
-    </ThemeProvider>
-  );
-}
 
 // The server refuses every admin function to anyone else; this only spares
 // them a page of errors.

@@ -536,7 +536,7 @@ describe("wall interaction", () => {
       sample(10, 10),
     );
 
-    expect(clicked.state.drawMessage).toBe("Aucun bloc de mur a supprimer.");
+    expect(clicked.state.drawMessage).toBe("Aucun bloc de mur à supprimer.");
     expect(clicked.state.pointerPreview).toBe(null);
   });
 

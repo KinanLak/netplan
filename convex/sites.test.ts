@@ -120,7 +120,7 @@ describe("sites", () => {
         objectId: "building:missing",
         name: "Missing",
       }),
-    ).rejects.toThrow("Site not found");
+    ).rejects.toThrow("Ce site n'existe plus.");
   });
 
   it("rejects a default-map identity owned by another site", async () => {

@@ -148,7 +148,7 @@ const validatePosition = (position: {
   y: number;
 }): string | null => {
   if (!isFiniteNumber(position.x) || !isFiniteNumber(position.y)) {
-    return "Position must contain finite numbers";
+    return "La position est invalide.";
   }
   return null;
 };
@@ -158,10 +158,10 @@ const validateSize = (size: {
   height: number;
 }): string | null => {
   if (!Number.isFinite(size.width) || !Number.isFinite(size.height)) {
-    return "Size must contain finite numbers";
+    return "La taille est invalide.";
   }
   if (size.width <= 0 || size.height <= 0) {
-    return "Size must be greater than zero";
+    return "La taille doit être positive.";
   }
   return null;
 };
@@ -679,7 +679,7 @@ const markAffectedFloor = (state: PlanningState, floorId: string) => {
 };
 
 const floorError = (state: PlanningState, floorId: string): string | null =>
-  state.floorSites.has(floorId) ? null : "Floor not found";
+  state.floorSites.has(floorId) ? null : "Cet étage n'existe plus.";
 
 const removePlannedInsert = (
   state: PlanningState,
@@ -726,7 +726,7 @@ const validateDevicePlacement = (
         other.size,
       )
     ) {
-      return "Device collides with another device";
+      return "L'équipement chevauche un autre équipement.";
     }
   }
 
@@ -741,7 +741,7 @@ const validateDevicePlacement = (
         { width: rect.width, height: rect.height },
       )
     ) {
-      return "Device collides with a wall";
+      return "L'équipement chevauche un mur.";
     }
   }
 
@@ -776,13 +776,13 @@ const deviceMacsError = (
   device: DeviceInput,
 ): string | null => {
   const problem = macListProblem(device.macs);
-  if (problem === "too-many") return "Too many MAC addresses";
-  if (problem === "duplicate") return "Duplicate MAC address";
-  if (problem === "invalid") return "Invalid MAC address";
+  if (problem === "too-many") return "Trop d'adresses MAC.";
+  if (problem === "duplicate") return "Une adresse MAC est en double.";
+  if (problem === "invalid") return "Une adresse MAC est invalide.";
   for (const mac of device.macs) {
     const owner = state.macOwners.get(macKey(siteId, mac));
     if (owner && owner !== device.id) {
-      return "MAC address belongs to another device of the site";
+      return "Une adresse MAC appartient déjà à un autre équipement du site.";
     }
   }
   return null;
@@ -793,11 +793,11 @@ const planDeviceCreate = (
   operation: DeviceCreateOperation,
 ): string | null => {
   const siteId = state.floorSites.get(operation.device.floorId);
-  if (!siteId) return "Floor not found";
+  if (!siteId) return "Cet étage n'existe plus.";
   const shapeError = validateDeviceShape(operation.device);
   if (shapeError) return shapeError;
   if (state.unplacedDevices.has(operation.device.id)) {
-    return "Device object id already exists with different payload";
+    return "Cet équipement existe déjà avec d'autres valeurs.";
   }
 
   const ports = portsForNewDevice(
@@ -814,18 +814,21 @@ const planDeviceCreate = (
       devicePayload(operation.device),
     ) && sameCabling(state, operation.device.id, ports, cables)
       ? null
-      : "Device object id already exists with different payload";
+      : "Cet équipement existe déjà avec d'autres valeurs.";
   }
 
   const macsError = deviceMacsError(state, siteId, operation.device);
   if (macsError) return macsError;
-  if (identityEditError(operation.device)) return "Invalid device identity";
-  const portsError = portListError(operation.device.id, ports);
-  if (portsError) return portsError;
-  if (cables.length > MAX_PORTS_PER_DEVICE) return "Too many cables";
+  const identityError = identityEditError(operation.device);
+  if (identityError) return identityError;
+  if (portListError(operation.device.id, ports)) {
+    return "Les ports de cet équipement sont invalides.";
+  }
+  if (cables.length > MAX_PORTS_PER_DEVICE)
+    return "Les câbles de cet équipement sont invalides.";
   // Another device's ids may embed this one's, so a port id can be taken.
   if (ports.some((port) => state.ports.has(port.id))) {
-    return "Port object id already exists";
+    return "Les ports de cet équipement sont invalides.";
   }
 
   const placementError = validateDevicePlacement(state, {
@@ -907,7 +910,7 @@ const planCables = (
     isCabled: (portId) => state.cabledPorts.has(portId),
     cableExists: (cableId) => state.cables.has(cableId),
   });
-  if ("error" in result) return result.error;
+  if ("error" in result) return "Les câbles de cet équipement sont invalides.";
   for (const value of result.cables) {
     const row = cableRow(siteId, value, meta.createdAt, meta.clientId);
     state.cables.set(value.id, row);
@@ -923,7 +926,7 @@ const planDevicePatch = (
   operation: DevicePatchOperation,
 ): string | null => {
   const existing = state.devices.get(operation.deviceId);
-  if (!existing) return "Device not found";
+  if (!existing) return "Cet équipement n'existe plus.";
 
   const patched: PlannedDevice = {
     ...existing,
@@ -988,9 +991,10 @@ const planDeviceDelete = (
   operation: DeviceDeleteOperation,
 ): string | null => {
   const existing = state.devices.get(operation.deviceId);
-  if (!existing) return "Device not found";
+  if (!existing) return "Cet équipement n'existe plus.";
   // Its integration would bring it back at the next sync.
-  if (existing.source) return "Device is owned by its source";
+  if (existing.source)
+    return "Cet équipement vient d'une intégration : il ne peut pas être supprimé.";
 
   planCablingDelete(state, operation.deviceId);
   state.devices.delete(operation.deviceId);
@@ -1019,7 +1023,7 @@ const planDevicePlace = (
 ): string | null => {
   const { id, floorId, position, size } = operation.device;
   const siteId = state.floorSites.get(floorId);
-  if (!siteId) return "Floor not found";
+  if (!siteId) return "Cet étage n'existe plus.";
   const shapeError = validateDeviceShape(operation.device);
   if (shapeError) return shapeError;
 
@@ -1031,11 +1035,12 @@ const planDevicePlace = (
       { floorId, position, size },
     )
       ? null
-      : "Device is already placed";
+      : "Cet équipement est déjà sur le plan.";
   }
   const existing = state.unplacedDevices.get(id);
-  if (!existing) return "Device not found";
-  if (existing.siteId !== siteId) return "Device belongs to another site";
+  if (!existing) return "Cet équipement n'existe plus.";
+  if (existing.siteId !== siteId)
+    return "Cet équipement appartient à un autre site.";
 
   const placementError = validateDevicePlacement(state, {
     objectId: id,
@@ -1076,7 +1081,7 @@ const planDeviceUnplace = (
 ): string | null => {
   const existing = state.devices.get(operation.deviceId);
   // A device created by the same batch has no row to keep yet.
-  if (!existing?.rowId) return "Device not found";
+  if (!existing?.rowId) return "Cet équipement n'existe plus.";
 
   // Its ports and cables stay with it in the inventory.
   const { floorId, position: _position, size: _size, ...device } = existing;
@@ -1103,11 +1108,11 @@ const planWallsAdd = (
   operation: WallAddOperation,
 ): string | null => {
   if (operation.walls.length > MAX_WALLS_PER_OPERATION) {
-    return "Too many walls in one operation";
+    return "Trop de murs en une seule modification.";
   }
   for (const input of operation.walls) {
     const wall = canonicalWall(input);
-    if (!wall) return "Invalid wall geometry";
+    if (!wall) return "La forme du mur est invalide.";
 
     const existingFloorError = floorError(state, wall.floorId);
     if (existingFloorError) return existingFloorError;
@@ -1116,7 +1121,7 @@ const planWallsAdd = (
     if (existing) {
       markAffectedFloor(state, existing.floorId);
       if (!sameJson(plannedWallPayload(existing), wallPayload(wall))) {
-        return "Wall object id already exists with different payload";
+        return "Ce mur existe déjà avec d'autres valeurs.";
       }
       continue;
     }
@@ -1128,7 +1133,7 @@ const planWallsAdd = (
     }
 
     if (wallCollidesWithDevice(state, wall)) {
-      return "Wall collides with a device";
+      return "Le mur chevauche un équipement.";
     }
 
     const value: WallInsert = {
@@ -1171,10 +1176,10 @@ const planWallsDelete = (
   operation: WallDeleteOperation,
 ): string | null => {
   if (operation.wallIds.length > MAX_WALL_DELETES_PER_OPERATION) {
-    return "Too many walls in one delete operation";
+    return "Trop de murs en une seule modification.";
   }
   for (const wallId of operation.wallIds) {
-    if (!state.walls.has(wallId)) return "Wall not found";
+    if (!state.walls.has(wallId)) return "Ce mur n'existe plus.";
   }
   for (const wallId of operation.wallIds) planWallDeleteById(state, wallId);
   return null;
@@ -1185,14 +1190,14 @@ const overlayValueError = (
   overlay: OverlayValue,
 ): string | null => {
   const invalid = overlayError(overlay);
-  if (invalid) return `Invalid calque: ${invalid}`;
+  if (invalid) return "Le placement du calque est invalide.";
   const file = state.overlayFiles.get(overlay.fileId);
-  if (!file) return "Calque file not found";
+  if (!file) return "L'image du calque n'existe plus.";
   if (
     file.width !== overlay.imageWidth ||
     file.height !== overlay.imageHeight
   ) {
-    return "Calque size does not match its file";
+    return "La taille du calque ne correspond pas à son image.";
   }
   return null;
 };
@@ -1230,18 +1235,18 @@ const planOverlaySet = (
   if (existingFloorError) return existingFloorError;
   const current = state.overlays.get(operation.floorId) ?? null;
   const next = operation.overlay;
-  if (!current && !next) return "Calque not found";
+  if (!current && !next) return "Ce calque n'existe plus.";
 
   if (next) {
     if (next.floorId !== operation.floorId) {
-      return "Calque belongs to another floor";
+      return "Ce calque appartient à un autre étage.";
     }
     if (current && sameOverlay(current, next)) {
       markAffectedFloor(state, operation.floorId);
       return null;
     }
   }
-  if (current?.locked) return "Calque is locked";
+  if (current?.locked) return "Le calque est verrouillé.";
   if (!next) {
     putOverlay(state, operation.floorId, null);
     return null;
@@ -1265,9 +1270,9 @@ const planOverlayPatch = (
   const existingFloorError = floorError(state, operation.floorId);
   if (existingFloorError) return existingFloorError;
   const current = state.overlays.get(operation.floorId);
-  if (!current) return "Calque not found";
+  if (!current) return "Ce calque n'existe plus.";
   if (isPatchBlockedByLock(current, operation.patch)) {
-    return "Calque is locked";
+    return "Le calque est verrouillé.";
   }
 
   const value: OverlayValue = {
@@ -1276,7 +1281,7 @@ const planOverlayPatch = (
     updatedBy: operation.meta.clientId,
   };
   const invalid = overlayError(value);
-  if (invalid) return `Invalid calque: ${invalid}`;
+  if (invalid) return "Le placement du calque est invalide.";
   if (sameOverlay(current, value)) {
     markAffectedFloor(state, operation.floorId);
     return null;
@@ -1310,7 +1315,7 @@ const planOperation = (
       return planOverlayPatch(state, operation);
     case "batch": {
       if (operation.operations.length > MAX_BATCH_OPERATIONS) {
-        return "Too many operations in one batch";
+        return "Trop de modifications en une fois.";
       }
       for (const subOperation of operation.operations) {
         const error = planOperation(state, {
@@ -1434,7 +1439,7 @@ const singleAffectedFloorId = (state: PlanningState): string | undefined =>
 const validateSingleAffectedFloor = (state: PlanningState): string | null =>
   state.affectedFloorIds.size === 1
     ? null
-    : "Operation must affect exactly one floor";
+    : "Une modification ne peut toucher qu'un seul étage.";
 
 const clientOperationResult = (operation: Doc<"clientOperations">) => ({
   status: operation.status,

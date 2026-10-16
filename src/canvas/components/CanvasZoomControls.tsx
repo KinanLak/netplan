@@ -36,8 +36,8 @@ export function CanvasZoomControls({
           type="button"
           onClick={onZoomOut}
           className="grid h-8 w-8 place-items-center border-b border-border text-foreground transition-colors hover:bg-muted"
-          aria-label="Zoom arriere"
-          title="Zoom arriere"
+          aria-label="Zoom arrière"
+          title="Zoom arrière"
         >
           <HugeiconsIcon
             icon={MinusSignIcon}

@@ -199,6 +199,6 @@ describe("presences", () => {
       message = error instanceof Error ? error.message : String(error);
     }
 
-    expect(message).toContain("Floor not found");
+    expect(message).toContain("Cet étage n'existe plus.");
   });
 });

@@ -304,7 +304,7 @@ const clickErasePane = (
 
   return {
     ...state,
-    drawMessage: eraseResult.changed ? null : "Aucun bloc de mur a supprimer.",
+    drawMessage: eraseResult.changed ? null : "Aucun bloc de mur à supprimer.",
     hoverSnapPoint: sample.snappedPoint,
     pointerPreview: null,
     erasePreviewKeys: previewErase(context, adapter, sample),

@@ -171,7 +171,7 @@ export class SequentialOutbox {
             this.queue.shift();
             this.options.onReject(
               operation,
-              result.error ?? "Operation rejected by server",
+              result.error ?? "Le serveur a refusé la modification.",
             );
             this.retryAttempts = 0;
             this.lastFailure = null;

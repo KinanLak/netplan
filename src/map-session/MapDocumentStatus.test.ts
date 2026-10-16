@@ -6,21 +6,15 @@ import {
 } from "./MapDocumentStatus";
 
 describe("MapDocumentStatus", () => {
-  it("formats collision rejections for users", () => {
-    expect(getRejectedOperationMessage("Device collides with a wall")).toBe(
-      "Action refusee: collision avec un autre element.",
+  it("shows the server's own sentence", () => {
+    expect(getRejectedOperationMessage("L'équipement chevauche un mur.")).toBe(
+      "L'équipement chevauche un mur.",
     );
   });
 
   it("tells a reader their role cannot edit the map", () => {
     expect(getRejectedOperationMessage(FORBIDDEN_REJECTION)).toContain(
       "votre rôle ne permet pas de modifier le plan",
-    );
-  });
-
-  it("formats missing target rejections for users", () => {
-    expect(getRejectedOperationMessage("Device not found")).toBe(
-      "Action refusee: l'element n'est plus disponible.",
     );
   });
 
@@ -32,7 +26,7 @@ describe("MapDocumentStatus", () => {
         isRetrying: false,
         hasBackgroundPendingOperations: false,
       }),
-    ).toBe("Chargement du plan...");
+    ).toBe("Chargement du plan…");
     expect(
       getDocumentActivityMessage({
         isReady: true,
@@ -40,7 +34,7 @@ describe("MapDocumentStatus", () => {
         isRetrying: false,
         hasBackgroundPendingOperations: true,
       }),
-    ).toContain("plusieurs etages");
+    ).toContain("plusieurs étages");
     expect(
       getDocumentActivityMessage({
         isReady: true,

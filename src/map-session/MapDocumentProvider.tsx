@@ -734,7 +734,7 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
     const preview = applyOperation(snapshotBefore, operation);
     if (!preview.applied) {
       setRejectedMessage(
-        "Impossible d'annuler: l'element a ete modifie par un autre utilisateur.",
+        "Impossible d'annuler : l'élément a été modifié par un autre utilisateur.",
       );
       return;
     }
@@ -1031,9 +1031,9 @@ export function MapDocumentProvider({
         }
         setRejectedMessage(error);
       },
-      onNetworkFailure: (_operation, error) => {
-        setRejectedMessage(error.message);
-      },
+      // The status card already says the outbox is retrying; a network
+      // failure is not a refusal.
+      onNetworkFailure: () => {},
       onStateChange: setOutboxState,
     });
     outboxRef.current = outbox;
@@ -1126,12 +1126,6 @@ export function MapDocumentProvider({
     const patch = reconcileEphemeralState(document, useMapStore.getState());
     if (patch) useMapStore.setState(patch);
   }, [document, isReady]);
-
-  useEffect(() => {
-    if (!rejectedMessage) return;
-    const timeout = window.setTimeout(() => setRejectedMessage(null), 5000);
-    return () => window.clearTimeout(timeout);
-  }, [rejectedMessage]);
 
   const connectionState = !convexConnectionState.hasEverConnected
     ? "connecting"

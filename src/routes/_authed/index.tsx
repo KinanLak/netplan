@@ -22,8 +22,7 @@ import {
 } from "@/store/selectors";
 import type { Floor } from "@/types/map";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
-import { ThemeProvider, useTheme } from "@/components/theme-provider";
-import { Toaster } from "@/components/ui/sonner";
+import { useTheme } from "@/components/theme-provider";
 import {
   ShortcutIntentProvider,
   useShortcutIntentEffect,
@@ -47,12 +46,9 @@ export const Route = createFileRoute("/_authed/")({
 
 function HomePage() {
   return (
-    <ThemeProvider defaultTheme="system" storageKey="netplan-ui-theme">
-      <ShortcutIntentProvider>
-        <HomePageContent />
-      </ShortcutIntentProvider>
-      <Toaster />
-    </ThemeProvider>
+    <ShortcutIntentProvider>
+      <HomePageContent />
+    </ShortcutIntentProvider>
   );
 }
 

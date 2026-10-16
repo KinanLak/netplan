@@ -172,7 +172,7 @@ describe("calque operations", () => {
     });
     expect(moved).toMatchObject({
       status: "rejected",
-      error: "Calque is locked",
+      error: "Le calque est verrouillé.",
     });
     const faded = await editor.mutation(api.mapOperations.apply, {
       operation: {
@@ -186,7 +186,7 @@ describe("calque operations", () => {
     const removedWhileLocked = await editor.mutation(api.mapOperations.apply, {
       operation: { kind: "overlay.set", meta: meta(5), floorId, overlay: null },
     });
-    expect(removedWhileLocked.error).toBe("Calque is locked");
+    expect(removedWhileLocked.error).toBe("Le calque est verrouillé.");
 
     const removed = await editor.mutation(api.mapOperations.apply, {
       operation: {
@@ -249,7 +249,7 @@ describe("calque operations", () => {
         overlay: placement(floorId, "overlay-file:missing"),
       },
     });
-    expect(unknown.error).toBe("Calque file not found");
+    expect(unknown.error).toBe("L'image du calque n'existe plus.");
 
     const resized = await editor.mutation(api.mapOperations.apply, {
       operation: {
@@ -259,7 +259,9 @@ describe("calque operations", () => {
         overlay: { ...placement(floorId, fileId), imageWidth: 600 },
       },
     });
-    expect(resized.error).toBe("Calque size does not match its file");
+    expect(resized.error).toBe(
+      "La taille du calque ne correspond pas à son image.",
+    );
 
     const invalid = await editor.mutation(api.mapOperations.apply, {
       operation: {
@@ -269,7 +271,7 @@ describe("calque operations", () => {
         overlay: { ...placement(floorId, fileId), opacity: 0 },
       },
     });
-    expect(invalid.error).toBe("Invalid calque: invalid-opacity");
+    expect(invalid.error).toBe("Le placement du calque est invalide.");
 
     const otherFloor = await editor.mutation(api.mapOperations.apply, {
       operation: {
@@ -279,7 +281,7 @@ describe("calque operations", () => {
         overlay: placement("floor:elsewhere", fileId),
       },
     });
-    expect(otherFloor.error).toBe("Calque belongs to another floor");
+    expect(otherFloor.error).toBe("Ce calque appartient à un autre étage.");
   });
 
   it("keeps one row per floor when a batch replaces the calque twice", async () => {
