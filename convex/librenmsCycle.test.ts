@@ -443,6 +443,45 @@ describe("the LibreNMS step", () => {
       expect.objectContaining({ kind: "located", place: atSocket }),
       expect.objectContaining({ kind: "online", deviceName: "Imprimante" }),
     ]);
+    // Deleted from the map and brought back by undo: it did not move.
+    const stranger = await admin.run(
+      async (ctx) =>
+        await ctx.db
+          .query("devices")
+          .withIndex("by_object_id", (q) => q.eq("objectId", "device:stranger"))
+          .unique(),
+    );
+    if (!stranger?.placement) throw new Error("device:stranger is not placed");
+    const meta = (clientSeq: number) => ({
+      opId: `op:undo:${clientSeq}`,
+      clientId: "client:undo",
+      clientSeq,
+      createdAt: Date.now(),
+    });
+    await admin.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "device.delete",
+        meta: meta(1),
+        deviceId: "device:stranger",
+      },
+    });
+    await admin.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "device.create",
+        meta: meta(2),
+        device: {
+          id: "device:stranger",
+          floorId: stranger.placement.floorId,
+          type: stranger.type,
+          name: stranger.name,
+          position: stranger.placement.position,
+          size: stranger.placement.size,
+          macs: stranger.macs,
+          metadata: stranger.metadata,
+        },
+      },
+    });
+    expect(await history("device:stranger")).toHaveLength(2);
 
     // Seen on another port, then not at all for two cycles.
     librenms.state.fdb = [

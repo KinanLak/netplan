@@ -102,8 +102,8 @@ export const placeNamer = (ctx: QueryCtx) => {
 
 /**
  * Records that the network saw `device` at `place`. With `unlessLast`, a
- * place its last `located` event already names is not recorded again: the
- * first sighting of a device after its arrival recorded it. A move the cycle
+ * place its last `located` event already names is not recorded again: an
+ * arrival, a restored device or the first sighting after an arrival. A move the cycle
  * found against the device's latest sighting is always recorded, even back
  * to the port that event names.
  */
@@ -191,7 +191,10 @@ export const recordArrival = async (
     if (row && (!latest || row.seenAt > latest.seenAt)) latest = row;
   }
   if (!latest) return;
-  await recordLocated(ctx, device, await placeNamer(ctx)(latest), at);
+  // A device brought back by undo where it was has not moved.
+  await recordLocated(ctx, device, await placeNamer(ctx)(latest), at, {
+    unlessLast: true,
+  });
   if (status === "up") {
     await recordPresence(ctx, device, "online", at);
   } else if (status === "down") {
