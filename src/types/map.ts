@@ -256,7 +256,7 @@ export interface WallStrokeInput {
 
 // ── UI store (Zustand): only ephemeral interaction state ─────────────────────
 
-/** The port a cable being drawn starts from. */
+/** A port pressed on the map, to draw a cable from or unplug. */
 export interface CableDraft {
   deviceId: DeviceId;
   portId: PortId;
@@ -273,7 +273,10 @@ export interface MapInteractionState {
   isMultiSelectMode: boolean;
   /** The switch or patch panel whose cables were asked for (ADR 0025). */
   shownCablesDeviceId: DeviceId | null;
-  /** The port a cable being drawn on the map starts from (ADR 0025). */
+  /**
+   * The port pressed on the map: a cable being drawn from it, or the one
+   * plugged into it, to unplug (ADR 0025).
+   */
   cableDraft: CableDraft | null;
   activeDrawTool: DrawTool;
   selectedWallColor: WallColor;

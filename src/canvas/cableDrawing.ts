@@ -1,8 +1,9 @@
 // Drawing a cable on the map (ADR 0025): from a free port of a device to
-// another device of the same floor, through the same mutation as the port
-// table.
+// another device of the same floor, through the same mutations as the port
+// table. A cabled port unplugs its cable instead.
 import { comparePorts } from "@/devices/ports";
-import { portLabel } from "@/devices/portState";
+import { endLabel, portLabel } from "@/devices/portState";
+import { INTEGRATION_LABELS } from "@/sites/integrations";
 import type {
   Cable,
   CableDraft,
@@ -48,23 +49,53 @@ export const freePortsOf = (
     .sort(comparePorts);
 };
 
+/** What pressing a port of the map does. */
+export type CableStart =
+  | { kind: "draw" }
+  | { kind: "unplug"; cable: Cable; label: string }
+  | { kind: "refused"; reason: string };
+
 /**
- * Why a cable cannot start at `portId`, or `null` when it can: the port
- * must belong to a device cabled on the map and be free.
+ * What pressing `draft`'s port does: a free port draws a cable from it; a
+ * port cabled by hand to a device of the floor offers to unplug the cable.
+ * A cable an integration made, or one to another floor, stays with the port
+ * table, as does every port of a device not cabled on the map.
  */
-export const cableStartRefusal = (
+export const cableStart = (
   draft: CableDraft,
   floor: FloorPorts,
-): string | null => {
+): CableStart => {
   const device = floor.devices.find(({ id }) => id === draft.deviceId);
   const port = floor.ports.find(({ id }) => id === draft.portId);
   if (!device || !CABLED_ON_MAP.has(device.type) || !port) {
-    return "Ce port ne se câble pas sur le plan.";
+    return { kind: "refused", reason: "Ce port ne se câble pas sur le plan." };
   }
-  if (cabledPortIds(floor.cables).has(port.id)) {
-    return `« ${device.name} » ${portLabel(port)} est déjà câblé : débranchez-le d'abord dans la table des ports.`;
+  const cable = floor.cables.find(
+    ({ a, b }) => a.portId === port.id || b.portId === port.id,
+  );
+  if (!cable) return { kind: "draw" };
+
+  const near = endLabel(device.name, port);
+  if (cable.source) {
+    return {
+      kind: "refused",
+      reason: `Le câble de ${near} vient de ${INTEGRATION_LABELS[cable.source.integration]} : il ne se débranche pas dans Netplan.`,
+    };
   }
-  return null;
+  const far = cable.a.portId === port.id ? cable.b : cable.a;
+  const farDevice = floor.devices.find(({ id }) => id === far.deviceId);
+  const farPort = floor.ports.find(({ id }) => id === far.portId);
+  if (!farDevice || !farPort) {
+    return {
+      kind: "refused",
+      reason: `${near} est câblé vers un autre étage : débranchez-le dans la table des ports.`,
+    };
+  }
+  return {
+    kind: "unplug",
+    cable,
+    label: `${near} ↔ ${endLabel(farDevice.name, farPort)}`,
+  };
 };
 
 /**

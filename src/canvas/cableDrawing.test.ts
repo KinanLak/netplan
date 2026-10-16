@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { cableDropResult, cableStartRefusal } from "./cableDrawing";
+import { cableDropResult, cableStart } from "./cableDrawing";
 import { defaultPorts } from "@/devices/ports";
 import type { Cable, CableId, Device, DeviceId, Port } from "@/types/map";
 
@@ -31,19 +31,65 @@ const floor = {
   cables: [cable(portOf("sw"), portOf("wall2"))],
 };
 
-describe("cableStartRefusal", () => {
-  it("starts from a free port of a cabled device", () => {
-    const draft = { deviceId: id("wall"), portId: portOf("wall").id };
-    expect(cableStartRefusal(draft, floor)).toBe(null);
+describe("cableStart", () => {
+  const press = (deviceId: string, n = 0) =>
+    cableStart(
+      { deviceId: id(deviceId), portId: portOf(deviceId, n).id },
+      floor,
+    );
+
+  it("draws from a free port of a device cabled on the map", () => {
+    expect(press("wall")).toEqual({ kind: "draw" });
+    expect(press("pc")).toEqual({
+      kind: "refused",
+      reason: "Ce port ne se câble pas sur le plan.",
+    });
   });
 
-  it("refuses a cabled port, and a device not cabled on the map", () => {
+  it("offers to unplug a cable made by hand, from either end", () => {
+    const unplug = {
+      kind: "unplug",
+      cable: floor.cables[0],
+      label: "« Accès » 1 ↔ « Prise 2 » Avant 1",
+    };
+    expect(press("sw")).toEqual(unplug);
+    expect(press("wall2")).toEqual({
+      ...unplug,
+      label: "« Prise 2 » Avant 1 ↔ « Accès » 1",
+    });
+  });
+
+  it("leaves an integration's cable, and one to another floor, to the port table", () => {
+    const netbox = {
+      ...floor,
+      cables: [
+        {
+          ...cable(portOf("sw"), portOf("wall2")),
+          source: { integration: "netbox" as const, externalId: "7" },
+        },
+      ],
+    };
     expect(
-      cableStartRefusal({ deviceId: id("sw"), portId: portOf("sw").id }, floor),
-    ).toContain("déjà câblé");
+      cableStart({ deviceId: id("sw"), portId: portOf("sw").id }, netbox),
+    ).toEqual({
+      kind: "refused",
+      reason:
+        "Le câble de « Accès » 1 vient de NetBox : il ne se débranche pas dans Netplan.",
+    });
+
+    // The socket's device is on another floor: not in this floor's document.
+    const upstairs = {
+      ...floor,
+      devices: devices.filter(({ id: deviceId }) => deviceId !== "wall2"),
+      ports: ports.filter(({ deviceId }) => deviceId !== "wall2"),
+    };
     expect(
-      cableStartRefusal({ deviceId: id("pc"), portId: portOf("pc").id }, floor),
-    ).toBe("Ce port ne se câble pas sur le plan.");
+      cableStart({ deviceId: id("sw"), portId: portOf("sw").id }, upstairs),
+    ).toEqual({
+      kind: "refused",
+      reason:
+        "« Accès » 1 est câblé vers un autre étage : débranchez-le dans la table des ports.",
+    });
   });
 });
 

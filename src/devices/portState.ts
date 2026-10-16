@@ -33,6 +33,12 @@ export const portLabel = (port: Pick<Port, "name" | "kind">): string => {
   return kind ? `${kind} ${port.name}` : port.name;
 };
 
+/** One end of a cable as a toast or a menu names it. */
+export const endLabel = (
+  deviceName: string,
+  port: Pick<Port, "name" | "kind">,
+): string => `« ${deviceName} » ${portLabel(port)}`;
+
 export const portState = (port: Pick<Port, "status" | "seen">): PortState => {
   if (port.seen) return "seen";
   if (port.status === "up" || port.status === "down") return port.status;
