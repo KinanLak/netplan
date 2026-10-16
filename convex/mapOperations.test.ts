@@ -192,6 +192,44 @@ describe("mapOperations.apply", () => {
     expect(result.error).toBe("L'équipement chevauche un autre équipement.");
   });
 
+  it("rejects putting back a device that has moved since", async () => {
+    const t = await signedInTest();
+    const floorId = await freshFloor(t);
+    await t.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "device.create",
+        meta: meta(30),
+        device: device("device:moved", floorId, 0),
+      },
+    });
+    await t.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "device.patch",
+        meta: meta(31),
+        deviceId: "device:moved",
+        patch: { position: { x: 300, y: 0 } },
+      },
+    });
+
+    // An undo of a move to 100, made before the device went to 300.
+    const result = await t.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "device.patch",
+        meta: meta(32),
+        deviceId: "device:moved",
+        patch: { position: { x: 0, y: 0 } },
+        expected: { position: { x: 100, y: 0 } },
+      },
+    });
+    const document = await getFloorDocument(t, floorId);
+
+    expect(result.status).toBe("rejected");
+    expect(result.error).toBe(
+      "Cet équipement a été déplacé depuis, par une autre personne ou par la collecte.",
+    );
+    expect(document.devices[0].position).toEqual({ x: 300, y: 0 });
+  });
+
   it("rejects moving into a wall", async () => {
     const t = await signedInTest();
     const floorId = await freshFloor(t);
@@ -1297,6 +1335,40 @@ describe("mapOperations.apply on the site inventory", () => {
     ]);
     expect(document.ports).toEqual(before.ports);
     expect(document.cables).toEqual(before.cables);
+  });
+
+  it("does not take off a device that has moved since it was placed", async () => {
+    const t = await signedInTest();
+    const floorId = await freshFloor(t);
+    await create(t, 1, device("device:placed", floorId, 0));
+    await t.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "device.patch",
+        meta: meta(2),
+        deviceId: "device:placed",
+        patch: { position: { x: 300, y: 0 } },
+      },
+    });
+
+    const result = await t.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "device.unplace",
+        meta: meta(3),
+        deviceId: "device:placed",
+        expected: {
+          position: { x: 0, y: 0 },
+          size: { width: 80, height: 80 },
+        },
+      },
+    });
+
+    expect(result).toMatchObject({
+      status: "rejected",
+      error:
+        "Cet équipement a été déplacé depuis, par une autre personne ou par la collecte.",
+    });
+    const document = await getFloorDocument(t, floorId);
+    expect(document.devices.map((item) => item.id)).toEqual(["device:placed"]);
   });
 
   it("takes only where a placed device stands, never its identity", async () => {

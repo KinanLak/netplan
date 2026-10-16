@@ -734,7 +734,7 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
     const preview = applyOperation(snapshotBefore, operation);
     if (!preview.applied) {
       setRejectedMessage(
-        "Impossible d'annuler : l'élément a été modifié par un autre utilisateur.",
+        `Impossible ${type === "undo" ? "d'annuler" : "de rétablir"} : l'élément a été modifié depuis, par une autre personne ou par la collecte.`,
       );
       return;
     }

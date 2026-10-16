@@ -119,6 +119,26 @@ describe("applyOperation", () => {
     });
   });
 
+  it("refuses a patch that finds the device elsewhere than it expects", () => {
+    const original = device(deviceId("device:a"));
+    const snapshot = { ...emptySnapshot, devices: [original] };
+    const putBack = (expected: { x: number; y: number }): MapOperation => ({
+      kind: "device.patch",
+      meta: meta(1),
+      deviceId: original.id,
+      patch: { position: { x: 100, y: 120 } },
+      expected: { position: expected },
+    });
+
+    const where = applyOperation(snapshot, putBack({ x: 0, y: 0 }));
+    const elsewhere = applyOperation(snapshot, putBack({ x: 40, y: 0 }));
+
+    expect(where.applied).toBe(true);
+    expect(elsewhere.applied).toBe(false);
+    expect(elsewhere.reason).toBe("conflict");
+    expect(elsewhere.snapshot.devices).toEqual([original]);
+  });
+
   it("creating a device gives it its type's ports unless it brings its own", () => {
     const created = device(deviceId("device:a"));
     const ports = defaultPorts(created.id, "switch").slice(0, 2);

@@ -43,6 +43,12 @@ export type AtomicMapOperation =
       meta: OperationMeta;
       deviceId: DeviceId;
       patch: DevicePatch;
+      /**
+       * What the patch expects to replace. An undo or a redo carries it, so
+       * that it does not put back a device someone has moved since, the
+       * cycle included (ADR 0025).
+       */
+      expected?: DevicePatch;
     }
   | { kind: "device.delete"; meta: OperationMeta; deviceId: DeviceId }
   | {
@@ -59,6 +65,8 @@ export type AtomicMapOperation =
       kind: "device.unplace";
       meta: OperationMeta;
       deviceId: DeviceId;
+      /** Where the unplace expects the device, as for `device.patch`. */
+      expected?: DevicePatch;
     }
   | { kind: "walls.add"; meta: OperationMeta; walls: Array<WallSegment> }
   | { kind: "walls.delete"; meta: OperationMeta; wallIds: Array<WallId> }
