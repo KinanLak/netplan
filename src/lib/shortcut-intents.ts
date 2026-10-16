@@ -213,7 +213,11 @@ export const isShortcutModalTarget = (target: EventTarget | null): boolean => {
     return false;
   }
 
-  return target.closest('[data-slot="dialog-content"]') !== null;
+  return (
+    target.closest(
+      '[data-slot="dialog-content"], [data-slot="alert-dialog-content"]',
+    ) !== null
+  );
 };
 
 const isScopeActive = (

@@ -267,8 +267,8 @@ function MapWorkspace({
           <FlowCanvas />
           <Toolbar />
           {selectedDeviceId ? <DeviceDrawer /> : null}
-          {/* With no floor there is no document to wait for. */}
-          {empty ? <MapEmptyState {...empty} /> : <MapDocumentStatus />}
+          {empty ? <MapEmptyState {...empty} /> : null}
+          <MapDocumentStatus floorless={empty !== null} />
 
           <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
             {canEdit ? (
