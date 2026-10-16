@@ -96,7 +96,7 @@ const refusal = (status: number): string => {
 /**
  * One JSON `PATCH` to NetBox, with retries, or the French reason it failed:
  * `status` is set when NetBox answered, with what it said. Throws the
- * `RetryStopped` of a `beforeRetry` that says no.
+ * `RetryStopped` of a `stillWanted` that says no.
  */
 export async function netboxPatch(
   baseUrl: string,

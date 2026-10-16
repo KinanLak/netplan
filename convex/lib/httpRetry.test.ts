@@ -72,13 +72,24 @@ describe("fetchWithRetry", () => {
         wanted = false;
         return Promise.resolve();
       },
-      beforeRetry: () => Promise.resolve(wanted),
+      stillWanted: () => Promise.resolve(wanted),
     };
     const stopped = await fetchWithRetry("https://x.test", {}, stopping).catch(
       (error: unknown) => error,
     );
     expect(stopped).toBeInstanceOf(RetryStopped);
     expect(calls).toHaveLength(1);
+  });
+
+  it("sends nothing nobody wants any more", async () => {
+    const calls = answers(200);
+    const stopped = await fetchWithRetry(
+      "https://x.test",
+      {},
+      { ...options, stillWanted: () => Promise.resolve(false) },
+    ).catch((error: unknown) => error);
+    expect(stopped).toBeInstanceOf(RetryStopped);
+    expect(calls).toHaveLength(0);
   });
 
   it("returns a 4xx at once", async () => {

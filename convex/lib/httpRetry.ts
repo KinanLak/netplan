@@ -12,10 +12,10 @@ export type RetryOptions = {
   /** Replaced in tests, which never wait. */
   sleep?: (ms: number) => Promise<void>;
   /**
-   * Asked after each pause: `false` stops with `RetryStopped` rather than
-   * send again something nobody wants sent any more.
+   * Asked before each attempt, the first included: `false` stops with
+   * `RetryStopped` rather than send something nobody wants sent any more.
    */
-  beforeRetry?: () => Promise<boolean>;
+  stillWanted?: () => Promise<boolean>;
 };
 
 export class RetryStopped extends Error {
@@ -47,6 +47,9 @@ export async function fetchWithRetry(
   let delay = options.initialDelayMs;
   for (let attempt = 1; ; attempt += 1) {
     const last = attempt >= options.attempts;
+    if (options.stillWanted && !(await options.stillWanted())) {
+      throw new RetryStopped();
+    }
     try {
       const response = await fetch(url, {
         ...init,
@@ -65,9 +68,6 @@ export async function fetchWithRetry(
       if (last) throw error;
     }
     await sleep(delay);
-    if (options.beforeRetry && !(await options.beforeRetry())) {
-      throw new RetryStopped();
-    }
     delay = Math.min(delay * 2, options.maxDelayMs);
   }
 }

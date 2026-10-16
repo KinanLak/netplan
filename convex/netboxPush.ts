@@ -192,7 +192,7 @@ const mayGoOn = async (ctx: QueryCtx, siteId: string, runId: string) =>
   holdsLease(await cycleOf(ctx, siteId), runId) &&
   (await pushEnabled(ctx, siteId));
 
-/** Whether the run may still write: asked again before each retry. */
+/** Whether the run may still write: asked before each PATCH attempt. */
 export const stillPushing = internalQuery({
   args: { siteId: v.string(), runId: v.string() },
   returns: v.boolean(),
@@ -277,11 +277,11 @@ const pushDevices = async (
     tally.error = connection.error;
     return;
   }
-  // A PATCH retried for minutes stops once the push is off or the site's
-  // NetBox changed, rather than write with what it held at the start.
+  // Each PATCH attempt, the first and the retries over minutes, is sent only
+  // while the push is on and the site's NetBox is the one this run opened.
   const retry = {
     ...SOURCE_RETRY,
-    beforeRetry: () =>
+    stillWanted: () =>
       ctx.runQuery(internal.netboxPush.stillPushing, { siteId, runId }),
   };
   let cursor: string | null = null;
