@@ -1,6 +1,7 @@
-// Thirty days of what the network observed (ADRs 0014 and 0027). The
-// LibreNMS step writes events through the helpers below; Éditeurs and Admins
-// read them, and a daily cron forgets what is older than 30 days.
+// Thirty days of what the network observed (ADRs 0014 and 0027): device
+// events and five daily MAC snapshots. The LibreNMS step writes them through
+// the helpers below; Éditeurs and Admins read them, and a daily cron forgets
+// what is older than 30 days.
 import {
   paginationOptsValidator,
   paginationResultValidator,
@@ -9,16 +10,25 @@ import { v } from "convex/values";
 import type { Infer } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalMutation } from "./_generated/server";
-import type { Doc } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { editorQuery } from "./lib/functions";
 import { PRESENT_TYPES } from "./lib/statuses";
-import { deviceEventKind, publicDeviceEvent } from "./historyValidators";
+import {
+  deviceEventKind,
+  macSighting,
+  publicDeviceEvent,
+  publicSnapshotEntry,
+  publicSnapshotSlot,
+} from "./historyValidators";
 import type { historyPlace } from "./historyValidators";
+import { slotAt as snapshotSlotAt } from "../src/sites/snapshots";
 
 export const RETENTION_MS = 30 * 24 * 60 * 60_000;
-/** Rows one purge mutation deletes per table before it schedules the next. */
+/** Rows one purge mutation deletes before it schedules the next. */
 const PURGE_BATCH = 500;
+/** Sightings one snapshot mutation writes. */
+export const SNAPSHOT_PAGE = 500;
 
 export type HistoryPlace = Infer<typeof historyPlace>;
 type DeviceEventKind = Infer<typeof deviceEventKind>;
@@ -261,6 +271,162 @@ export const forSite = editorQuery({
 });
 
 /**
+ * Claims the snapshot slot whose window holds `at`, the time a cycle read the
+ * network, unless an earlier cycle took it. The cycle then writes its entries
+ * with `captureSlot`.
+ */
+export const claimSlot = async (
+  ctx: MutationCtx,
+  site: Doc<"sites">,
+  at: number,
+) => {
+  const slot = snapshotSlotAt(site.timezone, at);
+  if (!slot) return null;
+  const taken = await ctx.db
+    .query("historySlots")
+    .withIndex("by_site_day", (q) =>
+      q.eq("siteId", site.objectId).eq("day", slot.day).eq("time", slot.time),
+    )
+    .unique();
+  if (taken) return null;
+  return await ctx.db.insert("historySlots", {
+    siteId: site.objectId,
+    ...slot,
+    takenAt: at,
+  });
+};
+
+/**
+ * Writes one page of a snapshot from the sightings its cycle read, with the
+ * names as they are now; the last page marks the slot complete.
+ */
+export const captureSlot = internalMutation({
+  args: {
+    slotId: v.id("historySlots"),
+    sightings: v.array(macSighting),
+    /** The snapshot's entry count, given with its last page. */
+    total: v.optional(v.number()),
+  },
+  returns: v.null(),
+  handler: async (ctx, { slotId, sightings, total }) => {
+    const slot = await ctx.db.get(slotId);
+    if (!slot) return null;
+    const placeOf = placeNamer(ctx);
+    for (const { mac, switchId, portId, socketId } of sightings) {
+      const owned = await ctx.db
+        .query("deviceMacs")
+        .withIndex("by_site_mac", (q) =>
+          q.eq("siteId", slot.siteId).eq("mac", mac),
+        )
+        .unique();
+      const device = owned
+        ? await ctx.db
+            .query("devices")
+            .withIndex("by_object_id", (q) => q.eq("objectId", owned.deviceId))
+            .unique()
+        : null;
+      await ctx.db.insert("historySlotEntries", {
+        slotId,
+        siteId: slot.siteId,
+        slotAt: slot.at,
+        mac,
+        ...(device && { deviceId: device.objectId, deviceName: device.name }),
+        place: await placeOf({ switchId, portId, socketId }),
+      });
+    }
+    if (total !== undefined) await ctx.db.patch(slotId, { entries: total });
+    return null;
+  },
+});
+
+/** The snapshots a site took on one of its days, in time order. */
+export const slotsForDay = editorQuery({
+  args: { siteId: v.string(), day: v.string() },
+  returns: v.array(publicSnapshotSlot),
+  handler: async (ctx, { siteId, day }) => {
+    const slots = await ctx.db
+      .query("historySlots")
+      .withIndex("by_site_day", (q) => q.eq("siteId", siteId).eq("day", day))
+      .collect();
+    return slots.map(({ time, at, takenAt, entries }) => ({
+      day,
+      time,
+      at,
+      takenAt,
+      ...(entries !== undefined && { entries }),
+    }));
+  },
+});
+
+const toPublicEntry = ({
+  slotAt,
+  mac,
+  deviceId,
+  deviceName,
+  place,
+}: Doc<"historySlotEntries">): Infer<typeof publicSnapshotEntry> => ({
+  slotAt,
+  mac,
+  ...(deviceId !== undefined && { deviceId }),
+  ...(deviceName !== undefined && { deviceName }),
+  place,
+});
+
+/** Where each MAC address was at one snapshot, in address order. */
+export const slotEntries = editorQuery({
+  args: {
+    siteId: v.string(),
+    day: v.string(),
+    time: v.string(),
+    paginationOpts: paginationOptsValidator,
+  },
+  returns: paginationResultValidator(publicSnapshotEntry),
+  handler: async (ctx, { siteId, day, time, paginationOpts }) => {
+    const slot = await ctx.db
+      .query("historySlots")
+      .withIndex("by_site_day", (q) =>
+        q.eq("siteId", siteId).eq("day", day).eq("time", time),
+      )
+      .unique();
+    if (slot?.entries === undefined) {
+      return { page: [], isDone: true, continueCursor: "" };
+    }
+    const result = await ctx.db
+      .query("historySlotEntries")
+      .withIndex("by_slot_mac", (q) => q.eq("slotId", slot._id))
+      .paginate(paginationOpts);
+    return { ...result, page: result.page.map(toPublicEntry) };
+  },
+});
+
+/**
+ * Where a device was at each snapshot, newest first. An entry of a capture
+ * that stopped before its end is left out, as `slotEntries` leaves out the
+ * whole snapshot: it reads as no snapshot, so a page may come back short.
+ */
+export const snapshotsForDevice = editorQuery({
+  args: { deviceId: v.string(), paginationOpts: paginationOptsValidator },
+  returns: paginationResultValidator(publicSnapshotEntry),
+  handler: async (ctx, { deviceId, paginationOpts }) => {
+    const result = await ctx.db
+      .query("historySlotEntries")
+      .withIndex("by_device_at", (q) => q.eq("deviceId", deviceId))
+      .order("desc")
+      .paginate(paginationOpts);
+    const complete = new Map<Id<"historySlots">, boolean>();
+    const page = [];
+    for (const entry of result.page) {
+      if (!complete.has(entry.slotId)) {
+        const slot = await ctx.db.get(entry.slotId);
+        complete.set(entry.slotId, slot?.entries !== undefined);
+      }
+      if (complete.get(entry.slotId)) page.push(toPublicEntry(entry));
+    }
+    return { ...result, page };
+  },
+});
+
+/**
  * Deletes history older than 30 days, a batch at a time, and schedules
  * itself again while some remains. Current state is never touched.
  */
@@ -269,12 +435,32 @@ export const purge = internalMutation({
   returns: v.null(),
   handler: async (ctx) => {
     const before = Date.now() - RETENTION_MS;
-    const old = await ctx.db
+    let budget = PURGE_BATCH;
+    const events = await ctx.db
       .query("deviceEvents")
       .withIndex("by_at", (q) => q.lt("at", before))
-      .take(PURGE_BATCH);
-    for (const row of old) await ctx.db.delete(row._id);
-    if (old.length === PURGE_BATCH) {
+      .take(budget);
+    for (const row of events) await ctx.db.delete(row._id);
+    budget -= events.length;
+    const slots = await ctx.db
+      .query("historySlots")
+      .withIndex("by_at", (q) => q.lt("at", before))
+      .take(budget);
+    for (const slot of slots) {
+      if (budget === 0) break;
+      const entries = await ctx.db
+        .query("historySlotEntries")
+        .withIndex("by_slot_mac", (q) => q.eq("slotId", slot._id))
+        .take(budget);
+      for (const row of entries) await ctx.db.delete(row._id);
+      budget -= entries.length;
+      // A slot goes once its entries have.
+      if (budget > 0) {
+        await ctx.db.delete(slot._id);
+        budget -= 1;
+      }
+    }
+    if (budget === 0) {
       await ctx.scheduler.runAfter(0, internal.history.purge, {});
     }
     return null;
