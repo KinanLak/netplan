@@ -113,7 +113,9 @@ export default defineSchema({
     source: v.optional(sourceRef),
   })
     .index("by_object_id", ["objectId"])
-    .index("by_device", ["deviceId"]),
+    .index("by_device", ["deviceId"])
+    // A trace crosses a patch panel from a rear port back to its front one.
+    .index("by_rear_port", ["rearPortId"]),
 
   // One cable per port. Each end repeats its device, so a floor finds the
   // cables of its devices without reading their ports first.

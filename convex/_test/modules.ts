@@ -11,6 +11,7 @@ export const modules: Record<string, () => Promise<Record<string, any>>> = {
   "./authSettings.ts": () => import("../authSettings"),
   "./bootstrap.ts": () => import("../bootstrap"),
   "./buildings.ts": () => import("../buildings"),
+  "./cables.ts": () => import("../cables"),
   "./dev.ts": () => import("../dev"),
   "./devices.ts": () => import("../devices"),
   "./floorOverlays.ts": () => import("../floorOverlays"),

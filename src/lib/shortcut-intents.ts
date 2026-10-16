@@ -54,6 +54,7 @@ const shortcutRoutingPriority: Array<ShortcutAction> = [
   "delete-device",
   "edit-device-identity",
   "unplace-device",
+  "show-port-cables",
   "cancel-wall-tool",
   "highlight-connections",
   "escape",

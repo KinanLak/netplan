@@ -8,6 +8,7 @@ import {
   cablesToLay,
   defaultPorts,
   portListError,
+  traceFrom,
 } from "../../src/devices/ports";
 import type { DeviceId, DeviceType } from "../../src/types/map";
 
@@ -197,3 +198,45 @@ export const insertDeviceCabling = async (
     );
   }
 };
+
+export const portRowOf = async (ctx: QueryCtx, portId: string) =>
+  await ctx.db
+    .query("ports")
+    .withIndex("by_object_id", (q) => q.eq("objectId", portId))
+    .unique();
+
+const traced = (row: Doc<"ports"> | null) =>
+  row ? { ...row, id: row.objectId } : undefined;
+
+/** The ports a cable from `start` leads through, the last where it ends. */
+export const traceRows = async (ctx: QueryCtx, start: Doc<"ports">) =>
+  await traceFrom(
+    { ...start, id: start.objectId },
+    {
+      cabledTo: async (portId) => {
+        const cable = await cableRowAt(ctx, portId);
+        if (!cable) return undefined;
+        return traced(
+          await portRowOf(
+            ctx,
+            cable.aPortId === portId ? cable.bPortId : cable.aPortId,
+          ),
+        );
+      },
+      portOf: async (portId) => traced(await portRowOf(ctx, portId)),
+      frontOf: async (rearPortId) =>
+        traced(
+          await ctx.db
+            .query("ports")
+            .withIndex("by_rear_port", (q) => q.eq("rearPortId", rearPortId))
+            .first(),
+        ),
+      isSocket: async (deviceId) =>
+        (
+          await ctx.db
+            .query("devices")
+            .withIndex("by_object_id", (q) => q.eq("objectId", deviceId))
+            .unique()
+        )?.type === "wall-port",
+    },
+  );

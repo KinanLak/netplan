@@ -15,6 +15,7 @@ import type * as auth from "../auth.js";
 import type * as authSettings from "../authSettings.js";
 import type * as bootstrap from "../bootstrap.js";
 import type * as buildings from "../buildings.js";
+import type * as cables from "../cables.js";
 import type * as crons from "../crons.js";
 import type * as dev from "../dev.js";
 import type * as devices from "../devices.js";
@@ -61,6 +62,7 @@ declare const fullApi: ApiFromModules<{
   authSettings: typeof authSettings;
   bootstrap: typeof bootstrap;
   buildings: typeof buildings;
+  cables: typeof cables;
   crons: typeof crons;
   dev: typeof dev;
   devices: typeof devices;
