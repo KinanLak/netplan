@@ -15,7 +15,7 @@ const device = (id: string): Device => ({
 });
 
 describe("reconcileEphemeralState", () => {
-  it("clears selected, hovered, and highlighted ids missing from document", () => {
+  it("clears selected, hovered, and cable-showing ids missing from document", () => {
     const patch = reconcileEphemeralState(
       {
         floorId,
@@ -30,14 +30,14 @@ describe("reconcileEphemeralState", () => {
         selectedDeviceId: "device:missing" as DeviceId,
         selectedDeviceIds: ["device:a", "device:missing"] as Array<DeviceId>,
         hoveredDeviceId: "device:hover" as DeviceId,
-        highlightedDeviceIds: ["device:a", "device:missing"] as Array<DeviceId>,
+        shownCablesDeviceId: "device:missing" as DeviceId,
       },
     );
 
     expect(patch?.selectedDeviceId).toBe("device:a");
     expect(patch?.selectedDeviceIds).toEqual(["device:a"]);
     expect(patch?.hoveredDeviceId).toBe(null);
-    expect(patch?.highlightedDeviceIds).toEqual(["device:a"]);
+    expect(patch?.shownCablesDeviceId).toBe(null);
   });
 
   it("returns null when ephemeral ids are still valid", () => {
@@ -56,7 +56,7 @@ describe("reconcileEphemeralState", () => {
           selectedDeviceId: "device:a" as DeviceId,
           selectedDeviceIds: ["device:a"] as Array<DeviceId>,
           hoveredDeviceId: null,
-          highlightedDeviceIds: ["device:a"] as Array<DeviceId>,
+          shownCablesDeviceId: "device:a" as DeviceId,
         },
       ),
     ).toBe(null);

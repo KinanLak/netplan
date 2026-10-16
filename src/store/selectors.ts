@@ -27,8 +27,8 @@ export const useWallEraserSize = () => useMapStore((s) => s.wallEraserSize);
 export const useIsOverlayPanelOpen = () =>
   useMapStore((s) => s.isOverlayPanelOpen);
 export const useIsOverlayHidden = () => useMapStore((s) => s.isOverlayHidden);
-export const useHighlightedDeviceIds = () =>
-  useMapStore((s) => s.highlightedDeviceIds);
+export const useShownCablesDeviceId = () =>
+  useMapStore((s) => s.shownCablesDeviceId);
 
 // ── Derived selectors ────────────────────────────────────────────────────────
 
@@ -36,5 +36,5 @@ export const useIsDeviceSelected = (id: DeviceId) =>
   useMapStore(
     (s) => s.selectedDeviceId === id || s.selectedDeviceIdSet.has(id),
   );
-export const useIsDeviceHighlighted = (id: DeviceId) =>
-  useMapStore((s) => s.highlightedDeviceIdSet.has(id));
+export const useShowsCables = (id: DeviceId) =>
+  useMapStore((s) => s.shownCablesDeviceId === id);

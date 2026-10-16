@@ -1,5 +1,11 @@
 import { describe, expect, it } from "bun:test";
-import { cablePathOf, floorCabling } from "./cablePaths";
+import {
+  cablePathOf,
+  endLabels,
+  floorCabling,
+  mergedPaths,
+  toggledCableDisplay,
+} from "./cablePaths";
 import type { FarEnd, SeenAt } from "./cablePaths";
 import type {
   Cable,
@@ -203,5 +209,61 @@ describe("cablePathOf", () => {
       { seenAt: [], farEnds: [] },
     );
     expect(hops(cablePathOf(id("p"), loop))).toEqual(["p>q", "q>p"]);
+  });
+
+  it("shows a patch panel's paths on both sides at once", () => {
+    const path = cablePathOf(id("p"), floor({ seenAt: [seenAtWall] }));
+    expect(hops(path).toSorted()).toEqual(["p>sw", "p>wall"]);
+    expect(path.sightings).toEqual([
+      { deviceId: id("pc"), socketId: id("wall") },
+    ]);
+
+    // Drawn with a hovered PC's path, each cable shows once.
+    const merged = mergedPaths([
+      path,
+      cablePathOf(id("pc"), floor({ seenAt: [seenAtWall] })),
+    ]);
+    expect(merged.cables).toHaveLength(2);
+    expect(merged.sightings).toHaveLength(1);
+  });
+});
+
+describe("toggledCableDisplay", () => {
+  const aSwitch = { id: id("sw"), type: "switch" } as const;
+  const aPanel = { id: id("p"), type: "patch-panel" } as const;
+  const aPc = { id: id("pc"), type: "pc" } as const;
+
+  it("shows a switch or a patch panel, and hides it when asked again", () => {
+    expect(toggledCableDisplay(null, aSwitch)).toBe(id("sw"));
+    expect(toggledCableDisplay(id("sw"), aSwitch)).toBe(null);
+    // Another switch's or panel's cables replace the shown ones.
+    expect(toggledCableDisplay(id("sw"), aPanel)).toBe(id("p"));
+  });
+
+  it("hides on any other device, or on none", () => {
+    expect(toggledCableDisplay(id("sw"), aPc)).toBe(null);
+    expect(toggledCableDisplay(id("sw"), undefined)).toBe(null);
+    expect(toggledCableDisplay(null, aPc)).toBe(null);
+  });
+});
+
+describe("endLabels", () => {
+  it("gathers the ports reached on one device into one label", () => {
+    const portEnd = (n: number) =>
+      ({ kind: "port", at: id("sw"), portName: `Gi1/0/${n}` }) as const;
+    const away = {
+      kind: "away",
+      at: id("sw"),
+      deviceName: "Cœur",
+      portName: "Te1/1/1",
+      floorName: null,
+    } as const;
+    expect(endLabels([portEnd(1), portEnd(2), away]).get(id("sw"))).toEqual([
+      "Gi1/0/1, Gi1/0/2",
+      "Cœur · Te1/1/1 (non placé)",
+    ]);
+    expect(endLabels([1, 2, 3, 4, 5].map(portEnd)).get(id("sw"))).toEqual([
+      "5 ports",
+    ]);
   });
 });

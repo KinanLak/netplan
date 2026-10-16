@@ -5,14 +5,14 @@ import { seedMapStore } from "../../test/storeHarness";
 import {
   useActiveDrawTool,
   useCurrentFloorId,
-  useHighlightedDeviceIds,
-  useIsDeviceHighlighted,
   useIsDeviceSelected,
   useIsEditMode,
   useIsMultiSelectMode,
   useSelectedDeviceId,
   useSelectedDeviceIds,
   useSelectedWallColor,
+  useShownCablesDeviceId,
+  useShowsCables,
   useWallEraserSize,
 } from "./selectors";
 import { useMapStore } from "./useMapStore";
@@ -35,8 +35,7 @@ describe("map store selectors", () => {
       activeDrawTool: "wall",
       selectedWallColor: "slate",
       wallEraserSize: 3,
-      highlightedDeviceIds: [did("device-a")],
-      highlightedDeviceIdSet: new Set([did("device-a")]),
+      shownCablesDeviceId: did("device-a"),
     });
 
     expect(renderHook(() => useCurrentFloorId()).result.current).toBe(
@@ -55,20 +54,20 @@ describe("map store selectors", () => {
       "slate",
     );
     expect(renderHook(() => useWallEraserSize()).result.current).toBe(3);
-    expect(renderHook(() => useHighlightedDeviceIds()).result.current).toEqual([
+    expect(renderHook(() => useShownCablesDeviceId()).result.current).toBe(
       did("device-a"),
-    ]);
+    );
     expect(
       renderHook(() => useIsDeviceSelected(did("device-a"))).result.current,
     ).toBe(true);
     expect(
-      renderHook(() => useIsDeviceHighlighted(did("device-a"))).result.current,
+      renderHook(() => useShowsCables(did("device-a"))).result.current,
     ).toBe(true);
     expect(
       renderHook(() => useIsDeviceSelected(did("device-b"))).result.current,
     ).toBe(false);
     expect(
-      renderHook(() => useIsDeviceHighlighted(did("device-b"))).result.current,
+      renderHook(() => useShowsCables(did("device-b"))).result.current,
     ).toBe(false);
   });
 

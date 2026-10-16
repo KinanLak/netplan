@@ -1,13 +1,13 @@
 import type { DeviceId, DeviceStatus } from "@/types/map";
 import { cn } from "@/lib/utils";
 import {
-  useIsDeviceHighlighted,
   useIsDeviceSelected,
   useIsEditMode,
+  useShowsCables,
 } from "@/store/selectors";
 
 export interface NetworkNodeProps {
-  /** React Flow node id — used to read selection/highlight state */
+  /** React Flow node id — used to read selection and cable display state */
   id: string;
   /** Device status for border and shadow color */
   status: DeviceStatus;
@@ -43,7 +43,9 @@ export default function NetworkNode({
   const isEditMode = useIsEditMode();
   const deviceId = id as DeviceId;
   const isSelected = useIsDeviceSelected(deviceId);
-  const isHighlighted = useIsDeviceHighlighted(deviceId);
+  // A switch or patch panel whose cables show keeps a glow, so the way to
+  // hide them is not lost when it is deselected.
+  const isHighlighted = useShowsCables(deviceId);
 
   return (
     <div
@@ -65,7 +67,7 @@ export default function NetworkNode({
           status === "unknown" &&
           "shadow-[0_0_8px_2px_var(--unknown)]!",
 
-        // Highlight (non-selected): subtle shadow
+        // Showing its cables (non-selected): subtle shadow
         isHighlighted &&
           !isSelected &&
           status === "up" &&
@@ -79,7 +81,7 @@ export default function NetworkNode({
           status === "unknown" &&
           "shadow-[0_0_6px_1px_var(--unknown)]!",
 
-        // Default shadow when not selected/highlighted
+        // Default shadow otherwise
         !isSelected && !isHighlighted && "shadow-md",
 
         className,

@@ -1,6 +1,4 @@
 import type { DeviceId, DeviceStatus, DeviceType } from "@/types/map";
-import { Button } from "@/components/ui/button";
-import { ShortcutHintInline } from "@/components/ui/shortcut-hint";
 import { StatusDot } from "@/components/StatusDot";
 import { getDeviceKindLabel } from "@/devices/deviceKindRegistry";
 
@@ -13,15 +11,11 @@ export interface ConnectedDeviceSummary {
 
 interface DrawerConnectionsSectionProps {
   connectedDevices: Array<ConnectedDeviceSummary>;
-  isCurrentDeviceHighlighted: boolean;
-  onHighlightConnections: () => void;
   onSelectConnected: (deviceId: DeviceId) => void;
 }
 
 export function DrawerConnectionsSection({
   connectedDevices,
-  isCurrentDeviceHighlighted,
-  onHighlightConnections,
   onSelectConnected,
 }: DrawerConnectionsSectionProps) {
   if (connectedDevices.length === 0) {
@@ -30,21 +24,9 @@ export function DrawerConnectionsSection({
 
   return (
     <section>
-      <div className="mb-2 flex items-center justify-between">
-        <h3 className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-          Connexions ({connectedDevices.length})
-        </h3>
-        <Button
-          type="button"
-          variant={isCurrentDeviceHighlighted ? "secondary" : "outline"}
-          size="sm"
-          onClick={onHighlightConnections}
-          className="h-6 gap-1 text-xs"
-        >
-          {isCurrentDeviceHighlighted ? "Masquer" : "Voir sur plan"}
-          <ShortcutHintInline action="highlight-connections" />
-        </Button>
-      </div>
+      <h3 className="mb-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+        Connexions ({connectedDevices.length})
+      </h3>
       <div className="space-y-1">
         {connectedDevices.map((connDevice) => (
           <button

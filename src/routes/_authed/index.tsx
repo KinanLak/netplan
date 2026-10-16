@@ -37,7 +37,7 @@ import { isAdmin } from "@/lib/roles";
 import { siteSearch, useCurrentSite } from "@/sites/useCurrentSite";
 import { ShortcutsDialog } from "@/components/shortcuts-dialog";
 import { ShortcutHintAbsolute } from "@/components/ui/shortcut-hint";
-import { getNextConnectionHighlightIds } from "@/lib/shortcut-intents";
+import { toggledCableDisplay } from "@/canvas/cablePaths";
 import { asBuildingId, asFloorId } from "@/lib/objectIds";
 import { api } from "../../../convex/_generated/api";
 
@@ -162,7 +162,7 @@ function MapWorkspace({
   const toggleEditMode = useMapStore((s) => s.toggleEditMode);
   const selectDevice = useMapStore((s) => s.selectDevice);
   const setActiveDrawTool = useMapStore((s) => s.setActiveDrawTool);
-  const setHighlightedDevices = useMapStore((s) => s.setHighlightedDevices);
+  const showCables = useMapStore((s) => s.showCables);
   const leaveEditTools = useMapStore((s) => s.leaveEditTools);
 
   // A draw tool or a multi-selection left on swallows device clicks, and a
@@ -200,7 +200,7 @@ function MapWorkspace({
   const closeDrawer = () => {
     selectDevice(null);
     setActiveDrawTool("device");
-    setHighlightedDevices([]);
+    showCables(null);
   };
 
   const deleteSelectedDevice = () => {
@@ -208,22 +208,15 @@ function MapWorkspace({
     if (commands.deleteDevice(selectedDeviceId)) selectDevice(null);
   };
 
-  // Reads hover/highlight state lazily so the workspace does not re-render
-  // on every pointer hover; it is only needed when the shortcut fires.
-  const highlightConnections = () => {
-    const { hoveredDeviceId, highlightedDeviceIds } = useMapStore.getState();
-    const { cables, devices } = getDocument();
-    const next = getNextConnectionHighlightIds({
-      cables,
-      devices,
-      highlightedDeviceIds,
-      hoveredDeviceId,
-      selectedDeviceId,
-    });
-
-    if (next) {
-      setHighlightedDevices(next);
-    }
+  // Reads hover state lazily so the workspace does not re-render on every
+  // pointer hover; it is only needed when the shortcut fires.
+  const toggleDeviceCables = () => {
+    const { hoveredDeviceId, shownCablesDeviceId } = useMapStore.getState();
+    const targetId = selectedDeviceId ?? hoveredDeviceId;
+    const target = getDocument().devices.find(
+      (device) => device.id === targetId,
+    );
+    showCables(toggledCableDisplay(shownCablesDeviceId, target));
   };
 
   useShortcutIntentEffect("toggle-edit-mode", toggleEditMode);
@@ -235,7 +228,7 @@ function MapWorkspace({
     commands.unplaceDevice(selectedDeviceId);
     selectDevice(null);
   });
-  useShortcutIntentEffect("highlight-connections", highlightConnections);
+  useShortcutIntentEffect("toggle-device-cables", toggleDeviceCables);
   useShortcutIntentEffect("escape", () => {
     const {
       activeDrawTool,
@@ -243,11 +236,14 @@ function MapWorkspace({
       overlayCalibration,
       setOverlayCalibration,
       setOverlayPanelOpen,
+      shownCablesDeviceId,
     } = useMapStore.getState();
-    if (!isEditMode || activeDrawTool !== "device") return;
-    if (overlayCalibration) setOverlayCalibration(null);
-    else if (isOverlayPanelOpen) setOverlayPanelOpen(false);
-    else toggleEditMode();
+    const isEditing = isEditMode && activeDrawTool === "device";
+    if (isEditing && overlayCalibration) setOverlayCalibration(null);
+    else if (isEditing && isOverlayPanelOpen) setOverlayPanelOpen(false);
+    // Hiding the cables a switch shows comes before leaving edit mode.
+    else if (shownCablesDeviceId) showCables(null);
+    else if (isEditing) toggleEditMode();
   });
   useShortcutIntentEffect("undo", () => {
     if (isEditMode && isReady) undo();

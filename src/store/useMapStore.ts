@@ -8,13 +8,6 @@ import type {
 } from "@/types/map";
 import { WALL_ERASER_DEFAULT_SIZE, clampWallEraserSize } from "@/lib/constants";
 
-const EMPTY_HIGHLIGHT_SET: ReadonlySet<DeviceId> = new Set<DeviceId>();
-const toHighlightedDeviceIdSet = (
-  deviceIds: ReadonlyArray<DeviceId>,
-): ReadonlySet<DeviceId> => {
-  return deviceIds.length === 0 ? EMPTY_HIGHLIGHT_SET : new Set(deviceIds);
-};
-
 const withoutMultiSelect = (state: MapInteractionState) => ({
   isMultiSelectMode: false,
   ...(state.isMultiSelectMode
@@ -41,8 +34,7 @@ export const useMapStore = create<MapStore>()((set) => ({
   hoveredDeviceId: null,
   isEditMode: true,
   isMultiSelectMode: false,
-  highlightedDeviceIds: [],
-  highlightedDeviceIdSet: toHighlightedDeviceIdSet([]),
+  shownCablesDeviceId: null,
   activeDrawTool: "device",
   selectedWallColor: "concrete",
   wallEraserSize: WALL_ERASER_DEFAULT_SIZE,
@@ -59,8 +51,7 @@ export const useMapStore = create<MapStore>()((set) => ({
       selectedDeviceIds: [],
       selectedDeviceIdSet: new Set(),
       hoveredDeviceId: null,
-      highlightedDeviceIds: [],
-      highlightedDeviceIdSet: toHighlightedDeviceIdSet([]),
+      shownCablesDeviceId: null,
       overlayDraft: null,
       overlayCalibration: null,
     });
@@ -72,8 +63,7 @@ export const useMapStore = create<MapStore>()((set) => ({
       selectedDeviceIds: [],
       selectedDeviceIdSet: new Set(),
       hoveredDeviceId: null,
-      highlightedDeviceIds: [],
-      highlightedDeviceIdSet: toHighlightedDeviceIdSet([]),
+      shownCablesDeviceId: null,
       overlayDraft: null,
       overlayCalibration: null,
     });
@@ -175,20 +165,11 @@ export const useMapStore = create<MapStore>()((set) => ({
   setOverlayCalibration: (calibration) => {
     set({ overlayCalibration: calibration });
   },
-  setHighlightedDevices: (deviceIds) => {
-    set((state) => {
-      const isSameHighlightState =
-        state.highlightedDeviceIds.length === deviceIds.length &&
-        state.highlightedDeviceIds.every(
-          (id, index) => id === deviceIds[index],
-        );
-      if (isSameHighlightState) {
-        return state;
-      }
-      return {
-        highlightedDeviceIds: deviceIds,
-        highlightedDeviceIdSet: toHighlightedDeviceIdSet(deviceIds),
-      };
-    });
+  showCables: (deviceId) => {
+    set((state) =>
+      state.shownCablesDeviceId === deviceId
+        ? state
+        : { shownCablesDeviceId: deviceId },
+    );
   },
 }));

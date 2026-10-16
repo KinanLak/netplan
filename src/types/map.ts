@@ -265,8 +265,8 @@ export interface MapInteractionState {
   hoveredDeviceId: DeviceId | null;
   isEditMode: boolean;
   isMultiSelectMode: boolean;
-  highlightedDeviceIds: Array<DeviceId>;
-  highlightedDeviceIdSet: ReadonlySet<DeviceId>;
+  /** The switch or patch panel whose cables were asked for (ADR 0025). */
+  shownCablesDeviceId: DeviceId | null;
   activeDrawTool: DrawTool;
   selectedWallColor: WallColor;
   wallEraserSize: number;
@@ -306,7 +306,7 @@ export interface MapInteractionActions {
   setActiveDrawTool: (tool: DrawTool) => void;
   setSelectedWallColor: (color: WallColor) => void;
   setWallEraserSize: (size: number) => void;
-  setHighlightedDevices: (deviceIds: Array<DeviceId>) => void;
+  showCables: (deviceId: DeviceId | null) => void;
   setOverlayPanelOpen: (open: boolean) => void;
   toggleOverlayHidden: () => void;
   setOverlayDraft: (draft: OverlayDraft | null) => void;

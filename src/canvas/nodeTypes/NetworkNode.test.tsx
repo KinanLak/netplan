@@ -14,8 +14,7 @@ describe("NetworkNode wrapper", () => {
     seedMapStore({
       isEditMode: true,
       selectedDeviceId: null,
-      highlightedDeviceIds: [],
-      highlightedDeviceIdSet: new Set(),
+      shownCablesDeviceId: null,
     });
 
     render(
@@ -36,8 +35,7 @@ describe("NetworkNode wrapper", () => {
     seedMapStore({
       isEditMode: true,
       selectedDeviceId: "device-1" as DeviceId,
-      highlightedDeviceIds: [],
-      highlightedDeviceIdSet: new Set(),
+      shownCablesDeviceId: null,
     });
 
     render(
@@ -55,8 +53,7 @@ describe("NetworkNode wrapper", () => {
     seedMapStore({
       isEditMode: false,
       selectedDeviceId: null,
-      highlightedDeviceIds: [],
-      highlightedDeviceIdSet: new Set(),
+      shownCablesDeviceId: null,
     });
 
     const { container, rerender } = render(

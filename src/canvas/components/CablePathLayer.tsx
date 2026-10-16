@@ -1,22 +1,21 @@
 import { ViewportPortal, useStore } from "@xyflow/react";
 import type { ReactFlowState } from "@xyflow/react";
 import { useQuery } from "convex/react";
-import { cablePathOf, EMPTY_PATH, floorCabling } from "@/canvas/cablePaths";
-import type { PathEnd } from "@/canvas/cablePaths";
+import {
+  TRACED_ON_HOVER,
+  cablePathOf,
+  endLabels,
+  floorCabling,
+  mergedPaths,
+} from "@/canvas/cablePaths";
 import { useMapDocumentData } from "@/map-session/useMapDocument";
-import { useHoveredDeviceId, useSelectedDeviceId } from "@/store/selectors";
-import type { Device, DeviceId, Position } from "@/types/map";
+import {
+  useHoveredDeviceId,
+  useSelectedDeviceId,
+  useShownCablesDeviceId,
+} from "@/store/selectors";
+import type { DeviceId, Position } from "@/types/map";
 import { api } from "../../../convex/_generated/api";
-
-/**
- * The devices whose path shows when hovered or selected (ADR 0025). A switch
- * or a patch panel carries too many cables to show them unasked.
- */
-const TRACED: ReadonlySet<Device["type"]> = new Set([
-  "pc",
-  "endpoint",
-  "wall-port",
-]);
 
 const NO_ENDS = { seenAt: [], farEnds: [] };
 
@@ -59,24 +58,12 @@ const centreOf = (box: Box): Position => ({
   y: box.y + box.height / 2,
 });
 
-const labelOf = (end: PathEnd): string => {
-  switch (end.kind) {
-    case "port":
-      return end.portName;
-    case "shared":
-      return `${end.portName} · arrière partagé`;
-    case "away":
-      return `${end.deviceName} · ${end.portName} (${end.floorName ?? "non placé"})`;
-    case "seen-away":
-      return `Vu à ${end.socketName} (${end.floorName ?? "non placé"})`;
-  }
-};
-
 /**
- * The cable path of the hovered device, or else the selected one: its
- * cables through sockets and patch panels to the switch port, drawn over the
- * floor; a dashed segment to the socket where the network last saw it; and a
- * label where the path ends or leaves the floor.
+ * The cable path of the hovered device, or else the selected one, together
+ * with the paths of the switch or patch panel whose cables were asked for
+ * (ADR 0025): cables through sockets and patch panels to the switch port,
+ * drawn over the floor; a dashed segment to the socket where the network
+ * last saw a device; and a label where a path ends or leaves the floor.
  */
 export function CablePathLayer() {
   const { document } = useMapDocumentData();
@@ -87,20 +74,26 @@ export function CablePathLayer() {
     floorId: document.floorId,
   });
 
+  const shown = useShownCablesDeviceId();
+
   const targetId = hovered ?? selected;
   const target = document.devices.find((device) => device.id === targetId);
-  const path =
-    target && TRACED.has(target.type)
-      ? cablePathOf(
-          target.id,
-          floorCabling(
-            document.devices,
-            document.ports,
-            document.cables,
-            ends ?? NO_ENDS,
-          ),
+  const traced = [
+    ...(target && TRACED_ON_HOVER.has(target.type) ? [target.id] : []),
+    ...(shown ? [shown] : []),
+  ];
+  const floor =
+    traced.length > 0
+      ? floorCabling(
+          document.devices,
+          document.ports,
+          document.cables,
+          ends ?? NO_ENDS,
         )
-      : EMPTY_PATH;
+      : null;
+  const path = mergedPaths(
+    floor ? traced.map((deviceId) => cablePathOf(deviceId, floor)) : [],
+  );
 
   const ids = [
     ...path.cables.flatMap(({ from, to }) => [from, to]),
@@ -118,7 +111,7 @@ export function CablePathLayer() {
   };
 
   // Labels on one device stack downwards from under it.
-  const labelsAt = Map.groupBy(path.ends, (end) => end.at);
+  const labelsAt = endLabels(path.ends);
 
   return (
     <ViewportPortal>
@@ -165,7 +158,7 @@ export function CablePathLayer() {
           );
         })}
       </svg>
-      {[...labelsAt].map(([at, atEnds]) => {
+      {[...labelsAt].map(([at, labels]) => {
         const box = boxes.get(at);
         if (!box) return null;
         return (
@@ -180,12 +173,12 @@ export function CablePathLayer() {
               transformOrigin: "top center",
             }}
           >
-            {atEnds.map((end) => (
+            {labels.map((label) => (
               <span
-                key={JSON.stringify(end)}
+                key={label}
                 className="rounded-sm border border-border bg-popover px-1.5 py-0.5 text-xs whitespace-nowrap text-popover-foreground shadow-sm"
               >
-                {labelOf(end)}
+                {label}
               </span>
             ))}
           </div>
