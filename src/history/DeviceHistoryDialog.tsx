@@ -122,7 +122,7 @@ function DeviceEvents({
     );
   }
   return (
-    <ScrollArea className="max-h-[60vh]">
+    <ScrollArea className="*:data-[slot=scroll-area-viewport]:max-h-[60vh]">
       <ul className="divide-y divide-border">
         {results.map((event) => (
           <li
@@ -156,7 +156,9 @@ function DeviceSnapshots({
   if (status === "LoadingFirstPage") {
     return <p className="text-sm text-muted-foreground">Chargement…</p>;
   }
-  if (results.length === 0) {
+  // A page can come back empty while older ones remain: it held only
+  // entries of captures that failed.
+  if (results.length === 0 && status === "Exhausted") {
     return (
       <p className="text-sm text-muted-foreground">
         Aucun relevé de 8 h, 12 h, 14 h, 16 h ou 19 h n'a vu cet équipement ces
@@ -165,7 +167,7 @@ function DeviceSnapshots({
     );
   }
   return (
-    <ScrollArea className="max-h-[60vh]">
+    <ScrollArea className="*:data-[slot=scroll-area-viewport]:max-h-[60vh]">
       <ul className="divide-y divide-border">
         {results.map((entry) => (
           <li

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { siteDay, slotAt, slotStillOpen } from "./snapshots";
+import { captureRunning, siteDay, slotAt, slotStillOpen } from "./snapshots";
 
 const PARIS = "Europe/Paris";
 const at = (iso: string) => Date.parse(iso);
@@ -47,5 +47,11 @@ describe("snapshot slots", () => {
     expect(slotStillOpen(PARIS, "2026-06-15", "19:00", at14h09)).toBe(false);
     // 23:30 UTC is already the next day in Paris.
     expect(siteDay(PARIS, at("2026-06-16T23:30:00Z"))).toBe("2026-06-17");
+  });
+
+  it("gives up on a capture its cycle's action could no longer be writing", () => {
+    const takenAt = at("2026-06-16T12:00:30Z");
+    expect(captureRunning(takenAt, takenAt + 9 * 60_000)).toBe(true);
+    expect(captureRunning(takenAt, takenAt + 10 * 60_000)).toBe(false);
   });
 });

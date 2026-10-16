@@ -18,7 +18,12 @@ import { useCanEdit } from "@/hooks/use-current-user";
 import { useNow } from "@/hooks/use-now";
 import { cn } from "@/lib/utils";
 import { SiteSwitcher } from "@/sites/SiteSwitcher";
-import { SNAPSHOT_TIMES, siteDay, slotStillOpen } from "@/sites/snapshots";
+import {
+  captureRunning,
+  SNAPSHOT_TIMES,
+  siteDay,
+  slotStillOpen,
+} from "@/sites/snapshots";
 import { siteSearch, useCurrentSite } from "@/sites/useCurrentSite";
 import type { SiteSummary } from "@/sites/useCurrentSite";
 import { api } from "../../../convex/_generated/api";
@@ -238,6 +243,7 @@ function SiteSnapshots({ site }: { site: SiteSummary }) {
               time={slotTime}
               slot={slotOf.get(slotTime)}
               open={slotStillOpen(site.timezone, day, slotTime, now)}
+              now={now}
               loading={slots === undefined}
               active={time === slotTime}
               onSelect={() => setTime(slotTime)}
@@ -260,6 +266,7 @@ function SlotButton({
   time,
   slot,
   open,
+  now,
   loading,
   active,
   onSelect,
@@ -267,6 +274,7 @@ function SlotButton({
   time: string;
   slot: Slot | undefined;
   open: boolean;
+  now: number;
   loading: boolean;
   active: boolean;
   onSelect: () => void;
@@ -276,7 +284,9 @@ function SlotButton({
     : slot?.entries !== undefined
       ? `${slot.entries} adresse${slot.entries > 1 ? "s" : ""}`
       : slot
-        ? "En cours"
+        ? captureRunning(slot.takenAt, now)
+          ? "En cours"
+          : "Pas de relevé"
         : open
           ? "À venir"
           : "Pas de relevé";
