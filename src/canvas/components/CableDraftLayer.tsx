@@ -32,17 +32,18 @@ type PortPick = {
   flow: Position;
 };
 
-/** The device or port under a point of the screen, if any. */
+/**
+ * The device or port under a point of the screen, if any. Only the topmost
+ * element counts: a drawer or dialog over the plan hides what lies beneath.
+ */
 const dropAt = (client: Position): CableDrop | null => {
-  for (const element of window.document.elementsFromPoint(client.x, client.y)) {
-    const node = element.closest(".react-flow__node");
-    const deviceId = node?.getAttribute("data-id");
-    if (deviceId) {
-      const portId = portIdAt(element);
-      return { deviceId: deviceId as DeviceId, ...(portId ? { portId } : {}) };
-    }
-  }
-  return null;
+  const element = window.document.elementFromPoint(client.x, client.y);
+  const deviceId = element
+    ?.closest(".react-flow__node")
+    ?.getAttribute("data-id");
+  if (!element || !deviceId) return null;
+  const portId = portIdAt(element);
+  return { deviceId: deviceId as DeviceId, ...(portId ? { portId } : {}) };
 };
 
 /**
