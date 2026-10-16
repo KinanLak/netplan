@@ -21,6 +21,7 @@ import {
 } from "@/map-session/useMapDocument";
 import { GRID_SIZE } from "@/lib/grid";
 import { cn } from "@/lib/utils";
+import { CablePathLayer } from "@/canvas/components/CablePathLayer";
 import { CanvasZoomControls } from "@/canvas/components/CanvasZoomControls";
 import { ContextMenu, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { DeviceContextMenu } from "./DeviceContextMenu";
@@ -387,6 +388,7 @@ export default function FlowCanvas() {
             <OverlayGizmo />
 
             <WallInteractionLayer bridge={paneBridge} floorWalls={floorWalls} />
+            <CablePathLayer />
           </ReactFlow>
         </ContextMenuTrigger>
         {contextTargetId ? (

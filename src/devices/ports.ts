@@ -252,22 +252,28 @@ export type TracePort = {
   rearPortId?: string;
 };
 
-const MAX_TRACE_HOPS = 32;
+export const MAX_TRACE_HOPS = 32;
 
 /**
  * Where a cable from `start` leads (ADR 0022): the far port of each cable in
  * turn, crossing a patch panel from a front port to its rear port and back,
  * until a port has no cable, is an interface, or belongs to a wall socket.
- * The last port is where the trace ends; none when `start` is uncabled.
+ * A rear port that several front ports share (a breakout, a multi-position
+ * panel) does not say which one the signal takes, so the trace stops there
+ * (ADR 0025). The last port is where the trace ends; none when `start` is
+ * uncabled.
  */
+const onlyOf = <P>(ports: ReadonlyArray<P>) =>
+  ports.length === 1 ? ports[0] : undefined;
+
 export const traceFrom = async <P extends TracePort>(
   start: P,
   site: {
     /** The port at the other end of the cable plugged into `portId`. */
     cabledTo: (portId: string) => Promise<P | undefined>;
     portOf: (portId: string) => Promise<P | undefined>;
-    /** The front port that passes through to a rear port. */
-    frontOf: (rearPortId: string) => Promise<P | undefined>;
+    /** The front ports that pass through to a rear port; two are enough. */
+    frontsOf: (rearPortId: string) => Promise<Array<P>>;
     isSocket: (deviceId: string) => Promise<boolean>;
   },
 ): Promise<Array<P>> => {
@@ -288,7 +294,7 @@ export const traceFrom = async <P extends TracePort>(
         ? far.rearPortId === undefined
           ? undefined
           : await site.portOf(far.rearPortId)
-        : await site.frontOf(far.id);
+        : onlyOf(await site.frontsOf(far.id));
     if (!through || seen.has(through.id)) break;
     seen.add(through.id);
     at = through;

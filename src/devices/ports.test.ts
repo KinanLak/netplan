@@ -19,8 +19,8 @@ const site = (
   return {
     cabledTo: (portId: string) => at(far.get(portId)),
     portOf: (portId: string) => at(portId),
-    frontOf: (rearPortId: string) =>
-      Promise.resolve(ports.find((port) => port.rearPortId === rearPortId)),
+    frontsOf: (rearPortId: string) =>
+      Promise.resolve(ports.filter((port) => port.rearPortId === rearPortId)),
     isSocket: (deviceId: string) => Promise.resolve(sockets.includes(deviceId)),
   };
 };
@@ -93,6 +93,33 @@ describe("traceFrom", () => {
         ),
       ),
     ).toEqual(["p1:rear1", "jack:front1"]);
+  });
+
+  it("stops at a rear port several front ports share", async () => {
+    const breakout: Array<TracePort> = [
+      { id: "b:rear", deviceId: "b", kind: "rear" },
+      ...[1, 2].map((n): TracePort => ({
+        id: `b:front${n}`,
+        deviceId: "b",
+        kind: "front",
+        rearPortId: "b:rear",
+      })),
+    ];
+    const ports = [iface("sw"), ...breakout, socket];
+    const cabling = site(
+      ports,
+      [
+        ["sw:if", "b:rear"],
+        ["b:front1", "socket:front"],
+      ],
+      ["socket"],
+    );
+    expect(ids(await traceFrom(iface("sw"), cabling))).toEqual(["b:rear"]);
+    // From the socket, the front port leads to its one rear port.
+    expect(ids(await traceFrom(socket, cabling))).toEqual([
+      "b:front1",
+      "sw:if",
+    ]);
   });
 
   it("stops where a miscabled panel leads back on itself", async () => {

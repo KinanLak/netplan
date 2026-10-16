@@ -1,6 +1,13 @@
 import { v } from "convex/values";
 import { readerQuery } from "./lib/functions";
-import { cableRowsOf, portRowsOf, toCable, toPort } from "./lib/ports";
+import {
+  cableRowsOf,
+  portRowOf,
+  portRowsOf,
+  toCable,
+  toPort,
+} from "./lib/ports";
+import { PRESENT_TYPES } from "./lib/statuses";
 import {
   cable,
   floorOverlay,
@@ -145,5 +152,113 @@ export const getFloorOverlay = readerQuery({
       opacity: row.opacity,
       locked: row.locked,
     };
+  },
+});
+
+const deviceRowOf = async (ctx: QueryCtx, deviceId: string) =>
+  await ctx.db
+    .query("devices")
+    .withIndex("by_object_id", (q) => q.eq("objectId", deviceId))
+    .unique();
+
+/** The name of the floor a device stands on; none while it is on no floor. */
+const floorNameOf = async (ctx: QueryCtx, device: Doc<"devices">) => {
+  const floorId = device.placement?.floorId;
+  if (floorId === undefined) return null;
+  const floor = await ctx.db
+    .query("floors")
+    .withIndex("by_object_id", (q) => q.eq("objectId", floorId))
+    .unique();
+  return floor?.name ?? null;
+};
+
+/**
+ * What the floor's cable paths need beyond the floor (ADR 0025): the socket
+ * where each `pc` or `endpoint` on it was last seen, and the far end of each
+ * cable that leaves it, for the label a path ends on.
+ */
+export const getFloorPathEnds = readerQuery({
+  args: { floorId: v.string() },
+  returns: v.object({
+    seenAt: v.array(
+      v.object({
+        deviceId: v.string(),
+        socketId: v.string(),
+        socketName: v.string(),
+        floorName: v.union(v.null(), v.string()),
+      }),
+    ),
+    farEnds: v.array(
+      v.object({
+        portId: v.string(),
+        portName: v.string(),
+        deviceId: v.string(),
+        deviceName: v.string(),
+        floorName: v.union(v.null(), v.string()),
+      }),
+    ),
+  }),
+  handler: async (ctx, { floorId }) => {
+    const rows = await ctx.db
+      .query("devices")
+      .withIndex("by_floor", (q) => q.eq("placement.floorId", floorId))
+      .collect();
+    const onFloor = new Set(rows.map((row) => row.objectId));
+
+    const seenAt = [];
+    for (const row of rows) {
+      if (!PRESENT_TYPES.has(row.type)) continue;
+      // The MAC seen in the fewest cycles ago tells where the device is now.
+      let last: Doc<"macSightings"> | null = null;
+      for (const mac of row.macs) {
+        const sighting = await ctx.db
+          .query("macSightings")
+          .withIndex("by_site_mac", (q) =>
+            q.eq("siteId", row.siteId).eq("mac", mac),
+          )
+          .unique();
+        if (sighting?.socketId === undefined) continue;
+        if (
+          !last ||
+          sighting.misses < last.misses ||
+          (sighting.misses === last.misses && sighting.seenAt > last.seenAt)
+        ) {
+          last = sighting;
+        }
+      }
+      const socket = last?.socketId && (await deviceRowOf(ctx, last.socketId));
+      if (!socket) continue;
+      seenAt.push({
+        deviceId: row.objectId,
+        socketId: socket.objectId,
+        socketName: socket.name,
+        floorName: await floorNameOf(ctx, socket),
+      });
+    }
+
+    const cables = new Map(
+      (await Promise.all(rows.map((row) => cableRowsOf(ctx, row.objectId))))
+        .flat()
+        .map((row) => [row.objectId, row]),
+    );
+    const farEnds = [];
+    for (const row of cables.values()) {
+      const far = !onFloor.has(row.aDeviceId)
+        ? row.aPortId
+        : !onFloor.has(row.bDeviceId)
+          ? row.bPortId
+          : null;
+      const farPort = far === null ? null : await portRowOf(ctx, far);
+      const device = farPort && (await deviceRowOf(ctx, farPort.deviceId));
+      if (!farPort || !device) continue;
+      farEnds.push({
+        portId: farPort.objectId,
+        portName: farPort.name,
+        deviceId: device.objectId,
+        deviceName: device.name,
+        floorName: await floorNameOf(ctx, device),
+      });
+    }
+    return { seenAt, farEnds };
   },
 });
