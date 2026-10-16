@@ -10,6 +10,7 @@ import { internalMutation, internalQuery } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
 import type { ActionCtx, MutationCtx, QueryCtx } from "./_generated/server";
 import { cycleOf } from "./lib/cycles";
+import { ignoredMacsOf } from "./lib/ignoredMacs";
 import { toPublicDevice } from "./mapDocument";
 import { applyMapOperation, getWallCollisionRect } from "./mapOperations";
 import type { OperationInput } from "./mapOperations";
@@ -368,13 +369,14 @@ export const recordSightings = internalMutation({
     const owners = new Map<string, Doc<"devices">>();
     const dropped = new Set<string>();
     const presentOwners = new Map<string, { id: string; placed: boolean }>();
+    const ignored = await ignoredMacsOf(ctx, siteId);
     let unknown = 0;
     for (const [mac, missed] of misses) {
       const owner = await ownerOf(ctx, siteId, mac);
       const row = rowOf.get(mac);
       const seen = sightingOf.get(mac);
       if (owner) owners.set(owner.objectId, owner);
-      else if (seen) unknown += 1;
+      else if (seen && !ignored.has(mac)) unknown += 1;
       if (row?.ownerId !== undefined && row.ownerId !== owner?.objectId) {
         dropped.add(row.ownerId);
       }

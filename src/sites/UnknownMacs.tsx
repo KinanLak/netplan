@@ -1,3 +1,5 @@
+import { HugeiconsIcon } from "@hugeicons/react";
+import { ArrowDown01Icon, ArrowRight01Icon } from "@hugeicons/core-free-icons";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useId, useState } from "react";
@@ -34,14 +36,39 @@ const when = (at: number) =>
 
 /**
  * MAC addresses the network sees that no device of the site carries, for an
- * Éditeur to turn into equipment (ADR 0022).
+ * Éditeur to turn into equipment (ADR 0022) or ignore (ADR 0026).
  */
 export function UnknownMacs({ siteId }: { siteId: string }) {
   const unknown = useQuery(api.unknownMacs.listForSite, { siteId });
+  const ignored = useQuery(api.unknownMacs.listIgnored, { siteId });
+  const ignoreMac = useMutation(api.unknownMacs.ignore);
+  const restoreMac = useMutation(api.unknownMacs.restore);
   const [all, setAll] = useState(false);
+  const [showIgnored, setShowIgnored] = useState(false);
   const [creating, setCreating] = useState<UnknownMac | null>(null);
-  if (!unknown || unknown.length === 0) return null;
+  if (!unknown || !ignored) return null;
+  if (unknown.length === 0 && ignored.length === 0) return null;
   const shown = all ? unknown : unknown.slice(0, SHOWN);
+
+  const restore = async (mac: string) => {
+    try {
+      await restoreMac({ siteId, mac });
+    } catch (error) {
+      toast.error(failureMessage(error, "editor"));
+    }
+  };
+  const ignore = async (mac: string) => {
+    try {
+      await ignoreMac({ siteId, mac });
+      toast(`${mac} ignorée`, {
+        action: { label: "Annuler", onClick: () => void restore(mac) },
+        duration: 10_000,
+      });
+    } catch (error) {
+      toast.error(failureMessage(error, "editor"));
+    }
+  };
+
   return (
     <section
       aria-labelledby="unknown-macs"
@@ -52,48 +79,100 @@ export function UnknownMacs({ siteId }: { siteId: string }) {
           Adresses MAC inconnues ({unknown.length})
         </h2>
         <p className="text-sm text-muted-foreground">
-          LibreNMS les voit sur le réseau, mais aucun équipement du site ne les
-          porte.
+          {unknown.length > 0
+            ? "LibreNMS les voit sur le réseau, mais aucun équipement du site ne les porte."
+            : "Toutes celles que LibreNMS voit sont portées par un équipement ou ignorées."}
         </p>
       </div>
-      <ul className="divide-y">
-        {shown.map((sighting) => (
-          <li
-            key={sighting.mac}
-            className="flex flex-col gap-2 py-2.5 first:pt-0 last:pb-0 md:flex-row md:items-center md:justify-between"
-          >
-            <div className="min-w-0 space-y-0.5 text-sm">
-              <p className="font-mono">{sighting.mac}</p>
-              <p className="truncate text-muted-foreground">
-                {[
-                  sighting.socket
-                    ? `Prise « ${sighting.socket.name} »`
-                    : "Sans prise",
-                  [sighting.switchName, sighting.portName]
-                    .filter(Boolean)
-                    .join(" "),
-                  `vue le ${when(sighting.seenAt)}`,
-                ]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </p>
-            </div>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setCreating(sighting)}
+      {unknown.length > 0 ? (
+        <ul className="divide-y">
+          {shown.map((sighting) => (
+            <li
+              key={sighting.mac}
+              className="flex flex-col gap-2 py-2.5 first:pt-0 last:pb-0 md:flex-row md:items-center md:justify-between"
             >
-              Créer l'équipement
-            </Button>
-          </li>
-        ))}
-      </ul>
+              <div className="min-w-0 space-y-0.5 text-sm">
+                <p className="font-mono">{sighting.mac}</p>
+                <p className="truncate text-muted-foreground">
+                  {[
+                    sighting.socket
+                      ? `Prise « ${sighting.socket.name} »`
+                      : "Sans prise",
+                    [sighting.switchName, sighting.portName]
+                      .filter(Boolean)
+                      .join(" "),
+                    `vue le ${when(sighting.seenAt)}`,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </p>
+              </div>
+              <div className="flex shrink-0 gap-2">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => void ignore(sighting.mac)}
+                >
+                  Ignorer
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setCreating(sighting)}
+                >
+                  Créer l'équipement
+                </Button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       {unknown.length > SHOWN ? (
         <Button size="sm" variant="ghost" onClick={() => setAll(!all)}>
           {all
             ? "Afficher moins"
             : `Afficher les ${unknown.length - SHOWN} autres`}
         </Button>
+      ) : null}
+      {ignored.length > 0 ? (
+        <div className="space-y-2 border-t pt-3">
+          <Button
+            size="sm"
+            variant="ghost"
+            aria-expanded={showIgnored}
+            onClick={() => setShowIgnored(!showIgnored)}
+          >
+            <HugeiconsIcon
+              icon={showIgnored ? ArrowDown01Icon : ArrowRight01Icon}
+              strokeWidth={2}
+            />
+            Adresses ignorées ({ignored.length})
+          </Button>
+          {showIgnored ? (
+            <ul className="divide-y">
+              {ignored.map((row) => (
+                <li
+                  key={row.mac}
+                  className="flex items-center justify-between gap-2 py-2 text-sm"
+                >
+                  <div className="min-w-0 space-y-0.5">
+                    <p className="font-mono">{row.mac}</p>
+                    <p className="truncate text-muted-foreground">
+                      Ignorée par {row.ignoredByName} le {when(row.ignoredAt)}
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void restore(row.mac)}
+                  >
+                    Rétablir
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
       ) : null}
       <Dialog
         open={creating !== null}
