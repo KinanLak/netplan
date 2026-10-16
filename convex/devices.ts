@@ -12,6 +12,7 @@ import {
   placedDevice,
 } from "./mapValidators";
 import { deleteDeviceCabling, insertDeviceCabling } from "./lib/ports";
+import { observedMetadata } from "./lib/statuses";
 import { requireSite } from "./sites";
 import {
   IDENTITY_FIELD_NAMES,
@@ -187,6 +188,7 @@ export async function insertManualDevice(
 
   const macs = edit.macs ?? [];
   await replaceDeviceMacs(ctx, { siteId, objectId: deviceId }, macs);
+  const device = { siteId, objectId: deviceId, type, macs };
   await ctx.db.insert("devices", {
     objectId: deviceId,
     siteId,
@@ -198,7 +200,7 @@ export async function insertManualDevice(
     model: edit.model ?? undefined,
     ip: edit.ip ?? undefined,
     notes: edit.notes ?? undefined,
-    metadata: metadata ?? {},
+    metadata: await observedMetadata(ctx, device, metadata ?? {}),
     updatedAt: Date.now(),
     updatedBy: userId,
   });

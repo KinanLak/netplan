@@ -9,8 +9,9 @@ import { internal } from "./_generated/api";
 import { internalMutation, internalQuery } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
 import type { ActionCtx, MutationCtx, QueryCtx } from "./_generated/server";
-import { cycleOf, LEASE_MS } from "./lib/cycles";
+import { cycleOf } from "./lib/cycles";
 import { ignoredMacsOf } from "./lib/ignoredMacs";
+import { PRESENT_TYPES, staleAfterOf, statusFrom } from "./lib/statuses";
 import { toPublicDevice } from "./mapDocument";
 import { applyMapOperation, getWallCollisionRect } from "./mapOperations";
 import type { OperationInput } from "./mapOperations";
@@ -25,14 +26,12 @@ import {
   edgeSightings,
   freshFdb,
   freshSwitches,
-  isOnline,
   matchPorts,
   MISSES_OFFLINE,
   readLastDiscovered,
   readLibreNMSDeviceStatus,
   readLibreNMSFdb,
   readLibreNMSPorts,
-  readStaleAfterMs,
   sightingSummary,
   socketMoves,
 } from "../src/sites/librenmsCycle";
@@ -57,11 +56,6 @@ type AtomicMapOperationInput =
       ? Omit<Operation, "meta">
       : never
     : never;
-
-const PRESENT_TYPES: ReadonlySet<Doc<"devices">["type"]> = new Set([
-  "pc",
-  "endpoint",
-]);
 
 const sighting = v.object({
   mac: v.string(),
@@ -225,26 +219,6 @@ const setStatus = async (
   });
 };
 
-const staleAfterOf = (site: Doc<"sites">) =>
-  readStaleAfterMs(site.cadence, LEASE_MS);
-
-/**
- * A present device's status from the MACs it was last seen with on a switch
- * whose read still vouches for it (ADR 0025); none when there is no such MAC.
- */
-const statusFrom = (
-  device: Doc<"devices">,
-  seenOn: (mac: string) => { misses: number; switchId: string } | undefined,
-  fresh: ReadonlySet<string>,
-): "up" | "down" | undefined => {
-  const missed = device.macs.flatMap((mac) => {
-    const seen = seenOn(mac);
-    return seen && fresh.has(seen.switchId) ? [seen.misses] : [];
-  });
-  if (missed.length === 0) return undefined;
-  return isOnline(missed) ? "up" : "down";
-};
-
 /**
  * Removes what rests on a switch read that has grown too old (ADR 0025): the
  * switch's status, and the status of devices last seen on it unless another
@@ -287,7 +261,7 @@ export const expireStaleReads = async (
     await setStatus(
       ctx,
       owner,
-      statusFrom(owner, (mac) => rowOf.get(mac), fresh),
+      statusFrom(owner.macs, (mac) => rowOf.get(mac), fresh),
     );
   }
 };
@@ -544,7 +518,7 @@ export const recordSightings = internalMutation({
       if (!PRESENT_TYPES.has(device.type)) continue;
       // A device left with no MAC a fresh read saw has no status from the
       // network any more.
-      const status = statusFrom(device, seenOn, fresh);
+      const status = statusFrom(device.macs, seenOn, fresh);
       if (device.metadata.status === status) continue;
       await setStatus(ctx, device, status);
       if (status === "up") online += 1;

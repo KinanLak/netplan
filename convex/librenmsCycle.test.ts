@@ -402,6 +402,92 @@ describe("the LibreNMS step", () => {
     expect(await statusOf(admin, "device:sw")).toBeNull();
   });
 
+  it("brings a device back with the status its read still vouches for", async () => {
+    setSystemTime(new Date("2026-10-16T08:00:00Z"));
+    const { admin, siteId, signIn } = await siteWithLibreNMS();
+    librenms.state.fdb = [
+      { port_id: 101, mac_address: PC },
+      { port_id: 101, mac_address: PRINTER },
+      { port_id: 101, mac_address: STRANGER },
+    ];
+    await cycle(admin, siteId);
+    const removed = async (client: TestClient, deviceId: string) => {
+      const payload = await client.mutation(api.devices.remove, { deviceId });
+      if (!payload) throw new Error(`expected ${deviceId} to be removed`);
+      return payload;
+    };
+
+    // An "Annuler" right away: the read still vouches for it.
+    const printer = await removed(admin, "device:printer");
+    expect(printer.metadata).toEqual({ status: "up" });
+    await admin.mutation(api.devices.create, {
+      siteId,
+      deviceId: "device:printer",
+      ...printer,
+    });
+    expect(await statusOf(admin, "device:printer")).toBe("up");
+
+    const pc = await removed(admin, "device:pc");
+    const late = await removed(admin, "device:printer");
+    await admin.mutation(api.librenms.saveSettings, {
+      siteId,
+      baseUrl: LIBRENMS,
+      settings: { switches: [{ switchId: "device:sw", device: null }] },
+    });
+    setSystemTime(new Date("2026-10-16T10:16:00Z"));
+    const later = await signIn();
+    await tick(later);
+
+    // The cycle no longer looks at the expired read, so nothing would
+    // remove a status brought back from before.
+    await later.mutation(api.devices.create, {
+      siteId,
+      deviceId: "device:printer",
+      ...late,
+    });
+    expect(await statusOf(later, "device:printer")).toBeNull();
+    const buildingId = await later.mutation(api.buildings.create, {
+      siteId,
+      objectId: "building:back",
+      name: "Bâtiment",
+    });
+    const floorId = await later.mutation(api.floors.create, {
+      objectId: "floor:back",
+      buildingId,
+      name: "RDC",
+    });
+    const restored = await later.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "device.create",
+        meta: {
+          opId: "op:back",
+          clientId: "client:back",
+          clientSeq: 1,
+          createdAt: Date.now(),
+        },
+        device: {
+          id: "device:pc",
+          floorId,
+          type: "pc",
+          name: "pc",
+          position: { x: 0, y: 0 },
+          size: { width: 80, height: 80 },
+          macs: pc.identity.macs,
+          metadata: pc.metadata,
+        },
+      },
+    });
+    expect(restored.status).toBe("applied");
+    expect(await statusOf(later, "device:pc")).toBeNull();
+    await later.mutation(api.unknownMacs.createDevice, {
+      siteId,
+      mac: STRANGER,
+      deviceId: "device:stranger",
+      name: "Inconnu",
+    });
+    expect(await statusOf(later, "device:stranger")).toBeNull();
+  });
+
   it("forgets the sightings with the site", async () => {
     const { admin, siteId } = await siteWithLibreNMS();
     librenms.state.fdb = [{ port_id: 101, mac_address: STRANGER }];
