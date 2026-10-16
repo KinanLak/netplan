@@ -12,13 +12,20 @@ let client: ConvexReactClient | undefined;
  * boundary reads as a lost session. A page without one never gets a token,
  * so it must not wait. Signing in or out reloads the page, so the choice
  * holds for the client's life.
+ *
+ * Convex's own unload warning fires on any request in flight, the presence
+ * heartbeat included, so signing out asked to leave the page; the map warns
+ * only while its edits are unsaved (`MapDocumentProvider`).
  */
 export function getConvexClient(
   url: string,
   { signedIn }: { signedIn: boolean },
 ): ConvexReactClient {
   if (client?.url !== url) {
-    client = new ConvexReactClient(url, { expectAuth: signedIn });
+    client = new ConvexReactClient(url, {
+      expectAuth: signedIn,
+      unsavedChangesWarning: false,
+    });
   }
   return client;
 }
