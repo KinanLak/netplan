@@ -42,10 +42,16 @@ the move from history.
   discovery is ever asked for a snapshot. The slot row (`historySlots`)
   claims the slot inside the cycle's own mutation. Its entries
   (`historySlotEntries`, one per MAC seen by that cycle, owned or not, with
-  the same copied names) are then written by a scheduled mutation that pages
-  through `macSightings`, 500 rows a page. A site of several thousand MACs
+  the same copied names) are then written by the cycle's action from the
+  sightings it read itself, 500 per mutation. A site of several thousand MACs
   therefore stays far below Convex's 16,000 writes per transaction, and the
-  cycle's mutation writes no more than before.
+  recording mutation writes no more than before.
+
+  The entries copy the cycle's own observations, not `macSightings`. A later
+  cycle, or the removal of LibreNMS, can then rewrite current state while a
+  snapshot is being written without mixing into it. The slot is marked
+  complete after its last page. A capture cut short, because the action
+  failed, leaves an incomplete slot that is shown as "pas de relevé".
 
   A slot no cycle took has no row. The interface shows it as "pas de relevé"
   once its window has closed, so an absent snapshot is never filled later
