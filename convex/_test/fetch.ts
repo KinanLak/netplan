@@ -1,8 +1,8 @@
-type Answer = Response | Error | (() => Response);
+type Answer = Response | Error | ((url: string) => Response);
 
 /**
  * Replaces the global `fetch` with one that gives `answers` in turn, the
- * last one again once they run out. The test DOM installs `fetch` as an
+ * last one again once they run out; a function answers from the URL. The test DOM installs `fetch` as an
  * accessor, which `spyOn` cannot wrap.
  */
 export function stubFetch(...answers: Array<Answer>) {
@@ -17,7 +17,9 @@ export function stubFetch(...answers: Array<Answer>) {
       new Error("The test gave fetch no answer.");
     next += 1;
     if (answer instanceof Error) return Promise.reject(answer);
-    return Promise.resolve(typeof answer === "function" ? answer() : answer);
+    return Promise.resolve(
+      typeof answer === "function" ? answer(String(url)) : answer,
+    );
   };
   Object.defineProperty(globalThis, "fetch", {
     configurable: true,

@@ -164,19 +164,24 @@ const runCheck = async (
 };
 
 /**
- * The address and clear token a collection cycle calls a source with, or a
- * French reason it cannot.
+ * The address and clear token Netplan calls a source with, or a French
+ * reason it cannot. Only a collection cycle needs the source enabled: an
+ * admin sets a source up before turning it on.
  */
 export const openConnection = async (
   ctx: ActionCtx,
   siteId: string,
   kind: IntegrationKind,
+  { enabledOnly = true }: { enabledOnly?: boolean } = {},
 ): Promise<{ baseUrl: string; token: string } | { error: string }> => {
   const stored = await ctx.runQuery(internal.integrations.credentials, {
     siteId,
     kind,
   });
-  if (!stored?.enabled) {
+  if (!stored) {
+    return { error: `${INTEGRATION_LABELS[kind]} n'est pas configuré.` };
+  }
+  if (enabledOnly && !stored.enabled) {
     return { error: `${INTEGRATION_LABELS[kind]} est désactivé.` };
   }
   let token: string | null;
@@ -238,6 +243,8 @@ export const store = internalMutation({
       ...(token ? { token } : {}),
       // The last check described the old connection.
       ...(changed ? { lastCheck: undefined } : {}),
+      // Another NetBox has other sites and roles under the same ids.
+      ...(existing.baseUrl !== baseUrl ? { netbox: undefined } : {}),
       // Strictly later, even within a millisecond: a test result is recorded
       // only if no save came after the one it tested.
       updatedAt: Math.max(updatedAt, existing.updatedAt + 1),

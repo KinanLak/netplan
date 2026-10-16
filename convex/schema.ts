@@ -16,6 +16,7 @@ import {
   cycleRun,
   encryptedSecret,
   integrationKind,
+  netboxSettings,
   runningCycle,
   siteCadence,
 } from "./siteValidators";
@@ -40,6 +41,8 @@ export default defineSchema({
     enabled: v.boolean(),
     token: encryptedSecret,
     lastCheck: v.optional(connectionCheck),
+    /** NetBox only: what the site imports from it. */
+    netbox: v.optional(netboxSettings),
     updatedAt: v.number(),
   }).index("by_site_kind", ["siteId", "kind"]),
 

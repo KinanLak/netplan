@@ -1,5 +1,5 @@
-// "Tester la connexion": one authenticated read from the tool, answered in
-// French for the admin. The token never appears in a message.
+// Authenticated reads from a tool, answered in French for the admin, and
+// "Tester la connexion" on top of them. The token never appears in a message.
 import { fetchWithRetry } from "./httpRetry";
 import type { RetryOptions } from "./httpRetry";
 import { INTEGRATION_LABELS } from "../../src/sites/integrations";
@@ -64,17 +64,26 @@ const failureMessage = (label: string, status: number): string => {
   return `${label} a répondu ${status}.`;
 };
 
-export async function probeIntegration(
+export type SourceAnswer =
+  | { ok: true; body: unknown }
+  | { ok: false; message: string };
+
+/**
+ * One authenticated JSON read from the tool, with retries, or the French
+ * reason it failed.
+ */
+export async function sourceGet(
   kind: IntegrationKind,
   baseUrl: string,
+  path: string,
   token: string,
-  retry: RetryOptions = PROBE_RETRY,
-): Promise<ConnectionCheck> {
+  retry: RetryOptions,
+): Promise<SourceAnswer> {
   const label = INTEGRATION_LABELS[kind];
   let response: Response;
   try {
     response = await fetchWithRetry(
-      `${baseUrl}${PROBE_PATH[kind]}`,
+      `${baseUrl}${path}`,
       // A redirect could carry the token to another host.
       { headers: authHeaders(kind, token), redirect: "manual" },
       retry,
@@ -93,13 +102,23 @@ export async function probeIntegration(
     await response.body?.cancel();
     return { ok: false, message: failureMessage(label, response.status) };
   }
-  let body: unknown;
   try {
-    body = await response.json();
+    return { ok: true, body: await response.json() };
   } catch {
     return { ok: false, message: `${label} n'a pas répondu en JSON.` };
   }
-  const version = versionOf(kind, body);
+}
+
+export async function probeIntegration(
+  kind: IntegrationKind,
+  baseUrl: string,
+  token: string,
+  retry: RetryOptions = PROBE_RETRY,
+): Promise<ConnectionCheck> {
+  const label = INTEGRATION_LABELS[kind];
+  const answer = await sourceGet(kind, baseUrl, PROBE_PATH[kind], token, retry);
+  if (!answer.ok) return answer;
+  const version = versionOf(kind, answer.body);
   if (!version) {
     return {
       ok: false,
