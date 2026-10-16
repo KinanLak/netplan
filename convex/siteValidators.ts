@@ -55,3 +55,21 @@ export const runningCycle = v.object({
   leaseUntil: v.number(),
   manual: v.boolean(),
 });
+
+/** `NetBoxSettings` from `src/sites/netbox.ts`. */
+export const netboxSettings = v.object({
+  site: v.union(v.null(), v.object({ id: v.number(), name: v.string() })),
+  roles: v.array(
+    v.object({
+      id: v.number(),
+      name: v.string(),
+      type: v.union(
+        v.literal("switch"),
+        v.literal("patch-panel"),
+        v.literal("wall-port"),
+        v.literal("pc"),
+        v.literal("endpoint"),
+      ),
+    }),
+  ),
+});
