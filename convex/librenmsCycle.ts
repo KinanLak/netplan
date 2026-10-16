@@ -28,6 +28,7 @@ import {
   readLibreNMSFdb,
   readLibreNMSPorts,
   sightingSummary,
+  socketMoves,
 } from "../src/sites/librenmsCycle";
 import type {
   FdbEntry,
@@ -330,7 +331,7 @@ export const recordSightings = internalMutation({
 
     const owners = new Map<string, Doc<"devices">>();
     const dropped = new Set<string>();
-    const moves = new Map<string, string>();
+    const presentOwners = new Map<string, { id: string; placed: boolean }>();
     let unknown = 0;
     for (const [mac, missed] of misses) {
       const owner = await ownerOf(ctx, siteId, mac);
@@ -341,14 +342,11 @@ export const recordSightings = internalMutation({
       if (row?.ownerId !== undefined && row.ownerId !== owner?.objectId) {
         dropped.add(row.ownerId);
       }
-      if (
-        owner &&
-        PRESENT_TYPES.has(owner.type) &&
-        seen?.socketId !== undefined &&
-        (!owner.placement ||
-          (row?.ownerId === owner.objectId && row.socketId !== seen.socketId))
-      ) {
-        moves.set(owner.objectId, seen.socketId);
+      if (owner && seen && PRESENT_TYPES.has(owner.type)) {
+        presentOwners.set(mac, {
+          id: owner.objectId,
+          placed: owner.placement !== undefined,
+        });
       }
       if (!owner && missed >= MISSES_OFFLINE) {
         if (row) await ctx.db.delete(row._id);
@@ -388,7 +386,11 @@ export const recordSightings = internalMutation({
     }
 
     let placed = 0;
-    for (const [deviceId, socketId] of moves) {
+    for (const [deviceId, socketId] of socketMoves(
+      sightings,
+      presentOwners,
+      rows,
+    )) {
       const device = owners.get(deviceId);
       if (device && (await placeNextTo(ctx, device, socketId))) placed += 1;
     }

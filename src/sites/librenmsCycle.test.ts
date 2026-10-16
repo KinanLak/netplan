@@ -9,6 +9,7 @@ import {
   readLibreNMSPorts,
   readLibreNMSTime,
   sightingSummary,
+  socketMoves,
 } from "./librenmsCycle";
 import type { SwitchPort } from "./librenmsCycle";
 
@@ -221,6 +222,58 @@ describe("presence", () => {
     expect(isOnline([2, 1])).toBe(true);
     expect(isOnline([2, 3])).toBe(false);
     expect(isOnline([])).toBe(false);
+  });
+
+  it("moves a device by where any of its MACs was last seen", () => {
+    const owners = new Map([
+      ["mac-a", { id: "pc", placed: true }],
+      ["mac-b", { id: "pc", placed: true }],
+    ]);
+    const atA = [{ ownerId: "pc", socketId: "socket-a", seenAt: 1 }];
+    // Seen through its other interface at another socket.
+    expect([
+      ...socketMoves([{ mac: "mac-b", socketId: "socket-b" }], owners, atA),
+    ]).toEqual([["pc", "socket-b"]]);
+    // Still where its latest sighting saw it, through either MAC.
+    expect(
+      socketMoves(
+        [
+          { mac: "mac-b", socketId: "socket-b" },
+          { mac: "mac-a", socketId: "socket-a" },
+        ],
+        owners,
+        atA,
+      ).size,
+    ).toBe(0);
+    // Back at a socket an older sighting saw it at.
+    expect([
+      ...socketMoves([{ mac: "mac-a", socketId: "socket-a" }], owners, [
+        ...atA,
+        { ownerId: "pc", socketId: "socket-b", seenAt: 2 },
+      ]),
+    ]).toEqual([["pc", "socket-a"]]);
+    // Seen for the first time: a person's place stays.
+    expect(
+      socketMoves([{ mac: "mac-a", socketId: "socket-a" }], owners, []).size,
+    ).toBe(0);
+  });
+
+  it("places an unplaced device at the first socket read", () => {
+    const owners = new Map([
+      ["mac-a", { id: "pc", placed: false }],
+      ["mac-b", { id: "pc", placed: false }],
+    ]);
+    expect([
+      ...socketMoves(
+        [
+          { mac: "mac-b" },
+          { mac: "mac-b", socketId: "socket-b" },
+          { mac: "mac-a", socketId: "socket-a" },
+        ],
+        owners,
+        [{ ownerId: "pc", socketId: "socket-a", seenAt: 1 }],
+      ),
+    ]).toEqual([["pc", "socket-b"]]);
   });
 
   it("summarises a read", () => {
