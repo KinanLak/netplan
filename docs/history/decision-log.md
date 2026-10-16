@@ -993,3 +993,232 @@ Questions of 2026-10-15 and 16, in the order they came up.
 - Decision: React Flow's `.react-flow__viewport` sets `pointer-events: none`, inherited by `ViewportPortal` children; the gizmo and the calibration layer set `pointer-events-auto`. Browser checks of canvas gestures now use real mouse drags.
 - Why: synthesised events skip hit testing, so they cannot prove an element is reachable.
 - Who: agent (obvious)
+
+### L1 — Auth
+
+Questions of 2026-10-15 and 16, in the order they came up.
+
+#### Which better-auth version?
+
+- Context: deps stay on latest, but `@convex-dev/better-auth` 0.12.5 (latest) declares `better-auth >=1.6.11 <1.7.0`; better-auth latest is 1.7.10.
+- Decision: `@convex-dev/better-auth@latest` with `better-auth@1.6.33` (latest of the supported line).
+- Why: the component is the integration point; running outside its peer range is unsupported. 1.7 also moves the OIDC callback path, which is planned work (ADR 0003).
+- Who: agent (obvious)
+
+#### How are role identifiers stored?
+
+- Context: roles are Lecteur / Éditeur / Admin (ADR 0004); the repo is in English, the UI in French (ADR 0016).
+- Decision: stored as `reader | editor | admin` on the better-auth user (admin plugin `role`), labelled in French in the UI. `defaultRole: "reader"`, `adminRoles: ["admin"]`.
+- Why: code and data stay English; labels are a UI concern.
+- Who: agent (obvious)
+
+#### Where is the Keycloak role mapping applied?
+
+- Context: the admin plugin's `role` field is `input: false`, so better-auth drops it from `mapProfileToUser` / `overrideUserInfo` output; ADR 0004 asks for a re-read at every login, not at every token refresh.
+- Decision: a `session.create` database hook. When the session is created by the Keycloak OAuth callback, it reads the user's Keycloak account tokens (already refreshed by that callback), collects `realm_access.roles`, `resource_access[clientId].roles`, `roles` and `groups`, maps them with the admin-chosen names (Admin wins over Éditeur) and writes `user.role`; no match gives `reader`.
+- Why: runs exactly once per login, on the server, after tokens arrive from the token endpoint over the backchannel; it is the only point where better-auth lets us write a non-input field.
+- Who: agent (judgement call)
+
+#### Can a Keycloak login attach to an existing local account with the same email?
+
+- Context: better-auth links implicitly when the provider is trusted or the email is verified; a local admin account would then be reachable through Keycloak, and its role would flip to the Keycloak mapping.
+- Decision: implicit account linking is off. A Keycloak login whose email belongs to a local account fails with a French message asking the admin to delete one of the two.
+- Why: one account has one source of truth for its role (ADR 0004: local roles set by the admin, SSO roles by Keycloak). Reversible later.
+- Who: agent (judgement call)
+
+#### How does an invited user set a password?
+
+- Context: no sign-up; better-auth has no invitation flow outside the organization plugin; `admin.createUser` accepts no password.
+- Decision: the admin creates the user without a password; Netplan creates a `reset-password:<token>` verification valid 7 days and mails a link to a French "Choisir un mot de passe" page; `resetPassword` creates the credential account. Re-sending an invitation issues a new token.
+- Why: reuses better-auth's own reset path end to end (hashing, token check, credential creation) instead of a parallel flow.
+- Who: agent (judgement call)
+
+#### Can an SSO user use "forgot password"?
+
+- Context: better-auth's `resetPassword` creates a credential account when the user has none, so a reset mail to an SSO-only user would give them a local password that bypasses Keycloak (and its role removal).
+- Decision: `sendResetPassword` sends nothing to users without a credential account (and the request still answers success, so it leaks nothing); invitations are only issued to users with no Keycloak account. Password reset also revokes the user's other sessions.
+- Why: keeps Keycloak the only door for SSO accounts.
+- Who: agent (obvious)
+
+#### What does "désactiver" mean?
+
+- Context: the admin page must disable users.
+- Decision: better-auth admin `banUser` (no expiry) — it revokes the sessions and blocks both password and Keycloak logins; "réactiver" is `unbanUser`.
+- Why: built-in, covers both methods, keeps the user's history attributions.
+- Who: agent (obvious)
+
+#### How long does a session last?
+
+- Context: Q24 B: 24 hours.
+- Decision: `session.expiresIn` 24h with `disableSessionRefresh: true`, so the 24 hours are absolute, not sliding.
+- Why: a sliding session would never pick up a Keycloak role removal for a user who stays active (ADR 0004 bounds that delay by the session length).
+- Who: agent (obvious)
+
+#### How is authorization enforced on every Convex function?
+
+- Context: ADR 0003/0004: every public function checks session and role on the server.
+- Decision: `convex/lib/functions.ts` exports `readerQuery`, `editorMutation`, `adminMutation`, … built with convex-helpers custom functions; they load the user through the better-auth component (session validated in the database, banned users refused) and put `ctx.user` in the context. An oxlint `no-restricted-imports` rule forbids the raw `query`/`mutation`/`action` builders outside that file; the connector's machine-authenticated actions (deleted in L2) carry the only exception. Behaviour tests cover each role on each function group.
+- Why: a wrapper makes the check impossible to forget, the lint rule makes it impossible to bypass silently, the tests prove the levels.
+- Who: agent (obvious)
+
+#### Which role does each function need?
+
+- Context: ADR 0004 role semantics.
+- Decision: reads → Lecteur; map, building and floor edits and manual refresh → Éditeur; sites, integrations, users, role mapping, SMTP test → Admin; presence → any signed-in user (on their own row only).
+- Why: direct reading of ADR 0004.
+- Who: agent (obvious)
+
+#### What replaces the `netplan-identity` client identity?
+
+- Context: the local identity also seeds object ids and operation ids (`clientId`).
+- Decision: the stored identity and pseudonym lists are deleted; presence name and colour come from the signed-in user on the server; `clientId` becomes a random value per page load kept in memory (still needed for id uniqueness and own-operation echo). No identity key remains in `localStorage`.
+- Why: the server must not trust a client-supplied name; a per-tab id is all the engine needs.
+- Who: agent (obvious)
+
+#### How is the first admin created?
+
+- Context: no sign-up; a fresh install has no user.
+- Decision: internal action `bootstrap:ensureFirstAdmin` (an action because better-auth's `createUser` hashes the password and calls the component), a no-op once any admin exists, reading `BOOTSTRAP_ADMIN_EMAIL` / `BOOTSTRAP_ADMIN_PASSWORD` / `BOOTSTRAP_ADMIN_NAME` from Convex env or from arguments; L0's deploy one-shot runs it after `convex env set`, and `bun run auth:bootstrap-admin` runs it by hand.
+- Why: works unattended in compose and by command, as ADR 0003 asks.
+- Who: agent (obvious)
+
+#### How is mail sent?
+
+- Context: SMTP by env (Q6 B / Q15 A); Convex runs mutations in its V8 runtime.
+- Decision: a `"use node"` internal action with nodemailer, scheduled from the auth callbacks; env `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`. The self-hosted backend image ships Node 22, so node actions work there.
+- Why: standard, no extra service; scheduling keeps the HTTP auth request fast and retries out of it.
+- Who: agent (obvious)
+
+#### How do browser and Convex both reach Keycloak in dev?
+
+- Context: the browser uses a published `127.0.0.1` port; the per-worktree Convex container cannot reach that address.
+- Decision: in compose, L0's edge gives one `*.localhost` URL that works from both sides. In `dev:agent`, the shared dev Keycloak runs with hostname v2 (`KC_HOSTNAME` = browser URL, `KC_HOSTNAME_BACKCHANNEL_DYNAMIC=true`) on a `netplan-dev` Docker network the worktree backends join, so discovery fetched through the internal name returns backchannel endpoints on the internal name and browser endpoints on the public one.
+- Why: one issuer, no per-worktree Keycloak; matches L0's compose shape.
+- Who: agent (judgement call)
+
+#### Which ADR number?
+
+- Context: L0 writes the deployment ADR at the same time.
+- Decision: L0 takes 0020, L1 takes 0021.
+- Who: agent (obvious, agreed with L0)
+
+#### How is L1 split into pull requests?
+
+- Context: one concern per PR (ADR 0019); the lot touches every Convex function, the routes, presence, mail, an admin page and Keycloak.
+- Decision: five stacked layers: (1) auth core, role builders on every function, login page, sign-out, seeded accounts; (2) a read-only map for readers; (3) presence and identity from the signed-in user; (4) mail, invitations, forgotten password and the bootstrap script; (5) admin users page, Keycloak role mapping and dev realm, docs and this journal.
+- Why: each layer is reviewable and green on its own; layer 1 is the smallest change that makes the app require a login.
+- Who: agent (judgement call)
+
+#### How does the Convex backend verify its own tokens in dev?
+
+- Context: better-auth's Convex plugin signs JWTs whose JWKS URL derives from the backend's `CONVEX_SITE_URL`, and the backend fetches that URL itself; dev:agent published the site port on a host port the container cannot reach.
+- Decision: dev:agent (and CI) set the backend's `CONVEX_SITE_ORIGIN` to its in-container address `http://127.0.0.1:3211`; the app server reaches the site through the published port, which dev:agent writes as `CONVEX_SITE_URL` in `.env.local`.
+- Why: no static JWKS to keep in sync; production has one public site URL that both sides reach.
+- Who: agent (obvious)
+
+#### Which level does `sites.ensureDefault` need?
+
+- Context: ADR 0004 gives site management to Admin, but the sidebar's "create the default map" flow, available to editors, calls it.
+- Decision: Éditeur, until the site pages (L2+) replace that flow.
+- Why: it only creates the default site when none exists; requiring Admin would break an editor's first-map flow.
+- Who: agent (judgement call)
+
+#### How is "every public function is authorized" tested?
+
+- Context: the brief asks for server-side authorization on every function, with tests.
+- Decision: each role builder tags the function with its level; a test imports every module under `convex/`, compares the tags with an explicit policy table, and fails on a new or changed function. Behaviour tests check unauthenticated, banned, expired, reader, editor, admin and unknown-role callers.
+- Why: proves coverage without a test per function, and a level change is a visible diff.
+- Who: agent (judgement call)
+
+#### What is rate-limited, and by which address?
+
+- Context: better-auth rate-limits by client IP read from `X-Forwarded-For`; requests reach Convex through the app server, and without that header every user shares one bucket. Token and session reads run on every page load.
+- Decision: rate limiting stays on (database storage) for sign-in and other auth endpoints; `/convex/token` and `/get-session` are exempt. The edge (L0) must set a single-address `X-Forwarded-For`; the app proxy forwards it.
+- Why: the limit is about guessing credentials; counting session reads would write a row per page load and lock everyone out together behind a misconfigured edge.
+- Who: agent (judgement call)
+
+#### What happens to an open page when its session ends?
+
+- Context: the Convex JWT stays valid for a while after a sign-out in another tab, an expiry or a ban; functions then refuse with `unauthenticated` and the page showed a raw error.
+- Decision: the signed-in layout uses the component's `AuthBoundary` on `users.me`; an `unauthenticated` refusal sends the user to the login page with a redirect back.
+- Why: verified in the browser with two tabs; a reload alone would loop on the error.
+- Who: agent (obvious)
+
+#### Should a reader still see edit tools?
+
+- Context: the server refuses a reader's edit, but the map still offers edit mode and the dev map controls, and the refusal surfaced as an unhandled error.
+- Decision: a dedicated layer gives readers a read-only map (no edit mode, no edit shortcuts or controls) and shows a server refusal.
+- Why: "the server rejects what the client prevents"; separate from layer 1 to keep that PR about authentication.
+- Who: agent (obvious)
+
+#### How does the backend fetch its own JWKS under dev:agent?
+
+- Context: after #15, the Convex CLI writes the backend's reported site URL into `.env.local` as `CONVEX_SITE_URL`, which the app server now reads; making the backend report its in-container origin (above) left the app server proxying to an address that only works inside the container.
+- Decision: the container reports its published site URL again, and an optional Convex variable, `AUTH_JWKS_URL`, replaces the JWKS address in `auth.config.ts`; dev:agent sets it to the in-container port. Reading an unset variable there throws (`AuthConfigMissingEnvironmentVariable`) and `"X" in process.env` is always false, so a `try`/`catch` keeps it optional. Compose passes it empty.
+- Why: a static JWKS puts a private key in the environment and needs a second push; the backend refuses a repeated port flag, so the image's flags cannot be overridden.
+- Who: agent (judgement call)
+
+#### How was the lot actually split?
+
+- Context: the five layers planned above grew as reviews and L2's work landed alongside.
+- Decision: eight pull requests: login and role builders (#13), the read-only map for readers (#21), real-name presence (#24), the SMTP relay and dev Mailpit (#26), forgotten password (#29), waiting for the token before the first query (#30), the users page with invitations, roles, disabling and test mail (#33), and Keycloak sign-in with the role mapping and dev realm (#37), then this closing docs change.
+- Why: invitations, mail and Keycloak each carried enough review on their own; #30 fixed a race L2 reported.
+- Who: agent (judgement call)
+
+#### Was the shared dev Keycloak built?
+
+- Context: the entry on reaching Keycloak in dev planned one shared Keycloak on a `netplan-dev` network.
+- Decision: no. The realm ships in the compose `local` profile (`deploy/keycloak/import/`); browser checks under dev:agent ran a Keycloak built from that directory, attached to the worktree's backend network and removed afterwards. dev:agent starts no Keycloak.
+- Why: every check needed one Keycloak for a few hours; a permanent shared service is something to run and secure for nothing the tests do not already cover.
+- Who: agent (judgement call)
+
+#### Does `sites.ensureDefault` still exist?
+
+- Context: the entry above gave it Éditeur until the site pages replaced it.
+- Decision: L2's site pages (#28) removed it; creating a site is Admin only.
+- Who: agent (obvious)
+
+#### Why does the first query wait for the token?
+
+- Context: on a page loaded with a session, children of `ConvexBetterAuthProvider` subscribe before the provider sets the token, so `users.me` went out anonymous, failed as `unauthenticated`, and `AuthBoundary` could send a signed-in user to `/login`.
+- Decision: the Convex client is built with `expectAuth` when the root route found a session cookie; a signed-out page does not wait.
+- Why: sign-in and sign-out are full page loads, so the choice holds for the client's life.
+- Who: agent (obvious)
+
+#### Where does the Keycloak role mapping live?
+
+- Context: ADR 0004 says the admin chooses the Keycloak role names; environment variables would need a redeploy to change them.
+- Decision: an `authSettings` table holds the editor and admin names, set from a Keycloak section of the users page that also shows the issuer, client and redirect URI to register; the same name for both is refused. A Keycloak account's role is locked on that page.
+- Why: an admin changes the mapping without touching the deployment, and one place decides each account's role.
+- Who: agent (obvious)
+
+#### How does the login page know Keycloak is on?
+
+- Decision: a small better-auth plugin answers `GET /api/auth/sign-in-options` with `{ keycloak }`, true only when issuer, client id and secret are all set; the server reads it before rendering the login page.
+- Why: the button must not appear on an installation without Keycloak, and the client cannot read Convex variables.
+- Who: agent (obvious)
+
+#### Is turning account linking off enough?
+
+- Context: zipzoup (P1) found that linking from a signed-in session ignores `accountLinking.enabled`, and that generic OAuth also registers Keycloak with `/link-social`.
+- Decision: both `/oauth2/link` and `/link-social` are disabled; a test signs in through Keycloak and expects 404 from each (it got 200 from `/link-social` without the fix).
+- Why: a local account linking a Keycloak identity would keep its local role at password logins.
+- Who: agent (obvious)
+
+#### Where does a cancelled Keycloak login land?
+
+- Context: the OAuth callback redirects `error=access_denied` and state errors before it reads the sign-in state, so the `errorCallbackURL` does not apply and better-auth's English `/error` page showed (zipzoup P2).
+- Decision: `onAPIError.errorURL` is `<SITE_URL>/login`; the login page maps the codes to French messages and never echoes the provider's text. Only OAuth routes use that setting.
+- Who: agent (obvious)
+
+#### How strict is the rate limit on starting a Keycloak login?
+
+- Context: the `/sign-in/*` rule allows 3 attempts per 10 s per address, and a team behind one NAT signs in together in the morning.
+- Decision: `/sign-in/oauth2` has its own rule of 100 per 10 s; Keycloak guards the password itself.
+- Who: agent (judgement call)
+
+#### What name does a Keycloak user without first and last names get?
+
+- Context: Keycloak omits `name` for such a user, and better-auth refuses a login without a name.
+- Decision: `mapProfileToUser` takes the first of `name`, `preferred_username` and `email`.
+- Who: agent (obvious)
