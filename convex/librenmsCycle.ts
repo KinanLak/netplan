@@ -674,9 +674,17 @@ export const recordSightings = internalMutation({
       if (device && (await placeNextTo(ctx, device, socketId))) placed += 1;
     }
     const placeOf = placeNamer(ctx);
-    for (const [deviceId, seen] of portMoves(sightings, presentOwners, rows)) {
+    for (const [deviceId, { seen, first }] of portMoves(
+      sightings,
+      presentOwners,
+      rows,
+    )) {
       const device = owners.get(deviceId);
-      if (device) await recordLocated(ctx, device, await placeOf(seen), now);
+      if (device) {
+        await recordLocated(ctx, device, await placeOf(seen), now, {
+          unlessLast: first,
+        });
+      }
     }
 
     let online = 0;

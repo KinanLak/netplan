@@ -541,12 +541,14 @@ export function socketMoves(
  * Where each device the history records as located now (ADR 0027): the first
  * sighting this read made of it, when its MACs were never seen before, or
  * when none of the ports they are seen on now is one its latest sighting saw.
+ * `first` says no sighting of it was known: its arrival may have recorded
+ * that place already.
  */
 export function portMoves<Seen extends { mac: string; portId: string }>(
   sightings: ReadonlyArray<Seen>,
   ownerOf: ReadonlyMap<string, { id: string }>,
   history: ReadonlyArray<{ ownerId?: string; portId: string; seenAt: number }>,
-): Map<string, Seen> {
+): Map<string, { seen: Seen; first: boolean }> {
   const current = new Map<string, Array<Seen>>();
   for (const sighting of sightings) {
     const owner = ownerOf.get(sighting.mac);
@@ -554,11 +556,13 @@ export function portMoves<Seen extends { mac: string; portId: string }>(
     current.set(owner.id, [...(current.get(owner.id) ?? []), sighting]);
   }
   const latest = latestSeen(history, current, ({ portId }) => portId);
-  const moves = new Map<string, Seen>();
+  const moves = new Map<string, { seen: Seen; first: boolean }>();
   for (const [id, seen] of current) {
     const last = latest.get(id);
     // Every entry of `current` holds at least one sighting.
-    if (!seen.some(({ portId }) => last?.has(portId))) moves.set(id, seen[0]);
+    if (!seen.some(({ portId }) => last?.has(portId))) {
+      moves.set(id, { seen: seen[0], first: last === undefined });
+    }
   }
   return moves;
 }

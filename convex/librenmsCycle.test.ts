@@ -475,6 +475,27 @@ describe("the LibreNMS step", () => {
       "device:printer",
       "device:pc",
     ]);
+
+    // Seen through two MACs on both ports, then only the other, then back:
+    // the way back is a move, though its last `located` event names it.
+    await admin.mutation(api.devices.updateIdentity, {
+      deviceId: "device:printer",
+      edit: { macs: [PRINTER, macOf(4)] },
+    });
+    librenms.state.fdb = [
+      { port_id: 102, mac_address: PRINTER },
+      { port_id: 101, mac_address: macOf(4) },
+    ];
+    await cycle(admin, siteId);
+    librenms.state.fdb = [{ port_id: 101, mac_address: macOf(4) }];
+    await cycle(admin, siteId);
+    librenms.state.fdb = [{ port_id: 102, mac_address: PRINTER }];
+    await cycle(admin, siteId);
+    expect(
+      (await history("device:printer"))
+        .filter(({ kind }) => kind === "located")
+        .map(({ place }) => place),
+    ).toEqual([onFreePort, onFreePort]);
   });
 
   it("gives a switch the status LibreNMS has for it", async () => {

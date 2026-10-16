@@ -406,19 +406,23 @@ describe("presence", () => {
     const onA = { mac: "mac-a", portId: "port-a", switchId: "sw" };
     const onB = { mac: "mac-b", portId: "port-b", switchId: "sw" };
     // Never seen before.
-    expect([...portMoves([onA], owners, [])]).toEqual([["pc", onA]]);
+    expect([...portMoves([onA], owners, [])]).toEqual([
+      ["pc", { seen: onA, first: true }],
+    ]);
     const atA = [{ ownerId: "pc", portId: "port-a", seenAt: 1 }];
     // Still on a port its latest sighting saw, through either MAC.
     expect(portMoves([onB, onA], owners, atA).size).toBe(0);
     // Only on another port: located there.
-    expect([...portMoves([onB], owners, atA)]).toEqual([["pc", onB]]);
+    expect([...portMoves([onB], owners, atA)]).toEqual([
+      ["pc", { seen: onB, first: false }],
+    ]);
     // Back on a port an older sighting saw.
     expect([
       ...portMoves([onA], owners, [
         ...atA,
         { ownerId: "pc", portId: "port-b", seenAt: 2 },
       ]),
-    ]).toEqual([["pc", onA]]);
+    ]).toEqual([["pc", { seen: onA, first: false }]]);
     // A MAC no device carries records nothing.
     expect(portMoves([{ ...onA, mac: "mac-x" }], owners, []).size).toBe(0);
   });

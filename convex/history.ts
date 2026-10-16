@@ -100,20 +100,29 @@ export const placeNamer = (ctx: QueryCtx) => {
   };
 };
 
-/** Records that the network saw `device` at `place`. */
+/**
+ * Records that the network saw `device` at `place`. With `unlessLast`, a
+ * place its last `located` event already names is not recorded again: the
+ * first sighting of a device after its arrival recorded it. A move the cycle
+ * found against the device's latest sighting is always recorded, even back
+ * to the port that event names.
+ */
 export const recordLocated = async (
   ctx: MutationCtx,
   device: Doc<"devices">,
   place: HistoryPlace,
   at: number,
+  { unlessLast = false }: { unlessLast?: boolean } = {},
 ) => {
-  const previous = await ctx.db
-    .query("deviceEvents")
-    .withIndex("by_device_at", (q) => q.eq("deviceId", device.objectId))
-    .order("desc")
-    .filter((q) => q.eq(q.field("kind"), "located"))
-    .first();
-  if (previous?.place?.portId === place.portId) return;
+  if (unlessLast) {
+    const previous = await ctx.db
+      .query("deviceEvents")
+      .withIndex("by_device_at", (q) => q.eq("deviceId", device.objectId))
+      .order("desc")
+      .filter((q) => q.eq(q.field("kind"), "located"))
+      .first();
+    if (previous?.place?.portId === place.portId) return;
+  }
   await ctx.db.insert("deviceEvents", {
     siteId: device.siteId,
     deviceId: device.objectId,
