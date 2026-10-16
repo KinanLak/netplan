@@ -35,11 +35,14 @@ if (!baseUrl || !token) {
   console.error("LIBRENMS_URL and LIBRENMS_TOKEN must be set.");
   process.exit(2);
 }
-const ids = values.device.map((value) => librenmsId(value));
-if (ids.some((id) => id === null)) {
+const parsed = values.device.map((value) => librenmsId(value));
+if (parsed.some((id) => id === null)) {
   console.error("--device takes a LibreNMS device id.");
   process.exit(2);
 }
+// Once each, as a cycle polls a stack's shared device: a repeated id would
+// ask for a second discovery at once.
+const ids = [...new Set(parsed)];
 
 const read = (path: string) =>
   sourceGet("librenms", baseUrl, path, token, SOURCE_RETRY);

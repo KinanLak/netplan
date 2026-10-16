@@ -55,7 +55,7 @@ describe("switchChecks", () => {
       ),
     });
     const text = levels(checks).join("\n");
-    expect(text).toContain("warn last_discovered unreadable ((none))");
+    expect(text).toContain("warn No last_discovered");
     expect(text).toContain(
       "fail 1 of 2 forwarding entries unreadable, such as port_id number, mac_address zz:99:99:99:99:99.",
     );
@@ -72,8 +72,21 @@ describe("switchChecks", () => {
       fdb: fdb([1, "02:aa:00:00:00:01", "2026-10-15 18:00:00"]),
     });
     expect(levels(checks)).toContain(
-      "warn The newest entry is 846 min older than the last discovery: discoveries may not refresh the table, or the two clocks differ.",
+      "warn The newest entry is 846 min older than the last discovery: either discoveries do not refresh the table, or the two dates come from different clocks or time zones. Run with --discover to tell.",
     );
+  });
+
+  test("a last_discovered in another format only stops the comparison", () => {
+    const checks = switchChecks({
+      device: device("16/10/2026 08:05"),
+      ports,
+      fdb: fdb([1, "02:aa:00:00:00:01", "2026-10-15 18:00:00"]),
+    });
+    const text = levels(checks).join("\n");
+    expect(text).toContain(
+      "warn last_discovered is not a date this script reads (99/99/9999 99:99)",
+    );
+    expect(text).not.toContain("than the last discovery");
   });
 
   test("entries on unknown ports are counted", () => {
@@ -102,6 +115,17 @@ describe("discoveryChecks", () => {
     expect(
       discoveryChecks({ before, after }).every(({ level }) => level === "ok"),
     ).toBe(true);
+  });
+
+  test("one over a table without timestamps is inconclusive", () => {
+    const untimed = fdb([1, "02:aa:00:00:00:01"]);
+    const checks = discoveryChecks({
+      before: { device: before.device, fdb: untimed },
+      after: { device: device("2026-10-16 08:05:30"), fdb: untimed },
+    });
+    expect(levels(checks).at(-1)).toStartWith(
+      "warn Whether it refreshed the table cannot be told",
+    );
   });
 
   test("one that moved nothing, or did not finish, is flagged", () => {

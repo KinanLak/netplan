@@ -59,16 +59,24 @@ export function switchChecks({
   const checks: Array<Check> = [];
   const lastDiscovered = readLastDiscovered(device);
   const discoveredAt = readLibreNMSTime(lastDiscovered);
+  // A cycle sees a discovery finish when this text changes, whatever its
+  // format; only the comparison with the table below needs it as a date.
   checks.push(
-    discoveredAt === null
+    lastDiscovered === null
       ? {
           level: "warn",
-          message: `last_discovered unreadable (${shapeOf(lastDiscovered)}): a cycle cannot tell when a discovery finished.`,
+          message:
+            "No last_discovered: a cycle cannot tell when a discovery finished, waits the full two minutes, then reads the table anyway.",
         }
-      : {
-          level: "ok",
-          message: `last_discovered reads (${shapeOf(lastDiscovered)}).`,
-        },
+      : discoveredAt === null
+        ? {
+            level: "warn",
+            message: `last_discovered is not a date this script reads (${shapeOf(lastDiscovered)}): a cycle still sees a discovery finish, but the table cannot be compared with it below.`,
+          }
+        : {
+            level: "ok",
+            message: `last_discovered reads (${shapeOf(lastDiscovered)}).`,
+          },
   );
 
   const portList = readLibreNMSPorts(ports);
@@ -148,11 +156,14 @@ export function switchChecks({
         ? {
             level: "ok",
             message:
-              "The newest entry dates from the last discovery: discoveries refresh the table.",
+              "The newest entry dates from the last discovery, as it does when discoveries refresh the table.",
           }
         : {
+            // A cycle compares entries with each other, never with this
+            // date: the gap matters only if discoveries leave the table as
+            // it was, which --discover tells.
             level: "warn",
-            message: `The newest entry is ${minutes(Math.abs(gap))} ${gap > 0 ? "older" : "newer"} than the last discovery: discoveries may not refresh the table, or the two clocks differ.`,
+            message: `The newest entry is ${minutes(Math.abs(gap))} ${gap > 0 ? "older" : "newer"} than the last discovery: either discoveries do not refresh the table, or the two dates come from different clocks or time zones. Run with --discover to tell.`,
           },
     );
   }
@@ -181,8 +192,20 @@ export function discoveryChecks({
   ];
   const was = newestEntry(before.fdb);
   const is = newestEntry(after.fdb);
+  if (is === null) {
+    checks.push(
+      readLibreNMSFdb(after.fdb).length === 0
+        ? { level: "warn", message: "The table is empty after it." }
+        : {
+            level: "warn",
+            message:
+              "Whether it refreshed the table cannot be told: no entry has a readable updated_at, so a cycle keeps every entry, however old.",
+          },
+    );
+    return checks;
+  }
   checks.push(
-    is !== null && (was === null || is > was)
+    was === null || is > was
       ? {
           level: "ok",
           message: `It refreshed the table: ${readLibreNMSFdb(after.fdb).length} entries, the newest moved.`,

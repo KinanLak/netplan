@@ -46,14 +46,19 @@ What a warning means:
 - **No readable `updated_at`**: a cycle cannot tell fresh entries from old
   ones and counts every entry as seen. Statuses stay online as long as
   LibreNMS keeps an entry.
-- **The newest entry is far from the last discovery**, or **the discovery
-  refreshed no entry**: discoveries do not rewrite the forwarding table on
-  this LibreNMS, or its clock and the switch's differ. A cycle then sees
-  nothing on that switch, and its devices go offline after two cycles.
+- **The newest entry is far from the last discovery**: either discoveries
+  do not rewrite the forwarding table, or the two dates come from different
+  clocks or time zones. The latter is harmless, since a cycle compares
+  entries with each other; `--discover` tells the two apart.
+- **The discovery refreshed no entry**: discoveries do not rewrite the
+  forwarding table on this LibreNMS. A cycle then sees nothing on that
+  switch, and its devices go offline after two cycles.
 - **Entries on ports the port list does not have**: those MAC addresses are
   never placed or counted.
-- **`last_discovered` unreadable**: a cycle waits the full two minutes for
-  each discovery, then reads the table anyway.
+- **No `last_discovered`**: a cycle cannot tell when a discovery finished,
+  waits the full two minutes for each, then reads the table anyway. One in a
+  date format the script does not read is harmless to a cycle, which only
+  watches it change; the script then cannot compare it with the table.
 
 ## Checking a site in the app
 
