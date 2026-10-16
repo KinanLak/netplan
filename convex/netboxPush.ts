@@ -14,7 +14,7 @@ import type { ActionCtx, MutationCtx, QueryCtx } from "./_generated/server";
 import { placeNamer } from "./history";
 import { openConnection } from "./integrations";
 import { cycleOf, LEASE_MS } from "./lib/cycles";
-import { SOURCE_RETRY } from "./lib/httpRetry";
+import { RetryStopped, SOURCE_RETRY } from "./lib/httpRetry";
 import { netboxPatch } from "./lib/netboxApi";
 import { pushedValues, pushRun } from "./siteValidators";
 import {
@@ -55,13 +55,26 @@ const pushRowOf = async (ctx: QueryCtx, deviceId: string) =>
     .withIndex("by_device", (q) => q.eq("deviceId", deviceId))
     .unique();
 
-/** What the push knew of a site's devices; it forgets them with NetBox. */
+/**
+ * What the push knew of a site's devices; it forgets them with NetBox. A run
+ * still going loses its lease, so nothing it hears back is recorded.
+ */
 export const deletePushes = async (ctx: MutationCtx, siteId: string) => {
   const rows = await ctx.db
     .query("netboxPushes")
     .withIndex("by_site_retry", (q) => q.eq("siteId", siteId))
     .collect();
   for (const row of rows) await ctx.db.delete(row._id);
+  const cycle = await cycleOf(ctx, siteId);
+  if (cycle?.pushRunning) {
+    await ctx.db.patch(cycle._id, { pushRunning: undefined });
+  }
+};
+
+/** A device the import removed or unbound: nothing will push to it again. */
+export const deletePush = async (ctx: MutationCtx, deviceId: string) => {
+  const row = await pushRowOf(ctx, deviceId);
+  if (row) await ctx.db.delete(row._id);
 };
 
 /**
@@ -175,9 +188,21 @@ export const due = internalQuery({
 const holdsLease = (cycle: Doc<"siteCycles"> | null, runId: string) =>
   cycle?.pushRunning?.runId === runId;
 
+const mayGoOn = async (ctx: QueryCtx, siteId: string, runId: string) =>
+  holdsLease(await cycleOf(ctx, siteId), runId) &&
+  (await pushEnabled(ctx, siteId));
+
+/** Whether the run may still write: asked again before each retry. */
+export const stillPushing = internalQuery({
+  args: { siteId: v.string(), runId: v.string() },
+  returns: v.boolean(),
+  handler: async (ctx, { siteId, runId }) => await mayGoOn(ctx, siteId, runId),
+});
+
 /**
  * Records what NetBox answered for one device. Returns whether the run may
- * go on: turning the push off, or losing the lease, stops it at once.
+ * go on: turning the push off, or losing the lease, stops it at once, and
+ * the answer is then dropped: it may come from a NetBox the site left.
  */
 export const record = internalMutation({
   args: {
@@ -190,10 +215,17 @@ export const record = internalMutation({
   },
   returns: v.boolean(),
   handler: async (ctx, args) => {
+    if (!(await mayGoOn(ctx, args.siteId, args.runId))) return false;
     const now = Date.now();
     const row = await pushRowOf(ctx, args.deviceId);
+    // What went to another NetBox device says nothing of this one.
+    const forgotten =
+      row && row.netboxId !== args.netboxId
+        ? { sent: undefined, sentAt: undefined }
+        : {};
     const outcome = args.refused
       ? {
+          ...forgotten,
           failures: (row?.failures ?? 0) + 1,
           message: args.refused,
           failingSince: row?.failingSince ?? now,
@@ -217,10 +249,7 @@ export const record = internalMutation({
         ...outcome,
       });
     }
-    const cycle = await cycleOf(ctx, args.siteId);
-    return (
-      holdsLease(cycle, args.runId) && (await pushEnabled(ctx, args.siteId))
-    );
+    return true;
   },
 });
 
@@ -248,6 +277,13 @@ const pushDevices = async (
     tally.error = connection.error;
     return;
   }
+  // A PATCH retried for minutes stops once the push is off or the site's
+  // NetBox changed, rather than write with what it held at the start.
+  const retry = {
+    ...SOURCE_RETRY,
+    beforeRetry: () =>
+      ctx.runQuery(internal.netboxPush.stillPushing, { siteId, runId }),
+  };
   let cursor: string | null = null;
   for (;;) {
     const page: {
@@ -265,13 +301,19 @@ const pushDevices = async (
     });
     for (const device of page.devices) {
       if (tally.sent + tally.refused >= MAX_PUSHES_PER_RUN) return;
-      const answer = await netboxPatch(
-        connection.baseUrl,
-        connection.token,
-        `/api/dcim/devices/${device.netboxId}/`,
-        { custom_fields: customFields(device.values) },
-        SOURCE_RETRY,
-      );
+      let answer;
+      try {
+        answer = await netboxPatch(
+          connection.baseUrl,
+          connection.token,
+          `/api/dcim/devices/${device.netboxId}/`,
+          { custom_fields: customFields(device.values) },
+          retry,
+        );
+      } catch (error) {
+        if (error instanceof RetryStopped) return;
+        throw error;
+      }
       // Unreachable, or failing on its side: the next device would fare the
       // same, so the next cycle's run tries again.
       if (!answer.ok && (answer.status === undefined || answer.status >= 500)) {

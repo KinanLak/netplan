@@ -12,18 +12,23 @@ const FAILING_SHOWN = 20;
 const byName = new Intl.Collator("fr", { numeric: true, sensitivity: "base" });
 
 const failingPushes = async (ctx: QueryCtx, siteId: string) => {
-  const rows = await ctx.db
-    .query("netboxPushes")
-    .withIndex("by_site_retry", (q) => q.eq("siteId", siteId).gt("retryAt", 0))
-    .take(FAILING_SHOWN + 1);
   const failing = [];
-  for (const row of rows.slice(0, FAILING_SHOWN)) {
+  let more = false;
+  const rows = ctx.db
+    .query("netboxPushes")
+    .withIndex("by_site_retry", (q) => q.eq("siteId", siteId).gt("retryAt", 0));
+  // Rows of devices removed since are skipped, so the page counts only
+  // devices still pushed to.
+  for await (const row of rows) {
     const device = await ctx.db
       .query("devices")
       .withIndex("by_object_id", (q) => q.eq("objectId", row.deviceId))
       .unique();
-    // A device removed since: nothing will push to it again.
     if (!device?.source || device.source.integration !== "netbox") continue;
+    if (failing.length === FAILING_SHOWN) {
+      more = true;
+      break;
+    }
     failing.push({
       deviceId: row.deviceId,
       deviceName: device.name,
@@ -34,7 +39,7 @@ const failingPushes = async (ctx: QueryCtx, siteId: string) => {
     });
   }
   failing.sort((a, b) => a.failingSince - b.failingSince);
-  return { failing, more: rows.length > FAILING_SHOWN };
+  return { failing, more };
 };
 
 export const overview = adminQuery({

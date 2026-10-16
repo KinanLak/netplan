@@ -1,7 +1,7 @@
 // Reads from the NetBox REST API. Lists are read page by page with offsets
 // rather than by following `next`, whose address NetBox builds from the
 // request's headers and could point the token elsewhere behind a proxy.
-import { fetchWithRetry } from "./httpRetry";
+import { fetchWithRetry, RetryStopped } from "./httpRetry";
 import { authHeaders, sourceGet } from "./integrationProbe";
 import type { SourceAnswer } from "./integrationProbe";
 import type { RetryOptions } from "./httpRetry";
@@ -95,7 +95,8 @@ const refusal = (status: number): string => {
 
 /**
  * One JSON `PATCH` to NetBox, with retries, or the French reason it failed:
- * `status` is set when NetBox answered, with what it said.
+ * `status` is set when NetBox answered, with what it said. Throws the
+ * `RetryStopped` of a `beforeRetry` that says no.
  */
 export async function netboxPatch(
   baseUrl: string,
@@ -121,6 +122,7 @@ export async function netboxPatch(
       retry,
     );
   } catch (error) {
+    if (error instanceof RetryStopped) throw error;
     const timedOut =
       error instanceof DOMException && error.name === "TimeoutError";
     return {

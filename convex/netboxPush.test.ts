@@ -28,27 +28,27 @@ afterEach(() => {
 type Patch = { url: string; fields: Record<string, unknown> };
 
 /** A NetBox that answers each PATCH with `status`, and records it. */
-const netboxAnswering = (status: (url: string) => number | Error) => {
+const netboxAnswering = (
+  status: (url: string) => number | Error | Promise<number>,
+) => {
   const patches: Array<Patch> = [];
-  const answer = (url: string | URL | Request, init?: RequestInit) => {
+  const answer = async (url: string | URL | Request, init?: RequestInit) => {
     const { pathname } = new URL(String(url));
     if (init?.method !== "PATCH") {
-      return Promise.resolve(Response.json({ "netbox-version": "4.6.10" }));
+      return Response.json({ "netbox-version": "4.6.10" });
     }
     const body = JSON.parse(String(init.body)) as {
       custom_fields: Record<string, unknown>;
     };
     patches.push({ url: pathname, fields: body.custom_fields });
-    const outcome = status(pathname);
-    if (outcome instanceof Error) return Promise.reject(outcome);
-    return Promise.resolve(
-      outcome === 400
-        ? Response.json(
-            { custom_fields: ["Unknown field name 'netplan_site'."] },
-            { status: 400 },
-          )
-        : Response.json({}, { status: outcome }),
-    );
+    const outcome = await status(pathname);
+    if (outcome instanceof Error) throw outcome;
+    return outcome === 400
+      ? Response.json(
+          { custom_fields: ["Unknown field name 'netplan_site'."] },
+          { status: 400 },
+        )
+      : Response.json({}, { status: outcome });
   };
   Object.defineProperty(globalThis, "fetch", {
     configurable: true,
@@ -184,10 +184,49 @@ const moveTo = async (
     if (row) await ctx.db.patch(row._id, sighting);
   });
 
-const failing = async (admin: TestClient, siteId: string) => {
+const pushHealth = async (admin: TestClient, siteId: string) => {
   const sites = await admin.query(api.health.overview, {});
-  return sites.find((site) => site.id === siteId)?.netbox?.push?.failing;
+  return sites.find((site) => site.id === siteId)?.netbox?.push;
 };
+
+const failing = async (admin: TestClient, siteId: string) =>
+  (await pushHealth(admin, siteId))?.failing;
+
+/** Runs `work` with the retry pauses passing at once: tests wait on nothing. */
+const withoutPauses = async (work: () => Promise<unknown>) => {
+  const realTimeout = globalThis.setTimeout;
+  globalThis.setTimeout = ((callback: () => void) => {
+    callback();
+    return 0;
+  }) as unknown as typeof setTimeout;
+  try {
+    await work();
+  } finally {
+    globalThis.setTimeout = realTimeout;
+  }
+};
+
+const patchDevice = async (
+  admin: TestClient,
+  objectId: string,
+  fields: Record<string, unknown>,
+) =>
+  await admin.run(async (ctx) => {
+    const row = await ctx.db
+      .query("devices")
+      .withIndex("by_object_id", (q) => q.eq("objectId", objectId))
+      .unique();
+    if (row) await ctx.db.patch(row._id, fields);
+  });
+
+const retryNow = async (admin: TestClient, deviceId: string) =>
+  await admin.run(async (ctx) => {
+    const row = await ctx.db
+      .query("netboxPushes")
+      .withIndex("by_device", (q) => q.eq("deviceId", deviceId))
+      .unique();
+    if (row) await ctx.db.patch(row._id, { retryAt: Date.now() - 1 });
+  });
 
 describe("the push to NetBox", () => {
   it("sends nothing while it is off", async () => {
@@ -290,13 +329,7 @@ describe("the push to NetBox", () => {
     await push(admin, siteId);
     expect(patches).toHaveLength(1);
 
-    await admin.run(async (ctx) => {
-      const row = await ctx.db
-        .query("netboxPushes")
-        .withIndex("by_device", (q) => q.eq("deviceId", "device:seen"))
-        .unique();
-      if (row) await ctx.db.patch(row._id, { retryAt: Date.now() - 1 });
-    });
+    await retryNow(admin, "device:seen");
     netboxAnswering(() => 200);
     await push(admin, siteId);
     expect(await failing(admin, siteId)).toEqual([]);
@@ -306,17 +339,7 @@ describe("the push to NetBox", () => {
     const { admin, siteId } = await pushingSite();
     await turnOn(admin, siteId);
     netboxAnswering(() => new TypeError("fetch failed"));
-    // The retry pauses pass at once: this test waits on nothing.
-    const realTimeout = globalThis.setTimeout;
-    globalThis.setTimeout = ((callback: () => void) => {
-      callback();
-      return 0;
-    }) as unknown as typeof setTimeout;
-    try {
-      await push(admin, siteId);
-    } finally {
-      globalThis.setTimeout = realTimeout;
-    }
+    await withoutPauses(() => push(admin, siteId));
     expect(await lastPush(admin, siteId)).toMatchObject({
       sent: 0,
       refused: 0,
@@ -353,5 +376,94 @@ describe("the push to NetBox", () => {
       async (ctx) => await ctx.db.query("netboxPushes").collect(),
     );
     expect(rows).toEqual([]);
+  });
+  it("stops retrying a PATCH once the push is turned off", async () => {
+    const { admin, siteId } = await pushingSite();
+    await turnOn(admin, siteId);
+    const patches = netboxAnswering(async () => {
+      await admin.mutation(api.netbox.setPush, { siteId, push: false });
+      return 503;
+    });
+    await withoutPauses(() => push(admin, siteId));
+    expect(patches).toHaveLength(1);
+  });
+
+  it("drops an answer from the NetBox the site has just left", async () => {
+    const { admin, siteId } = await pushingSite();
+    await turnOn(admin, siteId);
+    const patches = netboxAnswering(async () => {
+      await admin.action(api.integrations.save, {
+        siteId,
+        kind: "netbox",
+        baseUrl: "https://other-netbox.test",
+        enabled: true,
+        token: TOKEN,
+      });
+      return 200;
+    });
+    await push(admin, siteId);
+    const rows = await admin.run(
+      async (ctx) => await ctx.db.query("netboxPushes").collect(),
+    );
+    expect(patches).toHaveLength(1);
+    expect(rows).toEqual([]);
+    // The run lost its lease with the address: it reports nothing either.
+    expect(await lastPush(admin, siteId)).toBeNull();
+  });
+
+  it("sends again to the NetBox device a computer is bound to now", async () => {
+    const { admin, siteId } = await pushingSite();
+    await turnOn(admin, siteId);
+    await patchDevice(admin, "device:seen", { metadata: { status: "down" } });
+    const patches = netboxAnswering(() => 200);
+    await push(admin, siteId);
+
+    // Imported again as another NetBox device, which first refuses.
+    await patchDevice(admin, "device:seen", {
+      source: { integration: "netbox", externalId: "43", syncedAt: NOW },
+    });
+    netboxAnswering(() => 400);
+    await push(admin, siteId);
+    await retryNow(admin, "device:seen");
+    const again = netboxAnswering(() => 200);
+    await push(admin, siteId);
+    expect(patches.map((patch) => patch.url)).toEqual([
+      "/api/dcim/devices/41/",
+    ]);
+    // The same values, but NetBox device 43 never had them.
+    expect(again.map((patch) => patch.url)).toEqual(["/api/dcim/devices/43/"]);
+    expect(await failing(admin, siteId)).toEqual([]);
+    const row = await admin.run(
+      async (ctx) =>
+        await ctx.db
+          .query("netboxPushes")
+          .withIndex("by_device", (q) => q.eq("deviceId", "device:seen"))
+          .unique(),
+    );
+    expect(row).toMatchObject({ netboxId: 43, failures: 0 });
+  });
+
+  it("lists the devices still failing past the rows of removed ones", async () => {
+    const { admin, siteId } = await pushingSite();
+    await turnOn(admin, siteId);
+    netboxAnswering(() => 400);
+    await push(admin, siteId);
+    await admin.run(async (ctx) => {
+      for (let n = 0; n < 25; n += 1) {
+        await ctx.db.insert("netboxPushes", {
+          siteId,
+          deviceId: `device:gone-${n}`,
+          netboxId: 100 + n,
+          failures: 1,
+          message: "NetBox refuse ces valeurs (400).",
+          failingSince: NOW,
+          retryAt: 1 + n,
+        });
+      }
+    });
+    expect(await pushHealth(admin, siteId)).toMatchObject({
+      failing: [expect.objectContaining({ deviceName: "seen" })],
+      more: false,
+    });
   });
 });

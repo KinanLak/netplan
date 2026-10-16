@@ -11,7 +11,19 @@ export type RetryOptions = {
   maxDelayMs: number;
   /** Replaced in tests, which never wait. */
   sleep?: (ms: number) => Promise<void>;
+  /**
+   * Asked after each pause: `false` stops with `RetryStopped` rather than
+   * send again something nobody wants sent any more.
+   */
+  beforeRetry?: () => Promise<boolean>;
 };
+
+export class RetryStopped extends Error {
+  constructor() {
+    super("The request was no longer wanted.");
+    this.name = "RetryStopped";
+  }
+}
 
 export const SOURCE_RETRY: RetryOptions = {
   attempts: 5,
@@ -53,6 +65,9 @@ export async function fetchWithRetry(
       if (last) throw error;
     }
     await sleep(delay);
+    if (options.beforeRetry && !(await options.beforeRetry())) {
+      throw new RetryStopped();
+    }
     delay = Math.min(delay * 2, options.maxDelayMs);
   }
 }
