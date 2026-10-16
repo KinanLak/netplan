@@ -165,6 +165,24 @@ describe("cablePathOf", () => {
     ]);
   });
 
+  it("names the port of a switch NetBox models with rear ports", () => {
+    const swRear = port("sw", "rear", 7);
+    const path = cablePathOf(
+      id("wall"),
+      floor(
+        {},
+        {
+          ports: [swRear],
+          cables: [cable(swRear, pFront), cable(pRear, wall)],
+        },
+      ),
+    );
+    expect(hops(path)).toEqual(["wall>p", "p>sw"]);
+    expect(path.ends).toEqual([
+      { kind: "port", at: id("sw"), portName: "rear 7" },
+    ]);
+  });
+
   it("draws a rear-to-rear cable and stops on a loop", () => {
     const qFront = port("q", "front", 1, 1);
     const qRear = port("q", "rear", 1);

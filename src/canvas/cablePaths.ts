@@ -160,7 +160,13 @@ const traceInto = (start: Port, floor: FloorCabling, path: CablePath) => {
       }
       through = fronts[0];
     }
-    if (!through || seen.has(through.id)) return;
+    if (!through) {
+      // The trace ends on this port, as `traceFrom` does: a switch NetBox
+      // models with rear ports, or a panel port patched to nothing behind.
+      path.ends.push({ kind: "port", at: far.deviceId, portName: far.name });
+      return;
+    }
+    if (seen.has(through.id)) return;
     seen.add(through.id);
     at = through;
   }
