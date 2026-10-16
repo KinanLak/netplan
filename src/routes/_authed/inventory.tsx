@@ -311,31 +311,22 @@ function InventoryItem({
     void navigate({ to: "/", search: { site: site.id } });
   };
 
-  // The same id and fields bring the device back as it was, MACs included.
-  const restore = async () => {
-    try {
-      await createDevice({
-        siteId: site.id,
-        deviceId: device.id,
-        type: device.type,
-        identity: {
-          name: device.name,
-          hostname: device.hostname ?? null,
-          serial: device.serial ?? null,
-          macs: device.macs,
-          model: device.model ?? null,
-          ip: device.ip ?? null,
-          notes: device.notes ?? null,
-        },
-      });
-    } catch (error) {
-      toast.error(deviceMutationError(error));
-    }
-  };
-
   const remove = async () => {
     try {
-      await removeDevice({ deviceId: device.id });
+      const removed = await removeDevice({ deviceId: device.id });
+      if (!removed) return;
+      // The same id and what the server removed bring it back as it was.
+      const restore = async () => {
+        try {
+          await createDevice({
+            siteId: site.id,
+            deviceId: device.id,
+            ...removed,
+          });
+        } catch (error) {
+          toast.error(deviceMutationError(error));
+        }
+      };
       toast(`« ${device.name} » supprimé`, {
         action: { label: "Annuler", onClick: () => void restore() },
         // Long enough to notice the wrong row went.

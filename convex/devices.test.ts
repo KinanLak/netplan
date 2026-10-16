@@ -395,6 +395,43 @@ describe("the site inventory", () => {
     expect(afterRestore).toMatchObject([{ id: "device:gone", macs: [MAC] }]);
   });
 
+  it("hands back what brings a deleted device back whole, its ports included", async () => {
+    const t = await signedInTest();
+    const { siteId } = await siteWithFloor(t);
+    const ports = [{ id: "port-1", number: 1, status: "up" as const }];
+    await t.mutation(api.devices.create, {
+      siteId,
+      deviceId: "device:switch",
+      type: "switch",
+      identity: { ...identity("Switch", [MAC]), serial: "SN-1" },
+      metadata: { ports },
+    });
+    const before = await t.run(async (ctx) =>
+      ctx.db
+        .query("devices")
+        .withIndex("by_object_id", (q) => q.eq("objectId", "device:switch"))
+        .unique(),
+    );
+
+    const removed = await t.mutation(api.devices.remove, {
+      deviceId: "device:switch",
+    });
+    await t.mutation(api.devices.create, {
+      siteId,
+      deviceId: "device:switch",
+      ...removed!,
+    });
+    const after = await t.run(async (ctx) =>
+      ctx.db
+        .query("devices")
+        .withIndex("by_object_id", (q) => q.eq("objectId", "device:switch"))
+        .unique(),
+    );
+
+    const { _id, _creationTime, updatedAt, ...kept } = before!;
+    expect(after).toMatchObject(kept);
+  });
+
   it("deletes neither a placed device nor one its integration owns", async () => {
     const t = await signedInTest();
     const { siteId, floorId } = await siteWithFloor(t);

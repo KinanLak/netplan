@@ -8,7 +8,6 @@ import FlowCanvas from "@/canvas/FlowCanvas";
 import AppSidebar from "@/panels/Sidebar";
 import Toolbar from "@/panels/Toolbar";
 import DeviceDrawer from "@/panels/DeviceDrawer";
-import { MapDocumentProvider } from "@/map-session/MapDocumentProvider";
 import { MapDocumentStatus } from "@/map-session/MapDocumentStatus";
 import {
   useMapDocumentActions,
@@ -123,17 +122,13 @@ function HomePageContent() {
     buildings === undefined ||
     (currentBuildingId !== null && floors === undefined);
 
-  // The provider stays mounted while another site or building loads: it
-  // holds the outbox of unsent edits and each floor's undo history.
   return (
     <SidebarProvider>
-      <MapDocumentProvider floorId={currentFloorId}>
-        {isBootstrappingMap ? (
-          <div className="h-screen w-screen bg-background" />
-        ) : (
-          <MapWorkspace sortedFloors={sortedFloors} />
-        )}
-      </MapDocumentProvider>
+      {isBootstrappingMap ? (
+        <div className="h-screen w-screen bg-background" />
+      ) : (
+        <MapWorkspace sortedFloors={sortedFloors} />
+      )}
     </SidebarProvider>
   );
 }

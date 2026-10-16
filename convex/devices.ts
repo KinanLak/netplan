@@ -3,6 +3,7 @@ import { editorMutation, readerQuery } from "./lib/functions";
 import { placedDevicesOf } from "./mapDocument";
 import {
   deviceIdentityFields,
+  deviceMetadata,
   deviceSource,
   deviceType,
   placedDevice,
@@ -121,19 +122,22 @@ const getDevice = async (ctx: QueryCtx, deviceId: string) =>
 
 const DEVICE_ID = /^device:[\w:.-]{1,120}$/;
 
+/** What `remove` hands back, so `create` can bring the device back whole. */
+const removedDevice = {
+  type: deviceType,
+  identity: identityEdit,
+  /** Ports, status and the like, which no form edits. */
+  metadata: v.optional(deviceMetadata),
+};
+
 /**
  * Adds a manual device to a site's inventory, on no floor. The client names
  * it, so a retry or the "Annuler" of a deletion brings back the same device.
  */
 export const create = editorMutation({
-  args: {
-    siteId: v.string(),
-    deviceId: v.string(),
-    type: deviceType,
-    identity: identityEdit,
-  },
+  args: { siteId: v.string(), deviceId: v.string(), ...removedDevice },
   returns: v.null(),
-  handler: async (ctx, { siteId, deviceId, type, identity }) => {
+  handler: async (ctx, { siteId, deviceId, type, identity, metadata }) => {
     await requireSite(ctx, siteId);
     if (!DEVICE_ID.test(deviceId)) throw new ConvexError("Invalid device id");
     if (await getDevice(ctx, deviceId)) {
@@ -158,7 +162,7 @@ export const create = editorMutation({
       model: edit.model ?? undefined,
       ip: edit.ip ?? undefined,
       notes: edit.notes ?? undefined,
-      metadata: {},
+      metadata: metadata ?? {},
       updatedAt: Date.now(),
       updatedBy: ctx.user.id,
     });
@@ -169,10 +173,11 @@ export const create = editorMutation({
 /**
  * Deletes a manual device that is on no floor. A placed one is deleted from
  * the map, where undo restores its links; a sourced one only leaves the map.
+ * Returns what `create` needs to undo it, or `null` if it was already gone.
  */
 export const remove = editorMutation({
   args: { deviceId: v.string() },
-  returns: v.null(),
+  returns: v.union(v.null(), v.object(removedDevice)),
   handler: async (ctx, { deviceId }) => {
     const device = await getDevice(ctx, deviceId);
     if (!device) return null;
@@ -192,7 +197,19 @@ export const remove = editorMutation({
       .collect();
     for (const row of macs) await ctx.db.delete(row._id);
     await ctx.db.delete(device._id);
-    return null;
+    return {
+      type: device.type,
+      identity: {
+        name: device.name,
+        hostname: device.hostname ?? null,
+        serial: device.serial ?? null,
+        macs: device.macs,
+        model: device.model ?? null,
+        ip: device.ip ?? null,
+        notes: device.notes ?? null,
+      },
+      metadata: device.metadata,
+    };
   },
 });
 
