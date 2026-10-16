@@ -17,8 +17,13 @@ docker compose up -d --build --wait
 Compose rebuilds the images, reruns `convex-deploy` (which pushes the new
 functions and schema before the new app starts) and recreates what changed.
 The app is unavailable for the few seconds between its old and new
-container. Convex refuses a schema that existing documents do not match: then
-`convex-deploy` fails, the new app is not started, and its log says why.
+container.
+
+Convex refuses a schema that existing documents do not match: then
+`convex-deploy` fails and its log says why. The installation is then down:
+compose has already replaced the old app container with a new one that waits
+for `convex-deploy` and never starts. Check out the previous release and run
+the same command to bring it back; its schema still matches the data.
 
 ## A new Convex backend
 

@@ -15,3 +15,5 @@ issues/
 .vscode/settings.json
 playwright-report
 test-results
+# An installation's own compose changes, such as trusting an internal CA.
+deploy/compose.override.yaml
