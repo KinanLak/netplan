@@ -77,7 +77,7 @@ export const librenmsSettings = v.object({
   switches: v.array(
     v.object({
       switchId: v.string(),
-      device: v.object({ id: v.number(), name: v.string() }),
+      device: v.union(v.null(), v.object({ id: v.number(), name: v.string() })),
     }),
   ),
 });

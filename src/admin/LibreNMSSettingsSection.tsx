@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/combobox";
 import { FieldError } from "@/components/ui/field";
 import { adminErrorMessage } from "@/admin/errors";
-import { suggestDevice } from "@/sites/librenms";
+import { polledSwitches, suggestDevice } from "@/sites/librenms";
 import type { LibreNMSDevice } from "@/sites/librenms";
 import { api } from "../../convex/_generated/api";
 
@@ -97,7 +97,10 @@ function Summary({ saved }: { saved: Saved }) {
     );
   }
   const deviceOf = new Map(
-    saved.settings.switches.map(({ switchId, device }) => [switchId, device]),
+    polledSwitches(saved.settings).map(({ switchId, device }) => [
+      switchId,
+      device,
+    ]),
   );
   const polled = saved.switches.filter((device) => deviceOf.has(device.id));
   if (polled.length === 0) {
@@ -145,7 +148,8 @@ function SettingsForm({
   const savedOf = new Map(
     saved.settings.switches.map(({ switchId, device }) => [switchId, device]),
   );
-  // A switch never mapped starts on the device named like it, if one is.
+  // A switch never configured starts on the device named like it, if one
+  // is; one an admin chose not to poll stays so.
   const [chosen, setChosen] = useState<Record<string, number | null>>(() =>
     Object.fromEntries(
       saved.switches.map((device) => [
@@ -167,10 +171,10 @@ function SettingsForm({
         siteId,
         baseUrl: options.baseUrl,
         settings: {
-          switches: saved.switches.flatMap((device) => {
-            const picked = listed.get(chosen[device.id] ?? -1);
-            return picked ? [{ switchId: device.id, device: picked }] : [];
-          }),
+          switches: saved.switches.map((device) => ({
+            switchId: device.id,
+            device: listed.get(chosen[device.id] ?? -1) ?? null,
+          })),
         },
       });
       onDone();

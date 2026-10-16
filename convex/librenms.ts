@@ -9,6 +9,7 @@ import { requireSite } from "./sites";
 import { librenmsSettings } from "./siteValidators";
 import {
   EMPTY_LIBRENMS_SETTINGS,
+  librenmsId,
   librenmsSettingsError,
 } from "../src/sites/librenms";
 import type { LibreNMSDevice } from "../src/sites/librenms";
@@ -111,8 +112,8 @@ export const saveSettings = adminMutation({
 const deviceOf = (item: unknown): LibreNMSDevice | null => {
   if (typeof item !== "object" || item === null) return null;
   const fields = item as Record<string, unknown>;
-  const id = fields.device_id;
-  if (typeof id !== "number") return null;
+  const id = librenmsId(fields.device_id);
+  if (id === null) return null;
   const name = [fields.sysName, fields.display, fields.hostname].find(
     (value): value is string => typeof value === "string" && value !== "",
   );

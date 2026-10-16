@@ -12,6 +12,9 @@ const LIBRENMS = "https://librenms.test";
 const DEVICES = [
   { device_id: 12, hostname: "10.0.0.12", sysName: "sw-etage" },
   { device_id: 4, hostname: "core.corp.test", sysName: "" },
+  // The API documents ids as strings too.
+  { device_id: "21", hostname: "10.0.0.21", display: "annexe" },
+  { device_id: "abc", hostname: "bad-id" },
   { hostname: "no-id" },
 ];
 
@@ -68,6 +71,7 @@ describe("LibreNMS settings", () => {
     expect(await admin.action(api.librenms.options, { siteId })).toEqual({
       baseUrl: LIBRENMS,
       devices: [
+        { id: 21, name: "annexe" },
         { id: 4, name: "core.corp.test" },
         { id: 12, name: "sw-etage" },
       ],
@@ -79,12 +83,15 @@ describe("LibreNMS settings", () => {
     const siteId = await createTestSite(admin);
     await addDevice(admin, siteId, "device:sw1", "switch", "Pile 1");
     await addDevice(admin, siteId, "device:sw2", "switch", "Pile 2");
+    await addDevice(admin, siteId, "device:sw3", "switch", "Pile 3");
     await addDevice(admin, siteId, "device:pc", "pc", "Poste");
     const stack = { id: 4, name: "core.corp.test" };
     const settings = {
       switches: [
         { switchId: "device:sw1", device: stack },
         { switchId: "device:sw2", device: stack },
+        // Chosen not to be polled.
+        { switchId: "device:sw3", device: null },
       ],
     };
     await expect(
@@ -114,6 +121,7 @@ describe("LibreNMS settings", () => {
       switches: [
         { id: "device:sw1", name: "Pile 1" },
         { id: "device:sw2", name: "Pile 2" },
+        { id: "device:sw3", name: "Pile 3" },
       ],
     });
 
@@ -121,7 +129,7 @@ describe("LibreNMS settings", () => {
     await admin.mutation(api.devices.remove, { deviceId: "device:sw2" });
     expect(
       (await admin.query(api.librenms.settings, { siteId }))?.settings,
-    ).toEqual({ switches: [settings.switches[0]] });
+    ).toEqual({ switches: [settings.switches[0], settings.switches[2]] });
 
     await connect(admin, siteId, "https://other-librenms.test");
     expect(

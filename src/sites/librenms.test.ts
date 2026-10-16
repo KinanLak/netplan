@@ -1,5 +1,10 @@
 import { describe, expect, it } from "bun:test";
-import { librenmsSettingsError, suggestDevice } from "./librenms";
+import {
+  librenmsId,
+  librenmsSettingsError,
+  polledSwitches,
+  suggestDevice,
+} from "./librenms";
 
 const devices = [
   { id: 1, name: "SW-ACCUEIL.corp.test" },
@@ -55,5 +60,29 @@ describe("librenmsSettingsError", () => {
         switches: [{ switchId: "device:a", device: { id: 0, name: "" } }],
       }),
     ).toContain("n'existe pas");
+  });
+});
+
+describe("librenmsId", () => {
+  it("reads ids LibreNMS returns as numbers or numeric strings", () => {
+    expect(librenmsId(12)).toBe(12);
+    expect(librenmsId("21")).toBe(21);
+    for (const bad of ["abc", "", "1.5", "-3", 0, 1.5, null, undefined]) {
+      expect(librenmsId(bad)).toBeNull();
+    }
+  });
+});
+
+describe("polledSwitches", () => {
+  it("leaves out the switches chosen not to be polled", () => {
+    const device = { id: 4, name: "core" };
+    expect(
+      polledSwitches({
+        switches: [
+          { switchId: "device:a", device },
+          { switchId: "device:b", device: null },
+        ],
+      }),
+    ).toEqual([{ switchId: "device:a", device }]);
   });
 });
