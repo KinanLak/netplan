@@ -1913,3 +1913,182 @@ Questions of 2026-10-16, in the order they came up; the last sections record the
 - Not extended to deletions, walls or the overlay: the ADR is about moves; the existing conflict checks cover the rest.
 - The message names "la collecte", the UI's word for the cycle.
 - To check on a real LibreNMS: a PC the cycle moves after an Éditeur dragged it; undo is refused. Here, a second tab's move stood in for the cycle (both go through `applyMapOperation`).
+
+### L5 — History & ops
+
+Questions of 2026-10-16, in the order they came up, ending with the deployment smoke test and the cleanup.
+
+#### Why did signing out ask to leave the page?
+
+- Context: L4 leftover. `ConvexReactClient` installs a `beforeunload` warning that fires while any request is in flight, and the presence heartbeat sends a mutation every 2 s.
+- Decision: create the client with `unsavedChangesWarning: false`; the map provider warns only while its outbox holds unsaved edits. Reproduced by stalling the WebSocket's `send` in the preview: the dialog appeared on sign-out before, not after; an unsaved deletion still warns.
+- Why: the only unsaved work a user can lose on unload is the map's queued edits; other pages await their single mutation in a toast.
+- Who: agent (obvious)
+
+#### Does history need a map operation and an inverse?
+
+- Context: AGENTS.md requires every durable change to ship with an operation, engine behaviour and an inverse.
+- Decision: no. History is written only by the collection cycle from what the network observed; no person writes it, and undoing a move does not erase it.
+- Why: the rule covers durable changes people make to the map; history is an observation log, like `macSightings`.
+- Who: agent (obvious)
+
+#### When is a device "located" in history?
+
+- Context: the cycle already moves a device on a socket change (`socketMoves`), but a device can be seen on an edge port with no socket.
+- Decision: a `located` event at the first sighting, and whenever none of the ports seen now is one of its latest sighting's ports; same rule as `socketMoves`, on ports.
+- Why: one rule for "it moved" across placement and history; ports exist even where sockets are not modelled.
+- Who: agent (judgement call)
+
+#### Should history copy names or reference ids?
+
+- Context: sockets and switches get renamed or deleted; history must still say where a device was.
+- Decision: each event and snapshot entry copies the names it shows (device, switch, port, socket, floor, building) along with the ids.
+- Why: a 30-day log must survive edits and deletions without joins to rows that may no longer exist.
+- Who: agent (obvious)
+
+#### How is a missing snapshot slot recorded?
+
+- Context: the frozen plan wrote an explicit `missing` slot when no cycle fell in [slot−5 min, slot+10 min].
+- Decision: only taken slots have a row; the UI shows "pas de relevé" for a slot whose window has closed without one. Hourly cadence (weekends, nights) usually misses slots; accepted.
+- Why: same information without a cron writing empty rows; never backfilled with older data.
+- Who: agent (judgement call)
+
+#### Does the snapshot design respect the ~8,000 MACs per mutation limit noted by L2?
+
+- Context: Convex allows 16,000 writes per transaction (`TRANSACTION_MAX_NUM_USER_WRITES`); `recordSightings` already writes up to one row per MAC.
+- Decision: the cycle's mutation only claims the slot; a scheduled mutation pages `macSightings` 500 at a time to write entries. The purge also deletes 500 per mutation and reschedules itself.
+- Why: snapshot capture adds no writes to the cycle's mutation, whatever the site's size.
+- Who: agent (obvious)
+
+#### How often does the NetBox push write last-seen?
+
+- Context: each PATCH adds a NetBox changelog entry; a 5-minute cycle over ~200 workstations would add ~57,000 a day.
+- Decision: push a location change at once; push last-seen alone when the device is offline (exact time) or when the value sent is over six hours old.
+- Why: NetBox shows where and when last seen with useful accuracy, without flooding its changelog.
+- Who: agent (judgement call)
+
+#### Who creates the NetBox custom fields?
+
+- Context: owner approved creating them on the real NetBox; the app's token normally only reads.
+- Decision: an operator script (`scripts/netbox-custom-fields.ts`, idempotent) or the documented manual steps; the app never creates schema in NetBox.
+- Why: creating custom fields needs admin rights the collection token should not have; the push only needs `change_device`.
+- Who: agent (judgement call)
+
+#### What does a snapshot copy, given that sightings keep changing?
+
+- Context: zipzoup on #76: paging `macSightings` after the cycle reads mutable rows; a later cycle or LibreNMS removal could mix into or empty a snapshot being written.
+- Decision: the cycle's action writes the entries from the sightings it read itself, 500 per mutation; the slot is complete once its last page sets `entries`; an incomplete slot shows nothing.
+- Why: the cycle's own observations are immutable, so no lease checks or coordination are needed; a crash leaves an honest gap.
+- Who: agent (judgement call)
+
+#### What happens to history when a site is deleted?
+
+- Context: events and snapshots are keyed by site id; site deletion removes current state.
+- Decision: history rows of a deleted site are left to the 30-day purge; no query can reach them since the site is gone.
+- Why: avoids an unbounded delete in the site deletion mutation; data ages out on schedule.
+- Who: agent (judgement call)
+
+#### Where does the real NetBox push test write?
+
+- Context: the brief allows writing values only on devices I create; the demo site imports from a NetBox site.
+- Decision: created test site `netplan-test-L5-2`, device `netplan-test-L5-1` (id 1182) with an interface and a MAC, all tagged `netplan-test`; a fake LibreNMS (LibreNMS is unreachable from this host) served the switch; the custom fields were created with `ui_editable: no`, group "Netplan".
+- Why: the push can only reach devices of the imported NetBox site, so no real device can be written; fields uneditable in the UI avoid a person's edit being overwritten silently.
+- Who: agent (judgement call)
+
+#### Does the push work against the real NetBox?
+
+- Context: L5 relocation test on 2026-10-16, NetBox 4.6.10.
+- Decision: recorded as verified: cycle 10:35:44Z wrote Prise B-03 / Accès RDC · Gi1/0/3; after moving the MAC to Gi1/0/5 the 10:40:43Z cycle wrote Prise B-05 / Gi1/0/5; device history showed both located events and "En ligne"; Santé showed "1 équipement mis à jour".
+- Why: end-to-end proof through the real API, permissions and custom-field validation.
+- Who: agent (obvious)
+
+#### Is a return to the port named by the last located event a move?
+
+- Context: zipzoup on #78: with two MACs, a device seen A, A+B, B, A never recorded its return to A, because recordLocated skipped a place equal to the last located event.
+- Decision: the skip applies only to a device's first sighting after its arrival and to arrivals (including undo restoring a deleted device); a move found against the latest sighting is always recorded.
+- Why: the skip exists to avoid duplicating the arrival's event, not to filter real moves; zipzoup's follow-up showed undo needed the same skip.
+- Who: agent (judgement call)
+
+#### Does a device's snapshot list show an interrupted capture?
+
+- Context: zipzoup on #79: entries are written 500 at a time; a failed capture leaves partial entries.
+- Decision: `snapshotsForDevice` drops entries of a slot whose `entries` count is unset, as the site view already did.
+- Why: a partial snapshot would say a device was absent when it was simply not written.
+- Who: agent (obvious)
+
+#### When is the location of a device made from a MAC recorded, if its read has expired?
+
+- Context: zipzoup on #78 (still open after 366708e): recordArrival skipped the location when no fresh read gave a status, and the next cycle on the same port saw no move, so the device had no location until it moved.
+- Decision: recordArrival records the freshest sighting's place at its `seenAt`, whatever the status; presence still needs a fresh read (#82).
+- Why: the sighting is a true observation even when too old to vouch for a status; its own time keeps the event honest.
+- Who: agent (judgement call)
+
+#### How does the history dialog keep a long list usable?
+
+- Context: zipzoup on #80: the ScrollArea root had a max height but its viewport did not, so a long history pushed the dialog off screen; an empty snapshot page showed the empty state while older pages remained; an interrupted capture read "En cours" forever.
+- Decision: the viewport carries the 60vh cap; the device snapshot list shows its empty state only once pagination is exhausted; a slot without entries older than ten minutes (the cycle action's limit) reads "Pas de relevé".
+- Why: nothing can still be writing a capture after its action stopped; a page of failed captures says nothing about older ones.
+- Who: agent (obvious)
+
+#### What stops a push that the admin turned off, or whose NetBox changed, mid-run?
+
+- Context: zipzoup on #81 (four P2s): a PATCH retried for up to 2.5 minutes kept the token and address of the run's start; an answer arriving after the address changed was still recorded; `sent` values cached for one NetBox device survived a refusal from another; Santé capped failing rows before skipping retired devices.
+- Decision: `fetchWithRetry` takes a `beforeRetry` hook, and the push asks `stillPushing` (lease held, push on) after each pause. `record` checks the same before writing anything. `deletePushes` (address change or removal) also drops the run's lease, and import removal or unbinding deletes the device's push row. A refusal for a new `netboxId` forgets `sent`. `failingPushes` walks the index and applies the limit after filtering.
+- Why: the push must write only while someone wants it, and only into the NetBox the site points at now; an answer from a NetBox the site left must not make the push skip the new one.
+- Who: agent (obvious)
+
+#### Where does an operator learn what a Santé line means?
+
+- Context: the brief asks for troubleshooting built from the Santé page; the messages are spread across the cycle, probe, import, LibreNMS and push code.
+- Decision: `docs/operations/troubleshooting.md` follows the page from top to bottom, gives each message's cause and what to do, and links to Integrations for the push refusals instead of repeating them.
+- Why: an operator reads the page, not the code. Ordering the guide like the page makes a message easy to find.
+- Who: agent (obvious)
+
+#### Is the push switch checked before a device's first PATCH, or only before its retries?
+
+- Context: zipzoup on #81 after 546a375: a push turned off while `due` was planning still sent each device's first PATCH, and only `record` caught it afterwards.
+- Decision: the retry hook became `stillWanted` and is asked before every attempt, the first included (d8938b3). The cost is one query per PATCH, at most 100 per run.
+- Why: "off" must mean that nothing more is written to NetBox, not just that nothing more is recorded.
+- Who: agent (obvious)
+
+#### How was the compose stack redeployed from main?
+
+- Context: the brief asks to rebuild the local compose stack from current main with the `ghcr.io/convex` images; the old `netplan-l0` stack ran L0's code on old data.
+- Decision: rebuilt from 46d8bb7 in a separate checkout under the same compose project (`-p netplan-l0`), after a backup. The in-place upgrade was refused: L0-era devices lack the `macs` field, so `convex-deploy` failed, and the old app container had already been replaced, leaving the installation down. Recovered with `down -v` and a fresh install; upgrade.md now says a refused schema leaves the app down and how to roll back. The old data stays in `~/l5-backups/netplan-2026-10-16-1306.zip`.
+- Why: the rebuild restarts data from zero (ADR 0001), so no migration was owed; the downtime was the finding worth documenting.
+- Who: agent (judgement call)
+
+#### Does the relocation work on the deployed stack?
+
+- Context: the brief's smoke test: a `netplan-test-L5` device moves socket, and its history and NetBox fields follow.
+- Decision: recorded as verified on the compose stack (main 46d8bb7, convex-backend 72ce13c), with the fake LibreNMS standing in: the 13:28 automatic cycle wrote Prise B-03 / Accès RDC · Gi1/0/3 to NetBox device 1182; after the MAC moved to Gi1/0/5, the 13:33 cycle wrote Prise B-05 / Gi1/0/5. Historique showed both located events and "En ligne"; Santé showed "Envoi vers NetBox · 1 équipement mis à jour".
+- Why: same proof as on dev:agent, through the production images, Caddy and Postgres.
+- Who: agent (obvious)
+
+#### Does the stack work over HTTPS?
+
+- Context: the brief asks to try the HTTPS/Caddy path. No public DNS reaches this host, so Let's Encrypt cannot be tried.
+- Decision: tried with `NETPLAN_SCHEME=https`, port 8443 and `tls internal` in each Caddyfile site. Without more, `/health` reports `unable to get local issuer certificate` (the app calls Convex through the public URL), and once the app trusts the CA (`NODE_EXTRA_CA_CERTS`), signing in works but the backend cannot fetch its own JWKS (`rustls UnknownIssuer`) and refuses every token. With `SSL_CERT_FILE` on the backend (system bundle plus Caddy's root), sign-in, the `wss://` sync, Historique and Santé all worked, in a headless Chromium that accepted the CA. install.md now says so; `deploy/compose.override.yaml` is ignored by git for that purpose. The stack was put back on HTTP afterwards.
+- Why: an internal CA is the likely case on a company network, and the JWKS failure looks like an empty app rather than a TLS error.
+- Who: agent (judgement call)
+
+#### What was created in NetBox, and what is left?
+
+- Context: the brief's final sweep: every object tagged `netplan-test` or named `netplan-test-*`, from all lots.
+- Decision: a sweep over 33 object types (checking each result's name and tags locally, since NetBox ignores some filters) found only L5's objects. Deleted, after checking each still carried the tag: MAC address 374 `02:4C:35:00:00:01`, interface 452 `eth0`, device 1182 `netplan-test-L5-1`, site 39 `netplan-test-L5-2`, then tag 404 `netplan-test` once it had no item. A second sweep found nothing and no device with a `netplan_*` value. No earlier lot left an object behind.
+- Why: test objects must not outlive the lot; verifying before each DELETE guards against a reused id.
+- Who: agent (obvious)
+
+#### Are the custom fields kept after the tests?
+
+- Context: the owner approved creating `netplan_site`, `netplan_floor`, `netplan_socket`, `netplan_switch_port` and `netplan_last_seen` (ids 112–116) on `dcim.device`; their test values lived only on device 1182.
+- Decision: the fields stay; their values went with device 1182, and no other device holds any.
+- Why: they are the production contract of ADR 0027; recreating them is a step an admin would otherwise repeat when turning the push on.
+- Who: owner (brief)
+
+#### What happens to the L2 leftovers?
+
+- Context: L2 noted TypeScript errors in generated code, and 161 NetBox devices whose model shows "undefined".
+- Decision: logged, not changed. `tsc --skipLibCheck false` reports no error in `convex/_generated` today; the only declaration errors are in `node_modules` (React Compiler's types against zod 4, unstorage drivers' optional peers) and in `src/types/bun-test.d.ts`, which duplicates `bun:test`'s globals. `skipLibCheck` hides them, `bun run check` is green, and none affects the build. The "undefined" models are NetBox data: role 2 and device types 1 and 4 are literally named "undefined"/"undefined2" there, so the drawer shows "Matériel undefined"; renaming them is for whoever owns that NetBox.
+- Why: Netplan shows what NetBox says; masking a name would hide a real data problem.
+- Who: agent (judgement call)
