@@ -9,6 +9,7 @@ import {
   readLibreNMSPorts,
   readLibreNMSTime,
   sightingSummary,
+  socketMoves,
 } from "./librenmsCycle";
 import type { SwitchPort } from "./librenmsCycle";
 
@@ -223,6 +224,58 @@ describe("presence", () => {
     expect(isOnline([])).toBe(false);
   });
 
+  it("moves a device by where any of its MACs was last seen", () => {
+    const owners = new Map([
+      ["mac-a", { id: "pc", placed: true }],
+      ["mac-b", { id: "pc", placed: true }],
+    ]);
+    const atA = [{ ownerId: "pc", socketId: "socket-a", seenAt: 1 }];
+    // Seen through its other interface at another socket.
+    expect([
+      ...socketMoves([{ mac: "mac-b", socketId: "socket-b" }], owners, atA),
+    ]).toEqual([["pc", "socket-b"]]);
+    // Still where its latest sighting saw it, through either MAC.
+    expect(
+      socketMoves(
+        [
+          { mac: "mac-b", socketId: "socket-b" },
+          { mac: "mac-a", socketId: "socket-a" },
+        ],
+        owners,
+        atA,
+      ).size,
+    ).toBe(0);
+    // Back at a socket an older sighting saw it at.
+    expect([
+      ...socketMoves([{ mac: "mac-a", socketId: "socket-a" }], owners, [
+        ...atA,
+        { ownerId: "pc", socketId: "socket-b", seenAt: 2 },
+      ]),
+    ]).toEqual([["pc", "socket-a"]]);
+    // Seen for the first time: a person's place stays.
+    expect(
+      socketMoves([{ mac: "mac-a", socketId: "socket-a" }], owners, []).size,
+    ).toBe(0);
+  });
+
+  it("places an unplaced device at the first socket read", () => {
+    const owners = new Map([
+      ["mac-a", { id: "pc", placed: false }],
+      ["mac-b", { id: "pc", placed: false }],
+    ]);
+    expect([
+      ...socketMoves(
+        [
+          { mac: "mac-b" },
+          { mac: "mac-b", socketId: "socket-b" },
+          { mac: "mac-a", socketId: "socket-a" },
+        ],
+        owners,
+        [{ ownerId: "pc", socketId: "socket-a", seenAt: 1 }],
+      ),
+    ]).toEqual([["pc", "socket-b"]]);
+  });
+
   it("summarises a read", () => {
     expect(
       sightingSummary({
@@ -230,6 +283,7 @@ describe("presence", () => {
         seen: 1,
         online: 0,
         offline: 0,
+        placed: 0,
         unknown: 0,
       }),
     ).toBe("1 switch lu, 1 MAC vue.");
@@ -239,10 +293,11 @@ describe("presence", () => {
         seen: 9,
         online: 2,
         offline: 1,
+        placed: 1,
         unknown: 3,
       }),
     ).toBe(
-      "2 switchs lus, 9 MAC vues (2 passés en ligne, 1 passé hors ligne, 3 inconnues).",
+      "2 switchs lus, 9 MAC vues (2 passés en ligne, 1 passé hors ligne, 1 placé près de sa prise, 3 inconnues).",
     );
   });
 });

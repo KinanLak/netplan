@@ -261,6 +261,57 @@ export const edgeSightings = (
 export const isOnline = (misses: ReadonlyArray<number>) =>
   misses.some((missed) => missed < MISSES_OFFLINE);
 
+/**
+ * The socket each device is to be placed next to: the first one this read saw
+ * it at, when it is on no floor, or when none of the sockets its MACs are seen
+ * at now is one where its latest sighting saw it. A device the network sees
+ * for the first time keeps a place a person gave it.
+ */
+export function socketMoves(
+  sightings: ReadonlyArray<{ mac: string; socketId?: string }>,
+  ownerOf: ReadonlyMap<string, { id: string; placed: boolean }>,
+  history: ReadonlyArray<{
+    ownerId?: string;
+    socketId?: string;
+    seenAt: number;
+  }>,
+): Map<string, string> {
+  const current = new Map<
+    string,
+    { placed: boolean; sockets: Array<string> }
+  >();
+  for (const { mac, socketId } of sightings) {
+    const owner = ownerOf.get(mac);
+    if (!owner || socketId === undefined) continue;
+    const seen = current.get(owner.id) ?? { placed: owner.placed, sockets: [] };
+    seen.sockets.push(socketId);
+    current.set(owner.id, seen);
+  }
+  // Across all of a device's MACs, so one seen through another interface
+  // still counts as a move.
+  const latest = new Map<
+    string,
+    { seenAt: number; sockets: Set<string | undefined> }
+  >();
+  for (const { ownerId, socketId, seenAt } of history) {
+    if (ownerId === undefined || !current.has(ownerId)) continue;
+    const last = latest.get(ownerId);
+    if (!last || seenAt > last.seenAt) {
+      latest.set(ownerId, { seenAt, sockets: new Set([socketId]) });
+    } else if (seenAt === last.seenAt) last.sockets.add(socketId);
+  }
+  const moves = new Map<string, string>();
+  for (const [id, { placed, sockets }] of current) {
+    const last = latest.get(id);
+    const moved =
+      !placed ||
+      (last !== undefined &&
+        !sockets.some((socket) => last.sockets.has(socket)));
+    if (moved) moves.set(id, sockets[0]);
+  }
+  return moves;
+}
+
 export type SightingCounts = {
   /** LibreNMS devices read. */
   switches: number;
@@ -269,6 +320,8 @@ export type SightingCounts = {
   /** Devices that came online or went offline during the cycle. */
   online: number;
   offline: number;
+  /** Devices placed next to the socket they were seen at. */
+  placed: number;
   /** MAC addresses seen that no device of the site carries. */
   unknown: number;
 };
@@ -284,6 +337,13 @@ export function sightingSummary(counts: SightingCounts): string {
       : null,
     counts.offline > 0
       ? counted(counts.offline, "passé hors ligne", "passés hors ligne")
+      : null,
+    counts.placed > 0
+      ? counted(
+          counts.placed,
+          "placé près de sa prise",
+          "placés près de leur prise",
+        )
       : null,
     counts.unknown > 0
       ? counted(counts.unknown, "inconnue", "inconnues")

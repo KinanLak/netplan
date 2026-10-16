@@ -406,6 +406,110 @@ describe("the LibreNMS step", () => {
     expect(await statusOf(admin, "device:pc")).toBe("down");
   });
 
+  it("places a device next to the socket it is seen at, and keeps where a person put it", async () => {
+    const { admin, siteId } = await siteWithLibreNMS();
+    const buildingId = await admin.mutation(api.buildings.create, {
+      siteId,
+      objectId: "building:cycle",
+      name: "Bâtiment",
+    });
+    const floorId = await admin.mutation(api.floors.create, {
+      objectId: "floor:cycle",
+      buildingId,
+      name: "RDC",
+    });
+    await admin.mutation(api.devices.create, {
+      siteId,
+      deviceId: "device:socket-2",
+      type: "wall-port",
+      identity: { name: "socket-2", macs: [] },
+      cables: [
+        {
+          id: "cable:desk-2",
+          a: { deviceId: "device:sw", portId: "port:device:sw:interface:2" },
+          b: {
+            deviceId: "device:socket-2",
+            portId: "port:device:socket-2:front:1",
+          },
+        },
+      ],
+    });
+    const socketAt = { x: 400, y: 400 };
+    const socketSize = { width: 40, height: 40 };
+    const setPlacement = async (
+      deviceId: string,
+      position: { x: number; y: number },
+      size: { width: number; height: number },
+    ) =>
+      await admin.run(async (ctx) => {
+        const row = await ctx.db
+          .query("devices")
+          .withIndex("by_object_id", (q) => q.eq("objectId", deviceId))
+          .unique();
+        if (row) {
+          await ctx.db.patch(row._id, {
+            placement: { floorId, position, size },
+          });
+        }
+      });
+    await setPlacement("device:socket", socketAt, socketSize);
+    await setPlacement("device:socket-2", { x: 2000, y: 400 }, socketSize);
+    const placementOf = async (deviceId: string) =>
+      await admin.run(
+        async (ctx) =>
+          (
+            await ctx.db
+              .query("devices")
+              .withIndex("by_object_id", (q) => q.eq("objectId", deviceId))
+              .unique()
+          )?.placement ?? null,
+      );
+    const distance = (
+      a: { x: number; y: number },
+      b: { x: number; y: number },
+    ) => Math.hypot(a.x - b.x, a.y - b.y);
+
+    // Seen while on no floor: placed beside its socket, clear of it.
+    librenms.state.fdb = [{ port_id: 101, mac_address: PC }];
+    expect((await cycle(admin, siteId)).message).toContain(
+      "1 MAC vue (1 passé en ligne, 1 placé près de sa prise).",
+    );
+    const placed = await placementOf("device:pc");
+    expect(placed).toMatchObject({
+      floorId,
+      size: { width: 80, height: 80 },
+    });
+    if (!placed) throw new Error("expected the pc on the floor");
+    expect(distance(placed.position, socketAt)).toBeLessThan(150);
+    const { x, y } = placed.position;
+    expect(
+      x + 80 <= socketAt.x ||
+        x >= socketAt.x + 40 ||
+        y + 80 <= socketAt.y ||
+        y >= socketAt.y + 40,
+    ).toBe(true);
+    expect(
+      await admin.query(api.mapDocument.getFloorRevision, { floorId }),
+    ).toBeGreaterThan(0);
+
+    // A person moves it: the same socket keeps it there.
+    await setPlacement("device:pc", { x: 1000, y: 1000 }, placed.size);
+    await cycle(admin, siteId);
+    expect((await placementOf("device:pc"))?.position).toEqual({
+      x: 1000,
+      y: 1000,
+    });
+
+    // Seen at another socket: it follows.
+    librenms.state.fdb = [{ port_id: 102, mac_address: PC }];
+    expect((await cycle(admin, siteId)).message).toContain(
+      "1 placé près de sa prise",
+    );
+    const moved = await placementOf("device:pc");
+    if (!moved) throw new Error("expected the pc on the floor");
+    expect(distance(moved.position, { x: 2000, y: 400 })).toBeLessThan(150);
+  });
+
   it("records nothing once LibreNMS was removed during the read", async () => {
     const { admin, siteId } = await siteWithLibreNMS();
     await admin.mutation(api.collection.refresh, { siteId });

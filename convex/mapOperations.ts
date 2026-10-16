@@ -199,7 +199,9 @@ const canonicalWall = (wall: WallInput): WallInput | null => {
   return { ...wall, ...normalized, geometryKey };
 };
 
-const getWallCollisionRect = (wall: Pick<WallInput, "start" | "end">) => {
+export const getWallCollisionRect = (
+  wall: Pick<WallInput, "start" | "end">,
+) => {
   if (arePositionsEqual(wall.start, wall.end)) {
     return {
       x: wall.start.x - GRID_SIZE / 2,
@@ -1322,7 +1324,7 @@ const planOperation = (
   }
 };
 
-const bumpDocumentRevisions = async (
+export const bumpDocumentRevisions = async (
   ctx: MutationCtx,
   floorIds: ReadonlySet<string>,
   now: number,

@@ -5,6 +5,7 @@ import PcNode from "@/canvas/nodeTypes/PcNode";
 import RackNode from "@/canvas/nodeTypes/RackNode";
 import SwitchNode from "@/canvas/nodeTypes/SwitchNode";
 import WallPortNode from "@/canvas/nodeTypes/WallPortNode";
+import { DEFAULT_DEVICE_SIZES } from "./deviceSizes";
 import type { DeviceType, Size } from "@/types/map";
 
 type DeviceNodeAdapter = NonNullable<NodeTypes[string]>;
@@ -22,42 +23,42 @@ export const deviceKindRegistry = {
     type: "rack",
     label: "Rack",
     drawerLabel: "Rack Serveur",
-    defaultSize: { width: 80, height: 160 },
+    defaultSize: DEFAULT_DEVICE_SIZES.rack,
     nodeAdapter: RackNode,
   },
   switch: {
     type: "switch",
     label: "Switch",
     drawerLabel: "Switch Réseau",
-    defaultSize: { width: 200, height: 60 },
+    defaultSize: DEFAULT_DEVICE_SIZES.switch,
     nodeAdapter: SwitchNode,
   },
   pc: {
     type: "pc",
     label: "PC",
     drawerLabel: "Poste de travail",
-    defaultSize: { width: 80, height: 80 },
+    defaultSize: DEFAULT_DEVICE_SIZES.pc,
     nodeAdapter: PcNode,
   },
   "wall-port": {
     type: "wall-port",
     label: "Prise",
     drawerLabel: "Prise murale",
-    defaultSize: { width: 40, height: 40 },
+    defaultSize: DEFAULT_DEVICE_SIZES["wall-port"],
     nodeAdapter: WallPortNode,
   },
   "patch-panel": {
     type: "patch-panel",
     label: "Panneau",
     drawerLabel: "Panneau de brassage",
-    defaultSize: { width: 200, height: 40 },
+    defaultSize: DEFAULT_DEVICE_SIZES["patch-panel"],
     nodeAdapter: PatchPanelNode,
   },
   endpoint: {
     type: "endpoint",
     label: "Terminal",
     drawerLabel: "Terminal",
-    defaultSize: { width: 80, height: 80 },
+    defaultSize: DEFAULT_DEVICE_SIZES.endpoint,
     nodeAdapter: EndpointNode,
   },
 } satisfies { [TType in DeviceType]: DeviceKind<TType> };

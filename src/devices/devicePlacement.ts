@@ -1,6 +1,7 @@
-import { CANVAS_DEVICE_NEAREST_POSITION_MAX_RADIUS } from "@/lib/constants";
-import { GRID_SIZE } from "@/lib/grid";
-import type { DeviceId, FloorId, Position, Size } from "@/types/map";
+// Relative imports: the LibreNMS cycle places devices with it on the server.
+import { CANVAS_DEVICE_NEAREST_POSITION_MAX_RADIUS } from "../lib/constants";
+import { GRID_SIZE } from "../lib/grid";
+import type { DeviceId, FloorId, Position, Size } from "../types/map";
 
 type PlacementStatus = "exact" | "relocated" | "reused-last-valid";
 
