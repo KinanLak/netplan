@@ -8,7 +8,7 @@
 # CONVEX_BACKEND_IMAGE equal to scripts/lib/convexBackend.ts
 # (scripts/lib/deploy.test.ts checks both).
 ARG BUN_VERSION=1.4.2
-ARG CONVEX_BACKEND_IMAGE=ghcr.io/get-convex/convex-backend:72ce13c379fe6dbdfc305bc8ad699c5663c68c2a
+ARG CONVEX_BACKEND_IMAGE=ghcr.io/convex/convex-backend:72ce13c379fe6dbdfc305bc8ad699c5663c68c2a
 
 FROM oven/bun:${BUN_VERSION} AS deps
 WORKDIR /src

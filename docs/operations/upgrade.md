@@ -25,7 +25,7 @@ container. Convex refuses a schema that existing documents do not match: then
 A Netplan release may change the `convex-backend` and `convex-dashboard`
 image tags in `compose.yaml` (they always move together, and with
 `CONVEX_BACKEND_IMAGE` in the `Dockerfile`). The release notes say so.
-Upstream offers [two ways](https://github.com/get-convex/convex-backend/blob/main/self-hosted/advanced/upgrading.md):
+Upstream offers [two ways](https://github.com/convex/convex-backend/blob/main/self-hosted/advanced/upgrading.md):
 
 **In place**, the default. `docker compose up -d --build --wait` starts the
 new backend on the existing database, which migrates it. Follow its log until

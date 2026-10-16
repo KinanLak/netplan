@@ -23,7 +23,7 @@ test("CI runs the same backend image as dev:agent", async () => {
   for (const file of ["ci.yml"]) {
     const workflow = await readFile(join(workflowPath, file), "utf8");
     const images = [
-      ...workflow.matchAll(/image:\s*(ghcr\.io\/get-convex\/\S+)/g),
+      ...workflow.matchAll(/image:\s*(ghcr\.io\/convex\/\S+)/g),
     ].map((match) => match[1]);
     expect(images.length).toBeGreaterThan(0);
     for (const image of images) expect(image).toBe(CONVEX_BACKEND_IMAGE);

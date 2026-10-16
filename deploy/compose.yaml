@@ -68,7 +68,7 @@ services:
       retries: 20
 
   convex-backend:
-    image: ghcr.io/get-convex/convex-backend:72ce13c379fe6dbdfc305bc8ad699c5663c68c2a
+    image: ghcr.io/convex/convex-backend:72ce13c379fe6dbdfc305bc8ad699c5663c68c2a
     restart: unless-stopped
     labels: { netplan.role: convex-backend }
     stop_signal: SIGINT
@@ -131,7 +131,7 @@ services:
       convex-backend: { condition: service_healthy }
 
   convex-dashboard:
-    image: ghcr.io/get-convex/convex-dashboard:72ce13c379fe6dbdfc305bc8ad699c5663c68c2a
+    image: ghcr.io/convex/convex-dashboard:72ce13c379fe6dbdfc305bc8ad699c5663c68c2a
     restart: unless-stopped
     labels: { netplan.role: convex-dashboard }
     stop_signal: SIGINT
