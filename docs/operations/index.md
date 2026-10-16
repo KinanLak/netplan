@@ -17,5 +17,7 @@ Netplan runs as a Docker Compose stack (`deploy/compose.yaml`, ADR 0020).
   back to NetBox.
 - **[Monitoring](monitoring.md)**: `/health` and the containers' health
   checks.
+- **[Troubleshooting](troubleshooting.md)**: what each line of the Santé
+  page means and what to do about it.
 
 Every command below runs from `deploy/`.
