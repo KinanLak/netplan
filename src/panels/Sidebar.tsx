@@ -45,6 +45,7 @@ import { ModeToggle } from "@/components/mode-toggle";
 import { useCanEdit } from "@/hooks/use-current-user";
 import { SidebarAccount } from "@/panels/SidebarAccount";
 import { CollectionFreshness } from "@/sites/CollectionFreshness";
+import { OfflineDevices } from "@/sites/OfflineDevices";
 import { SiteSwitcher } from "@/sites/SiteSwitcher";
 import { useCurrentSite } from "@/sites/useCurrentSite";
 import { api } from "../../convex/_generated/api";
@@ -333,6 +334,7 @@ export default function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+        {site ? <OfflineDevices siteId={site.id} /> : null}
       </SidebarContent>
 
       <SidebarUndoRedo />

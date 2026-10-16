@@ -96,6 +96,56 @@ export const listForSite = readerQuery({
   },
 });
 
+/**
+ * The site's devices the collection last saw offline, by name, with the
+ * floor each stands on, for the map's sidebar (ADR 0026).
+ */
+export const offlineForSite = readerQuery({
+  args: { siteId: v.string() },
+  returns: v.array(
+    v.object({
+      id: v.string(),
+      name: v.string(),
+      location: v.union(
+        v.null(),
+        v.object({
+          buildingId: v.string(),
+          floorId: v.string(),
+          floorName: v.string(),
+        }),
+      ),
+    }),
+  ),
+  handler: async (ctx, { siteId }) => {
+    const rows = await ctx.db
+      .query("devices")
+      .withIndex("by_site", (q) => q.eq("siteId", siteId))
+      .collect();
+    const offline = rows.filter((row) => row.metadata.status === "down");
+    if (offline.length === 0) return [];
+    const floorNames = await siteFloorNames(ctx, siteId);
+    return offline
+      .map((row) => {
+        const floor = row.placement && floorNames.get(row.placement.floorId);
+        return {
+          id: row.objectId,
+          name: row.name,
+          location:
+            row.placement && floor
+              ? {
+                  buildingId: floor.buildingId,
+                  floorId: row.placement.floorId,
+                  floorName: floor.floorName,
+                }
+              : null,
+        };
+      })
+      .toSorted((a, b) => byName.compare(a.name, b.name));
+  },
+});
+
+const byName = new Intl.Collator("fr", { numeric: true, sensitivity: "base" });
+
 async function siteFloorNames(ctx: QueryCtx, siteId: string) {
   const buildings = await ctx.db
     .query("buildings")
