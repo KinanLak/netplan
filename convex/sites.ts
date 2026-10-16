@@ -60,7 +60,7 @@ const toSettings = async (ctx: QueryCtx, site: Doc<"sites">) => ({
 
 export const requireSite = async (ctx: QueryCtx, siteId: string) => {
   const site = await getByObjectId(ctx, siteId);
-  if (!site) throw new ConvexError("Site not found");
+  if (!site) throw new ConvexError("Ce site n'existe plus.");
   return site;
 };
 
@@ -102,7 +102,7 @@ export const insertSite = async (
   };
   assertSettings(settings);
   if (await getByObjectId(ctx, input.objectId)) {
-    throw new ConvexError("Site identity already exists");
+    throw new ConvexError("Cet identifiant de site est déjà pris.");
   }
   await assertNameFree(ctx, settings.name);
   const now = Date.now();

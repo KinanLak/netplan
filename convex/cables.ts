@@ -148,7 +148,8 @@ export const connect = editorMutation({
   args: newCable.fields,
   returns: v.null(),
   handler: async (ctx, { id, a, b }) => {
-    if (!isCableId(id)) throw new ConvexError("Invalid cable id");
+    if (!isCableId(id))
+      throw new ConvexError("Cet identifiant de câble est invalide.");
     if (a.portId === b.portId) {
       throw new ConvexError("Un câble relie deux ports différents.");
     }

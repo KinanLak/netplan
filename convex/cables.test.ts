@@ -195,7 +195,7 @@ describe("cables", () => {
     ).rejects.toThrow("déjà pris");
     await expect(
       refusal(free, end("device:panel", "rear", 2), "link:new"),
-    ).rejects.toThrow("Invalid cable id");
+    ).rejects.toThrow("Cet identifiant de câble est invalide.");
   });
 
   it("disconnects a manual cable and connects it back as it was", async () => {

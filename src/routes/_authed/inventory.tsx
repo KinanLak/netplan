@@ -13,7 +13,6 @@ import type { FormEvent } from "react";
 import { toast } from "sonner";
 import { ModeToggle } from "@/components/mode-toggle";
 import { NetplanLogo } from "@/components/netplan-logo";
-import { ThemeProvider } from "@/components/theme-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -46,7 +45,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Toaster } from "@/components/ui/sonner";
 import { deviceKinds, getDeviceKindLabel } from "@/devices/deviceKindRegistry";
 import {
   IDENTITY_TEXT_LIMITS,
@@ -83,15 +81,6 @@ export const Route = createFileRoute("/_authed/inventory")({
 });
 
 function InventoryPage() {
-  return (
-    <ThemeProvider defaultTheme="system" storageKey="netplan-ui-theme">
-      <InventoryContent />
-      <Toaster />
-    </ThemeProvider>
-  );
-}
-
-function InventoryContent() {
   const { site } = useCurrentSite();
   return (
     <div className="flex h-svh flex-col bg-background text-foreground">

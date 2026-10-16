@@ -156,7 +156,9 @@ describe("mapOperations.apply", () => {
     });
 
     expect(result.status).toBe("rejected");
-    expect(result.error).toContain("different payload");
+    expect(result.error).toBe(
+      "Cet équipement existe déjà avec d'autres valeurs.",
+    );
   });
 
   it("rejects moving into another device", async () => {
@@ -187,7 +189,7 @@ describe("mapOperations.apply", () => {
     });
 
     expect(result.status).toBe("rejected");
-    expect(result.error).toContain("another device");
+    expect(result.error).toBe("L'équipement chevauche un autre équipement.");
   });
 
   it("rejects moving into a wall", async () => {
@@ -227,7 +229,7 @@ describe("mapOperations.apply", () => {
     });
 
     expect(result.status).toBe("rejected");
-    expect(result.error).toContain("wall");
+    expect(result.error).toBe("L'équipement chevauche un mur.");
   });
 
   it("lays a cable to another floor of the site, shown on both, and leaves out one to another site", async () => {
@@ -327,10 +329,14 @@ describe("mapOperations.apply", () => {
       cables: [cable("cable:8", "device:first", "device:hub")],
     });
 
-    expect(stolenPort.error).toContain("Invalid port id");
-    expect(takenPort.error).toContain("Port object id already exists");
-    expect(badId.error).toContain("Invalid cable id");
-    expect(notPlugged.error).toContain("does not plug into");
+    expect(stolenPort.error).toBe(
+      "Les ports de cet équipement sont invalides.",
+    );
+    expect(takenPort.error).toBe("Les ports de cet équipement sont invalides.");
+    expect(badId.error).toBe("Les câbles de cet équipement sont invalides.");
+    expect(notPlugged.error).toBe(
+      "Les câbles de cet équipement sont invalides.",
+    );
     // A cable into a port that holds another is left out, not refused.
     expect(occupied.status).toBe("applied");
     const document = await getFloorDocument(t, floorId);
@@ -473,7 +479,7 @@ describe("mapOperations.apply", () => {
     });
 
     expect(result.status).toBe("rejected");
-    expect(result.error).toContain("device");
+    expect(result.error).toBe("Le mur chevauche un équipement.");
     const document = await getFloorDocument(t, floorId);
     expect(document.walls).toEqual([]);
   });
@@ -511,7 +517,7 @@ describe("mapOperations.apply", () => {
     });
 
     expect(result.status).toBe("rejected");
-    expect(result.error).toContain("Invalid cable id");
+    expect(result.error).toBe("Les câbles de cet équipement sont invalides.");
     const document = await getFloorDocument(t, floorId);
     expect(document.devices).toEqual([]);
     expect(document.ports).toEqual([]);
@@ -589,7 +595,7 @@ describe("mapOperations.apply", () => {
     const result = await t.mutation(api.mapOperations.apply, { operation });
 
     expect(result.status).toBe("rejected");
-    expect(result.error).toContain("Too many operations");
+    expect(result.error).toBe("Trop de modifications en une fois.");
     const document = await getFloorDocument(t, floorId);
     expect(document.devices).toEqual([]);
   });
@@ -649,7 +655,7 @@ describe("mapOperations.apply", () => {
     });
 
     expect(result.status).toBe("rejected");
-    expect(result.error).toContain("wall geometry");
+    expect(result.error).toBe("La forme du mur est invalide.");
   });
 
   it("accepts wall segments produced by the wall engine", async () => {
@@ -762,7 +768,7 @@ describe("mapOperations.apply", () => {
           },
         }),
       );
-      expect(deviceResult.error).toContain("finite numbers");
+      expect(deviceResult.error).toBe("La position est invalide.");
 
       const wallResult = await expectApplicationRejected(() =>
         t.mutation(api.mapOperations.apply, {
@@ -779,7 +785,7 @@ describe("mapOperations.apply", () => {
           },
         }),
       );
-      expect(wallResult.error).toContain("wall geometry");
+      expect(wallResult.error).toBe("La forme du mur est invalide.");
     }
   });
 
@@ -805,7 +811,7 @@ describe("mapOperations.apply", () => {
           },
         }),
       );
-      expect(result.error).toContain("greater than zero");
+      expect(result.error).toBe("La taille doit être positive.");
     }
 
     for (const [index, size] of [
@@ -828,7 +834,7 @@ describe("mapOperations.apply", () => {
           },
         }),
       );
-      expect(result.error).toContain("finite numbers");
+      expect(result.error).toBe("La taille est invalide.");
     }
   });
 
@@ -886,11 +892,17 @@ describe("mapOperations.apply", () => {
     });
 
     expect(batch.status).toBe("rejected");
-    expect(batch.error).toContain("exactly one floor");
+    expect(batch.error).toBe(
+      "Une modification ne peut toucher qu'un seul étage.",
+    );
     expect(wallsAdd.status).toBe("rejected");
-    expect(wallsAdd.error).toContain("exactly one floor");
+    expect(wallsAdd.error).toBe(
+      "Une modification ne peut toucher qu'un seul étage.",
+    );
     expect(wallsDelete.status).toBe("rejected");
-    expect(wallsDelete.error).toContain("exactly one floor");
+    expect(wallsDelete.error).toBe(
+      "Une modification ne peut toucher qu'un seul étage.",
+    );
   });
 
   it("rejects new deletes for missing objects but replays applied delete opIds", async () => {
@@ -939,9 +951,9 @@ describe("mapOperations.apply", () => {
     expect(firstDelete.status).toBe("applied");
     expect(replayDelete).toEqual(firstDelete);
     expect(missingDevice.status).toBe("rejected");
-    expect(missingDevice.error).toContain("Device not found");
+    expect(missingDevice.error).toBe("Cet équipement n'existe plus.");
     expect(missingWall.status).toBe("rejected");
-    expect(missingWall.error).toContain("Wall not found");
+    expect(missingWall.error).toBe("Ce mur n'existe plus.");
   });
 
   it("observes applied and rejected pending operation log rows by op id", async () => {
@@ -978,7 +990,7 @@ describe("mapOperations.apply", () => {
       observed.find((item) => item.opId === rejectedOperation.meta.opId),
     ).toMatchObject({
       status: "rejected",
-      error: "Device not found",
+      error: "Cet équipement n'existe plus.",
     });
   });
 
@@ -1012,7 +1024,7 @@ describe("mapOperations.apply", () => {
 
     expect(atCap.status).toBe("applied");
     expect(overCap.status).toBe("rejected");
-    expect(overCap.error).toContain("Too many walls");
+    expect(overCap.error).toBe("Trop de murs en une seule modification.");
   });
 });
 
@@ -1071,7 +1083,7 @@ describe("mapOperations.apply on the site inventory", () => {
 
     expect(sameSite).toMatchObject({
       status: "rejected",
-      error: "MAC address belongs to another device of the site",
+      error: "Une adresse MAC appartient déjà à un autre équipement du site.",
     });
     expect(otherSite.status).toBe("applied");
   });
@@ -1091,8 +1103,8 @@ describe("mapOperations.apply on the site inventory", () => {
       device("device:upper", floorId, 0, 0, [MAC.toUpperCase()]),
     );
 
-    expect(duplicate.error).toBe("Duplicate MAC address");
-    expect(uppercase.error).toBe("Invalid MAC address");
+    expect(duplicate.error).toBe("Une adresse MAC est en double.");
+    expect(uppercase.error).toBe("Une adresse MAC est invalide.");
   });
 
   it("rejects a device whose identity breaks the drawer's limits", async () => {
@@ -1104,7 +1116,7 @@ describe("mapOperations.apply on the site inventory", () => {
       name: "x".repeat(121),
     });
 
-    expect(longName.error).toBe("Invalid device identity");
+    expect(longName.error).toContain("Trop long");
   });
 
   it("frees the MAC addresses of a deleted device, within one batch too", async () => {
@@ -1164,7 +1176,8 @@ describe("mapOperations.apply on the site inventory", () => {
 
     expect(result).toMatchObject({
       status: "rejected",
-      error: "Device is owned by its source",
+      error:
+        "Cet équipement vient d'une intégration : il ne peut pas être supprimé.",
     });
   });
 
@@ -1198,7 +1211,7 @@ describe("mapOperations.apply on the site inventory", () => {
     expect(created.status).toBe("rejected");
     expect(moved).toMatchObject({
       status: "rejected",
-      error: "Device not found",
+      error: "Cet équipement n'existe plus.",
     });
   });
   const unplace = (t: TestClient, seq: number, deviceId: string) =>
@@ -1317,7 +1330,7 @@ describe("mapOperations.apply on the site inventory", () => {
     expect(same.status).toBe("applied");
     expect(elsewhere).toMatchObject({
       status: "rejected",
-      error: "Device is already placed",
+      error: "Cet équipement est déjà sur le plan.",
     });
   });
 
@@ -1333,11 +1346,11 @@ describe("mapOperations.apply on the site inventory", () => {
 
     expect(foreign).toMatchObject({
       status: "rejected",
-      error: "Device belongs to another site",
+      error: "Cet équipement appartient à un autre site.",
     });
     expect(unknown).toMatchObject({
       status: "rejected",
-      error: "Device not found",
+      error: "Cet équipement n'existe plus.",
     });
   });
 
