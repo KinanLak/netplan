@@ -24,6 +24,7 @@ import {
   FieldSet,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { CollectionSection } from "@/admin/CollectionSection";
 import { adminErrorMessage } from "@/admin/errors";
 import { IntegrationsSection } from "@/admin/IntegrationsSection";
 import { TimeZoneField } from "@/admin/TimeZoneField";
@@ -89,6 +90,11 @@ function SitePage() {
       </header>
       <SiteSettingsForm key={site.id} site={site} />
       <IntegrationsSection siteId={site.id} />
+      <CollectionSection
+        siteId={site.id}
+        automaticRefresh={site.automaticRefresh}
+        manualRefresh={site.manualRefresh}
+      />
       <DeleteSite site={site} />
     </div>
   );

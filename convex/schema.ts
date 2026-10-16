@@ -13,8 +13,10 @@ import {
 } from "./mapValidators";
 import {
   connectionCheck,
+  cycleRun,
   encryptedSecret,
   integrationKind,
+  runningCycle,
   siteCadence,
 } from "./siteValidators";
 
@@ -40,6 +42,17 @@ export default defineSchema({
     lastCheck: v.optional(connectionCheck),
     updatedAt: v.number(),
   }).index("by_site_kind", ["siteId", "kind"]),
+
+  // A site's collection cycles (ADR 0023), apart from the site so that a
+  // cycle every five minutes does not wake every reader of its settings.
+  siteCycles: defineTable({
+    siteId: v.string(),
+    nextRunAt: v.number(),
+    /** Failed cycles in a row, which space out the next ones. */
+    failures: v.number(),
+    running: v.optional(runningCycle),
+    last: v.optional(cycleRun),
+  }).index("by_site", ["siteId"]),
 
   buildings: defineTable({
     objectId: v.string(),
