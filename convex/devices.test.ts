@@ -275,3 +275,149 @@ describe("devices.updateIdentity", () => {
     expect(await deviceRow(t, id)).toMatchObject({ name: "PC", macs: [] });
   });
 });
+
+describe("the site inventory", () => {
+  const MAC = "02:ab:cd:00:00:09";
+
+  const identity = (name: string, macs: Array<string> = []) => ({
+    name,
+    macs,
+  });
+
+  async function siteWithFloor(t: TestClient) {
+    counter += 1;
+    const siteId = await createTestSite(t);
+    const buildingId = await t.mutation(api.buildings.create, {
+      siteId,
+      objectId: `building:inventory:${counter}`,
+      name: "Bâtiment B",
+    });
+    const floorId = await t.mutation(api.floors.create, {
+      objectId: `floor:inventory:${counter}`,
+      buildingId,
+      name: "Étage 2",
+    });
+    return { siteId, floorId };
+  }
+
+  it("lists a site's devices with where they stand, or none", async () => {
+    const t = await signedInTest();
+    const { siteId, floorId } = await siteWithFloor(t);
+    const other = await siteWithFloor(t);
+    await createDevice(t, floorId, "device:placed", "PC-Placé", 0);
+    await createDevice(t, other.floorId, "device:other", "PC-Ailleurs", 0);
+    await t.mutation(api.devices.create, {
+      siteId,
+      deviceId: "device:stored",
+      type: "endpoint",
+      identity: { ...identity(" Imprimante ", [MAC]), hostname: " " },
+    });
+
+    const list = await t.query(api.devices.listForSite, { siteId });
+
+    expect(list.toSorted((a, b) => a.id.localeCompare(b.id))).toMatchObject([
+      {
+        id: "device:placed",
+        location: { floorId, buildingName: "Bâtiment B", floorName: "Étage 2" },
+      },
+      {
+        id: "device:stored",
+        type: "endpoint",
+        name: "Imprimante",
+        macs: [MAC],
+        location: null,
+      },
+    ]);
+    expect(list.find((item) => item.id === "device:stored")?.hostname).toBe(
+      undefined,
+    );
+  });
+
+  it("refuses a device whose MAC another device of the site carries", async () => {
+    const t = await signedInTest();
+    const { siteId, floorId } = await siteWithFloor(t);
+    await createDevice(t, floorId, "device:owner", "PC-MAC", 0, [MAC]);
+
+    const attempt = (
+      deviceId: string,
+      name: string,
+      macs: Array<string> = [],
+    ) =>
+      t.mutation(api.devices.create, {
+        siteId,
+        deviceId,
+        type: "pc",
+        identity: identity(name, macs),
+      });
+
+    await expect(attempt("device:copy", "Copie", [MAC])).rejects.toThrow(
+      "déjà celle de PC-MAC",
+    );
+    await expect(attempt("device:nameless", "  ")).rejects.toThrow(
+      "Le nom est obligatoire",
+    );
+    await expect(attempt("device:owner", "Doublon")).rejects.toThrow(
+      "déjà pris",
+    );
+  });
+
+  it("keeps creating to éditeurs", async () => {
+    const reader = await signedInTest("reader");
+    const siteId = await createTestSite(reader);
+
+    await expect(
+      reader.mutation(api.devices.create, {
+        siteId,
+        deviceId: "device:reader",
+        type: "pc",
+        identity: identity("Lecteur"),
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("deletes a manual device off the map and frees its MACs, so it can come back", async () => {
+    const t = await signedInTest();
+    const { siteId } = await siteWithFloor(t);
+    const args = {
+      siteId,
+      deviceId: "device:gone",
+      type: "pc" as const,
+      identity: identity("Parti", [MAC]),
+    };
+    await t.mutation(api.devices.create, args);
+
+    await t.mutation(api.devices.remove, { deviceId: "device:gone" });
+    const afterRemove = await t.query(api.devices.listForSite, { siteId });
+    await t.mutation(api.devices.create, args);
+    const afterRestore = await t.query(api.devices.listForSite, { siteId });
+
+    expect(afterRemove).toEqual([]);
+    expect(afterRestore).toMatchObject([{ id: "device:gone", macs: [MAC] }]);
+  });
+
+  it("deletes neither a placed device nor one its integration owns", async () => {
+    const t = await signedInTest();
+    const { siteId, floorId } = await siteWithFloor(t);
+    await createDevice(t, floorId, "device:on-map", "Sur le plan", 0);
+    await t.run(async (ctx) => {
+      await ctx.db.insert("devices", {
+        objectId: "device:netbox",
+        siteId,
+        type: "switch",
+        name: "sw-netbox",
+        macs: [],
+        source: { integration: "netbox", externalId: "3", syncedAt: 1 },
+        metadata: {},
+        updatedAt: 1,
+        updatedBy: "sync",
+      });
+    });
+
+    await expect(
+      t.mutation(api.devices.remove, { deviceId: "device:on-map" }),
+    ).rejects.toThrow("depuis le plan");
+    await expect(
+      t.mutation(api.devices.remove, { deviceId: "device:netbox" }),
+    ).rejects.toThrow("vient de NetBox");
+  });
+});

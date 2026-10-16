@@ -1114,10 +1114,13 @@ export function MapDocumentProvider({
     }
   }, [convexConnectionState.isWebSocketConnected]);
 
+  // Until the floor loads the document is empty, and reconciling against it
+  // would drop a selection made before arriving, as from the inventory.
   useEffect(() => {
+    if (!isReady) return;
     const patch = reconcileEphemeralState(document, useMapStore.getState());
     if (patch) useMapStore.setState(patch);
-  }, [document]);
+  }, [document, isReady]);
 
   useEffect(() => {
     if (!rejectedMessage) return;

@@ -34,6 +34,10 @@ const randomToken = (prefix: string): string => {
   throw new Error("Secure random identity generation is unavailable");
 };
 
+/** An id for an object created outside a map session, such as from the inventory. */
+export const createStandaloneObjectId = (kind: ObjectKind): ObjectId =>
+  randomToken(kind) as ObjectId;
+
 export const createLocalIdentity = (): LocalIdentity => ({
   clientId: randomToken("client") as ClientId,
   nextObjectCounter: 0,

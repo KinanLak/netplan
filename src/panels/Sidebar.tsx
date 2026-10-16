@@ -2,6 +2,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import {
   Building05Icon,
   DashedLine01Icon,
+  PackageIcon,
   RedoIcon,
   SolidLine01Icon,
   UndoIcon,
@@ -205,8 +206,27 @@ export default function AppSidebar() {
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel>Site</SidebarGroupLabel>
-          <SidebarGroupContent>
+          <SidebarGroupContent className="flex flex-col gap-1">
             <SiteSwitcher />
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  render={
+                    <Link
+                      to="/inventory"
+                      search={site ? { site: site.id } : {}}
+                    />
+                  }
+                >
+                  <HugeiconsIcon
+                    icon={PackageIcon}
+                    size={16}
+                    strokeWidth={1.5}
+                  />
+                  Inventaire
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
         <SidebarGroup>
