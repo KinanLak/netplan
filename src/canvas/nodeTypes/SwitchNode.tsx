@@ -3,7 +3,7 @@ import { Handle, Position } from "@xyflow/react";
 import NetworkNode from "./NetworkNode";
 import { areDeviceNodePropsEqual } from "./memo";
 import type { Node, NodeProps } from "@xyflow/react";
-import type { DeviceStatus } from "@/types/map";
+import type { DeviceStatus, DeviceId } from "@/types/map";
 import type { DeviceNodeData } from "@/devices/reactFlowDeviceAdapter";
 import { StatusDot } from "@/components/StatusDot";
 import {
@@ -14,12 +14,14 @@ import {
   shownPorts,
 } from "@/devices/portState";
 import { cn } from "@/lib/utils";
+import { PORT_ID_ATTRIBUTE, useCableGrip } from "@/canvas/hooks/useCableGrip";
 
 type SwitchNodeType = Node<DeviceNodeData>;
 
 function SwitchNode({ data: device, id }: NodeProps<SwitchNodeType>) {
   const status: DeviceStatus = device.metadata.status ?? "unknown";
   const ports = shownPorts(device.ports);
+  const grip = useCableGrip(id as DeviceId);
 
   return (
     <NetworkNode
@@ -40,6 +42,7 @@ function SwitchNode({ data: device, id }: NodeProps<SwitchNodeType>) {
       {/* Ports grid */}
       <div
         className="nodrag grid justify-items-center gap-0.5 overflow-hidden p-1"
+        onPointerDown={grip.onPointerDown}
         style={{
           gridTemplateColumns: `repeat(${portColumns(ports.length)}, minmax(0, 1fr))`,
         }}
@@ -47,8 +50,10 @@ function SwitchNode({ data: device, id }: NodeProps<SwitchNodeType>) {
         {ports.map((port) => (
           <div
             key={port.id}
+            {...{ [PORT_ID_ATTRIBUTE]: port.id }}
             className={cn(
               "aspect-square w-full max-w-3 rounded-xs shadow-sm transition-transform hover:scale-125",
+              grip.isGrip && "cursor-crosshair",
               PORT_STATE_CLASSES[portState(port)],
             )}
             title={`${port.name} : ${PORT_STATE_LABELS[portState(port)]}`}

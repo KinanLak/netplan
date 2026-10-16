@@ -8,6 +8,7 @@ export type EphemeralStatePatch = Partial<
     | "selectedDeviceIdSet"
     | "hoveredDeviceId"
     | "shownCablesDeviceId"
+    | "cableDraft"
   >
 >;
 
@@ -22,6 +23,7 @@ export function reconcileEphemeralState(
     | "selectedDeviceIds"
     | "hoveredDeviceId"
     | "shownCablesDeviceId"
+    | "cableDraft"
   >,
 ): EphemeralStatePatch | null {
   const deviceIds = new Set(snapshot.devices.map((device) => device.id));
@@ -47,6 +49,10 @@ export function reconcileEphemeralState(
 
   if (state.shownCablesDeviceId && !deviceIds.has(state.shownCablesDeviceId)) {
     patch.shownCablesDeviceId = null;
+  }
+
+  if (state.cableDraft && !deviceIds.has(state.cableDraft.deviceId)) {
+    patch.cableDraft = null;
   }
 
   return Object.keys(patch).length > 0 ? patch : null;

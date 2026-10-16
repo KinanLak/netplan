@@ -1,4 +1,4 @@
-import type { Port } from "@/types/map";
+import type { Port, PortKind } from "@/types/map";
 
 /** What the network last observed on a port, strongest first (ADR 0025). */
 export type PortState = "seen" | "up" | "down" | "unknown";
@@ -19,6 +19,18 @@ export const PORT_STATE_CLASSES: Record<PortState, string> = {
   up: "border border-up bg-up-background",
   down: "border border-unknown bg-unknown-background",
   unknown: "bg-unknown",
+};
+
+const KIND_LABELS: Record<PortKind, string | null> = {
+  interface: null,
+  front: "Avant",
+  rear: "Arrière",
+};
+
+/** A port as a person reads it: a patch panel's says which side it is on. */
+export const portLabel = (port: Pick<Port, "name" | "kind">): string => {
+  const kind = KIND_LABELS[port.kind];
+  return kind ? `${kind} ${port.name}` : port.name;
 };
 
 export const portState = (port: Pick<Port, "status" | "seen">): PortState => {

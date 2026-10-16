@@ -256,6 +256,12 @@ export interface WallStrokeInput {
 
 // ── UI store (Zustand): only ephemeral interaction state ─────────────────────
 
+/** The port a cable being drawn starts from. */
+export interface CableDraft {
+  deviceId: DeviceId;
+  portId: PortId;
+}
+
 export interface MapInteractionState {
   currentBuildingId: BuildingId | null;
   currentFloorId: FloorId | null;
@@ -267,6 +273,8 @@ export interface MapInteractionState {
   isMultiSelectMode: boolean;
   /** The switch or patch panel whose cables were asked for (ADR 0025). */
   shownCablesDeviceId: DeviceId | null;
+  /** The port a cable being drawn on the map starts from (ADR 0025). */
+  cableDraft: CableDraft | null;
   activeDrawTool: DrawTool;
   selectedWallColor: WallColor;
   wallEraserSize: number;
@@ -307,6 +315,7 @@ export interface MapInteractionActions {
   setSelectedWallColor: (color: WallColor) => void;
   setWallEraserSize: (size: number) => void;
   showCables: (deviceId: DeviceId | null) => void;
+  setCableDraft: (draft: CableDraft | null) => void;
   setOverlayPanelOpen: (open: boolean) => void;
   toggleOverlayHidden: () => void;
   setOverlayDraft: (draft: OverlayDraft | null) => void;

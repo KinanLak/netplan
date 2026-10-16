@@ -5,6 +5,9 @@ import { areDeviceNodePropsEqual } from "./memo";
 import type { Node, NodeProps } from "@xyflow/react";
 import type { DeviceNodeData } from "@/devices/reactFlowDeviceAdapter";
 import { shownPorts } from "@/devices/portState";
+import { PORT_ID_ATTRIBUTE, useCableGrip } from "@/canvas/hooks/useCableGrip";
+import { cn } from "@/lib/utils";
+import type { DeviceId } from "@/types/map";
 
 type PatchPanelNodeType = Node<DeviceNodeData>;
 
@@ -15,6 +18,7 @@ const PANEL_COLUMNS = 24;
 // observes its ports, only the cables passing through them.
 function PatchPanelNode({ data: device, id }: NodeProps<PatchPanelNodeType>) {
   const ports = shownPorts(device.ports);
+  const grip = useCableGrip(id as DeviceId);
   return (
     <NetworkNode
       id={id}
@@ -30,6 +34,7 @@ function PatchPanelNode({ data: device, id }: NodeProps<PatchPanelNodeType>) {
       </div>
       <div
         className="grid gap-0.5 overflow-hidden p-1"
+        onPointerDown={grip.onPointerDown}
         style={{
           gridTemplateColumns: `repeat(${PANEL_COLUMNS}, minmax(0, 1fr))`,
         }}
@@ -37,7 +42,12 @@ function PatchPanelNode({ data: device, id }: NodeProps<PatchPanelNodeType>) {
         {ports.map((port) => (
           <div
             key={port.id}
-            className="h-2 rounded-xs border border-border bg-muted"
+            {...{ [PORT_ID_ATTRIBUTE]: port.id }}
+            className={cn(
+              "h-2 rounded-xs border border-border bg-muted",
+              // In edit mode a port draws a cable rather than moving the panel.
+              grip.isGrip && "nodrag cursor-crosshair hover:bg-primary",
+            )}
             title={port.name}
           />
         ))}
