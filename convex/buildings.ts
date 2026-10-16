@@ -6,6 +6,7 @@ import type { MutationCtx } from "./_generated/server";
 import { requireSite } from "./sites";
 import { syncOverlayFileReleases } from "./lib/overlayFiles";
 import { deleteDeviceMacs } from "./lib/deviceMacs";
+import { deleteDeviceCabling } from "./lib/ports";
 
 const buildingValidator = v.object({
   id: v.string(),
@@ -166,6 +167,7 @@ export const clearMap = editorMutation({
     for (const device of devices) {
       if (device.source) continue;
       await deleteDeviceMacs(ctx, device.objectId);
+      await deleteDeviceCabling(ctx, device.objectId);
       await ctx.db.delete(device._id);
     }
 
@@ -209,14 +211,8 @@ export async function cascadeRemoveFloor(ctx: MutationCtx, floorId: string) {
     .unique();
   if (!floor) return;
 
-  const links = await ctx.db
-    .query("links")
-    .withIndex("by_floor", (q) => q.eq("floorId", floorId))
-    .collect();
-  for (const link of links) await ctx.db.delete(link._id);
-
-  // Devices belong to the site's inventory: losing their floor only takes
-  // them off the map.
+  // Devices belong to the site's inventory, with their ports and cables:
+  // losing their floor only takes them off the map.
   const devices = await ctx.db
     .query("devices")
     .withIndex("by_floor", (q) => q.eq("placement.floorId", floorId))

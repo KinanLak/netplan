@@ -395,41 +395,133 @@ describe("the site inventory", () => {
     expect(afterRestore).toMatchObject([{ id: "device:gone", macs: [MAC] }]);
   });
 
-  it("hands back what brings a deleted device back whole, its ports included", async () => {
+  it("hands back what brings a deleted device back whole, cables included", async () => {
     const t = await signedInTest();
     const { siteId } = await siteWithFloor(t);
-    const ports = [{ id: "port-1", number: 1, status: "up" as const }];
+    const port = (n: number) => ({
+      id: `port:device:switch:interface:${n}`,
+      deviceId: "device:switch",
+      name: `Gi1/0/${n}`,
+      kind: "interface" as const,
+      order: n,
+      status: "up" as const,
+    });
+    const cable = {
+      id: "cable:switch-pc",
+      a: { deviceId: "device:pc", portId: "port:device:pc:interface:1" },
+      b: { deviceId: "device:switch", portId: port(1).id },
+    };
     await t.mutation(api.devices.create, {
       siteId,
       deviceId: "device:switch",
       type: "switch",
       identity: { ...identity("Switch", [MAC]), serial: "SN-1" },
-      metadata: { ports },
+      metadata: { status: "up" },
+      ports: [port(1), port(2)],
     });
-    const before = await t.run(async (ctx) =>
-      ctx.db
-        .query("devices")
-        .withIndex("by_object_id", (q) => q.eq("objectId", "device:switch"))
-        .unique(),
-    );
+    await t.mutation(api.devices.create, {
+      siteId,
+      deviceId: "device:pc",
+      type: "pc",
+      identity: identity("PC", []),
+      cables: [cable],
+    });
+    const rows = async () =>
+      await t.run(async (ctx) => ({
+        device: await ctx.db
+          .query("devices")
+          .withIndex("by_object_id", (q) => q.eq("objectId", "device:switch"))
+          .unique(),
+        ports: (await ctx.db.query("ports").collect()).map(
+          (row) => row.objectId,
+        ),
+        cables: (await ctx.db.query("cables").collect()).map(
+          (row) => row.objectId,
+        ),
+      }));
+    const before = await rows();
+    expect(before.cables).toEqual([cable.id]);
 
     const removed = await t.mutation(api.devices.remove, {
       deviceId: "device:switch",
+    });
+    expect(await rows()).toMatchObject({
+      device: null,
+      ports: ["port:device:pc:interface:1"],
+      cables: [],
     });
     await t.mutation(api.devices.create, {
       siteId,
       deviceId: "device:switch",
       ...removed!,
     });
-    const after = await t.run(async (ctx) =>
-      ctx.db
-        .query("devices")
-        .withIndex("by_object_id", (q) => q.eq("objectId", "device:switch"))
-        .unique(),
-    );
+    const after = await rows();
 
-    const { _id, _creationTime, updatedAt, ...kept } = before!;
-    expect(after).toMatchObject(kept);
+    const { _id, _creationTime, updatedAt, ...kept } = before.device!;
+    expect(after.device).toMatchObject(kept);
+    expect(after.ports.sort()).toEqual(before.ports.sort());
+    expect(after.cables).toEqual([cable.id]);
+  });
+
+  it("leaves out a cable whose far port holds another since, and refuses a taken port id", async () => {
+    const t = await signedInTest();
+    const { siteId } = await siteWithFloor(t);
+    const cableTo = (id: string, deviceId: string) => ({
+      id,
+      a: { deviceId, portId: `port:${deviceId}:interface:1` },
+      b: { deviceId: "device:hub", portId: "port:device:hub:interface:1" },
+    });
+    await t.mutation(api.devices.create, {
+      siteId,
+      deviceId: "device:hub",
+      type: "switch",
+      identity: identity("Hub", []),
+    });
+    await t.mutation(api.devices.create, {
+      siteId,
+      deviceId: "device:first",
+      type: "pc",
+      identity: identity("Premier", []),
+      cables: [cableTo("cable:first", "device:first")],
+    });
+
+    await t.mutation(api.devices.create, {
+      siteId,
+      deviceId: "device:second",
+      type: "pc",
+      identity: identity("Second", []),
+      cables: [cableTo("cable:second", "device:second")],
+    });
+    // `device:hub:interface`'s own port 1 has the id of the hub's port 1.
+    await expect(
+      t.mutation(api.devices.create, {
+        siteId,
+        deviceId: "device:hub:interface",
+        type: "pc",
+        identity: identity("Imposteur", []),
+        ports: [
+          {
+            id: "port:device:hub:interface:1",
+            deviceId: "device:hub:interface",
+            name: "1",
+            kind: "interface",
+            order: 1,
+          },
+        ],
+      }),
+    ).rejects.toThrow("ports");
+
+    const rows = await t.run(async (ctx) => ({
+      second: await ctx.db
+        .query("devices")
+        .withIndex("by_object_id", (q) => q.eq("objectId", "device:second"))
+        .unique(),
+      cables: (await ctx.db.query("cables").collect()).map(
+        (row) => row.objectId,
+      ),
+    }));
+    expect(rows.second).not.toBeNull();
+    expect(rows.cables).toEqual(["cable:first"]);
   });
 
   it("deletes neither a placed device nor one its integration owns", async () => {

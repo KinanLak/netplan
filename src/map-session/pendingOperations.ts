@@ -1,4 +1,4 @@
-import type { FloorId } from "@/types/map";
+import type { DeviceId, FloorId } from "@/types/map";
 import type { MapOperation } from "@/map-engine/types";
 
 export interface PendingOperationEntry {
@@ -165,3 +165,18 @@ export const reconcileObservedOperationLogEntries = (
       rejected.find((observation) => observation.error)?.error ?? null,
   };
 };
+
+/**
+ * Whether a device's placement still waits for the server. Until it lands the
+ * floor has the device without its ports and cables, so an undo recorded then
+ * would bring it back without them.
+ */
+export const isPlacementPending = (
+  entries: ReadonlyArray<PendingOperationEntry>,
+  deviceId: DeviceId,
+): boolean =>
+  entries.some(({ operation }) =>
+    (operation.kind === "batch" ? operation.operations : [operation]).some(
+      (item) => item.kind === "device.place" && item.device.id === deviceId,
+    ),
+  );

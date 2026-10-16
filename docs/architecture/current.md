@@ -18,8 +18,8 @@ until it lands, no integration runs.
   toolbar and drawer live in `src/panels/`. Zustand (`src/store/`) holds only
   ephemeral UI state such as selection and tool mode.
 - **Backend** (`convex/`): Convex functions and schema. Convex owns every
-  durable fact: sites, buildings, floors, devices, walls, links and
-  presence.
+  durable fact: sites, buildings, floors, devices, walls, ports, cables
+  and presence.
 - **Hosting**: self-hosted with Docker Compose (ADRs 0002 and 0020), described
   below.
 
@@ -29,8 +29,8 @@ A durable change is a `MapOperation` (`src/map-engine/types.ts`). The client
 applies it optimistically through `src/map-engine/`, queues it in an outbox
 (`src/map-session/`) and sends it to `api.mapOperations.apply`. The server
 re-plans the operation against its own state and is authoritative: floors,
-object ids, collisions, link endpoints, orthogonal wall geometry and
-device-delete link cleanup are all validated there. Undo is an inverse
+object ids, collisions, cable endpoints, orthogonal wall geometry and
+device-delete cable cleanup are all validated there. Undo is an inverse
 operation built by `buildInverseOperation`. Each floor carries a revision that
 clients use to reconcile.
 

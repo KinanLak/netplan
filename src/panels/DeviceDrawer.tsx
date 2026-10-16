@@ -8,7 +8,7 @@ import {
   UserIcon,
   WasteIcon,
 } from "@hugeicons/core-free-icons";
-import type { DeviceId, DeviceStatus } from "@/types/map";
+import type { DeviceId } from "@/types/map";
 import { useMapStore } from "@/store/useMapStore";
 import {
   useMapDocumentActions,
@@ -34,12 +34,8 @@ import { DrawerPortsSection } from "@/panels/drawer/DrawerPortsSection";
 import { DeviceIdentityDialog } from "@/panels/drawer/DeviceIdentityDialog";
 import { useShortcutIntentEffect } from "@/hooks/use-shortcuts";
 import { INTEGRATION_LABELS } from "@/sites/integrations";
-
-const statusLabels: Record<DeviceStatus, string> = {
-  up: "En ligne",
-  down: "Hors ligne",
-  unknown: "Inconnu",
-};
+import { DEVICE_STATUS_LABELS } from "@/devices/status";
+import { cabledDeviceIds, comparePorts } from "@/devices/ports";
 
 export default function DeviceDrawer() {
   const selectedDeviceId = useSelectedDeviceId();
@@ -51,7 +47,7 @@ export default function DeviceDrawer() {
 
   const { document } = useMapDocumentData();
   const { commands } = useMapDocumentActions();
-  const { devices, links } = document;
+  const { devices, ports, cables } = document;
   const { deleteDevice, unplaceDevice } = commands;
 
   const reactFlow = useReactFlow();
@@ -68,30 +64,25 @@ export default function DeviceDrawer() {
     ? deviceById.get(selectedDeviceId)
     : undefined;
 
-  const connectedDevices: Array<ConnectedDeviceSummary> = (() => {
-    if (!device) return [];
-    const seen = new Set<DeviceId>();
-    const out: Array<ConnectedDeviceSummary> = [];
-    for (const link of links) {
-      const otherId =
-        link.fromDeviceId === device.id
-          ? link.toDeviceId
-          : link.toDeviceId === device.id
-            ? link.fromDeviceId
-            : null;
-      if (!otherId || seen.has(otherId)) continue;
-      seen.add(otherId);
-      const other = deviceById.get(otherId);
-      if (!other) continue;
-      out.push({
-        id: other.id,
-        name: other.name,
-        type: other.type,
-        status: other.metadata.status ?? "unknown",
-      });
-    }
-    return out;
-  })();
+  // Only the cabled devices on this floor; the drawer cannot jump to another.
+  const connectedDevices: Array<ConnectedDeviceSummary> = device
+    ? cabledDeviceIds(cables, device.id).flatMap((otherId) => {
+        const other = deviceById.get(otherId);
+        return other
+          ? [
+              {
+                id: other.id,
+                name: other.name,
+                type: other.type,
+                status: other.metadata.status ?? "unknown",
+              },
+            ]
+          : [];
+      })
+    : [];
+  const devicePorts = device
+    ? ports.filter((port) => port.deviceId === device.id).sort(comparePorts)
+    : [];
 
   const isCurrentDeviceHighlighted = (() => {
     if (!device || connectedDevices.length === 0) return false;
@@ -103,7 +94,8 @@ export default function DeviceDrawer() {
 
   const handleHighlightConnections = () => {
     const next = getNextConnectionHighlightIds({
-      links,
+      cables,
+      devices,
       highlightedDeviceIds,
       hoveredDeviceId: null,
       selectedDeviceId,
@@ -136,8 +128,7 @@ export default function DeviceDrawer() {
 
   const handleDeleteDevice = () => {
     if (!device) return;
-    deleteDevice(device.id);
-    selectDevice(null);
+    if (deleteDevice(device.id)) selectDevice(null);
   };
 
   if (!device) {
@@ -203,7 +194,7 @@ export default function DeviceDrawer() {
           )}
         >
           <StatusDot status={status} className="size-4" />
-          {statusLabels[status]}
+          {DEVICE_STATUS_LABELS[status]}
         </span>
       </header>
 
@@ -308,9 +299,7 @@ export default function DeviceDrawer() {
             onSelectConnected={handleSelectConnected}
           />
 
-          {device.type === "switch" && device.metadata.ports ? (
-            <DrawerPortsSection ports={device.metadata.ports} />
-          ) : null}
+          <DrawerPortsSection ports={devicePorts} />
 
           <section>
             <h3 className="mb-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">

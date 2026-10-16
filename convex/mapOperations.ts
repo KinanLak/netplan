@@ -17,6 +17,20 @@ import {
   macListProblem,
   MAX_MACS_PER_DEVICE,
 } from "../src/devices/identity";
+import {
+  MAX_PORTS_PER_DEVICE,
+  cablesToLay,
+  portListError,
+} from "../src/devices/ports";
+import {
+  cableRow,
+  cableRowAt,
+  cableRowsOf,
+  portRow,
+  portRowsOf,
+  portsForNewDevice,
+} from "./lib/ports";
+import type { NewCable, NewPort } from "./lib/ports";
 
 export type OperationInput = Infer<typeof mapOperation>;
 type DeviceCreateOperation = Extract<OperationInput, { kind: "device.create" }>;
@@ -29,28 +43,27 @@ type DeviceUnplaceOperation = Extract<
 >;
 type WallAddOperation = Extract<OperationInput, { kind: "walls.add" }>;
 type WallDeleteOperation = Extract<OperationInput, { kind: "walls.delete" }>;
-type LinkCreateOperation = Extract<OperationInput, { kind: "link.create" }>;
-type LinkDeleteOperation = Extract<OperationInput, { kind: "link.delete" }>;
 type OverlaySetOperation = Extract<OperationInput, { kind: "overlay.set" }>;
 type OverlayPatchOperation = Extract<OperationInput, { kind: "overlay.patch" }>;
 
 type DeviceInput = DeviceCreateOperation["device"];
 type WallInput = WallAddOperation["walls"][number];
-type LinkInput = LinkCreateOperation["link"];
 
 type DeviceRow = Omit<Doc<"devices">, "_id" | "_creationTime">;
 type DevicePlacement = NonNullable<DeviceRow["placement"]>;
 /** A placed device, flattened as the map sees it. */
 type DeviceInsert = Omit<DeviceRow, "placement"> & DevicePlacement;
 type WallInsert = Omit<Doc<"walls">, "_id" | "_creationTime">;
-type LinkInsert = Omit<Doc<"links">, "_id" | "_creationTime">;
+type PortInsert = Omit<Doc<"ports">, "_id" | "_creationTime">;
+type CableInsert = Omit<Doc<"cables">, "_id" | "_creationTime">;
 type OverlayValue = Omit<Doc<"floorOverlays">, "_id" | "_creationTime">;
 
 type DevicePatch = Pick<DeviceRow, "placement" | "updatedAt" | "updatedBy">;
 type PlannedDevice = DeviceInsert & { rowId?: Id<"devices"> };
 type UnplacedDevice = Omit<DeviceRow, "placement"> & { rowId: Id<"devices"> };
 type PlannedWall = WallInsert & { rowId?: Id<"walls"> };
-type PlannedLink = LinkInsert & { rowId?: Id<"links"> };
+type PlannedPort = PortInsert & { rowId?: Id<"ports"> };
+type PlannedCable = CableInsert & { rowId?: Id<"cables"> };
 
 type WritePlan = Array<
   | { kind: "insertDevice"; value: DeviceInsert }
@@ -58,8 +71,10 @@ type WritePlan = Array<
   | { kind: "deleteDevice"; rowId: Id<"devices">; objectId: string }
   | { kind: "insertWall"; value: WallInsert }
   | { kind: "deleteWall"; rowId: Id<"walls"> }
-  | { kind: "insertLink"; value: LinkInsert }
-  | { kind: "deleteLink"; rowId: Id<"links"> }
+  | { kind: "insertPort"; value: PortInsert }
+  | { kind: "deletePort"; rowId: Id<"ports"> }
+  | { kind: "insertCable"; value: CableInsert }
+  | { kind: "deleteCable"; rowId: Id<"cables"> }
   | {
       kind: "putOverlay";
       rowId?: Id<"floorOverlays">;
@@ -77,7 +92,14 @@ interface PlanningState {
   /** The device owning each loaded MAC address, keyed by `macKey`. */
   macOwners: Map<string, string>;
   walls: Map<string, PlannedWall>;
-  links: Map<string, PlannedLink>;
+  /**
+   * The loaded ports and cables: those of created and deleted devices, and
+   * the far ends of created cables.
+   */
+  ports: Map<string, PlannedPort>;
+  cables: Map<string, PlannedCable>;
+  /** The cable in each loaded port that holds one. */
+  cabledPorts: Map<string, string>;
   wallGeometry: Map<string, string>;
   /** The calque each loaded floor will have, `null` for none. */
   overlays: Map<string, OverlayValue | null>;
@@ -262,25 +284,31 @@ const plannedWallPayload = (wall: PlannedWall) => ({
   geometryKey: wall.geometryKey,
 });
 
-const linkPayload = (link: LinkInput) => ({
-  id: link.id,
-  floorId: link.floorId,
-  fromDeviceId: link.fromDeviceId,
-  fromPort: link.fromPort,
-  toDeviceId: link.toDeviceId,
-  toPort: link.toPort,
-  label: link.label,
+const plannedPortPayload = (value: PlannedPort): NewPort => ({
+  id: value.objectId,
+  deviceId: value.deviceId,
+  name: value.name,
+  kind: value.kind,
+  order: value.order,
+  rearPortId: value.rearPortId,
+  status: value.status,
 });
 
-const plannedLinkPayload = (link: PlannedLink) => ({
-  id: link.objectId,
-  floorId: link.floorId,
-  fromDeviceId: link.fromDeviceId,
-  fromPort: link.fromPort,
-  toDeviceId: link.toDeviceId,
-  toPort: link.toPort,
-  label: link.label,
+const portPayload = (value: NewPort): NewPort => ({
+  id: value.id,
+  deviceId: value.deviceId,
+  name: value.name,
+  kind: value.kind,
+  order: value.order,
+  rearPortId: value.rearPortId,
+  status: value.status,
 });
+
+const byId = (left: { id: string }, right: { id: string }) =>
+  left.id < right.id ? -1 : left.id > right.id ? 1 : 0;
+
+const cableTouchesDevice = (value: CableInsert, deviceId: string) =>
+  value.aDeviceId === deviceId || value.bDeviceId === deviceId;
 
 const wallGeometryKey = (floorId: string, geometryKey: string): string =>
   `${floorId}:${geometryKey}`;
@@ -291,7 +319,13 @@ interface OperationScope {
   /** MAC addresses of created devices, whose owners planning must know. */
   createdMacs: Array<{ floorId: string; mac: string }>;
   wallIds: Set<string>;
-  linkIds: Set<string>;
+  /** Devices whose ports and cables planning must know. */
+  cablingDeviceIds: Set<string>;
+  /** Ports created cables plug into, and created cable ids. */
+  cablePortIds: Set<string>;
+  /** Ports created devices would have, which must not exist yet. */
+  newPortIds: Set<string>;
+  cableIds: Set<string>;
   overlayFileIds: Set<string>;
 }
 
@@ -307,7 +341,10 @@ const collectOperationScope = (
     deviceIds: new Set(),
     createdMacs: [],
     wallIds: new Set(),
-    linkIds: new Set(),
+    cablingDeviceIds: new Set(),
+    cablePortIds: new Set(),
+    newPortIds: new Set(),
+    cableIds: new Set(),
     overlayFileIds: new Set(),
   },
 ): OperationScope => {
@@ -315,7 +352,24 @@ const collectOperationScope = (
     case "device.create":
       scope.floorIds.add(operation.device.floorId);
       scope.deviceIds.add(operation.device.id);
-      // Planning rejects a longer list before it would need the owners.
+      scope.cablingDeviceIds.add(operation.device.id);
+      // Planning rejects longer lists before it would need these rows.
+      if ((operation.ports?.length ?? 0) <= MAX_PORTS_PER_DEVICE) {
+        for (const port of portsForNewDevice(
+          operation.device.id,
+          operation.device.type,
+          operation.ports,
+        )) {
+          scope.newPortIds.add(port.id);
+        }
+      }
+      if ((operation.cables?.length ?? 0) <= MAX_PORTS_PER_DEVICE) {
+        for (const value of operation.cables ?? []) {
+          scope.cableIds.add(value.id);
+          scope.cablePortIds.add(value.a.portId);
+          scope.cablePortIds.add(value.b.portId);
+        }
+      }
       if (operation.device.macs.length <= MAX_MACS_PER_DEVICE) {
         for (const mac of operation.device.macs) {
           scope.createdMacs.push({ floorId: operation.device.floorId, mac });
@@ -326,21 +380,15 @@ const collectOperationScope = (
       scope.deviceIds.add(operation.deviceId);
       break;
     case "device.delete":
+      scope.deviceIds.add(operation.deviceId);
+      scope.cablingDeviceIds.add(operation.deviceId);
+      break;
     case "device.unplace":
       scope.deviceIds.add(operation.deviceId);
       break;
     case "device.place":
       scope.floorIds.add(operation.device.floorId);
       scope.deviceIds.add(operation.device.id);
-      break;
-    case "link.create":
-      scope.floorIds.add(operation.link.floorId);
-      scope.linkIds.add(operation.link.id);
-      scope.deviceIds.add(operation.link.fromDeviceId);
-      scope.deviceIds.add(operation.link.toDeviceId);
-      break;
-    case "link.delete":
-      scope.linkIds.add(operation.linkId);
       break;
     case "walls.add":
       // Created wall ids are covered by loading their declared floor;
@@ -403,6 +451,70 @@ const loadFloorSites = async (
   return floorSites;
 };
 
+/** The ports and cables the scope names, with the cable in each port. */
+const loadCabling = async (ctx: MutationCtx, scope: OperationScope) => {
+  const [
+    devicePorts,
+    deviceCables,
+    portRefs,
+    newPortRefs,
+    portCables,
+    cableRefs,
+  ] = await Promise.all([
+    Promise.all(
+      [...scope.cablingDeviceIds].map((deviceId) => portRowsOf(ctx, deviceId)),
+    ),
+    Promise.all(
+      [...scope.cablingDeviceIds].map((deviceId) => cableRowsOf(ctx, deviceId)),
+    ),
+    Promise.all(
+      [...scope.cablePortIds].map((objectId) =>
+        ctx.db
+          .query("ports")
+          .withIndex("by_object_id", (q) => q.eq("objectId", objectId))
+          .unique(),
+      ),
+    ),
+    Promise.all(
+      [...scope.newPortIds].map((objectId) =>
+        ctx.db
+          .query("ports")
+          .withIndex("by_object_id", (q) => q.eq("objectId", objectId))
+          .first(),
+      ),
+    ),
+    Promise.all(
+      [...scope.cablePortIds].map((portId) => cableRowAt(ctx, portId)),
+    ),
+    Promise.all(
+      [...scope.cableIds].map((objectId) =>
+        ctx.db
+          .query("cables")
+          .withIndex("by_object_id", (q) => q.eq("objectId", objectId))
+          .unique(),
+      ),
+    ),
+  ]);
+  const ports = new Map<string, PlannedPort>();
+  for (const row of [...devicePorts.flat(), ...portRefs, ...newPortRefs]) {
+    if (!row) continue;
+    const { _id, _creationTime, ...value } = row;
+    ports.set(row.objectId, { ...value, rowId: _id });
+  }
+  const cables = new Map<string, PlannedCable>();
+  for (const row of [...deviceCables.flat(), ...portCables, ...cableRefs]) {
+    if (!row) continue;
+    const { _id, _creationTime, ...value } = row;
+    cables.set(row.objectId, { ...value, rowId: _id });
+  }
+  const cabledPorts = new Map<string, string>();
+  for (const value of cables.values()) {
+    cabledPorts.set(value.aPortId, value.objectId);
+    cabledPorts.set(value.bPortId, value.objectId);
+  }
+  return { ports, cables, cabledPorts };
+};
+
 const buildPlanningState = async (
   ctx: MutationCtx,
   operation: OperationInput,
@@ -411,7 +523,7 @@ const buildPlanningState = async (
 
   // Resolve the floors of referenced objects through point lookups, then
   // load only those floors' rows.
-  const [deviceRefs, wallRefs, linkRefs] = await Promise.all([
+  const [deviceRefs, wallRefs] = await Promise.all([
     Promise.all(
       [...scope.deviceIds].map((objectId) =>
         ctx.db
@@ -428,14 +540,6 @@ const buildPlanningState = async (
           .unique(),
       ),
     ),
-    Promise.all(
-      [...scope.linkIds].map((objectId) =>
-        ctx.db
-          .query("links")
-          .withIndex("by_object_id", (q) => q.eq("objectId", objectId))
-          .unique(),
-      ),
-    ),
   ]);
 
   const floorIds = new Set(scope.floorIds);
@@ -446,7 +550,7 @@ const buildPlanningState = async (
     if (placement) floorIds.add(placement.floorId);
     else unplacedDevices.set(row.objectId, { ...device, rowId: _id });
   }
-  for (const row of [...wallRefs, ...linkRefs]) {
+  for (const row of wallRefs) {
     if (row) floorIds.add(row.floorId);
   }
 
@@ -462,59 +566,46 @@ const buildPlanningState = async (
         .unique();
     }),
   );
-  const [
-    devicesByFloor,
-    wallsByFloor,
-    linksByFloor,
-    overlayRows,
-    overlayFileRows,
-  ] = await Promise.all([
-    Promise.all(
-      floorIdList.map((floorId) =>
-        ctx.db
-          .query("devices")
-          .withIndex("by_floor", (q) => q.eq("placement.floorId", floorId))
-          .collect(),
+  const [devicesByFloor, wallsByFloor, overlayRows, overlayFileRows, cabling] =
+    await Promise.all([
+      Promise.all(
+        floorIdList.map((floorId) =>
+          ctx.db
+            .query("devices")
+            .withIndex("by_floor", (q) => q.eq("placement.floorId", floorId))
+            .collect(),
+        ),
       ),
-    ),
-    Promise.all(
-      floorIdList.map((floorId) =>
-        ctx.db
-          .query("walls")
-          .withIndex("by_floor", (q) => q.eq("floorId", floorId))
-          .collect(),
+      Promise.all(
+        floorIdList.map((floorId) =>
+          ctx.db
+            .query("walls")
+            .withIndex("by_floor", (q) => q.eq("floorId", floorId))
+            .collect(),
+        ),
       ),
-    ),
-    Promise.all(
-      floorIdList.map((floorId) =>
-        ctx.db
-          .query("links")
-          .withIndex("by_floor", (q) => q.eq("floorId", floorId))
-          .collect(),
+      Promise.all(
+        floorIdList.map((floorId) =>
+          ctx.db
+            .query("floorOverlays")
+            .withIndex("by_floor", (q) => q.eq("floorId", floorId))
+            .unique(),
+        ),
       ),
-    ),
-    Promise.all(
-      floorIdList.map((floorId) =>
-        ctx.db
-          .query("floorOverlays")
-          .withIndex("by_floor", (q) => q.eq("floorId", floorId))
-          .unique(),
+      Promise.all(
+        [...scope.overlayFileIds].map((fileId) =>
+          ctx.db
+            .query("floorOverlayFiles")
+            .withIndex("by_object_id", (q) => q.eq("objectId", fileId))
+            .unique(),
+        ),
       ),
-    ),
-    Promise.all(
-      [...scope.overlayFileIds].map((fileId) =>
-        ctx.db
-          .query("floorOverlayFiles")
-          .withIndex("by_object_id", (q) => q.eq("objectId", fileId))
-          .unique(),
-      ),
-    ),
-  ]);
+      loadCabling(ctx, scope),
+    ]);
   const loadedOverlays = overlayRows.flatMap((row) => (row ? [row] : []));
 
   const devices = devicesByFloor.flat();
   const walls = wallsByFloor.flat();
-  const links = linksByFloor.flat();
   return {
     floorSites,
     devices: new Map(
@@ -551,23 +642,7 @@ const buildPlanningState = async (
         },
       ]),
     ),
-    links: new Map(
-      links.map((link) => [
-        link.objectId,
-        {
-          rowId: link._id,
-          objectId: link.objectId,
-          floorId: link.floorId,
-          fromDeviceId: link.fromDeviceId,
-          fromPort: link.fromPort,
-          toDeviceId: link.toDeviceId,
-          toPort: link.toPort,
-          label: link.label,
-          updatedAt: link.updatedAt,
-          updatedBy: link.updatedBy,
-        },
-      ]),
-    ),
+    ...cabling,
     wallGeometry: new Map(
       walls.map((wall) => [
         wallGeometryKey(wall.floorId, wall.geometryKey),
@@ -606,7 +681,7 @@ const floorError = (state: PlanningState, floorId: string): string | null =>
 
 const removePlannedInsert = (
   state: PlanningState,
-  kind: "insertDevice" | "insertWall" | "insertLink",
+  kind: "insertDevice" | "insertWall" | "insertPort" | "insertCable",
   objectId: string,
 ) => {
   state.plan = state.plan.filter((write) => {
@@ -723,13 +798,19 @@ const planDeviceCreate = (
     return "Device object id already exists with different payload";
   }
 
+  const ports = portsForNewDevice(
+    operation.device.id,
+    operation.device.type,
+    operation.ports,
+  );
+  const cables = operation.cables ?? [];
   const existing = state.devices.get(operation.device.id);
   if (existing) {
     markAffectedFloor(state, existing.floorId);
     return sameJson(
       plannedDevicePayload(existing),
       devicePayload(operation.device),
-    )
+    ) && sameCabling(state, operation.device.id, ports, cables)
       ? null
       : "Device object id already exists with different payload";
   }
@@ -737,6 +818,13 @@ const planDeviceCreate = (
   const macsError = deviceMacsError(state, siteId, operation.device);
   if (macsError) return macsError;
   if (identityEditError(operation.device)) return "Invalid device identity";
+  const portsError = portListError(operation.device.id, ports);
+  if (portsError) return portsError;
+  if (cables.length > MAX_PORTS_PER_DEVICE) return "Too many cables";
+  // Another device's ids may embed this one's, so a port id can be taken.
+  if (ports.some((port) => state.ports.has(port.id))) {
+    return "Port object id already exists";
+  }
 
   const placementError = validateDevicePlacement(state, {
     objectId: operation.device.id,
@@ -758,6 +846,73 @@ const planDeviceCreate = (
   for (const mac of value.macs) state.macOwners.set(macKey(siteId, mac), id);
   markAffectedFloor(state, operation.device.floorId);
   state.plan.push({ kind: "insertDevice", value });
+  for (const port of ports) {
+    const row = portRow(siteId, port);
+    state.ports.set(port.id, row);
+    state.plan.push({ kind: "insertPort", value: row });
+  }
+  return planCables(
+    state,
+    siteId,
+    id,
+    new Set(ports.map((port) => port.id)),
+    cables,
+    operation.meta,
+  );
+};
+
+/** Whether a device's loaded ports and cables are the ones given. */
+const sameCabling = (
+  state: PlanningState,
+  deviceId: string,
+  ports: Array<NewPort>,
+  cables: Array<NewCable>,
+): boolean => {
+  const current = [...state.ports.values()]
+    .filter((port) => port.deviceId === deviceId)
+    .map(plannedPortPayload)
+    .sort(byId);
+  if (!sameJson(current, ports.map(portPayload).sort(byId))) return false;
+  return cables.every((value) => {
+    const laid = state.cables.get(value.id);
+    return (
+      laid !== undefined &&
+      laid.aPortId === value.a.portId &&
+      laid.bPortId === value.b.portId
+    );
+  });
+};
+
+/**
+ * Lays a new device's cables. Each plugs into one of its ports; the other
+ * end may be any port of the site, on a floor or not, and only the device's
+ * floor is affected: the far floor's cables follow from its query. A cable
+ * that no longer fits is left out (`cablesToLay`).
+ */
+const planCables = (
+  state: PlanningState,
+  siteId: string,
+  deviceId: string,
+  ownPortIds: ReadonlySet<string>,
+  cables: Array<NewCable>,
+  meta: OperationInput["meta"],
+): string | null => {
+  const result = cablesToLay(deviceId, ownPortIds, cables, {
+    farPortOf: (end) => {
+      const port = state.ports.get(end.portId);
+      return port?.siteId === siteId ? port : undefined;
+    },
+    isCabled: (portId) => state.cabledPorts.has(portId),
+    cableExists: (cableId) => state.cables.has(cableId),
+  });
+  if ("error" in result) return result.error;
+  for (const value of result.cables) {
+    const row = cableRow(siteId, value, meta.createdAt, meta.clientId);
+    state.cables.set(value.id, row);
+    state.cabledPorts.set(value.a.portId, value.id);
+    state.cabledPorts.set(value.b.portId, value.id);
+    state.plan.push({ kind: "insertCable", value: row });
+  }
   return null;
 };
 
@@ -802,16 +957,27 @@ const planDevicePatch = (
   return null;
 };
 
-const planLinkDeleteById = (state: PlanningState, linkId: string) => {
-  const existing = state.links.get(linkId);
-  if (!existing) return;
-
-  state.links.delete(linkId);
-  markAffectedFloor(state, existing.floorId);
-  if (existing.rowId) {
-    state.plan.push({ kind: "deleteLink", rowId: existing.rowId });
-  } else {
-    removePlannedInsert(state, "insertLink", linkId);
+/** Deletes a device's ports and the cables plugged into them. */
+const planCablingDelete = (state: PlanningState, deviceId: string) => {
+  for (const value of [...state.cables.values()]) {
+    if (!cableTouchesDevice(value, deviceId)) continue;
+    state.cables.delete(value.objectId);
+    state.cabledPorts.delete(value.aPortId);
+    state.cabledPorts.delete(value.bPortId);
+    if (value.rowId) {
+      state.plan.push({ kind: "deleteCable", rowId: value.rowId });
+    } else {
+      removePlannedInsert(state, "insertCable", value.objectId);
+    }
+  }
+  for (const port of [...state.ports.values()]) {
+    if (port.deviceId !== deviceId) continue;
+    state.ports.delete(port.objectId);
+    if (port.rowId) {
+      state.plan.push({ kind: "deletePort", rowId: port.rowId });
+    } else {
+      removePlannedInsert(state, "insertPort", port.objectId);
+    }
   }
 };
 
@@ -824,15 +990,7 @@ const planDeviceDelete = (
   // Its integration would bring it back at the next sync.
   if (existing.source) return "Device is owned by its source";
 
-  for (const link of [...state.links.values()]) {
-    if (
-      link.fromDeviceId === operation.deviceId ||
-      link.toDeviceId === operation.deviceId
-    ) {
-      planLinkDeleteById(state, link.objectId);
-    }
-  }
-
+  planCablingDelete(state, operation.deviceId);
   state.devices.delete(operation.deviceId);
   for (const mac of existing.macs) {
     const key = macKey(existing.siteId, mac);
@@ -918,15 +1076,7 @@ const planDeviceUnplace = (
   // A device created by the same batch has no row to keep yet.
   if (!existing?.rowId) return "Device not found";
 
-  for (const link of [...state.links.values()]) {
-    if (
-      link.fromDeviceId === operation.deviceId ||
-      link.toDeviceId === operation.deviceId
-    ) {
-      planLinkDeleteById(state, link.objectId);
-    }
-  }
-
+  // Its ports and cables stay with it in the inventory.
   const { floorId, position: _position, size: _size, ...device } = existing;
   const updatedAt = operation.meta.createdAt;
   const updatedBy = operation.meta.clientId;
@@ -943,57 +1093,6 @@ const planDeviceUnplace = (
     rowId: existing.rowId,
     value: { placement: undefined, updatedAt, updatedBy },
   });
-  return null;
-};
-
-const planLinkCreate = (
-  state: PlanningState,
-  operation: LinkCreateOperation,
-): string | null => {
-  const existingFloorError = floorError(state, operation.link.floorId);
-  if (existingFloorError) return existingFloorError;
-
-  const existing = state.links.get(operation.link.id);
-  if (existing) {
-    markAffectedFloor(state, existing.floorId);
-    return sameJson(plannedLinkPayload(existing), linkPayload(operation.link))
-      ? null
-      : "Link object id already exists with different payload";
-  }
-
-  const from = state.devices.get(operation.link.fromDeviceId);
-  const to = state.devices.get(operation.link.toDeviceId);
-  if (!from || !to) return "Link endpoint not found";
-  if (
-    from.floorId !== operation.link.floorId ||
-    to.floorId !== operation.link.floorId
-  ) {
-    return "Links must connect devices on the same floor";
-  }
-
-  const value: LinkInsert = {
-    objectId: operation.link.id,
-    floorId: operation.link.floorId,
-    fromDeviceId: operation.link.fromDeviceId,
-    fromPort: operation.link.fromPort,
-    toDeviceId: operation.link.toDeviceId,
-    toPort: operation.link.toPort,
-    label: operation.link.label,
-    updatedAt: operation.meta.createdAt,
-    updatedBy: operation.meta.clientId,
-  };
-  state.links.set(operation.link.id, value);
-  markAffectedFloor(state, operation.link.floorId);
-  state.plan.push({ kind: "insertLink", value });
-  return null;
-};
-
-const planLinkDelete = (
-  state: PlanningState,
-  operation: LinkDeleteOperation,
-): string | null => {
-  if (!state.links.has(operation.linkId)) return "Link not found";
-  planLinkDeleteById(state, operation.linkId);
   return null;
 };
 
@@ -1199,10 +1298,6 @@ const planOperation = (
       return planDevicePlace(state, operation);
     case "device.unplace":
       return planDeviceUnplace(state, operation);
-    case "link.create":
-      return planLinkCreate(state, operation);
-    case "link.delete":
-      return planLinkDelete(state, operation);
     case "walls.add":
       return planWallsAdd(state, operation);
     case "walls.delete":
@@ -1279,10 +1374,16 @@ const executePlan = async (ctx: MutationCtx, plan: WritePlan) => {
       case "deleteWall":
         await ctx.db.delete(write.rowId);
         break;
-      case "insertLink":
-        await ctx.db.insert("links", write.value);
+      case "insertPort":
+        await ctx.db.insert("ports", write.value);
         break;
-      case "deleteLink":
+      case "deletePort":
+        await ctx.db.delete(write.rowId);
+        break;
+      case "insertCable":
+        await ctx.db.insert("cables", write.value);
+        break;
+      case "deleteCable":
         await ctx.db.delete(write.rowId);
         break;
       case "putOverlay":
@@ -1303,8 +1404,6 @@ const operationFloorId = (operation: OperationInput): string | undefined => {
     case "device.create":
     case "device.place":
       return operation.device.floorId;
-    case "link.create":
-      return operation.link.floorId;
     case "walls.add":
       return operation.walls[0]?.floorId;
     case "overlay.set":
@@ -1320,7 +1419,6 @@ const operationFloorId = (operation: OperationInput): string | undefined => {
     case "device.patch":
     case "device.delete":
     case "device.unplace":
-    case "link.delete":
     case "walls.delete":
       return undefined;
   }

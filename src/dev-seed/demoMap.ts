@@ -5,14 +5,17 @@
 //
 // Convex bundles this file for `convex/dev.ts`, so it uses relative imports
 // only; the `@/` alias does not resolve there.
+import { numberedPorts, portIdOf } from "../devices/ports";
 import type { BatchSubOperation } from "../map-engine/types";
 import type {
+  Cable,
+  CableEnd,
+  CableId,
   DeviceId,
   DeviceStatus,
   FloorId,
-  LinkDoc,
-  LinkId,
   NewDevice,
+  Port,
   Position,
   WallColor,
   WallId,
@@ -25,7 +28,10 @@ export interface DemoFloor {
   id: FloorId;
   name: string;
   order: number;
-  /** One batch: walls first, then devices, then the links between them. */
+  /**
+   * One batch: walls, then devices, each with the cables to the devices
+   * before it.
+   */
   operations: Array<BatchSubOperation>;
 }
 
@@ -40,7 +46,9 @@ interface PcInput {
 const createFloorBuilder = (floorId: FloorId, slug: string) => {
   const walls = new Map<string, WallSegment>();
   const devices: Array<NewDevice> = [];
-  const links: Array<LinkDoc> = [];
+  const ports = new Map<DeviceId, Array<Port>>();
+  const cables = new Map<DeviceId, Array<Cable>>();
+  let cableCount = 0;
   let hostCount = 0;
 
   const deviceId = (key: string) => `device:demo:${slug}:${key}` as DeviceId;
@@ -119,11 +127,12 @@ const createFloorBuilder = (floorId: FloorId, slug: string) => {
         model: string;
         ip: string;
         portCount: number;
+        portName: (n: number) => string;
         activePorts: number;
       },
     ) {
       const compact = options.portCount <= 8;
-      return addDevice({
+      const id = addDevice({
         key,
         type: "switch",
         name,
@@ -134,13 +143,18 @@ const createFloorBuilder = (floorId: FloorId, slug: string) => {
         ip: options.ip,
         metadata: {
           status: "up",
-          ports: Array.from({ length: options.portCount }, (_, index) => ({
-            id: `port-${index + 1}`,
-            number: index + 1,
-            status: index < options.activePorts ? "up" : "down",
-          })),
         },
       });
+      ports.set(
+        id,
+        numberedPorts(id, "interface", options.portCount, options.portName).map(
+          (port) => ({
+            ...port,
+            status: port.order <= options.activePorts ? "up" : "down",
+          }),
+        ),
+      );
+      return id;
     },
 
     socket(key: string, name: string, position: Position) {
@@ -208,20 +222,18 @@ const createFloorBuilder = (floorId: FloorId, slug: string) => {
       });
     },
 
-    link(
-      from: DeviceId,
-      to: DeviceId,
-      ports: { from?: string; to?: string; label?: string } = {},
-    ) {
-      links.push({
-        id: `link:demo:${slug}:${links.length + 1}` as LinkId,
-        floorId,
-        fromDeviceId: from,
-        fromPort: ports.from,
-        toDeviceId: to,
-        toPort: ports.to,
-        label: ports.label,
-      });
+    /**
+     * A cable between two ports. It travels with whichever device comes
+     * last, since `device.create` lays cables to devices that exist.
+     */
+    cable(a: CableEnd, b: CableEnd) {
+      cableCount += 1;
+      const order = (end: CableEnd) =>
+        devices.findIndex((device) => device.id === end.deviceId);
+      const owner = order(a) > order(b) ? a.deviceId : b.deviceId;
+      const list = cables.get(owner) ?? [];
+      list.push({ id: `cable:demo:${slug}:${cableCount}` as CableId, a, b });
+      cables.set(owner, list);
     },
 
     operations(): Array<BatchSubOperation> {
@@ -230,12 +242,20 @@ const createFloorBuilder = (floorId: FloorId, slug: string) => {
         ...devices.map((device) => ({
           kind: "device.create" as const,
           device,
+          ...(ports.has(device.id) ? { ports: ports.get(device.id) } : {}),
+          ...(cables.has(device.id) ? { cables: cables.get(device.id) } : {}),
         })),
-        ...links.map((link) => ({ kind: "link.create" as const, link })),
       ];
     },
   };
 };
+
+const end = (deviceId: DeviceId, kind: Port["kind"], n: number): CableEnd => ({
+  deviceId,
+  portId: portIdOf(deviceId, kind, n),
+});
+
+const cisco = (n: number) => `Gi1/0/${n}`;
 
 const groundFloor = (floorId: FloorId): Array<BatchSubOperation> => {
   const floor = createFloorBuilder(floorId, "rdc");
@@ -256,6 +276,7 @@ const groundFloor = (floorId: FloorId): Array<BatchSubOperation> => {
       model: "Cisco Catalyst 9300-24P",
       ip: "192.0.2.1",
       portCount: 24,
+      portName: cisco,
       activePorts: 1,
     },
   );
@@ -267,11 +288,21 @@ const groundFloor = (floorId: FloorId): Array<BatchSubOperation> => {
       model: "Cisco Catalyst 9200-48",
       ip: "192.0.2.11",
       portCount: 48,
+      portName: cisco,
       activePorts: 10,
     },
   );
-  floor.link(core, access, { from: "port-1", to: "port-48", label: "Uplink" });
-  floor.patchPanel("brassage-a", "Brassage A", { x: 260, y: 260 });
+  floor.cable(end(core, "interface", 1), end(access, "interface", 48));
+  // Ground-floor sockets go through the patch panel; upstairs they are
+  // cabled to the switch directly.
+  const panel = floor.patchPanel("brassage-a", "Brassage A", {
+    x: 260,
+    y: 260,
+  });
+  const throughPanel = (number: number, socket: DeviceId) => {
+    floor.cable(end(access, "interface", number), end(panel, "front", number));
+    floor.cable(end(panel, "rear", number), end(socket, "front", 1));
+  };
 
   floor.room({ x: 530, y: 10 }, { x: 1130, y: 410 }, "sand", [
     { x: 530, y: 350 },
@@ -312,15 +343,14 @@ const groundFloor = (floorId: FloorId): Array<BatchSubOperation> => {
           y: socketY,
         },
       );
-      const computer = pc({
+      pc({
         key: `poste-${number}`,
         name: `Poste ${number}`,
         position: { x, y: pcY },
         status: statuses[index],
         lastUser: users[index],
       });
-      floor.link(access, socket, { from: `port-${number}` });
-      floor.link(socket, computer);
+      throughPanel(number, socket);
     }
   });
 
@@ -332,19 +362,18 @@ const groundFloor = (floorId: FloorId): Array<BatchSubOperation> => {
     x: 240,
     y: 600,
   });
-  const meetingPc = pc({
+  pc({
     key: "reunion",
     name: "PC Salle de réunion",
     position: { x: 220, y: 500 },
     status: "unknown",
   });
-  floor.link(access, meetingSocket, { from: "port-9" });
-  floor.link(meetingSocket, meetingPc);
+  throughPanel(9, meetingSocket);
   const printerSocket = floor.socket("prise-imprimante", "Prise Imprimante", {
     x: 60,
     y: 600,
   });
-  const printer = floor.endpoint(
+  floor.endpoint(
     "imprimante",
     "Imprimante",
     { x: 40, y: 500 },
@@ -354,8 +383,7 @@ const groundFloor = (floorId: FloorId): Array<BatchSubOperation> => {
       mac: "02:6e:70:00:03:01",
     },
   );
-  floor.link(access, printerSocket, { from: "port-10" });
-  floor.link(printerSocket, printer);
+  throughPanel(10, printerSocket);
 
   return floor.operations();
 };
@@ -378,6 +406,7 @@ const firstFloor = (floorId: FloorId): Array<BatchSubOperation> => {
       model: "UniFi Switch 8",
       ip: "192.0.2.21",
       portCount: 8,
+      portName: (n) => `Port ${n}`,
       activePorts: 6,
     },
   );
@@ -412,15 +441,14 @@ const firstFloor = (floorId: FloorId): Array<BatchSubOperation> => {
           y: socketY,
         },
       );
-      const computer = pc({
+      pc({
         key: `poste-e1-${number}`,
         name: `Poste ${number + 10}`,
         position: { x, y: pcY },
         status: statuses[index],
         lastUser: users[index],
       });
-      floor.link(access, socket, { from: `port-${number}` });
-      floor.link(socket, computer);
+      floor.cable(end(access, "interface", number), end(socket, "front", 1));
     }
   });
 

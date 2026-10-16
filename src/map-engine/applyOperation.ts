@@ -1,5 +1,11 @@
 import type { Device, MapDocumentSnapshot } from "@/types/map";
 import {
+  cableTouches,
+  cablesToLay,
+  defaultPorts,
+  portListError,
+} from "@/devices/ports";
+import {
   applyOverlayPatch,
   isPatchBlockedByLock,
   overlayError,
@@ -31,13 +37,29 @@ const placementOf = ({ floorId, position, size }: Device) => ({
   size,
 });
 
-const withoutConnectedLinks = (
+/**
+ * The floor without a device and its ports. A deleted device's cables go with
+ * it; an unplaced one keeps them, so they stay in view only while their other
+ * end is on the floor.
+ */
+const withoutDevice = (
   snapshot: MapDocumentSnapshot,
-  deviceId: string,
-) =>
-  snapshot.links.filter(
-    (link) => link.fromDeviceId !== deviceId && link.toDeviceId !== deviceId,
-  );
+  device: Device,
+  cables: "delete" | "keep",
+): MapDocumentSnapshot => {
+  const devices = snapshot.devices.filter((item) => item !== device);
+  const onFloor = new Set(devices.map((item) => item.id));
+  return {
+    ...snapshot,
+    devices,
+    ports: snapshot.ports.filter((port) => port.deviceId !== device.id),
+    cables: snapshot.cables.filter((cable) =>
+      cables === "delete"
+        ? !cableTouches(cable, device.id)
+        : onFloor.has(cable.a.deviceId) || onFloor.has(cable.b.deviceId),
+    ),
+  };
+};
 
 const applyBatch = (
   snapshot: MapDocumentSnapshot,
@@ -77,15 +99,12 @@ const isSafeBatchNoop = (
 ): boolean => {
   switch (operation.kind) {
     case "device.create":
-    case "link.create":
       return reason === "already-exists";
     case "device.place":
       return reason === "already-exists";
     case "device.delete":
     case "device.unplace":
       return reason === "missing-device";
-    case "link.delete":
-      return reason === "missing-link";
     case "walls.add":
       return reason === "duplicate-wall-geometry";
     case "walls.delete":
@@ -113,9 +132,43 @@ export function applyOperation(
           ? unchanged(snapshot, "already-exists")
           : unchanged(snapshot, "conflict");
       }
+      const { device } = operation;
+      const ports = operation.ports ?? defaultPorts(device.id, device.type);
+      const ownPortIds = new Set<string>(ports.map((port) => port.id));
+      // Another floor's ports are the server's to check; a far end on this
+      // floor is checked here as it will be there.
+      const cabled = new Set<string>(
+        snapshot.cables.flatMap((cable) => [cable.a.portId, cable.b.portId]),
+      );
+      const result = cablesToLay(
+        device.id,
+        ownPortIds,
+        operation.cables ?? [],
+        {
+          farPortOf: (end) =>
+            snapshot.ports.find((port) => port.id === end.portId) ??
+            (snapshot.devices.some((item) => item.id === end.deviceId)
+              ? undefined
+              : end),
+          isCabled: (portId) => cabled.has(portId),
+          cableExists: (cableId) =>
+            snapshot.cables.some((cable) => cable.id === cableId),
+        },
+      );
+      if (
+        portListError(device.id, ports) ||
+        ports.some((port) =>
+          snapshot.ports.some((item) => item.id === port.id),
+        ) ||
+        "error" in result
+      ) {
+        return unchanged(snapshot, "invalid-ports");
+      }
       return changed({
         ...snapshot,
-        devices: [...snapshot.devices, operation.device],
+        devices: [...snapshot.devices, device],
+        ports: [...snapshot.ports, ...ports],
+        cables: [...snapshot.cables, ...result.cables],
       });
     }
 
@@ -140,11 +193,7 @@ export function applyOperation(
       // Its integration would bring it back at the next sync.
       if (device.source) return unchanged(snapshot, "source-owned");
 
-      return changed({
-        ...snapshot,
-        devices: snapshot.devices.filter((item) => item !== device),
-        links: withoutConnectedLinks(snapshot, operation.deviceId),
-      });
+      return changed(withoutDevice(snapshot, device, "delete"));
     }
 
     case "device.place": {
@@ -167,50 +216,7 @@ export function applyOperation(
         (item) => item.id === operation.deviceId,
       );
       if (!device) return unchanged(snapshot, "missing-device");
-      return changed({
-        ...snapshot,
-        devices: snapshot.devices.filter((item) => item !== device),
-        links: withoutConnectedLinks(snapshot, operation.deviceId),
-      });
-    }
-
-    case "link.create": {
-      const existing = snapshot.links.find(
-        (link) => link.id === operation.link.id,
-      );
-      if (existing) {
-        return sameJson(existing, operation.link)
-          ? unchanged(snapshot, "already-exists")
-          : unchanged(snapshot, "conflict");
-      }
-
-      const from = snapshot.devices.find(
-        (device) => device.id === operation.link.fromDeviceId,
-      );
-      const to = snapshot.devices.find(
-        (device) => device.id === operation.link.toDeviceId,
-      );
-      if (!from || !to) return unchanged(snapshot, "missing-endpoint");
-      if (
-        from.floorId !== operation.link.floorId ||
-        to.floorId !== operation.link.floorId
-      ) {
-        return unchanged(snapshot, "cross-floor-link");
-      }
-
-      return changed({
-        ...snapshot,
-        links: [...snapshot.links, operation.link],
-      });
-    }
-
-    case "link.delete": {
-      const nextLinks = snapshot.links.filter(
-        (link) => link.id !== operation.linkId,
-      );
-      return nextLinks.length === snapshot.links.length
-        ? unchanged(snapshot, "missing-link")
-        : changed({ ...snapshot, links: nextLinks });
+      return changed(withoutDevice(snapshot, device, "keep"));
     }
 
     case "walls.add": {

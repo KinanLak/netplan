@@ -42,8 +42,7 @@ export function DeviceContextMenu({ deviceId }: { deviceId: DeviceId }) {
   };
 
   const deleteDevice = () => {
-    commands.deleteDevice(device.id);
-    selectDevice(null);
+    if (commands.deleteDevice(device.id)) selectDevice(null);
   };
 
   const unplaceDevice = () => {

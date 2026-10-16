@@ -102,8 +102,8 @@ in a browser with it.
 - Durable changes are `MapOperation`s (`src/map-engine/types.ts`), applied
   locally by `src/map-engine/` and on the server by `api.mapOperations.apply`.
 - Server validation is authoritative for floors, object ids, collisions,
-  links, wall geometry and device-delete link cleanup. The client's
-  validation is a courtesy.
+  ports and cables, wall geometry and device-delete cable cleanup. The
+  client's validation is a courtesy.
 - A new durable mutation ships together: the typed operation, pure engine
   behaviour, its inverse for undo, server application, and tests.
 - Convex tables use `objectId`. Convex `_id` stays inside `convex/`; UI and
@@ -131,7 +131,7 @@ in the PR which entries applied:
   usually has a shortcut (`src/hooks/use-shortcuts.tsx`, listed in the
   shortcuts dialog) and belongs in the command palette when there is one.
 - **Undo and redo**: every durable change has an inverse, and undoing it
-  leaves no orphan (links of a deleted device, walls of a room).
+  leaves no orphan (cables of a deleted device, walls of a room).
 - **Server validation**: the server rejects what the client prevents, and the
   client shows the rejection.
 - **Other users**: a second tab sees the change live; presence follows.

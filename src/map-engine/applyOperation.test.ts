@@ -1,11 +1,18 @@
 import { describe, expect, it } from "bun:test";
-import type { Device, DeviceId, FloorId, LinkId, WallId } from "@/types/map";
+import type {
+  Cable,
+  CableId,
+  Device,
+  DeviceId,
+  FloorId,
+  WallId,
+} from "@/types/map";
+import { defaultPorts, portIdOf } from "@/devices/ports";
 import { applyOperation } from "./applyOperation";
 import type { MapOperation } from "./types";
 
 const floorId = "floor:a" as FloorId;
 const deviceId = (value: string) => value as DeviceId;
-const linkId = (value: string) => value as LinkId;
 const wallId = (value: string) => value as WallId;
 
 const meta = (seq: number): MapOperation["meta"] => ({
@@ -31,8 +38,31 @@ const emptySnapshot = {
   revision: 0,
   devices: [],
   walls: [],
-  links: [],
+  ports: [],
+  cables: [],
   overlay: null,
+};
+
+/** Joins the only interface of two PCs. */
+const cableBetween = (a: Device, b: Device): Cable => ({
+  id: "cable:a" as CableId,
+  a: { deviceId: a.id, portId: portIdOf(a.id, "interface", 1) },
+  b: { deviceId: b.id, portId: portIdOf(b.id, "interface", 1) },
+});
+
+const cabledPair = (aSource?: Device["source"]) => {
+  const a: Device = { ...device(deviceId("device:a")), source: aSource };
+  const b = device(deviceId("device:b"), 200);
+  return {
+    a,
+    b,
+    snapshot: {
+      ...emptySnapshot,
+      devices: [a, b],
+      ports: [...defaultPorts(a.id, "pc"), ...defaultPorts(b.id, "pc")],
+      cables: [cableBetween(a, b)],
+    },
+  };
 };
 
 describe("applyOperation", () => {
@@ -89,23 +119,93 @@ describe("applyOperation", () => {
     });
   });
 
-  it("deleting a device removes connected links", () => {
-    const a = device(deviceId("device:a"));
-    const b = device(deviceId("device:b"), 200);
-    const link = {
-      id: linkId("link:a"),
-      floorId,
-      fromDeviceId: a.id,
-      toDeviceId: b.id,
-    };
+  it("creating a device gives it its type's ports unless it brings its own", () => {
+    const created = device(deviceId("device:a"));
+    const ports = defaultPorts(created.id, "switch").slice(0, 2);
 
-    const result = applyOperation(
-      { ...emptySnapshot, devices: [a, b], links: [link] },
-      { kind: "device.delete", meta: meta(2), deviceId: a.id },
+    const byDefault = applyOperation(emptySnapshot, {
+      kind: "device.create",
+      meta: meta(1),
+      device: created,
+    });
+    const given = applyOperation(emptySnapshot, {
+      kind: "device.create",
+      meta: meta(1),
+      device: created,
+      ports,
+    });
+
+    expect(byDefault.snapshot.ports).toEqual(defaultPorts(created.id, "pc"));
+    expect(given.snapshot.ports).toEqual(ports);
+  });
+
+  it("refuses a device whose ports are not its own or whose cable misses it", () => {
+    const { a, b } = cabledPair();
+    const create = (
+      extra: Pick<
+        Extract<MapOperation, { kind: "device.create" }>,
+        "ports" | "cables"
+      >,
+    ) =>
+      applyOperation(
+        { ...emptySnapshot, devices: [b], ports: defaultPorts(b.id, "pc") },
+        { kind: "device.create", meta: meta(1), device: a, ...extra },
+      );
+
+    expect(create({ ports: defaultPorts(b.id, "pc") }).reason).toBe(
+      "invalid-ports",
     );
+    expect(
+      create({
+        cables: [
+          {
+            ...cableBetween(a, b),
+            a: { deviceId: b.id, portId: portIdOf(b.id, "interface", 1) },
+          },
+        ],
+      }).reason,
+    ).toBe("invalid-ports");
+    expect(create({ cables: [cableBetween(a, b)] }).snapshot.cables).toEqual([
+      cableBetween(a, b),
+    ]);
+  });
+
+  it("lays a new device's cables only where they still fit, trusting the server off this floor", () => {
+    const { a, b, snapshot } = cabledPair();
+    const c = device(deviceId("device:c"), 400);
+    const far = device(deviceId("device:far"));
+    const into = (other: Device) => ({
+      ...cableBetween(c, other),
+      id: `cable:c-${other.id}` as CableId,
+    });
+
+    const result = applyOperation(snapshot, {
+      kind: "device.create",
+      meta: meta(1),
+      device: c,
+      // `a`'s port already holds a cable; `far` is on another floor.
+      cables: [into(a), into(far)],
+    });
+
+    expect(result.applied).toBe(true);
+    expect(result.snapshot.cables.map((cable) => cable.id)).toEqual([
+      cableBetween(a, b).id,
+      into(far).id,
+    ]);
+  });
+
+  it("deleting a device removes its ports and cables", () => {
+    const { a, b, snapshot } = cabledPair();
+
+    const result = applyOperation(snapshot, {
+      kind: "device.delete",
+      meta: meta(2),
+      deviceId: a.id,
+    });
 
     expect(result.snapshot.devices).toEqual([b]);
-    expect(result.snapshot.links).toEqual([]);
+    expect(result.snapshot.ports).toEqual(defaultPorts(b.id, "pc"));
+    expect(result.snapshot.cables).toEqual([]);
   });
 
   it("refuses to delete a device its integration owns", () => {
@@ -126,26 +226,23 @@ describe("applyOperation", () => {
     expect(result.snapshot).toBe(snapshot);
   });
 
-  it("unplacing a device takes its links off too, even for a sourced one", () => {
-    const a: Device = {
-      ...device(deviceId("device:a")),
-      source: { integration: "netbox", externalId: "42", syncedAt: 1 },
-    };
-    const b = device(deviceId("device:b"), 200);
-    const link = {
-      id: linkId("link:a"),
-      floorId,
-      fromDeviceId: a.id,
-      toDeviceId: b.id,
-    };
+  it("unplacing a device keeps its cables, even for a sourced one", () => {
+    const { a, b, snapshot } = cabledPair({
+      integration: "netbox",
+      externalId: "42",
+      syncedAt: 1,
+    });
 
-    const result = applyOperation(
-      { ...emptySnapshot, devices: [a, b], links: [link] },
-      { kind: "device.unplace", meta: meta(2), deviceId: a.id },
-    );
+    const result = applyOperation(snapshot, {
+      kind: "device.unplace",
+      meta: meta(2),
+      deviceId: a.id,
+    });
 
     expect(result.snapshot.devices).toEqual([b]);
-    expect(result.snapshot.links).toEqual([]);
+    expect(result.snapshot.ports).toEqual(defaultPorts(b.id, "pc"));
+    // The far end is still on the floor, so the cable stays in view.
+    expect(result.snapshot.cables).toEqual([cableBetween(a, b)]);
   });
 
   it("placing a device already where it stands is a no-op, elsewhere a conflict", () => {
@@ -164,26 +261,6 @@ describe("applyOperation", () => {
     expect(same.reason).toBe("already-exists");
     expect(elsewhere.reason).toBe("conflict");
     expect(fresh.snapshot.devices.map((item) => item.id)).toEqual([placed.id]);
-  });
-
-  it("link.create requires both endpoints", () => {
-    const a = device(deviceId("device:a"));
-    const result = applyOperation(
-      { ...emptySnapshot, devices: [a] },
-      {
-        kind: "link.create",
-        meta: meta(3),
-        link: {
-          id: linkId("link:a"),
-          floorId,
-          fromDeviceId: a.id,
-          toDeviceId: deviceId("device:missing"),
-        },
-      },
-    );
-
-    expect(result.applied).toBe(false);
-    expect(result.reason).toBe("missing-endpoint");
   });
 
   it("walls.add deduplicates geometry keys", () => {

@@ -232,7 +232,7 @@ export default function FlowCanvas() {
   const { document } = useMapDocumentData();
   const isReady = useMapDocumentReady();
   const { commands } = useMapDocumentActions();
-  const { devices, walls } = document;
+  const { devices, ports, walls } = document;
   const { updateDevicePosition, updateDevicePositions, checkCollision } =
     commands;
 
@@ -252,6 +252,7 @@ export default function FlowCanvas() {
     handleNodeMouseLeave,
   } = useCanvasDeviceNodes({
     devices,
+    ports,
     currentFloorId,
     selectedDeviceId,
     selectedDeviceIdSet,

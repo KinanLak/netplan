@@ -188,16 +188,17 @@ function MapWorkspace({ sortedFloors }: { sortedFloors: Array<Floor> }) {
 
   const deleteSelectedDevice = () => {
     if (!selectedDeviceId || !isReady || !isEditMode) return;
-    commands.deleteDevice(selectedDeviceId);
-    selectDevice(null);
+    if (commands.deleteDevice(selectedDeviceId)) selectDevice(null);
   };
 
   // Reads hover/highlight state lazily so the workspace does not re-render
   // on every pointer hover; it is only needed when the shortcut fires.
   const highlightConnections = () => {
     const { hoveredDeviceId, highlightedDeviceIds } = useMapStore.getState();
+    const { cables, devices } = getDocument();
     const next = getNextConnectionHighlightIds({
-      links: getDocument().links,
+      cables,
+      devices,
       highlightedDeviceIds,
       hoveredDeviceId,
       selectedDeviceId,

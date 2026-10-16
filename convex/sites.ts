@@ -1,5 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import { deleteDeviceMacs } from "./lib/deviceMacs";
+import { deleteDeviceCabling } from "./lib/ports";
 import { adminMutation, adminQuery, readerQuery } from "./lib/functions";
 import type { Doc } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
@@ -205,6 +206,7 @@ export const remove = adminMutation({
       .collect();
     for (const device of devices) {
       await deleteDeviceMacs(ctx, device.objectId);
+      await deleteDeviceCabling(ctx, device.objectId);
       await ctx.db.delete(device._id);
     }
     await ctx.db.delete(site._id);

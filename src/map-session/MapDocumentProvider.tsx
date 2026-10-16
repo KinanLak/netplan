@@ -20,15 +20,15 @@ import {
 import type { LocalIdentity } from "@/lib/identity";
 import { rectanglesOverlap } from "@/lib/geometry";
 import type {
+  Cable,
   Device,
   NewDevice,
   DeviceDraft,
   DeviceId,
   FloorId,
   FloorOverlay,
-  LinkDoc,
-  LinkId,
   MapDocumentSnapshot,
+  Port,
   Position,
   RoomDraft,
   Size,
@@ -67,6 +67,7 @@ import { SequentialOutbox, rejectingForbidden } from "./outbox";
 import type { OutboxState } from "./outbox";
 import {
   appendPendingOperation,
+  isPlacementPending,
   pruneAckedRevisionsInPlace,
   reconcileObservedOperationLogEntries,
   removeAckedPendingOperations,
@@ -85,13 +86,12 @@ export interface MapDocumentCommands {
   addDevices: (drafts: Array<DeviceDraft>) => Array<DeviceId>;
   updateDevicePosition: (deviceId: DeviceId, position: Position) => void;
   updateDevicePositions: (updates: Array<DevicePositionUpdate>) => void;
-  deleteDevice: (deviceId: DeviceId) => void;
+  /** False when the device cannot be deleted yet, or at all. */
+  deleteDevice: (deviceId: DeviceId) => boolean;
   /** Takes a device off the map; it stays in the site inventory. */
   unplaceDevice: (deviceId: DeviceId) => void;
   /** Puts an inventory device on the current floor; false when it cannot. */
   placeDevice: (device: Device) => boolean;
-  createLink: (link: Omit<LinkDoc, "id">) => LinkId | null;
-  deleteLink: (linkId: LinkId) => void;
   checkCollision: (
     floorId: FloorId,
     deviceId: DeviceId,
@@ -169,7 +169,8 @@ const emptyDocument = (floorId: FloorId): MapDocumentSnapshot => ({
   revision: 0,
   devices: [],
   walls: [],
-  links: [],
+  ports: [],
+  cables: [],
   overlay: null,
 });
 
@@ -219,8 +220,6 @@ const operationFloorId = (
     case "device.create":
     case "device.place":
       return operation.device.floorId;
-    case "link.create":
-      return operation.link.floorId;
     case "walls.add":
       return operation.walls[0]?.floorId ?? fallbackFloorId;
     case "overlay.set":
@@ -231,7 +230,6 @@ const operationFloorId = (
       const first = operation.operations[0];
       if (first.kind === "device.create" || first.kind === "device.place")
         return first.device.floorId;
-      if (first.kind === "link.create") return first.link.floorId;
       if (first.kind === "walls.add")
         return first.walls[0]?.floorId ?? fallbackFloorId;
       if (first.kind === "overlay.set" || first.kind === "overlay.patch")
@@ -241,7 +239,6 @@ const operationFloorId = (
     case "device.patch":
     case "device.delete":
     case "device.unplace":
-    case "link.delete":
     case "walls.delete":
       return fallbackFloorId;
   }
@@ -290,6 +287,7 @@ interface SessionActionDeps {
   redoStackRef: RefObject<ReadonlyArray<SessionHistoryEntry>>;
   historyGroupRef: RefObject<PendingHistoryGroup | null>;
   outboxRef: RefObject<SequentialOutbox | null>;
+  pendingEntriesRef: RefObject<ReadonlyArray<PendingOperationEntry>>;
   setPendingEntries: Dispatch<
     SetStateAction<ReadonlyArray<PendingOperationEntry>>
   >;
@@ -312,6 +310,7 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
     redoStackRef,
     historyGroupRef,
     outboxRef,
+    pendingEntriesRef,
     setPendingEntries,
     setHistoryByFloor,
     setRejectedMessage,
@@ -446,15 +445,22 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
     });
   };
 
-  const deleteDevice = (deviceId: DeviceId) => {
-    if (!isReadyRef.current) return;
+  const deleteDevice = (deviceId: DeviceId): boolean => {
+    if (!isReadyRef.current) return false;
     const device = documentRef.current.devices.find(
       (item) => item.id === deviceId,
     );
-    if (!device || device.source) return;
+    if (!device || device.source) return false;
+    if (isPlacementPending(pendingEntriesRef.current, deviceId)) {
+      setRejectedMessage(
+        "Cet équipement vient d'être placé : réessayez dans un instant.",
+      );
+      return false;
+    }
     const meta = freshMeta();
-    if (!meta) return;
+    if (!meta) return false;
     dispatchOperation({ kind: "device.delete", meta, deviceId });
+    return true;
   };
 
   const unplaceDevice = (deviceId: DeviceId) => {
@@ -477,27 +483,6 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
     if (!meta) return false;
     dispatchOperation({ kind: "device.place", meta, device });
     return true;
-  };
-
-  const createLink = (linkWithoutId: Omit<LinkDoc, "id">): LinkId | null => {
-    const identity = identityRef.current;
-    if (!isReadyRef.current || !identity) return null;
-    const id = createObjectId("link", identity) as LinkId;
-    const meta = freshMeta();
-    if (!meta) return null;
-    dispatchOperation({
-      kind: "link.create",
-      meta,
-      link: { id, ...linkWithoutId },
-    });
-    return id;
-  };
-
-  const deleteLink = (linkId: LinkId) => {
-    if (!isReadyRef.current) return;
-    const meta = freshMeta();
-    if (!meta) return;
-    dispatchOperation({ kind: "link.delete", meta, linkId });
   };
 
   // The engine runs first so a refused or empty change never reaches the
@@ -816,8 +801,6 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
       deleteDevice,
       unplaceDevice,
       placeDevice,
-      createLink,
-      deleteLink,
       checkCollision,
       addWallLine,
       addWallRoom,
@@ -853,7 +836,8 @@ export function MapDocumentProvider({
   const queryArgs = floorId ? { floorId } : ("skip" as const);
   const queriedDevices = useQuery(api.mapDocument.getFloorDevices, queryArgs);
   const queriedWalls = useQuery(api.mapDocument.getFloorWalls, queryArgs);
-  const queriedLinks = useQuery(api.mapDocument.getFloorLinks, queryArgs);
+  const queriedPorts = useQuery(api.mapDocument.getFloorPorts, queryArgs);
+  const queriedCables = useQuery(api.mapDocument.getFloorCables, queryArgs);
   const queriedRevision = useQuery(api.mapDocument.getFloorRevision, queryArgs);
   const queriedOverlay = useQuery(api.mapDocument.getFloorOverlay, queryArgs);
 
@@ -880,7 +864,8 @@ export function MapDocumentProvider({
     () =>
       queriedDevices !== undefined &&
       queriedWalls !== undefined &&
-      queriedLinks !== undefined &&
+      queriedPorts !== undefined &&
+      queriedCables !== undefined &&
       queriedRevision !== undefined &&
       queriedOverlay !== undefined
         ? ({
@@ -888,14 +873,16 @@ export function MapDocumentProvider({
             revision: queriedRevision,
             devices: queriedDevices as Array<Device>,
             walls: queriedWalls as Array<WallSegment>,
-            links: queriedLinks as Array<LinkDoc>,
+            ports: queriedPorts as Array<Port>,
+            cables: queriedCables as Array<Cable>,
             overlay: queriedOverlay as FloorOverlay | null,
           } satisfies MapDocumentSnapshot)
         : undefined,
     [
       queriedDevices,
       queriedWalls,
-      queriedLinks,
+      queriedPorts,
+      queriedCables,
       queriedRevision,
       queriedOverlay,
       activeFloorId,
@@ -954,6 +941,7 @@ export function MapDocumentProvider({
   const ackedRevisionsRef = useRef<Map<string, number>>(new Map());
   const historyGroupRef = useRef<PendingHistoryGroup | null>(null);
   const outboxRef = useRef<SequentialOutbox | null>(null);
+  const pendingEntriesRef = useRef(pendingEntries);
 
   useLayoutEffect(() => {
     documentRef.current = document;
@@ -963,6 +951,7 @@ export function MapDocumentProvider({
     isReadyRef.current = isReady;
     activeFloorIdRef.current = activeFloorId;
     serverRevisionRef.current = serverDocument.revision;
+    pendingEntriesRef.current = pendingEntries;
     pruneAckedRevisionsInPlace(ackedRevisionsRef.current, pendingEntries);
   });
 
@@ -979,6 +968,7 @@ export function MapDocumentProvider({
       redoStackRef,
       historyGroupRef,
       outboxRef,
+      pendingEntriesRef,
       setPendingEntries,
       setHistoryByFloor,
       setRejectedMessage,

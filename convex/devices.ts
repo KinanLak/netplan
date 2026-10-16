@@ -6,8 +6,11 @@ import {
   deviceMetadata,
   deviceSource,
   deviceType,
+  newCable,
+  newPort,
   placedDevice,
 } from "./mapValidators";
+import { deleteDeviceCabling, insertDeviceCabling } from "./lib/ports";
 import { requireSite } from "./sites";
 import {
   IDENTITY_FIELD_NAMES,
@@ -128,8 +131,11 @@ const DEVICE_ID = /^device:[\w:.-]{1,120}$/;
 const removedDevice = {
   type: deviceType,
   identity: identityEdit,
-  /** Ports, status and the like, which no form edits. */
+  /** Status and the like, which no form edits. */
   metadata: v.optional(deviceMetadata),
+  /** Absent for a new device, which gets its type's ports. */
+  ports: v.optional(v.array(newPort)),
+  cables: v.optional(v.array(newCable)),
 };
 
 /**
@@ -139,7 +145,10 @@ const removedDevice = {
 export const create = editorMutation({
   args: { siteId: v.string(), deviceId: v.string(), ...removedDevice },
   returns: v.null(),
-  handler: async (ctx, { siteId, deviceId, type, identity, metadata }) => {
+  handler: async (
+    ctx,
+    { siteId, deviceId, type, identity, metadata, ports, cables },
+  ) => {
     await requireSite(ctx, siteId);
     if (!DEVICE_ID.test(deviceId)) throw new ConvexError("Invalid device id");
     if (await getDevice(ctx, deviceId)) {
@@ -168,13 +177,19 @@ export const create = editorMutation({
       updatedAt: Date.now(),
       updatedBy: ctx.user.id,
     });
+    await insertDeviceCabling(
+      ctx,
+      { siteId, objectId: deviceId, type },
+      { ports, cables },
+      ctx.user.id,
+    );
     return null;
   },
 });
 
 /**
  * Deletes a manual device that is on no floor. A placed one is deleted from
- * the map, where undo restores its links; a sourced one only leaves the map.
+ * the map, where undo restores its cables; a sourced one only leaves the map.
  * Returns what `create` needs to undo it, or `null` if it was already gone.
  */
 export const remove = editorMutation({
@@ -198,8 +213,10 @@ export const remove = editorMutation({
       .withIndex("by_device", (q) => q.eq("deviceId", deviceId))
       .collect();
     for (const row of macs) await ctx.db.delete(row._id);
+    const cabling = await deleteDeviceCabling(ctx, deviceId);
     await ctx.db.delete(device._id);
     return {
+      ...cabling,
       type: device.type,
       identity: {
         name: device.name,

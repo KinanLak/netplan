@@ -65,7 +65,7 @@ describe("device kind registry", () => {
     expect(node.position).toBe(device.position);
     expect(node.selected).toBe(true);
     expect(node.draggable).toBe(true);
-    expect(node.data).toBe(device);
+    expect(node.data).toEqual({ ...device, ports: [] });
   });
 
   it("exposes lookup helpers derived from the registry", () => {

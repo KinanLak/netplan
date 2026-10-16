@@ -1,4 +1,5 @@
 import type { MapDocumentSnapshot } from "@/types/map";
+import { cableTouches } from "@/devices/ports";
 import { applyOperation } from "./applyOperation";
 import type { BatchSubOperation, MapOperation } from "./types";
 
@@ -32,37 +33,6 @@ const invertDevicePatch = (
     meta: operation.meta,
     deviceId: operation.deviceId,
     patch,
-  };
-};
-
-/** Brings a removed device back, then the links it lost with it. */
-const restoreDevice = (
-  snapshot: MapDocumentSnapshot,
-  operation: Extract<
-    MapOperation,
-    { kind: "device.delete" } | { kind: "device.unplace" }
-  >,
-  restore: Extract<
-    BatchSubOperation,
-    { kind: "device.create" } | { kind: "device.place" }
-  >,
-): MapOperation => {
-  const links = snapshot.links.filter(
-    (link) =>
-      link.fromDeviceId === operation.deviceId ||
-      link.toDeviceId === operation.deviceId,
-  );
-  if (links.length === 0) return withMeta(restore, operation.meta);
-  return {
-    kind: "batch",
-    meta: operation.meta,
-    operations: [
-      restore,
-      ...links.map((link): BatchSubOperation => ({
-        kind: "link.create",
-        link,
-      })),
-    ],
   };
 };
 
@@ -109,10 +79,18 @@ export function buildInverseOperation(
       );
       // A sourced device is never deleted, so there is nothing to restore.
       if (!device || device.source) return null;
-      return restoreDevice(snapshotBeforeOperation, operation, {
+      return {
         kind: "device.create",
+        meta: operation.meta,
         device,
-      });
+        ports: snapshotBeforeOperation.ports
+          .filter((port) => port.deviceId === device.id)
+          .map(({ source: _, ...port }) => port),
+        // A source's cable comes back with its next sync, not as a manual one.
+        cables: snapshotBeforeOperation.cables.filter(
+          (cable) => cableTouches(cable, device.id) && !cable.source,
+        ),
+      };
     }
 
     case "device.place":
@@ -126,25 +104,10 @@ export function buildInverseOperation(
       const device = snapshotBeforeOperation.devices.find(
         (item) => item.id === operation.deviceId,
       );
-      if (!device) return null;
-      return restoreDevice(snapshotBeforeOperation, operation, {
-        kind: "device.place",
-        device,
-      });
-    }
-
-    case "link.create":
-      return {
-        kind: "link.delete",
-        meta: operation.meta,
-        linkId: operation.link.id,
-      };
-
-    case "link.delete": {
-      const link = snapshotBeforeOperation.links.find(
-        (item) => item.id === operation.linkId,
-      );
-      return link ? { kind: "link.create", meta: operation.meta, link } : null;
+      // Its ports and cables stayed with it in the inventory.
+      return device
+        ? { kind: "device.place", meta: operation.meta, device }
+        : null;
     }
 
     case "walls.add":

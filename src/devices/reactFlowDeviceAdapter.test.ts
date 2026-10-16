@@ -23,7 +23,7 @@ const createDevice = (overrides: Partial<Device> = {}): Device => ({
 });
 
 describe("react flow device adapter", () => {
-  it("exposes the Device directly as the React Flow node data", () => {
+  it("exposes the Device and its ports as the React Flow node data", () => {
     const device = createDevice();
     const node = toDeviceNode({
       device,
@@ -31,7 +31,7 @@ describe("react flow device adapter", () => {
       canEditDevices: true,
     });
 
-    expect(node.data).toBe(device);
+    expect(node.data).toEqual({ ...device, ports: [] });
   });
 
   it("forwards canEditDevices to draggable so view mode locks nodes", () => {

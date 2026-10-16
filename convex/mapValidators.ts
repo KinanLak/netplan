@@ -25,17 +25,16 @@ export const wallColor = v.union(
 export const position = v.object({ x: v.number(), y: v.number() });
 export const size = v.object({ width: v.number(), height: v.number() });
 
-export const portInfo = v.object({
-  id: v.string(),
-  number: v.number(),
-  status: deviceStatus,
-});
-
 export const deviceMetadata = v.object({
   status: v.optional(deviceStatus),
-  ports: v.optional(v.array(portInfo)),
   lastUser: v.optional(v.string()),
 });
+
+export const portKind = v.union(
+  v.literal("interface"),
+  v.literal("front"),
+  v.literal("rear"),
+);
 
 /** `DeviceSource` from `src/types/map.ts`. */
 export const deviceSource = v.object({
@@ -43,6 +42,38 @@ export const deviceSource = v.object({
   externalId: v.string(),
   url: v.optional(v.string()),
   syncedAt: v.number(),
+});
+
+/** `SourceRef`: the object of an integration a port or cable comes from. */
+export const sourceRef = v.object({
+  integration: integrationKind,
+  externalId: v.string(),
+});
+
+/** `Port` from `src/types/map.ts`, as a person may create it. */
+export const newPort = v.object({
+  id: v.string(),
+  deviceId: v.string(),
+  name: v.string(),
+  kind: portKind,
+  order: v.number(),
+  rearPortId: v.optional(v.string()),
+  status: v.optional(deviceStatus),
+});
+
+export const port = v.object({
+  ...newPort.fields,
+  source: v.optional(sourceRef),
+});
+
+export const cableEnd = v.object({ deviceId: v.string(), portId: v.string() });
+
+/** `Cable` from `src/types/map.ts`, as a person may create it. */
+export const newCable = v.object({ id: v.string(), a: cableEnd, b: cableEnd });
+
+export const cable = v.object({
+  ...newCable.fields,
+  source: v.optional(sourceRef),
 });
 
 /** A device's identity in the site inventory (ADR 0022). */
@@ -100,16 +131,6 @@ export const wallSegment = v.object({
   geometryKey: v.string(),
 });
 
-export const link = v.object({
-  id: v.string(),
-  floorId: v.string(),
-  fromDeviceId: v.string(),
-  fromPort: v.optional(v.string()),
-  toDeviceId: v.string(),
-  toPort: v.optional(v.string()),
-  label: v.optional(v.string()),
-});
-
 export const floorOverlay = v.object({
   floorId: v.string(),
   fileId: v.string(),
@@ -131,7 +152,13 @@ export const overlayPatch = v.object({
 });
 
 export const mapOperation = v.union(
-  v.object({ kind: v.literal("device.create"), meta: operationMeta, device }),
+  v.object({
+    kind: v.literal("device.create"),
+    meta: operationMeta,
+    device,
+    ports: v.optional(v.array(newPort)),
+    cables: v.optional(v.array(newCable)),
+  }),
   v.object({
     kind: v.literal("device.patch"),
     meta: operationMeta,
@@ -152,12 +179,6 @@ export const mapOperation = v.union(
     kind: v.literal("device.unplace"),
     meta: operationMeta,
     deviceId: v.string(),
-  }),
-  v.object({ kind: v.literal("link.create"), meta: operationMeta, link }),
-  v.object({
-    kind: v.literal("link.delete"),
-    meta: operationMeta,
-    linkId: v.string(),
   }),
   v.object({
     kind: v.literal("walls.add"),
@@ -189,6 +210,8 @@ export const mapOperation = v.union(
         v.object({
           kind: v.literal("device.create"),
           device,
+          ports: v.optional(v.array(newPort)),
+          cables: v.optional(v.array(newCable)),
         }),
         v.object({
           kind: v.literal("device.patch"),
@@ -206,11 +229,6 @@ export const mapOperation = v.union(
         v.object({
           kind: v.literal("device.unplace"),
           deviceId: v.string(),
-        }),
-        v.object({ kind: v.literal("link.create"), link }),
-        v.object({
-          kind: v.literal("link.delete"),
-          linkId: v.string(),
         }),
         v.object({
           kind: v.literal("walls.add"),

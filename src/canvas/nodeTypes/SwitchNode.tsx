@@ -6,23 +6,17 @@ import type { Node, NodeProps } from "@xyflow/react";
 import type { DeviceStatus } from "@/types/map";
 import type { DeviceNodeData } from "@/devices/reactFlowDeviceAdapter";
 import { StatusDot } from "@/components/StatusDot";
+import { DEVICE_STATUS_LABELS } from "@/devices/status";
 import { cn } from "@/lib/utils";
 
 type SwitchNodeType = Node<DeviceNodeData>;
 
 function SwitchNode({ data: device, id }: NodeProps<SwitchNodeType>) {
-  const ports = device.metadata.ports ?? [];
   const status: DeviceStatus = device.metadata.status ?? "unknown";
-
-  // Generate 24 ports
-  const displayPorts =
-    ports.length > 0
-      ? ports
-      : Array.from({ length: 24 }, (_, i) => ({
-          id: `port-${i + 1}`,
-          number: i + 1,
-          status: "unknown",
-        }));
+  // Two rows of twelve fit the node; the drawer lists them all.
+  const shownPorts = device.ports
+    .filter((port) => port.kind === "interface")
+    .slice(0, 24);
 
   return (
     <NetworkNode
@@ -49,16 +43,16 @@ function SwitchNode({ data: device, id }: NodeProps<SwitchNodeType>) {
           gridTemplateRows: "repeat(2, minmax(0, 1fr))",
         }}
       >
-        {displayPorts.slice(0, 24).map((port) => (
+        {shownPorts.map((port) => (
           <div
             key={port.id}
             className={cn(
               "h-3 w-3 cursor-pointer rounded-xs shadow-sm transition-transform hover:scale-125",
               port.status === "up" && "bg-up",
               port.status === "down" && "bg-down",
-              port.status === "unknown" && "bg-unknown",
+              (port.status ?? "unknown") === "unknown" && "bg-unknown",
             )}
-            title={`Port ${port.number}: ${port.status}`}
+            title={`${port.name} : ${DEVICE_STATUS_LABELS[port.status ?? "unknown"]}`}
           />
         ))}
       </div>
