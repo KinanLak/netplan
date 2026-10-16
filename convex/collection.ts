@@ -368,10 +368,6 @@ export const freshness = readerQuery({
     if (!site) return null;
     const cycle = await cycleOf(ctx, siteId);
     const last = cycle?.last;
-    // A row from before `lastSuccessAt` existed still knows its last cycle.
-    const lastSuccessAt =
-      cycle?.lastSuccessAt ??
-      (last?.steps.every((step) => step.ok) ? last.startedAt : null);
     return {
       paused: collectionPaused(),
       hasSources: (await enabledSources(ctx, siteId)).length > 0,
@@ -392,7 +388,7 @@ export const freshness = readerQuery({
               .map((step) => step.source),
           }
         : null,
-      lastSuccessAt,
+      lastSuccessAt: cycle?.lastSuccessAt ?? null,
       nextRunAt: cycle ? cycle.nextRunAt : null,
       failures: cycle?.failures ?? 0,
     };
