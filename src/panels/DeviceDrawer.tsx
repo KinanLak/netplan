@@ -32,6 +32,7 @@ import { DrawerConnectionsSection } from "@/panels/drawer/DrawerConnectionsSecti
 import type { ConnectedDeviceSummary } from "@/panels/drawer/DrawerConnectionsSection";
 import { DrawerPortsSection } from "@/panels/drawer/DrawerPortsSection";
 import { DeviceIdentityDialog } from "@/panels/drawer/DeviceIdentityDialog";
+import { PortTableDialog } from "@/panels/drawer/PortTableDialog";
 import { useShortcutIntentEffect } from "@/hooks/use-shortcuts";
 import { INTEGRATION_LABELS } from "@/sites/integrations";
 import { DEVICE_STATUS_LABELS } from "@/devices/status";
@@ -57,6 +58,10 @@ export default function DeviceDrawer() {
   );
   useShortcutIntentEffect("edit-device-identity", () =>
     setIdentityDeviceId(selectedDeviceId),
+  );
+  const [cablesDeviceId, setCablesDeviceId] = useState<DeviceId | null>(null);
+  useShortcutIntentEffect("show-port-cables", () =>
+    setCablesDeviceId(selectedDeviceId),
   );
 
   const deviceById = new Map(devices.map((item) => [item.id, item]));
@@ -299,7 +304,10 @@ export default function DeviceDrawer() {
             onSelectConnected={handleSelectConnected}
           />
 
-          <DrawerPortsSection ports={devicePorts} />
+          <DrawerPortsSection
+            ports={devicePorts}
+            onShowCables={() => setCablesDeviceId(device.id)}
+          />
 
           <section>
             <h3 className="mb-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
@@ -379,6 +387,12 @@ export default function DeviceDrawer() {
         device={device}
         open={isEditMode && identityDeviceId === device.id}
         onOpenChange={(open) => setIdentityDeviceId(open ? device.id : null)}
+      />
+      <PortTableDialog
+        device={device}
+        editable={isEditMode}
+        open={cablesDeviceId === device.id}
+        onOpenChange={(open) => setCablesDeviceId(open ? device.id : null)}
       />
     </aside>
   );

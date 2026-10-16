@@ -93,6 +93,8 @@ export const defaultPorts = (
 const ID_BODY = /^[\w:./-]{1,200}$/;
 const CABLE_ID = /^cable:[\w:./-]{1,200}$/;
 
+export const isCableId = (id: string): boolean => CABLE_ID.test(id);
+
 /**
  * Port ids start with their device's, so a new device's ports cannot take
  * the id of another's.
@@ -149,8 +151,10 @@ export const portListError = (
 const KIND_RANK: Record<PortKind, number> = { interface: 0, front: 1, rear: 2 };
 
 /** Interfaces, then front ports, then rear ports, each in their order. */
-export const comparePorts = (a: Port, b: Port): number =>
-  KIND_RANK[a.kind] - KIND_RANK[b.kind] || a.order - b.order;
+export const comparePorts = (
+  a: Pick<Port, "kind" | "order">,
+  b: Pick<Port, "kind" | "order">,
+): number => KIND_RANK[a.kind] - KIND_RANK[b.kind] || a.order - b.order;
 
 /** Each device's ports, in display order. */
 export const portsByDevice = (
@@ -213,7 +217,7 @@ export const cablesToLay = <C extends CableShape>(
   const taken = new Set<string>();
   const laidIds = new Set<string>();
   for (const cable of cables) {
-    if (!CABLE_ID.test(cable.id)) return { error: "Invalid cable id" };
+    if (!isCableId(cable.id)) return { error: "Invalid cable id" };
     const ends = [cable.a, cable.b];
     if (cable.a.portId === cable.b.portId) {
       return { error: "A cable joins two ports" };
@@ -238,4 +242,56 @@ export const cablesToLay = <C extends CableShape>(
     laid.push(cable);
   }
   return { cables: laid };
+};
+
+/** A port as a trace walks it. */
+export type TracePort = {
+  id: string;
+  deviceId: string;
+  kind: PortKind;
+  rearPortId?: string;
+};
+
+const MAX_TRACE_HOPS = 32;
+
+/**
+ * Where a cable from `start` leads (ADR 0022): the far port of each cable in
+ * turn, crossing a patch panel from a front port to its rear port and back,
+ * until a port has no cable, is an interface, or belongs to a wall socket.
+ * The last port is where the trace ends; none when `start` is uncabled.
+ */
+export const traceFrom = async <P extends TracePort>(
+  start: P,
+  site: {
+    /** The port at the other end of the cable plugged into `portId`. */
+    cabledTo: (portId: string) => Promise<P | undefined>;
+    portOf: (portId: string) => Promise<P | undefined>;
+    /** The front port that passes through to a rear port. */
+    frontOf: (rearPortId: string) => Promise<P | undefined>;
+    isSocket: (deviceId: string) => Promise<boolean>;
+  },
+): Promise<Array<P>> => {
+  const hops: Array<P> = [];
+  // A miscabled panel may lead back where the trace has been.
+  const seen = new Set<string>([start.id]);
+  let at = start;
+  while (hops.length < MAX_TRACE_HOPS) {
+    const far = await site.cabledTo(at.id);
+    if (!far || seen.has(far.id)) break;
+    hops.push(far);
+    seen.add(far.id);
+    if (far.kind === "interface" || (await site.isSocket(far.deviceId))) {
+      break;
+    }
+    const through =
+      far.kind === "front"
+        ? far.rearPortId === undefined
+          ? undefined
+          : await site.portOf(far.rearPortId)
+        : await site.frontOf(far.id);
+    if (!through || seen.has(through.id)) break;
+    seen.add(through.id);
+    at = through;
+  }
+  return hops;
 };

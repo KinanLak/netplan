@@ -60,6 +60,7 @@ import { createStandaloneObjectId } from "@/lib/identity";
 import { asBuildingId, asDeviceId, asFloorId } from "@/lib/objectIds";
 import { cn } from "@/lib/utils";
 import { DeviceIdentityDialog } from "@/panels/drawer/DeviceIdentityDialog";
+import { PortTableDialog } from "@/panels/drawer/PortTableDialog";
 import { matchesDeviceSearch } from "@/devices/search";
 import { INTEGRATION_LABELS } from "@/sites/integrations";
 import { SiteSwitcher } from "@/sites/SiteSwitcher";
@@ -277,6 +278,7 @@ function InventoryItem({
   const createDevice = useMutation(api.devices.create);
   const removeDevice = useMutation(api.devices.remove);
   const [editing, setEditing] = useState(false);
+  const [showingCables, setShowingCables] = useState(false);
   const { location, source } = device;
   const removable = canEdit && !location && !source;
 
@@ -354,38 +356,45 @@ function InventoryItem({
         )}
       </td>
       <td className="px-2 py-1.5">
-        {location || canEdit ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              aria-label={`Actions pour ${device.name}`}
-              className={cn(
-                buttonVariants({ variant: "ghost", size: "icon-sm" }),
-              )}
-            >
-              <HugeiconsIcon icon={MoreHorizontalIcon} strokeWidth={2} />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {location ? (
-                <DropdownMenuItem onClick={showOnMap}>
-                  Voir sur le plan
-                </DropdownMenuItem>
-              ) : null}
-              {canEdit ? (
-                <DropdownMenuItem onClick={() => setEditing(true)}>
-                  Modifier l'identité
-                </DropdownMenuItem>
-              ) : null}
-              {removable ? (
-                <DropdownMenuItem
-                  variant="destructive"
-                  onClick={() => void remove()}
-                >
-                  Supprimer
-                </DropdownMenuItem>
-              ) : null}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : null}
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            aria-label={`Actions pour ${device.name}`}
+            className={cn(
+              buttonVariants({ variant: "ghost", size: "icon-sm" }),
+            )}
+          >
+            <HugeiconsIcon icon={MoreHorizontalIcon} strokeWidth={2} />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {location ? (
+              <DropdownMenuItem onClick={showOnMap}>
+                Voir sur le plan
+              </DropdownMenuItem>
+            ) : null}
+            <DropdownMenuItem onClick={() => setShowingCables(true)}>
+              Câbles
+            </DropdownMenuItem>
+            {canEdit ? (
+              <DropdownMenuItem onClick={() => setEditing(true)}>
+                Modifier l'identité
+              </DropdownMenuItem>
+            ) : null}
+            {removable ? (
+              <DropdownMenuItem
+                variant="destructive"
+                onClick={() => void remove()}
+              >
+                Supprimer
+              </DropdownMenuItem>
+            ) : null}
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <PortTableDialog
+          device={device}
+          editable={canEdit}
+          open={showingCables}
+          onOpenChange={setShowingCables}
+        />
         {canEdit ? (
           <DeviceIdentityDialog
             device={{ ...device, id: asDeviceId(device.id) }}

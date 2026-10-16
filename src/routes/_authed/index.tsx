@@ -23,6 +23,7 @@ import {
 import type { Floor } from "@/types/map";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { ThemeProvider, useTheme } from "@/components/theme-provider";
+import { Toaster } from "@/components/ui/sonner";
 import {
   ShortcutIntentProvider,
   useShortcutIntentEffect,
@@ -50,6 +51,7 @@ function HomePage() {
       <ShortcutIntentProvider>
         <HomePageContent />
       </ShortcutIntentProvider>
+      <Toaster />
     </ThemeProvider>
   );
 }

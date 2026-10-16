@@ -53,6 +53,7 @@ export type ShortcutAction =
   | "delete-device"
   | "edit-device-identity"
   | "unplace-device"
+  | "show-port-cables"
   | "highlight-connections";
 
 export type ShortcutConfig = {
@@ -304,6 +305,12 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
     label: "Retirer du plan",
     description:
       "Retirer l'appareil du plan ; il reste dans l'inventaire du site",
+    scope: "drawer",
+  },
+  "show-port-cables": {
+    keys: ["K"],
+    label: "Câbles",
+    description: "Voir les câbles de chaque port et où ils mènent",
     scope: "drawer",
   },
   "highlight-connections": {
