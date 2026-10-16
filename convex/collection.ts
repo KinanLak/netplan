@@ -9,6 +9,7 @@ import type { Doc } from "./_generated/dataModel";
 import type { ActionCtx, MutationCtx, QueryCtx } from "./_generated/server";
 import { openConnection } from "./integrations";
 import { cycleOf, isRunning } from "./lib/cycles";
+import { collectFromLibreNMS } from "./librenmsCycle";
 import { importFromNetBox } from "./netboxImport";
 import { adminQuery, editorMutation } from "./lib/functions";
 import { SOURCE_RETRY } from "./lib/httpRetry";
@@ -181,12 +182,15 @@ const collectFrom = async (
       connection.token,
       SOURCE_RETRY,
     );
-    if (!answer.ok || source !== "netbox") return { source, ...answer };
-    const imported = await importFromNetBox(ctx, siteId, cycleId, connection);
+    if (!answer.ok) return { source, ...answer };
+    const collected =
+      source === "netbox"
+        ? await importFromNetBox(ctx, siteId, cycleId, connection)
+        : await collectFromLibreNMS(ctx, siteId, cycleId, connection);
     return {
       source,
-      ok: imported.ok,
-      message: [answer.message, imported.message].filter(Boolean).join(" "),
+      ok: collected.ok,
+      message: [answer.message, collected.message].filter(Boolean).join(" "),
     };
   } catch (error) {
     // The token is never part of an error the source code builds.

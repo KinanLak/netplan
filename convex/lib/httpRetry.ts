@@ -20,7 +20,7 @@ export const SOURCE_RETRY: RetryOptions = {
   maxDelayMs: 30_000,
 };
 
-const pause = (ms: number) =>
+export const pause = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 // Statuses whose response cannot carry a body.

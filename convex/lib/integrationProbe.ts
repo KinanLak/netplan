@@ -66,7 +66,8 @@ const failureMessage = (label: string, status: number): string => {
 
 export type SourceAnswer =
   | { ok: true; body: unknown }
-  | { ok: false; message: string };
+  /** `status` is set when the tool answered, rather than timed out. */
+  | { ok: false; message: string; status?: number };
 
 /**
  * One authenticated JSON read from the tool, with retries, or the French
@@ -100,7 +101,11 @@ export async function sourceGet(
   }
   if (!response.ok) {
     await response.body?.cancel();
-    return { ok: false, message: failureMessage(label, response.status) };
+    return {
+      ok: false,
+      message: failureMessage(label, response.status),
+      status: response.status,
+    };
   }
   try {
     return { ok: true, body: await response.json() };
@@ -117,7 +122,7 @@ export async function probeIntegration(
 ): Promise<ConnectionCheck> {
   const label = INTEGRATION_LABELS[kind];
   const answer = await sourceGet(kind, baseUrl, PROBE_PATH[kind], token, retry);
-  if (!answer.ok) return answer;
+  if (!answer.ok) return { ok: false, message: answer.message };
   const version = versionOf(kind, answer.body);
   if (!version) {
     return {

@@ -14,6 +14,7 @@ import { configuredKeys, decryptSecret, encryptSecret } from "./lib/secrets";
 import type { EncryptedSecret } from "./lib/secrets";
 import { probeIntegration } from "./lib/integrationProbe";
 import type { ConnectionCheck } from "./lib/integrationProbe";
+import { releaseLibreNMS } from "./librenmsCycle";
 import { releaseNetBox } from "./netboxImport";
 import { requireSite } from "./sites";
 import {
@@ -204,6 +205,7 @@ export const remove = adminMutation({
     const row = await find(ctx, siteId, kind);
     if (row) await ctx.db.delete(row._id);
     if (kind === "netbox") await releaseNetBox(ctx, siteId);
+    if (kind === "librenms") await releaseLibreNMS(ctx, siteId);
     return null;
   },
 });
