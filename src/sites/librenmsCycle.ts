@@ -147,6 +147,48 @@ export function freshFdb(
   };
 }
 
+/**
+ * Whether LibreNMS reaches a device, from `/devices/:id`: its `status` is 1
+ * while the device answers its polls and 0 once it does not.
+ */
+export const readLibreNMSDeviceStatus = (
+  body: unknown,
+): "up" | "down" | null => {
+  const value = fieldsOf(listOf(body, "devices").at(0)).status;
+  if (value === 1 || value === true || value === "1") return "up";
+  if (value === 0 || value === false || value === "0") return "down";
+  return null;
+};
+
+/**
+ * How long a switch's read vouches for the statuses resting on it
+ * (ADR 0025): two of the site's longest intervals and a cycle's lease, so
+ * that one late or failed cycle changes nothing.
+ */
+export const readStaleAfterMs = (
+  cadence: { businessIntervalMinutes: number; otherIntervalMinutes: number },
+  leaseMs: number,
+) =>
+  2 *
+    Math.max(cadence.businessIntervalMinutes, cadence.otherIntervalMinutes) *
+    60_000 +
+  leaseMs;
+
+/** A switch's last successful read, and whether its statuses were removed. */
+export type SwitchRead = { switchId: string; readAt: number; expired?: true };
+
+/** The switches whose read still vouches for their statuses. */
+export const freshSwitches = (
+  reads: ReadonlyArray<SwitchRead>,
+  now: number,
+  staleAfterMs: number,
+): Set<string> =>
+  new Set(
+    reads
+      .filter((read) => !read.expired && now - read.readAt <= staleAfterMs)
+      .map((read) => read.switchId),
+  );
+
 /** When LibreNMS last finished discovering a device, from `/devices/:id`. */
 export const readLastDiscovered = (body: unknown): string | null => {
   const value = fieldsOf(listOf(body, "devices").at(0)).last_discovered;

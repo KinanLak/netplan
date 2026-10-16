@@ -1,7 +1,18 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  setSystemTime,
+} from "bun:test";
 import { randomBytes } from "node:crypto";
 import { api, internal } from "./_generated/api";
-import { createTestSite, signedInTest } from "./_test/auth.setup";
+import {
+  createSignedInUser,
+  createTestSite,
+  testBackend,
+} from "./_test/auth.setup";
 import { stubFetch } from "./_test/fetch";
 import type { TestClient } from "./_test/auth.setup";
 
@@ -30,6 +41,8 @@ function fakeLibreNMS() {
     discoverStatus: 200,
     lastDiscovered: "2026-10-16 06:00:00",
     discoveries: 0,
+    /** LibreNMS's `status`: 1 while the device answers its polls. */
+    deviceStatus: 1,
   };
   const handler = (url: string) => {
     const path = new URL(url).pathname;
@@ -42,7 +55,13 @@ function fakeLibreNMS() {
     if (path === `/api/v0/devices/${STACK}`) {
       return Response.json({
         status: "ok",
-        devices: [{ device_id: STACK, last_discovered: state.lastDiscovered }],
+        devices: [
+          {
+            device_id: STACK,
+            last_discovered: state.lastDiscovered,
+            status: state.deviceStatus,
+          },
+        ],
       });
     }
     if (path === `/api/v0/devices/${STACK}/discover`) {
@@ -91,6 +110,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  setSystemTime();
   fetchStub.restore();
   delete process.env.NETPLAN_SECRET_KEY;
 });
@@ -108,7 +128,11 @@ const port = (deviceId: string, n: number, name: string) => ({
  * its third cabled to the core; a pc and a printer; LibreNMS mapped.
  */
 async function siteWithLibreNMS() {
-  const admin = await signedInTest("admin");
+  const t = testBackend();
+  // A session lasts a minute: a test that moves the clock signs in again.
+  const signIn = async () =>
+    t.withIdentity((await createSignedInUser(t, "admin")).identity);
+  const admin = await signIn();
   const siteId = await createTestSite(admin);
   const create = async (
     deviceId: string,
@@ -171,7 +195,7 @@ async function siteWithLibreNMS() {
       ],
     },
   });
-  return { admin, siteId };
+  return { admin, siteId, signIn };
 }
 
 const cycle = async (admin: TestClient, siteId: string) => {
@@ -182,6 +206,12 @@ const cycle = async (admin: TestClient, siteId: string) => {
   ).last?.steps.find((one) => one.source === "librenms");
   if (!step) throw new Error("expected a LibreNMS step");
   return step;
+};
+
+/** The minute cron, and the cycle it starts when one is due. */
+const tick = async (admin: TestClient) => {
+  await admin.mutation(internal.collection.startDue, {});
+  await admin.finishAllScheduledFunctions(() => {});
 };
 
 const statusOf = async (admin: TestClient, deviceId: string) =>
@@ -289,12 +319,27 @@ describe("the LibreNMS step", () => {
     expect(await sightings(admin)).toEqual([]);
   });
 
-  it("reads nothing and takes everyone offline once no switch is polled", async () => {
+  it("gives a switch the status LibreNMS has for it", async () => {
     const { admin, siteId } = await siteWithLibreNMS();
+    expect(await statusOf(admin, "device:sw")).toBeNull();
+    await cycle(admin, siteId);
+    expect(await statusOf(admin, "device:sw")).toBe("up");
+    librenms.state.deviceStatus = 0;
+    await cycle(admin, siteId);
+    expect(await statusOf(admin, "device:sw")).toBe("down");
+    // The core is not polled, so nothing says how it is.
+    expect(await statusOf(admin, "device:core")).toBeNull();
+  });
+
+  it("forgets the statuses a switch read long ago set, until it is read again", async () => {
+    setSystemTime(new Date("2026-10-16T08:00:00Z"));
+    const { admin, siteId, signIn } = await siteWithLibreNMS();
     librenms.state.fdb = [{ port_id: 101, mac_address: PC }];
     await cycle(admin, siteId);
     expect(await statusOf(admin, "device:pc")).toBe("up");
+    expect(await statusOf(admin, "device:sw")).toBe("up");
 
+    // A switch no longer polled is not read, so the pc counts no miss.
     await admin.mutation(api.librenms.saveSettings, {
       siteId,
       baseUrl: LIBRENMS,
@@ -305,13 +350,180 @@ describe("the LibreNMS step", () => {
       "Aucun switch n'est interrogé.",
     );
     await cycle(admin, siteId);
-    expect(await statusOf(admin, "device:pc")).toBe("down");
+    expect(await statusOf(admin, "device:pc")).toBe("up");
     // Only the connection checks.
     expect(
       fetchStub.calls
         .slice(calls)
         .every(([url]) => String(url).includes("/api/v0/system")),
     ).toBe(true);
+
+    // Two hours of the site's longest interval, and the lease, vouch for
+    // the read; the minute cron removes what rests on it afterwards.
+    setSystemTime(new Date("2026-10-16T10:15:00Z"));
+    await tick(admin);
+    expect(await statusOf(admin, "device:pc")).toBe("up");
+    setSystemTime(new Date("2026-10-16T10:16:00Z"));
+    await tick(admin);
+    expect(await statusOf(admin, "device:pc")).toBeNull();
+    expect(await statusOf(admin, "device:sw")).toBeNull();
+
+    // A cycle that reads no switch brings nothing back; one that reads it
+    // does.
+    const later = await signIn();
+    await cycle(later, siteId);
+    expect(await statusOf(later, "device:pc")).toBeNull();
+    await later.mutation(api.librenms.saveSettings, {
+      siteId,
+      baseUrl: LIBRENMS,
+      settings: {
+        switches: [
+          { switchId: "device:sw", device: { id: STACK, name: "pile" } },
+        ],
+      },
+    });
+    await cycle(later, siteId);
+    expect(await statusOf(later, "device:pc")).toBe("up");
+    expect(await statusOf(later, "device:sw")).toBe("up");
+  });
+
+  it("forgets the statuses a failing LibreNMS can no longer vouch for", async () => {
+    setSystemTime(new Date("2026-10-16T08:00:00Z"));
+    const { admin, siteId, signIn } = await siteWithLibreNMS();
+    librenms.state.fdb = [{ port_id: 101, mac_address: PC }];
+    await cycle(admin, siteId);
+    librenms.state.fdbStatus = 403;
+    setSystemTime(new Date("2026-10-16T09:00:00Z"));
+    expect((await cycle(await signIn(), siteId)).ok).toBe(false);
+    expect(await statusOf(admin, "device:pc")).toBe("up");
+    setSystemTime(new Date("2026-10-16T10:16:00Z"));
+    await tick(admin);
+    expect(await statusOf(admin, "device:pc")).toBeNull();
+    expect(await statusOf(admin, "device:sw")).toBeNull();
+  });
+
+  it("brings a device back with the status its read still vouches for", async () => {
+    setSystemTime(new Date("2026-10-16T08:00:00Z"));
+    const { admin, siteId, signIn } = await siteWithLibreNMS();
+    librenms.state.fdb = [
+      { port_id: 101, mac_address: PC },
+      { port_id: 101, mac_address: PRINTER },
+      { port_id: 101, mac_address: STRANGER },
+    ];
+    await cycle(admin, siteId);
+    const removed = async (client: TestClient, deviceId: string) => {
+      const payload = await client.mutation(api.devices.remove, { deviceId });
+      if (!payload) throw new Error(`expected ${deviceId} to be removed`);
+      return payload;
+    };
+
+    // An "Annuler" right away: the read still vouches for it.
+    const printer = await removed(admin, "device:printer");
+    expect(printer.metadata).toEqual({ status: "up" });
+    await admin.mutation(api.devices.create, {
+      siteId,
+      deviceId: "device:printer",
+      ...printer,
+    });
+    expect(await statusOf(admin, "device:printer")).toBe("up");
+
+    const pc = await removed(admin, "device:pc");
+    const late = await removed(admin, "device:printer");
+    await admin.mutation(api.librenms.saveSettings, {
+      siteId,
+      baseUrl: LIBRENMS,
+      settings: { switches: [{ switchId: "device:sw", device: null }] },
+    });
+    setSystemTime(new Date("2026-10-16T10:16:00Z"));
+    const later = await signIn();
+    await tick(later);
+
+    // The cycle no longer looks at the expired read, so nothing would
+    // remove a status brought back from before.
+    await later.mutation(api.devices.create, {
+      siteId,
+      deviceId: "device:printer",
+      ...late,
+    });
+    expect(await statusOf(later, "device:printer")).toBeNull();
+    const buildingId = await later.mutation(api.buildings.create, {
+      siteId,
+      objectId: "building:back",
+      name: "Bâtiment",
+    });
+    const floorId = await later.mutation(api.floors.create, {
+      objectId: "floor:back",
+      buildingId,
+      name: "RDC",
+    });
+    const restored = await later.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "device.create",
+        meta: {
+          opId: "op:back",
+          clientId: "client:back",
+          clientSeq: 1,
+          createdAt: Date.now(),
+        },
+        device: {
+          id: "device:pc",
+          floorId,
+          type: "pc",
+          name: "pc",
+          position: { x: 0, y: 0 },
+          size: { width: 80, height: 80 },
+          macs: pc.identity.macs,
+          metadata: pc.metadata,
+        },
+      },
+    });
+    expect(restored.status).toBe("applied");
+    expect(await statusOf(later, "device:pc")).toBeNull();
+    await later.mutation(api.unknownMacs.createDevice, {
+      siteId,
+      mac: STRANGER,
+      deviceId: "device:stranger",
+      name: "Inconnu",
+    });
+    expect(await statusOf(later, "device:stranger")).toBeNull();
+    // Nor does a status nothing saw.
+    await later.mutation(api.devices.create, {
+      siteId,
+      deviceId: "device:ghost",
+      type: "pc",
+      identity: { name: "ghost", macs: [macOf(9)] },
+      metadata: { status: "up" },
+    });
+    expect(await statusOf(later, "device:ghost")).toBeNull();
+  });
+
+  it("forgets the status of a device made from a sighted MAC, once its read expires", async () => {
+    setSystemTime(new Date("2026-10-16T08:00:00Z"));
+    const { admin, siteId, signIn } = await siteWithLibreNMS();
+    librenms.state.fdb = [{ port_id: 101, mac_address: STRANGER }];
+    await cycle(admin, siteId);
+    const site = await admin.query(api.sites.getSettings, { siteId });
+    if (!site) throw new Error("expected the site");
+    await admin.mutation(api.sites.update, {
+      siteId,
+      name: site.name,
+      timezone: site.timezone,
+      cadence: site.cadence,
+      automaticRefresh: false,
+      manualRefresh: true,
+    });
+    // Through the inventory form, so no cycle records it as the MAC's owner.
+    await admin.mutation(api.devices.create, {
+      siteId,
+      deviceId: "device:stranger",
+      type: "endpoint",
+      identity: { name: "stranger", macs: [STRANGER] },
+    });
+    expect(await statusOf(admin, "device:stranger")).toBe("up");
+    setSystemTime(new Date("2026-10-16T10:16:00Z"));
+    const later = await signIn();
+    await tick(later);
+    expect(await statusOf(later, "device:stranger")).toBeNull();
   });
 
   it("forgets the sightings with the site", async () => {
@@ -725,7 +937,7 @@ describe("the LibreNMS step", () => {
         siteId,
         cycleId,
         baseUrl: LIBRENMS,
-        failedSwitchIds: [],
+        readSwitches: [{ switchId: "device:sw", status: "up" }],
         sightings: [
           {
             mac: PC,
@@ -738,5 +950,6 @@ describe("the LibreNMS step", () => {
     ).toBeNull();
     expect(await sightings(admin)).toEqual([]);
     expect(await statusOf(admin, "device:pc")).toBeNull();
+    expect(await statusOf(admin, "device:sw")).toBeNull();
   });
 });

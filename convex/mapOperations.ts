@@ -11,6 +11,7 @@ import {
   sameOverlay,
 } from "../src/map-engine/overlay";
 import { deleteDeviceMacs } from "./lib/deviceMacs";
+import { observedMetadata } from "./lib/statuses";
 import { syncOverlayFileReleases } from "./lib/overlayFiles";
 import {
   identityEditError,
@@ -1358,8 +1359,12 @@ const bumpDocumentRevisions = async (
 const executePlan = async (ctx: MutationCtx, plan: WritePlan) => {
   for (const write of plan) {
     switch (write.kind) {
-      case "insertDevice":
-        await ctx.db.insert("devices", deviceRowFromPlanned(write.value));
+      case "insertDevice": {
+        const row = deviceRowFromPlanned(write.value);
+        await ctx.db.insert("devices", {
+          ...row,
+          metadata: await observedMetadata(ctx, row, row.metadata),
+        });
         for (const mac of write.value.macs) {
           await ctx.db.insert("deviceMacs", {
             siteId: write.value.siteId,
@@ -1368,6 +1373,7 @@ const executePlan = async (ctx: MutationCtx, plan: WritePlan) => {
           });
         }
         break;
+      }
       case "patchDevice":
         await ctx.db.patch(write.rowId, write.value);
         break;

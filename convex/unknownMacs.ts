@@ -8,7 +8,6 @@ import { editorMutation, editorQuery } from "./lib/functions";
 import { ignoredMacsOf, ignoredRowsOf } from "./lib/ignoredMacs";
 import { deviceOf, ownerOf, placeNextTo } from "./librenmsCycle";
 import { normalizeMac } from "../src/devices/mac";
-import { isOnline } from "../src/sites/librenmsCycle";
 
 const portName = async (ctx: Parameters<typeof deviceOf>[0], portId: string) =>
   (
@@ -92,8 +91,6 @@ export const createDevice = editorMutation({
         deviceId,
         type: "endpoint",
         identity: { name, macs: [mac] },
-        // The cycle that saw it would have set it.
-        metadata: { status: isOnline([row.misses]) ? "up" : "down" },
       },
       ctx.user.id,
     );

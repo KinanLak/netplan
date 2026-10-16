@@ -8,8 +8,8 @@ import { internalAction, internalMutation } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
 import type { ActionCtx, MutationCtx, QueryCtx } from "./_generated/server";
 import { openConnection } from "./integrations";
-import { cycleOf, isRunning } from "./lib/cycles";
-import { collectFromLibreNMS } from "./librenmsCycle";
+import { cycleOf, isRunning, LEASE_MS } from "./lib/cycles";
+import { collectFromLibreNMS, expireStaleReads } from "./librenmsCycle";
 import { importFromNetBox } from "./netboxImport";
 import { adminQuery, editorMutation, readerQuery } from "./lib/functions";
 import { SOURCE_RETRY } from "./lib/httpRetry";
@@ -24,9 +24,6 @@ import {
 import { nextRunAt, retryAt } from "../src/sites/cadence";
 import { INTEGRATION_KINDS } from "../src/sites/integrations";
 import type { IntegrationKind } from "../src/sites/integrations";
-
-// Longer than a cycle can take: an action stops after ten minutes.
-const LEASE_MS = 15 * 60_000;
 
 /** Ends the cycle if it still holds this lease once it runs out. */
 const scheduleExpiry = async (
@@ -101,17 +98,22 @@ const begin = async (
   return running.startedAt;
 };
 
-/** Run by the cron every minute: starts the cycle of each site that is due. */
+/**
+ * Run by the cron every minute: removes the statuses a read no longer
+ * vouches for, and starts the cycle of each site that is due.
+ */
 export const startDue = internalMutation({
   args: {},
   returns: v.number(),
   handler: async (ctx) => {
-    if (collectionPaused()) return 0;
     const now = Date.now();
     let started = 0;
     for (const site of await ctx.db.query("sites").collect()) {
-      if (!site.automaticRefresh) continue;
       const cycle = await cycleOf(ctx, site.objectId);
+      // Statuses expire even while cycles are paused or off, since nothing
+      // keeps them true then (ADR 0025).
+      if (cycle) await expireStaleReads(ctx, site, cycle, now);
+      if (collectionPaused() || !site.automaticRefresh) continue;
       if (isRunning(cycle, now) || (cycle && cycle.nextRunAt > now)) continue;
       if ((await enabledSources(ctx, site.objectId)).length === 0) continue;
       await begin(ctx, site.objectId, cycle, false, now);

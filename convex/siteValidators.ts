@@ -54,6 +54,14 @@ export const fdbTable = v.object({
   staleUpTo: v.optional(v.number()),
 });
 
+/** A switch's last successful LibreNMS read (`SwitchRead`, ADR 0025). */
+export const switchRead = v.object({
+  switchId: v.string(),
+  readAt: v.number(),
+  /** Set once the statuses resting on the read were removed. */
+  expired: v.optional(v.literal(true)),
+});
+
 export const runningCycle = v.object({
   cycleId: v.string(),
   startedAt: v.number(),

@@ -4,6 +4,12 @@ import { nextRunAt } from "../../src/sites/cadence";
 import type { Doc } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 
+/**
+ * How long a cycle may run before another may take over: longer than a cycle
+ * can take, since an action stops after ten minutes.
+ */
+export const LEASE_MS = 15 * 60_000;
+
 export const cycleOf = async (ctx: QueryCtx, siteId: string) =>
   await ctx.db
     .query("siteCycles")

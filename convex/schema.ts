@@ -22,6 +22,7 @@ import {
   netboxSettings,
   runningCycle,
   siteCadence,
+  switchRead,
 } from "./siteValidators";
 
 export default defineSchema({
@@ -73,6 +74,8 @@ export default defineSchema({
     librenmsTables: v.optional(
       v.array(v.object({ deviceId: v.number(), table: fdbTable })),
     ),
+    /** When each polled switch was last read; statuses rest on it (ADR 0025). */
+    switchReads: v.optional(v.array(switchRead)),
   }).index("by_site", ["siteId"]),
 
   buildings: defineTable({
