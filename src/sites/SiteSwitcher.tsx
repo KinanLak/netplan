@@ -8,10 +8,10 @@ import {
 } from "@/components/ui/select";
 import { useCurrentSite } from "@/sites/useCurrentSite";
 
-/** The site the map shows; a list only when there is more than one. */
+/** The site the page shows; a list only when there is more than one. */
 export function SiteSwitcher() {
   const { sites, site } = useCurrentSite();
-  const navigate = useNavigate({ from: "/" });
+  const navigate = useNavigate();
   if (!sites || !site) return null;
 
   if (sites.length === 1) {
@@ -27,7 +27,7 @@ export function SiteSwitcher() {
       items={sites.map(({ id, name }) => ({ value: id, label: name }))}
       value={site.id}
       onValueChange={(siteId) => {
-        if (siteId) void navigate({ search: { site: siteId } });
+        if (siteId) void navigate({ to: ".", search: { site: siteId } });
       }}
     >
       <SelectTrigger aria-label="Site" className="w-full">

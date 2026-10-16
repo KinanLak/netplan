@@ -1,5 +1,4 @@
 import { useMutation } from "convex/react";
-import { ConvexError } from "convex/values";
 import { useId, useState } from "react";
 import type { FormEvent } from "react";
 import type { Device } from "@/types/map";
@@ -29,7 +28,7 @@ import {
 } from "@/devices/identity";
 import type { IdentityEdit, IdentityField } from "@/devices/identity";
 import { parseMacList } from "@/devices/mac";
-import { isForbidden } from "@/lib/login";
+import { deviceMutationError } from "@/devices/mutationError";
 import { INTEGRATION_LABELS } from "@/sites/integrations";
 import { api } from "../../../convex/_generated/api";
 
@@ -44,20 +43,26 @@ const TEXT_FIELDS: Array<{ field: TextField; label: string; mono?: boolean }> =
     { field: "serial", label: "N° de série", mono: true },
   ];
 
-function errorMessage(error: unknown): string {
-  if (isForbidden(error)) return "Action réservée aux éditeurs.";
-  if (error instanceof ConvexError && typeof error.data === "string") {
-    return error.data;
-  }
-  return "La modification a échoué. Réessayez.";
-}
+/** What the dialog reads and edits: the identity, wherever the device stands. */
+export type IdentityDevice = Pick<
+  Device,
+  | "id"
+  | "name"
+  | "hostname"
+  | "serial"
+  | "macs"
+  | "model"
+  | "ip"
+  | "notes"
+  | "source"
+>;
 
 export function DeviceIdentityDialog({
   device,
   open,
   onOpenChange,
 }: {
-  device: Device;
+  device: IdentityDevice;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -85,7 +90,7 @@ function IdentityForm({
   device,
   onDone,
 }: {
-  device: Device;
+  device: IdentityDevice;
   onDone: () => void;
 }) {
   const updateIdentity = useMutation(api.devices.updateIdentity);
@@ -150,7 +155,7 @@ function IdentityForm({
       await updateIdentity({ deviceId: device.id, edit: normalized });
       onDone();
     } catch (caught) {
-      setError(errorMessage(caught));
+      setError(deviceMutationError(caught));
     } finally {
       setSaving(false);
     }

@@ -1,6 +1,9 @@
+import type { ReactNode } from "react";
 import { AuthBoundary } from "@convex-dev/better-auth/react";
 import { Outlet, createFileRoute, redirect } from "@tanstack/react-router";
 import { CurrentUserProvider } from "@/hooks/use-current-user";
+import { MapDocumentProvider } from "@/map-session/MapDocumentProvider";
+import { useCurrentFloorId } from "@/store/selectors";
 import { providerAuthClient } from "@/lib/auth-client";
 import { isSessionLost } from "@/lib/login";
 import { api } from "../../convex/_generated/api";
@@ -34,8 +37,20 @@ function AuthedLayout() {
       onUnauth={backToLogin}
     >
       <CurrentUserProvider>
-        <Outlet />
+        <MapSession>
+          <Outlet />
+        </MapSession>
       </CurrentUserProvider>
     </AuthBoundary>
+  );
+}
+
+// The map session outlives the map page: it holds the outbox of unsent edits
+// and each floor's undo history, which a trip to the inventory or the admin,
+// or another site or building loading, must not drop.
+function MapSession({ children }: { children: ReactNode }) {
+  const floorId = useCurrentFloorId();
+  return (
+    <MapDocumentProvider floorId={floorId}>{children}</MapDocumentProvider>
   );
 }

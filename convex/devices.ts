@@ -1,7 +1,14 @@
 import { ConvexError, v } from "convex/values";
 import { editorMutation, readerQuery } from "./lib/functions";
 import { placedDevicesOf } from "./mapDocument";
-import { placedDevice } from "./mapValidators";
+import {
+  deviceIdentityFields,
+  deviceMetadata,
+  deviceSource,
+  deviceType,
+  placedDevice,
+} from "./mapValidators";
+import { requireSite } from "./sites";
 import {
   IDENTITY_FIELD_NAMES,
   identityEditError,
@@ -11,7 +18,7 @@ import {
 import type { IdentityEdit } from "../src/devices/identity";
 import { INTEGRATION_LABELS } from "../src/sites/integrations";
 import type { Doc } from "./_generated/dataModel";
-import type { MutationCtx } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 
 export const listForFloor = readerQuery({
   args: { floorId: v.string() },
@@ -32,6 +39,180 @@ export const identityEdit = v.object({
   notes: optionalText,
 });
 
+const inventoryDevice = v.object({
+  id: v.string(),
+  ...deviceIdentityFields,
+  source: v.optional(deviceSource),
+  /** Where it stands, or `null` for a device on no floor. */
+  location: v.union(
+    v.null(),
+    v.object({
+      buildingId: v.string(),
+      buildingName: v.string(),
+      floorId: v.string(),
+      floorName: v.string(),
+    }),
+  ),
+});
+
+/** Every device of a site, placed or not, as the inventory lists them. */
+export const listForSite = readerQuery({
+  args: { siteId: v.string() },
+  returns: v.array(inventoryDevice),
+  handler: async (ctx, { siteId }) => {
+    const [rows, floorNames] = await Promise.all([
+      ctx.db
+        .query("devices")
+        .withIndex("by_site", (q) => q.eq("siteId", siteId))
+        .collect(),
+      siteFloorNames(ctx, siteId),
+    ]);
+    return rows.map((row) => {
+      const floor = row.placement && floorNames.get(row.placement.floorId);
+      return {
+        id: row.objectId,
+        type: row.type,
+        name: row.name,
+        hostname: row.hostname,
+        serial: row.serial,
+        macs: row.macs,
+        model: row.model,
+        ip: row.ip,
+        notes: row.notes,
+        source: row.source,
+        location:
+          row.placement && floor
+            ? { floorId: row.placement.floorId, ...floor }
+            : null,
+      };
+    });
+  },
+});
+
+async function siteFloorNames(ctx: QueryCtx, siteId: string) {
+  const buildings = await ctx.db
+    .query("buildings")
+    .withIndex("by_site", (q) => q.eq("siteId", siteId))
+    .collect();
+  const names = new Map<
+    string,
+    { buildingId: string; buildingName: string; floorName: string }
+  >();
+  for (const building of buildings) {
+    const floors = await ctx.db
+      .query("floors")
+      .withIndex("by_building", (q) => q.eq("buildingId", building.objectId))
+      .collect();
+    for (const floor of floors) {
+      names.set(floor.objectId, {
+        buildingId: building.objectId,
+        buildingName: building.name,
+        floorName: floor.name,
+      });
+    }
+  }
+  return names;
+}
+
+const getDevice = async (ctx: QueryCtx, deviceId: string) =>
+  await ctx.db
+    .query("devices")
+    .withIndex("by_object_id", (q) => q.eq("objectId", deviceId))
+    .unique();
+
+const DEVICE_ID = /^device:[\w:.-]{1,120}$/;
+
+/** What `remove` hands back, so `create` can bring the device back whole. */
+const removedDevice = {
+  type: deviceType,
+  identity: identityEdit,
+  /** Ports, status and the like, which no form edits. */
+  metadata: v.optional(deviceMetadata),
+};
+
+/**
+ * Adds a manual device to a site's inventory, on no floor. The client names
+ * it, so a retry or the "Annuler" of a deletion brings back the same device.
+ */
+export const create = editorMutation({
+  args: { siteId: v.string(), deviceId: v.string(), ...removedDevice },
+  returns: v.null(),
+  handler: async (ctx, { siteId, deviceId, type, identity, metadata }) => {
+    await requireSite(ctx, siteId);
+    if (!DEVICE_ID.test(deviceId)) throw new ConvexError("Invalid device id");
+    if (await getDevice(ctx, deviceId)) {
+      throw new ConvexError("Cet identifiant d'équipement est déjà pris.");
+    }
+
+    const edit = normalizeIdentityEdit(identity);
+    if (!edit.name) throw new ConvexError("Le nom est obligatoire.");
+    const error = identityEditError(edit);
+    if (error) throw new ConvexError(error);
+
+    const macs = edit.macs ?? [];
+    await replaceDeviceMacs(ctx, { siteId, objectId: deviceId }, macs);
+    await ctx.db.insert("devices", {
+      objectId: deviceId,
+      siteId,
+      type,
+      name: edit.name,
+      hostname: edit.hostname ?? undefined,
+      serial: edit.serial ?? undefined,
+      macs,
+      model: edit.model ?? undefined,
+      ip: edit.ip ?? undefined,
+      notes: edit.notes ?? undefined,
+      metadata: metadata ?? {},
+      updatedAt: Date.now(),
+      updatedBy: ctx.user.id,
+    });
+    return null;
+  },
+});
+
+/**
+ * Deletes a manual device that is on no floor. A placed one is deleted from
+ * the map, where undo restores its links; a sourced one only leaves the map.
+ * Returns what `create` needs to undo it, or `null` if it was already gone.
+ */
+export const remove = editorMutation({
+  args: { deviceId: v.string() },
+  returns: v.union(v.null(), v.object(removedDevice)),
+  handler: async (ctx, { deviceId }) => {
+    const device = await getDevice(ctx, deviceId);
+    if (!device) return null;
+    if (device.source) {
+      throw new ConvexError(
+        `Cet équipement vient de ${INTEGRATION_LABELS[device.source.integration]} : il ne se supprime pas dans Netplan.`,
+      );
+    }
+    if (device.placement) {
+      throw new ConvexError(
+        "Cet équipement est sur le plan : supprimez-le depuis le plan.",
+      );
+    }
+    const macs = await ctx.db
+      .query("deviceMacs")
+      .withIndex("by_device", (q) => q.eq("deviceId", deviceId))
+      .collect();
+    for (const row of macs) await ctx.db.delete(row._id);
+    await ctx.db.delete(device._id);
+    return {
+      type: device.type,
+      identity: {
+        name: device.name,
+        hostname: device.hostname ?? null,
+        serial: device.serial ?? null,
+        macs: device.macs,
+        model: device.model ?? null,
+        ip: device.ip ?? null,
+        notes: device.notes ?? null,
+      },
+      metadata: device.metadata,
+    };
+  },
+});
+
 type EditedField = keyof IdentityEdit;
 type IdentityPatch = Partial<Pick<Doc<"devices">, EditedField>>;
 
@@ -44,10 +225,7 @@ export const updateIdentity = editorMutation({
   args: { deviceId: v.string(), edit: identityEdit },
   returns: v.null(),
   handler: async (ctx, { deviceId, edit: rawEdit }) => {
-    const device = await ctx.db
-      .query("devices")
-      .withIndex("by_object_id", (q) => q.eq("objectId", deviceId))
-      .unique();
+    const device = await getDevice(ctx, deviceId);
     if (!device) throw new ConvexError("Cet équipement n'existe plus.");
 
     const edit = normalizeIdentityEdit(rawEdit);
@@ -82,7 +260,7 @@ export const updateIdentity = editorMutation({
 /** Claims the device's new MAC addresses and frees the ones it dropped. */
 async function replaceDeviceMacs(
   ctx: MutationCtx,
-  device: Doc<"devices">,
+  device: Pick<Doc<"devices">, "siteId" | "objectId">,
   macs: Array<string>,
 ) {
   for (const mac of macs) {
