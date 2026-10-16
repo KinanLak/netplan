@@ -21,6 +21,7 @@ const withoutMultiSelect = (state: MapInteractionState) => ({
 
 const withoutEditTools = (state: MapInteractionState) => ({
   ...withoutMultiSelect(state),
+  cableDraft: null,
   activeDrawTool: "device" as const,
   isOverlayPanelOpen: false,
 });
@@ -35,6 +36,7 @@ export const useMapStore = create<MapStore>()((set) => ({
   isEditMode: true,
   isMultiSelectMode: false,
   shownCablesDeviceId: null,
+  cableDraft: null,
   activeDrawTool: "device",
   selectedWallColor: "concrete",
   wallEraserSize: WALL_ERASER_DEFAULT_SIZE,
@@ -52,6 +54,7 @@ export const useMapStore = create<MapStore>()((set) => ({
       selectedDeviceIdSet: new Set(),
       hoveredDeviceId: null,
       shownCablesDeviceId: null,
+      cableDraft: null,
       overlayDraft: null,
       overlayCalibration: null,
     });
@@ -64,6 +67,7 @@ export const useMapStore = create<MapStore>()((set) => ({
       selectedDeviceIdSet: new Set(),
       hoveredDeviceId: null,
       shownCablesDeviceId: null,
+      cableDraft: null,
       overlayDraft: null,
       overlayCalibration: null,
     });
@@ -171,5 +175,8 @@ export const useMapStore = create<MapStore>()((set) => ({
         ? state
         : { shownCablesDeviceId: deviceId },
     );
+  },
+  setCableDraft: (draft) => {
+    set({ cableDraft: draft });
   },
 }));

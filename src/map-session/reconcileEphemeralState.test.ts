@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import type { Device, DeviceId, FloorId } from "@/types/map";
+import type { Device, DeviceId, FloorId, PortId } from "@/types/map";
 import { reconcileEphemeralState } from "./reconcileEphemeralState";
 
 const floorId = "floor:a" as FloorId;
@@ -31,6 +31,10 @@ describe("reconcileEphemeralState", () => {
         selectedDeviceIds: ["device:a", "device:missing"] as Array<DeviceId>,
         hoveredDeviceId: "device:hover" as DeviceId,
         shownCablesDeviceId: "device:missing" as DeviceId,
+        cableDraft: {
+          deviceId: "device:missing" as DeviceId,
+          portId: "port:missing" as PortId,
+        },
       },
     );
 
@@ -38,6 +42,7 @@ describe("reconcileEphemeralState", () => {
     expect(patch?.selectedDeviceIds).toEqual(["device:a"]);
     expect(patch?.hoveredDeviceId).toBe(null);
     expect(patch?.shownCablesDeviceId).toBe(null);
+    expect(patch?.cableDraft).toBe(null);
   });
 
   it("returns null when ephemeral ids are still valid", () => {
@@ -57,6 +62,7 @@ describe("reconcileEphemeralState", () => {
           selectedDeviceIds: ["device:a"] as Array<DeviceId>,
           hoveredDeviceId: null,
           shownCablesDeviceId: "device:a" as DeviceId,
+          cableDraft: null,
         },
       ),
     ).toBe(null);

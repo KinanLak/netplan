@@ -5,14 +5,18 @@ import { memo } from "react";
 import NetworkNode from "./NetworkNode";
 import { areDeviceNodePropsEqual } from "./memo";
 import type { Node, NodeProps } from "@xyflow/react";
-import type { DeviceStatus } from "@/types/map";
+import type { DeviceId, DeviceStatus } from "@/types/map";
 import type { DeviceNodeData } from "@/devices/reactFlowDeviceAdapter";
 import { cn } from "@/lib/utils";
+import { PORT_ID_ATTRIBUTE, useCableGrip } from "@/canvas/hooks/useCableGrip";
 
 type WallPortNodeType = Node<DeviceNodeData>;
 
 function WallPortNode({ data: device, id }: NodeProps<WallPortNodeType>) {
   const status: DeviceStatus = device.metadata.status ?? "unknown";
+  const grip = useCableGrip(id as DeviceId);
+  // A socket has one front port: its icon is where a cable is drawn from.
+  const socket = device.ports.at(0);
 
   return (
     <NetworkNode
@@ -24,8 +28,13 @@ function WallPortNode({ data: device, id }: NodeProps<WallPortNodeType>) {
     >
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <div
+          {...(socket ? { [PORT_ID_ATTRIBUTE]: socket.id } : {})}
+          onPointerDown={grip.onPointerDown}
           className={cn(
-            "mb-1",
+            "mb-1 rounded-xs",
+            grip.isGrip &&
+              socket &&
+              "nodrag cursor-crosshair hover:ring-2 hover:ring-primary",
             status === "up" && "text-up",
             status === "down" && "text-down",
             status === "unknown" && "text-unknown",

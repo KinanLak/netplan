@@ -221,7 +221,16 @@ function MapWorkspace({
 
   useShortcutIntentEffect("toggle-edit-mode", toggleEditMode);
   useShortcutIntentEffect("cycle-theme", cycleTheme);
-  useShortcutIntentEffect("close-drawer", closeDrawer);
+  // Escape abandons a cable being drawn before it closes anything else.
+  const abandonCable = () => {
+    const { cableDraft, setCableDraft } = useMapStore.getState();
+    if (cableDraft) setCableDraft(null);
+    return cableDraft !== null;
+  };
+
+  useShortcutIntentEffect("close-drawer", () => {
+    if (!abandonCable()) closeDrawer();
+  });
   useShortcutIntentEffect("delete-device", deleteSelectedDevice);
   useShortcutIntentEffect("unplace-device", () => {
     if (!selectedDeviceId || !isReady || !isEditMode) return;
@@ -230,6 +239,7 @@ function MapWorkspace({
   });
   useShortcutIntentEffect("toggle-device-cables", toggleDeviceCables);
   useShortcutIntentEffect("escape", () => {
+    if (abandonCable()) return;
     const {
       activeDrawTool,
       isOverlayPanelOpen,

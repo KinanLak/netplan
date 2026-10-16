@@ -1,7 +1,6 @@
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
-import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,11 +19,11 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { getDeviceKindLabel } from "@/devices/deviceKindRegistry";
-import { failureMessage } from "@/lib/errors";
 import { matchesDeviceSearch } from "@/devices/search";
 import { createStandaloneObjectId } from "@/lib/identity";
 import { INTEGRATION_LABELS } from "@/sites/integrations";
-import type { PortKind } from "@/types/map";
+import { portLabel } from "@/devices/portState";
+import { endLabel, useCableCommands } from "@/devices/useCableCommands";
 import { api } from "../../../convex/_generated/api";
 
 type PortTable = NonNullable<FunctionReturnType<typeof api.cables.portTable>>;
@@ -32,22 +31,11 @@ type PortRow = PortTable["ports"][number];
 type PortEnd = NonNullable<PortRow["traceEnd"]>;
 type InventoryRow = FunctionReturnType<typeof api.devices.listForSite>[number];
 
-const KIND_LABELS: Record<PortKind, string | null> = {
-  interface: null,
-  front: "Avant",
-  rear: "Arrière",
-};
-
 const byName = new Intl.Collator("fr", { numeric: true, sensitivity: "base" });
 
 const isToastPress = (event: Event) =>
   event.target instanceof Element &&
   event.target.closest("[data-sonner-toaster]") !== null;
-
-const portLabel = (port: { name: string; kind: PortKind }) => {
-  const kind = KIND_LABELS[port.kind];
-  return kind ? `${kind} ${port.name}` : port.name;
-};
 
 /**
  * A device's ports with their cables, wherever in the site the other ends
@@ -124,7 +112,7 @@ function PortTableBody({
     return (
       <CablePicker
         siteId={table.siteId}
-        from={{ deviceId, port: cablingFrom }}
+        from={{ deviceId, deviceName: device.name, port: cablingFrom }}
         onDone={() => setCablingFrom(null)}
       />
     );
@@ -157,30 +145,8 @@ function PortTableLine({
   editable: boolean;
   onCable: () => void;
 }) {
-  const connect = useMutation(api.cables.connect);
-  const disconnect = useMutation(api.cables.disconnect);
+  const { unplug } = useCableCommands();
   const { cable } = port;
-
-  const unplug = async (cableId: string) => {
-    try {
-      const removed = await disconnect({ cableId });
-      if (!removed) return;
-      // The same id and ends bring the cable back as it was.
-      const restore = async () => {
-        try {
-          await connect(removed);
-        } catch (error) {
-          toast.error(failureMessage(error, "editor"));
-        }
-      };
-      toast(`« ${deviceName} » ${portLabel(port)} débranché`, {
-        action: { label: "Annuler", onClick: () => void restore() },
-        duration: 10_000,
-      });
-    } catch (error) {
-      toast.error(failureMessage(error, "editor"));
-    }
-  };
 
   return (
     <li className="flex items-center gap-3 py-2 pr-3">
@@ -212,7 +178,11 @@ function PortTableLine({
         </Button>
       ) : null}
       {editable && cable && !cable.source ? (
-        <Button variant="ghost" size="sm" onClick={() => void unplug(cable.id)}>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => void unplug(cable.id, endLabel(deviceName, port))}
+        >
           Débrancher
         </Button>
       ) : null}
@@ -243,7 +213,7 @@ function CablePicker({
   onDone,
 }: {
   siteId: string;
-  from: { deviceId: string; port: PortRow };
+  from: { deviceId: string; deviceName: string; port: PortRow };
   onDone: () => void;
 }) {
   const [target, setTarget] = useState<InventoryRow | null>(null);
@@ -338,26 +308,26 @@ function FreePortList({
   target,
   onDone,
 }: {
-  from: { deviceId: string; port: PortRow };
+  from: { deviceId: string; deviceName: string; port: PortRow };
   target: InventoryRow;
   onDone: () => void;
 }) {
   const table = useQuery(api.cables.portTable, { deviceId: target.id });
-  const connect = useMutation(api.cables.connect);
+  const { plug } = useCableCommands();
   const [error, setError] = useState<string | null>(null);
   const free = table?.ports.filter((port) => !port.cable);
 
   const cable = async (port: PortRow) => {
-    try {
-      await connect({
+    const refusal = await plug(
+      {
         id: createStandaloneObjectId("cable"),
         a: { deviceId: from.deviceId, portId: from.port.id },
         b: { deviceId: target.id, portId: port.id },
-      });
-      onDone();
-    } catch (caught) {
-      setError(failureMessage(caught, "editor"));
-    }
+      },
+      `${endLabel(from.deviceName, from.port)} ↔ ${endLabel(target.name, port)}`,
+    );
+    if (refusal) setError(refusal);
+    else onDone();
   };
 
   return (
