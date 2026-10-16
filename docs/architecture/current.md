@@ -103,8 +103,8 @@ and a token, which actions encrypt with `NETPLAN_SECRET_KEY` before storing
 and no function returns. The admin tests the connection, then maps the
 NetBox site and the Netplan type of each NetBox role, and each Netplan switch
 to its LibreNMS device. Settings are keyed by the source's ids, so changing
-an address forgets them, and a source's devices, ports and cables become
-manual. [`docs/operations/integrations.md`](../operations/integrations.md)
+an address forgets them; a new NetBox address also turns the devices, ports
+and cables the old one brought into manual ones. [`docs/operations/integrations.md`](../operations/integrations.md)
 says how to check a real LibreNMS.
 
 ## Inventory, ports and cables
