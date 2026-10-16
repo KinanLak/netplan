@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import {
   importSummary,
   planNetBoxImport,
+  sameImport,
   readNetBoxDevices,
 } from "./netboxImport";
 import type { ImportedDevice, InventoryDevice } from "./netboxImport";
@@ -230,5 +231,25 @@ describe("importSummary", () => {
         review: 0,
       }),
     ).toBe("Import : 1 équipement.");
+  });
+});
+
+describe("sameImport", () => {
+  const settings = (
+    site: number,
+    ...roles: Array<[number, "pc" | "switch"]>
+  ) => ({
+    site: { id: site, name: `Site ${site}` },
+    roles: roles.map(([id, type]) => ({ id, name: `Role ${id}`, type })),
+  });
+
+  it("compares the site and each role's type, in any order", () => {
+    const saved = settings(1, [4, "pc"], [9, "switch"]);
+    expect(sameImport(saved, settings(1, [9, "switch"], [4, "pc"]))).toBe(true);
+    expect(sameImport(saved, settings(2, [4, "pc"], [9, "switch"]))).toBe(
+      false,
+    );
+    expect(sameImport(saved, settings(1, [4, "pc"]))).toBe(false);
+    expect(sameImport(saved, settings(1, [4, "pc"], [9, "pc"]))).toBe(false);
   });
 });

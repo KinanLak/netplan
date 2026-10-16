@@ -16,6 +16,7 @@ import {
   newDeviceKey,
   planNetBoxImport,
   readNetBoxDevices,
+  sameImport,
 } from "../src/sites/netboxImport";
 import type { ImportedDevice } from "../src/sites/netboxImport";
 
@@ -108,7 +109,7 @@ export const importFromNetBox = async (
     siteId,
     cycleId,
     baseUrl,
-    netboxSiteId: site.id,
+    settings,
     devices: readNetBoxDevices(devices.items, interfaces.items, settings.roles),
   });
   if (!counts) return { ok: true, message: "" };
@@ -129,7 +130,7 @@ export const apply = internalMutation({
     siteId: v.string(),
     cycleId: v.string(),
     baseUrl: v.string(),
-    netboxSiteId: v.number(),
+    settings: netboxSettings,
     devices: v.array(importedDevice),
   },
   returns: v.union(v.null(), importCounts),
@@ -143,10 +144,12 @@ export const apply = internalMutation({
         q.eq("siteId", siteId).eq("kind", "netbox"),
       )
       .unique();
-    // The admin pointed the site elsewhere while NetBox was read.
+    // The admin changed what the site imports while NetBox was read: an
+    // import of other roles would remove devices the new mapping keeps.
     if (
       row?.baseUrl !== args.baseUrl ||
-      row.netbox?.site?.id !== args.netboxSiteId
+      !row.netbox ||
+      !sameImport(row.netbox, args.settings)
     ) {
       return null;
     }
@@ -248,6 +251,34 @@ export const apply = internalMutation({
   },
 });
 
+/**
+ * Releases the devices bound to the site's NetBox, which become manual, and
+ * drops its pending reviews: another NetBox reuses the same ids for other
+ * devices, so a binding means nothing once the address changes.
+ */
+export const releaseNetBox = async (ctx: MutationCtx, siteId: string) => {
+  const bound = await ctx.db
+    .query("devices")
+    .withIndex("by_site_source", (q) =>
+      q.eq("siteId", siteId).eq("source.integration", "netbox"),
+    )
+    .collect();
+  for (const device of bound) {
+    await ctx.db.patch(device._id, { source: undefined });
+  }
+  await deleteImportReviews(ctx, siteId);
+};
+
+export const deleteImportReviews = async (ctx: MutationCtx, siteId: string) => {
+  const rows = await ctx.db
+    .query("importReviews")
+    .withIndex("by_site", (q) =>
+      q.eq("siteId", siteId).eq("integration", "netbox"),
+    )
+    .collect();
+  for (const row of rows) await ctx.db.delete(row._id);
+};
+
 const sourceFields = (
   device: ImportedDevice,
   macs: Array<string>,
@@ -303,13 +334,7 @@ const replaceReviews = async (
   plan: ReturnType<typeof planNetBoxImport>,
   now: number,
 ) => {
-  const previous = await ctx.db
-    .query("importReviews")
-    .withIndex("by_site", (q) =>
-      q.eq("siteId", siteId).eq("integration", "netbox"),
-    )
-    .collect();
-  for (const row of previous) await ctx.db.delete(row._id);
+  await deleteImportReviews(ctx, siteId);
   const reviews = [
     ...plan.suggest.map((entry) => ({ ...entry, kind: "suggestion" as const })),
     ...plan.conflict.map((entry) => ({ ...entry, kind: "conflict" as const })),

@@ -190,7 +190,7 @@ describe("NetBox import", () => {
 
   it("waits for a person when only a hostname matches", async () => {
     const source = netbox([device(12, "PC-0012")], []);
-    const { t, editor, siteId } = await importingSite(source);
+    const { t, admin, editor, siteId } = await importingSite(source);
     await editor.mutation(api.devices.create, {
       siteId,
       deviceId: "device:manual",
@@ -212,6 +212,43 @@ describe("NetBox import", () => {
         candidateIds: ["device:manual"],
       },
     ]);
+
+    await admin.mutation(api.sites.remove, { siteId });
+    expect(
+      await t.run(async (ctx) => await ctx.db.query("importReviews").collect()),
+    ).toEqual([]);
+  });
+
+  it("releases NetBox's devices when the site leaves that NetBox", async () => {
+    const source = netbox([device(12, "pc-0012"), device(13, "PC-0013")], []);
+    const { t, admin, editor, siteId } = await importingSite(source);
+    await editor.mutation(api.devices.create, {
+      siteId,
+      deviceId: "device:manual",
+      type: "pc",
+      identity: { name: "Accueil", hostname: "pc-0013", macs: [] },
+    });
+    await refresh(editor, siteId);
+    const reviews = async () =>
+      await t.run(async (ctx) => await ctx.db.query("importReviews").collect());
+    expect(await reviews()).toHaveLength(1);
+
+    // Another NetBox has another device under id 12.
+    await admin.action(api.integrations.save, {
+      siteId,
+      kind: "netbox",
+      baseUrl: "https://other-netbox.test",
+      enabled: true,
+      token: TOKEN,
+    });
+
+    expect(
+      (await inventory(editor, siteId)).map((d) => [d.name, d.source ?? null]),
+    ).toEqual([
+      ["Accueil", null],
+      ["pc-0012", null],
+    ]);
+    expect(await reviews()).toEqual([]);
   });
 
   it("ignores an import whose cycle or settings changed meanwhile", async () => {
@@ -221,7 +258,7 @@ describe("NetBox import", () => {
       siteId,
       cycleId: "cycle:gone",
       baseUrl: NETBOX,
-      netboxSiteId: 7,
+      settings: { site: { id: 7, name: "Siège" }, roles: [] },
       devices: [{ externalId: "1", type: "pc", name: "pc-1", macs: [] }],
     });
     expect(stale).toBeNull();

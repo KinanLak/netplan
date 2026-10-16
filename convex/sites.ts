@@ -2,6 +2,7 @@ import { ConvexError, v } from "convex/values";
 import { deleteCycle, rescheduleCycle } from "./lib/cycles";
 import { deleteDeviceMacs } from "./lib/deviceMacs";
 import { deleteDeviceCabling } from "./lib/ports";
+import { deleteImportReviews } from "./netboxImport";
 import { adminMutation, adminQuery, readerQuery } from "./lib/functions";
 import type { Doc } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
@@ -203,6 +204,7 @@ export const remove = adminMutation({
       await ctx.db.delete(integration._id);
     }
     await deleteCycle(ctx, siteId);
+    await deleteImportReviews(ctx, siteId);
     const devices = await ctx.db
       .query("devices")
       .withIndex("by_site", (q) => q.eq("siteId", siteId))

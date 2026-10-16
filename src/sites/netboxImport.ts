@@ -4,7 +4,11 @@
 // imports only.
 import { MAX_MACS_PER_DEVICE } from "../devices/identity";
 import { normalizeMac } from "../devices/mac";
-import type { NetBoxRoleMapping, NetBoxRoleType } from "./netbox";
+import type {
+  NetBoxRoleMapping,
+  NetBoxRoleType,
+  NetBoxSettings,
+} from "./netbox";
 
 /** A device as NetBox describes it, in the fields NetBox owns. */
 export type ImportedDevice = {
@@ -328,3 +332,16 @@ export function importSummary(counts: ImportCounts): string {
     ? `${imported} (${changes.join(", ")}).`
     : `${imported}.`;
 }
+
+/**
+ * Whether two settings import the same thing: the same NetBox site, and the
+ * same roles as the same types. Names are NetBox's labels and do not count.
+ */
+export const sameImport = (a: NetBoxSettings, b: NetBoxSettings) => {
+  const roles = (settings: NetBoxSettings) =>
+    settings.roles
+      .map((role) => `${role.id}:${role.type}`)
+      .toSorted()
+      .join(",");
+  return a.site?.id === b.site?.id && roles(a) === roles(b);
+};
