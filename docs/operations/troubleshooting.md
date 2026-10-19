@@ -11,6 +11,10 @@ push to NetBox when it is on. Start there; the Convex backend's log
 (`docker compose logs convex-backend`) has the detail of an unexpected
 error, under `collection <site> <source>` or `netbox push <site>`.
 
+A site whose connection has "Ignorer les erreurs de certificat TLS" ticked
+carries a warning, "… est interrogé sans vérifier son certificat TLS", until
+it is unticked: its token goes to whoever answers at that address.
+
 ## Freshness
 
 The headline is measured from the **start** of the last cycle in which
@@ -71,19 +75,32 @@ and the rest is that step's report.
 
 **The source's answer.** Timeouts, network errors and 5xx answers are
 retried 5 times over about 2.5 minutes before a cycle reports them; a 4xx
-answer is final.
+answer and a refused certificate are final.
 
-| Message                                  | Cause                                                                                                       |
-| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| "… ne répond pas (délai dépassé)."       | Every attempt timed out (30 s each).                                                                        |
-| "… est injoignable à cette adresse."     | DNS, connection refused, or TLS: test the address from the backend's container, not from a browser.         |
-| "… refuse ce jeton (401)." / "(403)."    | Token wrong, expired or without the rights [Integrations](integrations.md) lists.                           |
-| "Aucune API … à cette adresse (404)."    | Wrong base address. On a LibreNMS switch line, the switch's LibreNMS device no longer exists: map it again. |
-| "L'adresse redirige (3xx) : …"           | Redirects are not followed: enter the final address, usually with `https://`.                               |
-| "… a répondu 5xx." or another 4xx        | The source's own error after every retry; its log says why.                                                 |
-| "… n'a pas répondu en JSON."             | A proxy or a login page answered.                                                                           |
-| "Cette adresse ne répond pas comme …"    | Something else answers at that address.                                                                     |
-| "Erreur inattendue pendant la collecte." | A bug or an answer of an unexpected shape: the backend's log has it.                                        |
+| Message                                        | Cause                                                                                                            |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| "… ne répond pas (délai dépassé)."             | Every attempt timed out (30 s each).                                                                             |
+| "… est injoignable à cette adresse."           | DNS or connection refused: test the address from the backend's container, not from a browser. See below for DNS. |
+| "Le certificat TLS de … est refusé (CODE) : …" | See below.                                                                                                       |
+| "… refuse ce jeton (401)." / "(403)."          | Token wrong, expired or without the rights [Integrations](integrations.md) lists.                                |
+| "Aucune API … à cette adresse (404)."          | Wrong base address. On a LibreNMS switch line, the switch's LibreNMS device no longer exists: map it again.      |
+| "L'adresse redirige (3xx) : …"                 | Redirects are not followed: enter the final address, usually with `https://`.                                    |
+| "… a répondu 5xx." or another 4xx              | The source's own error after every retry; its log says why.                                                      |
+| "… n'a pas répondu en JSON."                   | A proxy or a login page answered.                                                                                |
+| "Cette adresse ne répond pas comme …"          | Something else answers at that address.                                                                          |
+| "Erreur inattendue pendant la collecte."       | A bug or an answer of an unexpected shape: the backend's log has it.                                             |
+
+**"… est injoignable à cette adresse."** on an address the host itself
+reaches: a container keeps the DNS servers the host had when the container
+was created. After the host's DNS changes (a VPN, a new network), recreate
+the backend: `docker compose up -d --force-recreate convex-backend`.
+
+**"Le certificat TLS de … est refusé (CODE)"**: the certificate does not
+match the address, has expired, or comes from a CA the backend does not
+trust; CODE says which. Give the backend an internal CA
+([Install](install.md)). A certificate that names another host, as after a
+move that kept the old certificate, is what the connection's "Ignorer les
+erreurs de certificat TLS" is for ([Integrations](integrations.md)).
 
 **NetBox import:**
 
