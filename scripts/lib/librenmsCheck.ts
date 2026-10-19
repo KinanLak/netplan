@@ -106,13 +106,25 @@ export function switchChecks({
 
   const raw = rawEntries(fdb);
   const entries = readLibreNMSFdb(fdb);
-  const unreadable = raw.find(
-    (item) => readLibreNMSFdb({ ports_fdb: [item] }).length === 0,
+  // LibreNMS's port 0 is "no port": a MAC address it learnt on an interface
+  // it does not list, such as a port channel. A cycle skips them, rightly.
+  const noPort = raw.filter(({ port_id }) => Number(port_id) === 0).length;
+  if (noPort > 0) {
+    checks.push({
+      level: "ok",
+      message: `${noPort} forwarding entries on no port (port_id 0), which a cycle skips.`,
+    });
+  }
+  const unreadable = raw.filter(
+    (item) =>
+      Number(item.port_id) !== 0 &&
+      readLibreNMSFdb({ ports_fdb: [item] }).length === 0,
   );
-  if (unreadable) {
+  const example = unreadable.at(0);
+  if (example) {
     checks.push({
       level: "fail",
-      message: `${raw.length - entries.length} of ${raw.length} forwarding entries unreadable, such as port_id ${shapeOf(unreadable.port_id)}, mac_address ${shapeOf(unreadable.mac_address, /[\da-f]/gi)}.`,
+      message: `${unreadable.length} of ${raw.length} forwarding entries unreadable, such as port_id ${shapeOf(example.port_id)}, mac_address ${shapeOf(example.mac_address, /[\da-f]/gi)}.`,
     });
   }
   if (entries.length === 0) {

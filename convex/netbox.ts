@@ -98,15 +98,9 @@ export const options = adminAction({
       enabledOnly: false,
     });
     if ("error" in connection) return connection;
-    const { baseUrl, token } = connection;
     const [sites, roles] = await Promise.all([
-      netboxList(baseUrl, token, "/api/dcim/sites/?brief=1", PROBE_RETRY),
-      netboxList(
-        baseUrl,
-        token,
-        "/api/dcim/device-roles/?brief=1",
-        PROBE_RETRY,
-      ),
+      netboxList(connection, "/api/dcim/sites/?brief=1", PROBE_RETRY),
+      netboxList(connection, "/api/dcim/device-roles/?brief=1", PROBE_RETRY),
     ]);
     if (!sites.ok) return { error: sites.message };
     if (!roles.ok) return { error: roles.message };
@@ -118,7 +112,7 @@ export const options = adminAction({
       return id === null ? [] : [more(id)];
     };
     return {
-      baseUrl,
+      baseUrl: connection.baseUrl,
       sites: sites.items
         .flatMap((item) =>
           picked(item, (id): NetBoxSite => ({ id, name: nameOf(item) })),

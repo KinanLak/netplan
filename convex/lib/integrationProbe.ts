@@ -1,11 +1,19 @@
 // Authenticated reads from a tool, answered in French for the admin, and
 // "Tester la connexion" on top of them. The token never appears in a message.
 import { fetchWithRetry } from "./httpRetry";
-import type { RetryOptions } from "./httpRetry";
+import type { Fetch, RetryOptions } from "./httpRetry";
 import { INTEGRATION_LABELS } from "../../src/sites/integrations";
 import type { IntegrationKind } from "../../src/sites/integrations";
 
 export type ConnectionCheck = { ok: boolean; message: string };
+
+/** One integration's tool, as its requests reach it. */
+export type Source = {
+  kind: IntegrationKind;
+  baseUrl: string;
+  token: string;
+  fetch: Fetch;
+};
 
 // An admin is waiting on the answer: fewer and shorter tries than a cycle.
 export const PROBE_RETRY: RetryOptions = {
@@ -74,20 +82,19 @@ export type SourceAnswer =
  * reason it failed.
  */
 export async function sourceGet(
-  kind: IntegrationKind,
-  baseUrl: string,
+  source: Source,
   path: string,
-  token: string,
   retry: RetryOptions,
 ): Promise<SourceAnswer> {
-  const label = INTEGRATION_LABELS[kind];
+  const label = INTEGRATION_LABELS[source.kind];
   let response: Response;
   try {
     response = await fetchWithRetry(
-      `${baseUrl}${path}`,
+      `${source.baseUrl}${path}`,
       // A redirect could carry the token to another host.
-      { headers: authHeaders(kind, token), redirect: "manual" },
+      { headers: authHeaders(source.kind, source.token), redirect: "manual" },
       retry,
+      source.fetch,
     );
   } catch (error) {
     const timedOut =
@@ -115,15 +122,13 @@ export async function sourceGet(
 }
 
 export async function probeIntegration(
-  kind: IntegrationKind,
-  baseUrl: string,
-  token: string,
+  source: Source,
   retry: RetryOptions = PROBE_RETRY,
 ): Promise<ConnectionCheck> {
-  const label = INTEGRATION_LABELS[kind];
-  const answer = await sourceGet(kind, baseUrl, PROBE_PATH[kind], token, retry);
+  const label = INTEGRATION_LABELS[source.kind];
+  const answer = await sourceGet(source, PROBE_PATH[source.kind], retry);
   if (!answer.ok) return { ok: false, message: answer.message };
-  const version = versionOf(kind, answer.body);
+  const version = versionOf(source.kind, answer.body);
   if (!version) {
     return {
       ok: false,

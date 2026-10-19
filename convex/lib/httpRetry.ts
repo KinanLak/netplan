@@ -3,6 +3,12 @@
 // else: a 4xx is an answer. The body is read inside the attempt, so a
 // connection that stalls or drops after the headers is retried too.
 
+/** How a request reaches a source; `fetch`, unless the source says otherwise. */
+export type Fetch = (url: string, init: RequestInit) => Promise<Response>;
+
+// Looked up at each call, so a test's replacement of `fetch` applies.
+export const defaultFetch: Fetch = (url, init) => fetch(url, init);
+
 export type RetryOptions = {
   attempts: number;
   timeoutMs: number;
@@ -42,6 +48,7 @@ export async function fetchWithRetry(
   url: string,
   init: RequestInit,
   options: RetryOptions,
+  send: Fetch = defaultFetch,
 ): Promise<Response> {
   const sleep = options.sleep ?? pause;
   let delay = options.initialDelayMs;
@@ -51,7 +58,7 @@ export async function fetchWithRetry(
       throw new RetryStopped();
     }
     try {
-      const response = await fetch(url, {
+      const response = await send(url, {
         ...init,
         signal: AbortSignal.timeout(options.timeoutMs),
       });

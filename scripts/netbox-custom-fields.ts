@@ -8,7 +8,11 @@
 //
 // A field that exists with another type is reported and left as it is.
 import { parseArgs } from "node:util";
-import { fetchWithRetry, SOURCE_RETRY } from "../convex/lib/httpRetry";
+import {
+  defaultFetch,
+  fetchWithRetry,
+  SOURCE_RETRY,
+} from "../convex/lib/httpRetry";
 import { authHeaders } from "../convex/lib/integrationProbe";
 import { netboxList } from "../convex/lib/netboxApi";
 import { fieldBody, planFields } from "./lib/netboxCustomFields";
@@ -25,8 +29,7 @@ if (!baseUrl || !token) {
 }
 
 const listed = await netboxList(
-  baseUrl,
-  token,
+  { kind: "netbox", baseUrl, token, fetch: defaultFetch },
   "/api/extras/custom-fields/?name__isw=netplan_",
   SOURCE_RETRY,
 );
