@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import {
+  backendCommand,
   backendOf,
   integrationSeedArgs,
   isGeneratedEnvFile,
@@ -7,6 +8,7 @@ import {
   nextBackendPorts,
   nextWebPort,
   parseEnvLines,
+  portRelay,
   preferredPorts,
   publishedPort,
   renderEnvFile,
@@ -117,5 +119,57 @@ describe("integrationSeedArgs", () => {
       args: { netbox: { url: "https://netbox.test", token: "nb" } }, // gitleaks:allow
       missing: ["LIBRENMS_TOKEN"],
     });
+  });
+});
+
+describe("the backend's port relay", () => {
+  it("relays a connection from the published port to the backend's own", async () => {
+    const backend = Bun.listen({
+      hostname: "127.0.0.1",
+      port: 0,
+      socket: { data: (socket, data) => void socket.write(data) },
+    });
+    const free = Bun.listen({
+      hostname: "127.0.0.1",
+      port: 0,
+      socket: { data: () => undefined },
+    });
+    const published = free.port;
+    free.stop(true);
+    const relay = Bun.spawn(
+      [process.execPath, "-e", portRelay([[published, backend.port]])],
+      { stdout: "ignore", stderr: "inherit" },
+    );
+    try {
+      const echoed = Promise.withResolvers<string>();
+      const connect = () =>
+        Bun.connect({
+          hostname: "127.0.0.1",
+          port: published,
+          socket: {
+            open: (socket) => void socket.write("ping"),
+            data: (_socket, data) => echoed.resolve(data.toString()),
+          },
+        });
+      // The relay listens once its process has started.
+      let client = await connect().catch(() => null);
+      while (!client) client = await connect().catch(() => null);
+      expect(await echoed.promise).toBe("ping");
+      client.end();
+    } finally {
+      relay.kill();
+      backend.stop(true);
+    }
+  });
+
+  it("starts the image's own script after the relay", () => {
+    const { entrypoint, args } = backendCommand(13806);
+    expect(entrypoint).toBe("bash");
+    expect(args[0]).toBe("-c");
+    expect(args[1]).toEndWith("& exec ./run_backend.sh");
+    expect(args[1]).toContain("[[13806,3210],[13807,3211]]");
+    expect(
+      args[1].slice("node -e '".length, -"' & exec ./run_backend.sh".length),
+    ).not.toContain("'");
   });
 });

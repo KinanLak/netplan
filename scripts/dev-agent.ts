@@ -30,10 +30,13 @@ import {
   isLoopbackUrl,
 } from "./lib/convexBackend";
 import {
+  BACKEND_SPEC,
+  BACKEND_SPEC_LABEL,
   MAILPIT_IMAGE,
   OWNER_LABEL,
   ROLE_LABEL,
   WORKTREE_LABEL,
+  backendCommand,
   backendOf,
   integrationSeedArgs,
   isGeneratedEnvFile,
@@ -131,6 +134,7 @@ interface Container {
   image: string;
   /** The host port published for the container port asked about. */
   port?: number;
+  spec?: string;
   networks: Array<string>;
 }
 
@@ -142,13 +146,13 @@ const inspectContainer = async (
     "container",
     "inspect",
     "--format",
-    "{{json .State.Running}} {{json .Config.Image}} {{json .HostConfig.PortBindings}} {{json .NetworkSettings.Networks}}",
+    "{{json .State.Running}}\t{{json .Config.Image}}\t{{json .HostConfig.PortBindings}}\t{{json .NetworkSettings.Networks}}\t{{json .Config.Labels}}",
     target,
   );
   if (!result.ok) return undefined;
-  const [running, image, bindings, networks] = result.out
+  const [running, image, bindings, networks, labels] = result.out
     .trim()
-    .split(" ")
+    .split("\t")
     .map((part) => JSON.parse(part) as unknown);
   return {
     running: running === true,
@@ -158,6 +162,7 @@ const inspectContainer = async (
       containerPort,
     ),
     networks: Object.keys(networks ?? {}),
+    spec: (labels as Record<string, string> | null)?.[BACKEND_SPEC_LABEL],
   };
 };
 
@@ -249,6 +254,7 @@ const labels = [
 ];
 
 const createContainer = async (backendPort: number) => {
+  const command = backendCommand(backendPort);
   await must(
     docker("volume", "create", ...labels, name),
     "docker volume create",
@@ -260,6 +266,10 @@ const createContainer = async (backendPort: number) => {
       "--name",
       name,
       ...labels,
+      "--label",
+      `${BACKEND_SPEC_LABEL}=${BACKEND_SPEC}`,
+      "--entrypoint",
+      command.entrypoint,
       "--publish",
       `127.0.0.1:${backendPort}:3210`,
       "--publish",
@@ -273,6 +283,7 @@ const createContainer = async (backendPort: number) => {
       "--env",
       "DISABLE_BEACON=true",
       CONVEX_BACKEND_IMAGE,
+      ...command.args,
     ),
     "docker run",
   );
@@ -281,9 +292,14 @@ const createContainer = async (backendPort: number) => {
 /** Starts the worktree's backend, creating it if needed; returns its API port. */
 const ensureBackend = async (): Promise<number> => {
   let container = await inspectContainer(name, 3210);
-  // A new image pin replaces the container; the data stays in the volume.
-  if (container && container.image !== CONVEX_BACKEND_IMAGE) {
-    console.log(`dev:agent: moving ${name} to the pinned backend image.`);
+  // A new image pin or command replaces the container; the data stays in the
+  // volume.
+  if (
+    container &&
+    (container.image !== CONVEX_BACKEND_IMAGE ||
+      container.spec !== BACKEND_SPEC)
+  ) {
+    console.log(`dev:agent: recreating ${name} with the current backend.`);
     await docker("container", "rm", "--force", name);
     const port = container.port;
     container = undefined;

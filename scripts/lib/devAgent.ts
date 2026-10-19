@@ -30,6 +30,50 @@ export const resourceName = (worktree: string): string => {
   return `netplan-cvx-${slug}-${digest(worktree).slice(0, 6)}`;
 };
 
+/**
+ * Bumped when the backend container's command changes: a container with
+ * another value is replaced, keeping its volume.
+ */
+export const BACKEND_SPEC_LABEL = "netplan.backend-spec";
+export const BACKEND_SPEC = "2";
+
+/**
+ * Node source relaying each `[from, to]` loopback port. A Node action calls
+ * the backend back at CONVEX_CLOUD_ORIGIN, whose port is the host's published
+ * one: inside the container it reaches nothing until relayed to the port the
+ * backend binds.
+ */
+export const portRelay = (routes: Array<[from: number, to: number]>): string =>
+  [
+    `const net = require("node:net");`,
+    `for (const [from, to] of ${JSON.stringify(routes.filter(([from, to]) => from !== to))}) {`,
+    `  net.createServer((client) => {`,
+    `    const backend = net.connect(to, "127.0.0.1");`,
+    `    client.pipe(backend).pipe(client);`,
+    `    client.on("error", () => backend.destroy());`,
+    `    backend.on("error", () => client.destroy());`,
+    `  }).listen(from, "127.0.0.1");`,
+    `}`,
+  ].join("\n");
+
+/**
+ * The backend container's entrypoint and arguments: the relay for the
+ * published API and HTTP-actions ports, then the image's own start script,
+ * which becomes the container's main process.
+ */
+export const backendCommand = (
+  port: number,
+): { entrypoint: string; args: Array<string> } => ({
+  entrypoint: "bash",
+  args: [
+    "-c",
+    `node -e '${portRelay([
+      [port, 3210],
+      [port + 1, 3211],
+    ])}' & exec ./run_backend.sh`,
+  ],
+});
+
 /** Mailpit, as the `local` compose profile runs it. */
 export const MAILPIT_IMAGE = "axllent/mailpit:v1.31.6";
 
