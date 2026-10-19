@@ -54,9 +54,11 @@ differ only by the dispatcher of their requests.
 - A certificate error is an answer, not an outage: it is not retried, and
   the admin reads that the certificate was refused and that the option
   exists, rather than "injoignable".
-- The self-hosted backend image ships Node 22, so `dev:agent`, CI and
-  `deploy/compose.yaml` run Node actions without change; `convex/mail.ts`
-  already relies on it.
+- The self-hosted backend image ships Node 22, and a Node action calls the
+  backend back at `CONVEX_CLOUD_ORIGIN`. In `deploy/compose.yaml` that URL
+  resolves inside the network to the edge; `dev:agent` publishes the
+  backend on a per-worktree host port, so its container relays that port to
+  the backend's own.
 - `scripts/check-librenms.ts` takes `--insecure` for the same purpose, with
   Bun's own option, since it runs outside Convex.
 

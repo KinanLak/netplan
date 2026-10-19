@@ -1,6 +1,6 @@
 // Authenticated reads from a tool, answered in French for the admin, and
 // "Tester la connexion" on top of them. The token never appears in a message.
-import { fetchWithRetry } from "./httpRetry";
+import { certificateRefusal, fetchWithRetry } from "./httpRetry";
 import type { Fetch, RetryOptions } from "./httpRetry";
 import { INTEGRATION_LABELS } from "../../src/sites/integrations";
 import type { IntegrationKind } from "../../src/sites/integrations";
@@ -14,6 +14,12 @@ export type Source = {
   token: string;
   fetch: Fetch;
 };
+
+/**
+ * How a site's requests reach its tools: `lenient`, for an integration that
+ * ignores certificate errors, is a Node action's (ADR 0028).
+ */
+export type Transport = { lenient: Fetch };
 
 // An admin is waiting on the answer: fewer and shorter tries than a cycle.
 export const PROBE_RETRY: RetryOptions = {
@@ -72,6 +78,22 @@ const failureMessage = (label: string, status: number): string => {
   return `${label} a répondu ${status}.`;
 };
 
+/** Why a request that got no answer failed, in French. */
+export const unansweredMessage = (
+  kind: IntegrationKind,
+  error: unknown,
+): string => {
+  const label = INTEGRATION_LABELS[kind];
+  if (error instanceof DOMException && error.name === "TimeoutError") {
+    return `${label} ne répond pas (délai dépassé).`;
+  }
+  const refusal = certificateRefusal(error);
+  if (refusal !== null) {
+    return `Le certificat TLS de ${label} est refusé (${refusal}) : corrigez-le, ou cochez « Ignorer les erreurs de certificat TLS » dans la connexion.`;
+  }
+  return `${label} est injoignable à cette adresse.`;
+};
+
 export type SourceAnswer =
   | { ok: true; body: unknown }
   /** `status` is set when the tool answered, rather than timed out. */
@@ -97,14 +119,7 @@ export async function sourceGet(
       source.fetch,
     );
   } catch (error) {
-    const timedOut =
-      error instanceof DOMException && error.name === "TimeoutError";
-    return {
-      ok: false,
-      message: timedOut
-        ? `${label} ne répond pas (délai dépassé).`
-        : `${label} est injoignable à cette adresse.`,
-    };
+    return { ok: false, message: unansweredMessage(source.kind, error) };
   }
   if (!response.ok) {
     await response.body?.cancel();

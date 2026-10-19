@@ -36,11 +36,12 @@ afterEach(() => {
 });
 
 const connect = async (admin: TestClient, siteId: string, baseUrl = LIBRENMS) =>
-  await admin.action(api.integrations.save, {
+  await admin.action(api.sources.saveIntegration, {
     siteId,
     kind: "librenms",
     baseUrl,
     enabled: false,
+    ignoreCertificateErrors: false,
     token: TOKEN,
   });
 
@@ -63,19 +64,23 @@ describe("LibreNMS settings", () => {
     const admin = await signedInTest("admin");
     const siteId = await createTestSite(admin);
     expect(await admin.query(api.librenms.settings, { siteId })).toBeNull();
-    expect(await admin.action(api.librenms.options, { siteId })).toEqual({
-      error: "LibreNMS n'est pas configuré.",
-    });
+    expect(await admin.action(api.sources.librenmsDevices, { siteId })).toEqual(
+      {
+        error: "LibreNMS n'est pas configuré.",
+      },
+    );
 
     await connect(admin, siteId);
-    expect(await admin.action(api.librenms.options, { siteId })).toEqual({
-      baseUrl: LIBRENMS,
-      devices: [
-        { id: 21, name: "annexe" },
-        { id: 4, name: "core.corp.test" },
-        { id: 12, name: "sw-etage" },
-      ],
-    });
+    expect(await admin.action(api.sources.librenmsDevices, { siteId })).toEqual(
+      {
+        baseUrl: LIBRENMS,
+        devices: [
+          { id: 21, name: "annexe" },
+          { id: 4, name: "core.corp.test" },
+          { id: 12, name: "sw-etage" },
+        ],
+      },
+    );
   });
 
   it("maps switches to devices, refuses other devices, and forgets them for another LibreNMS", async () => {

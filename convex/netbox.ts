@@ -1,10 +1,12 @@
 // A site's NetBox settings (ADR 0023): the NetBox site it imports and the
 // Netplan type of each NetBox device role, picked from what NetBox lists.
 import { ConvexError, v } from "convex/values";
-import type { QueryCtx } from "./_generated/server";
+import type { Infer } from "convex/values";
+import type { ActionCtx, QueryCtx } from "./_generated/server";
 import { openConnection } from "./integrations";
 import { PROBE_RETRY } from "./lib/integrationProbe";
-import { adminAction, adminMutation, adminQuery } from "./lib/functions";
+import type { Transport } from "./lib/integrationProbe";
+import { adminMutation, adminQuery } from "./lib/functions";
 import { idOf, nameOf, netboxList } from "./lib/netboxApi";
 import { requireSite } from "./sites";
 import { netboxSettings } from "./siteValidators";
@@ -82,50 +84,55 @@ export const setPush = adminMutation({
 
 const choice = v.object({ id: v.number(), name: v.string() });
 
-/** The sites and device roles NetBox lists, for the admin to pick from. */
-export const options = adminAction({
-  args: { siteId: v.string() },
-  returns: v.union(
-    v.object({ error: v.string() }),
-    v.object({
-      baseUrl: v.string(),
-      sites: v.array(choice),
-      roles: v.array(v.object({ ...choice.fields, depth: v.number() })),
-    }),
-  ),
-  handler: async (ctx, { siteId }) => {
-    const connection = await openConnection(ctx, siteId, "netbox", {
-      enabledOnly: false,
-    });
-    if ("error" in connection) return connection;
-    const [sites, roles] = await Promise.all([
-      netboxList(connection, "/api/dcim/sites/?brief=1", PROBE_RETRY),
-      netboxList(connection, "/api/dcim/device-roles/?brief=1", PROBE_RETRY),
-    ]);
-    if (!sites.ok) return { error: sites.message };
-    if (!roles.ok) return { error: roles.message };
-    const picked = <T>(
-      item: Record<string, unknown>,
-      more: (id: number) => T,
-    ) => {
-      const id = idOf(item);
-      return id === null ? [] : [more(id)];
-    };
-    return {
-      baseUrl: connection.baseUrl,
-      sites: sites.items
-        .flatMap((item) =>
-          picked(item, (id): NetBoxSite => ({ id, name: nameOf(item) })),
-        )
-        .sort((a, b) => a.name.localeCompare(b.name, "fr")),
-      // NetBox lists nested roles in tree order, each under its parent.
-      roles: roles.items.flatMap((item) =>
-        picked(item, (id): NetBoxRole => ({
-          id,
-          name: nameOf(item),
-          depth: typeof item._depth === "number" ? item._depth : 0,
-        })),
-      ),
-    };
-  },
-});
+export const choicesResult = v.union(
+  v.object({ error: v.string() }),
+  v.object({
+    baseUrl: v.string(),
+    sites: v.array(choice),
+    roles: v.array(v.object({ ...choice.fields, depth: v.number() })),
+  }),
+);
+
+/**
+ * The sites and device roles NetBox lists, for the admin to pick from.
+ * Registered in `sources.ts`.
+ */
+export const listChoices = async (
+  ctx: ActionCtx,
+  siteId: string,
+  transport: Transport,
+): Promise<Infer<typeof choicesResult>> => {
+  const connection = await openConnection(ctx, siteId, "netbox", transport, {
+    enabledOnly: false,
+  });
+  if ("error" in connection) return connection;
+  const [sites, roles] = await Promise.all([
+    netboxList(connection, "/api/dcim/sites/?brief=1", PROBE_RETRY),
+    netboxList(connection, "/api/dcim/device-roles/?brief=1", PROBE_RETRY),
+  ]);
+  if (!sites.ok) return { error: sites.message };
+  if (!roles.ok) return { error: roles.message };
+  const picked = <T>(
+    item: Record<string, unknown>,
+    more: (id: number) => T,
+  ) => {
+    const id = idOf(item);
+    return id === null ? [] : [more(id)];
+  };
+  return {
+    baseUrl: connection.baseUrl,
+    sites: sites.items
+      .flatMap((item) =>
+        picked(item, (id): NetBoxSite => ({ id, name: nameOf(item) })),
+      )
+      .sort((a, b) => a.name.localeCompare(b.name, "fr")),
+    // NetBox lists nested roles in tree order, each under its parent.
+    roles: roles.items.flatMap((item) =>
+      picked(item, (id): NetBoxRole => ({
+        id,
+        name: nameOf(item),
+        depth: typeof item._depth === "number" ? item._depth : 0,
+      })),
+    ),
+  };
+};

@@ -13,6 +13,7 @@ import {
   nextRun,
 } from "@/sites/freshness";
 import { INTEGRATION_LABELS } from "@/sites/integrations";
+import type { IntegrationKind } from "@/sites/integrations";
 import { api } from "../../../../convex/_generated/api";
 
 export const Route = createFileRoute("/_authed/admin/health")({
@@ -65,6 +66,15 @@ function HealthPage() {
     </div>
   );
 }
+
+const certificateWarning = (kinds: ReadonlyArray<IntegrationKind>) => {
+  const names = kinds.map((kind) => INTEGRATION_LABELS[kind]).join(" et ");
+  const subject =
+    kinds.length > 1
+      ? `${names} sont interrogés sans vérifier leur certificat TLS`
+      : `${names} est interrogé sans vérifier son certificat TLS`;
+  return `${subject} : décochez « Ignorer les erreurs de certificat TLS » dans les intégrations du site une fois le certificat corrigé.`;
+};
 
 const Dot = ({ className }: { className: string }) => (
   <span aria-hidden className={cn("size-2 shrink-0 rounded-full", className)} />
@@ -136,6 +146,12 @@ function SiteCard({ site, now }: { site: SiteHealth; now: number }) {
           )}
         </Fact>
       </dl>
+
+      {site.ignoringCertificates.length > 0 ? (
+        <p className="rounded-lg border border-down bg-down-background p-3 text-sm">
+          {certificateWarning(site.ignoringCertificates)}
+        </p>
+      ) : null}
 
       {last && last.steps.length > 0 ? (
         <ul className="space-y-1 text-sm">

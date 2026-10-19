@@ -68,11 +68,12 @@ async function pushingSite() {
   const t = testBackend();
   const admin = t.withIdentity((await createSignedInUser(t, "admin")).identity);
   const siteId = await createTestSite(admin, { name: "Siège" });
-  await admin.action(api.integrations.save, {
+  await admin.action(api.sources.saveIntegration, {
     siteId,
     kind: "netbox",
     baseUrl: NETBOX,
     enabled: true,
+    ignoreCertificateErrors: false,
     token: TOKEN,
   });
   await t.run(async (ctx) => {
@@ -160,7 +161,7 @@ const turnOn = async (admin: TestClient, siteId: string) =>
   await admin.mutation(api.netbox.setPush, { siteId, push: true });
 
 const push = async (admin: TestClient, siteId: string) =>
-  await admin.action(internal.netboxPush.run, { siteId });
+  await admin.action(internal.sources.pushToNetBox, { siteId });
 
 const lastPush = async (admin: TestClient, siteId: string) =>
   await admin.run(async (ctx) => {
@@ -392,11 +393,12 @@ describe("the push to NetBox", () => {
     const { admin, siteId } = await pushingSite();
     await turnOn(admin, siteId);
     const patches = netboxAnswering(async () => {
-      await admin.action(api.integrations.save, {
+      await admin.action(api.sources.saveIntegration, {
         siteId,
         kind: "netbox",
         baseUrl: "https://other-netbox.test",
         enabled: true,
+        ignoreCertificateErrors: false,
         token: TOKEN,
       });
       return 200;

@@ -18,7 +18,7 @@ import { api } from "../../convex/_generated/api";
 
 type Saved = NonNullable<FunctionReturnType<typeof api.librenms.settings>>;
 type Options = Exclude<
-  FunctionReturnType<typeof api.librenms.options>,
+  FunctionReturnType<typeof api.sources.librenmsDevices>,
   { error: string }
 >;
 type DeviceItem = { value: number; label: string };
@@ -31,7 +31,7 @@ const itemOf = (device: LibreNMSDevice): DeviceItem => ({
 /** The LibreNMS device each of the site's switches stands for. */
 export function LibreNMSSettingsSection({ siteId }: { siteId: string }) {
   const saved = useQuery(api.librenms.settings, { siteId });
-  const loadOptions = useAction(api.librenms.options);
+  const loadOptions = useAction(api.sources.librenmsDevices);
   const [options, setOptions] = useState<Options | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

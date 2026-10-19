@@ -5,7 +5,7 @@
 import { ConvexError, v } from "convex/values";
 import type { Infer } from "convex/values";
 import { internal } from "./_generated/api";
-import { internalAction, internalMutation } from "./_generated/server";
+import { internalMutation } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
 import type { ActionCtx, MutationCtx, QueryCtx } from "./_generated/server";
 import { openConnection } from "./integrations";
@@ -16,6 +16,7 @@ import { schedulePush } from "./netboxPush";
 import { adminQuery, editorMutation, readerQuery } from "./lib/functions";
 import { SOURCE_RETRY } from "./lib/httpRetry";
 import { probeIntegration } from "./lib/integrationProbe";
+import type { Transport } from "./lib/integrationProbe";
 import { requireSite } from "./sites";
 import {
   cycleRun,
@@ -91,7 +92,7 @@ const begin = async (
       running,
     });
   }
-  await ctx.scheduler.runAfter(0, internal.collection.run, {
+  await ctx.scheduler.runAfter(0, internal.sources.collect, {
     siteId,
     cycleId: running.cycleId,
   });
@@ -182,9 +183,10 @@ const collectFrom = async (
   siteId: string,
   cycleId: string,
   source: IntegrationKind,
+  transport: Transport,
 ): Promise<CycleStep> => {
   try {
-    const connection = await openConnection(ctx, siteId, source);
+    const connection = await openConnection(ctx, siteId, source, transport);
     if ("error" in connection) {
       return { source, ok: false, message: connection.error };
     }
@@ -210,27 +212,28 @@ const collectFrom = async (
   }
 };
 
-export const run = internalAction({
-  args: { siteId: v.string(), cycleId: v.string() },
-  returns: v.null(),
-  handler: async (ctx, { siteId, cycleId }) => {
-    const sources = await ctx.runMutation(internal.collection.claim, {
-      siteId,
-      cycleId,
-    });
-    if (sources === null) return null;
-    const steps: Array<CycleStep> = [];
-    for (const source of sources) {
-      steps.push(await collectFrom(ctx, siteId, cycleId, source));
-    }
-    await ctx.runMutation(internal.collection.finish, {
-      siteId,
-      cycleId,
-      steps,
-    });
-    return null;
-  },
-});
+/** One cycle of a site, registered in `sources.ts`. */
+export const runCycle = async (
+  ctx: ActionCtx,
+  { siteId, cycleId }: { siteId: string; cycleId: string },
+  transport: Transport,
+): Promise<null> => {
+  const sources = await ctx.runMutation(internal.collection.claim, {
+    siteId,
+    cycleId,
+  });
+  if (sources === null) return null;
+  const steps: Array<CycleStep> = [];
+  for (const source of sources) {
+    steps.push(await collectFrom(ctx, siteId, cycleId, source, transport));
+  }
+  await ctx.runMutation(internal.collection.finish, {
+    siteId,
+    cycleId,
+    steps,
+  });
+  return null;
+};
 
 /**
  * Records a cycle's outcome, plans the next one, and starts the push to

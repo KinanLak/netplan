@@ -31,11 +31,12 @@ describe("the admin health overview", () => {
     const t = await admin();
     const quiet = await createTestSite(t, { name: "Site B" });
     const busy = await createTestSite(t, { name: "Site A" });
-    await t.action(api.integrations.save, {
+    await t.action(api.sources.saveIntegration, {
       siteId: busy,
       kind: "netbox",
       baseUrl: "https://netbox.test",
       enabled: true,
+      ignoreCertificateErrors: false,
       token: "a-token-for-tests", // gitleaks:allow
     });
     const last = {
@@ -106,16 +107,43 @@ describe("the admin health overview", () => {
   it("names no NetBox import while NetBox is disabled", async () => {
     const t = await admin();
     const siteId = await createTestSite(t);
-    await t.action(api.integrations.save, {
+    await t.action(api.sources.saveIntegration, {
       siteId,
       kind: "netbox",
       baseUrl: "https://netbox.test",
       enabled: false,
+      ignoreCertificateErrors: false,
       token: "a-token-for-tests", // gitleaks:allow
     });
 
     const [site] = await t.query(api.health.overview, {});
 
     expect(site.netbox).toBeNull();
+  });
+
+  it("names the integrations that ignore certificate errors", async () => {
+    const t = await admin();
+    const siteId = await createTestSite(t);
+    const token = { keyId: "k", iv: "iv", ciphertext: "c" };
+    await t.run(async (ctx) => {
+      for (const [kind, ignoreCertificateErrors] of [
+        ["netbox", undefined],
+        ["librenms", true],
+      ] as const) {
+        await ctx.db.insert("integrations", {
+          siteId,
+          kind,
+          baseUrl: `https://${kind}.test`,
+          enabled: true,
+          token,
+          updatedAt: 0,
+          ...(ignoreCertificateErrors && { ignoreCertificateErrors }),
+        });
+      }
+    });
+
+    const [site] = await t.query(api.health.overview, {});
+
+    expect(site.ignoringCertificates).toEqual(["librenms"]);
   });
 });

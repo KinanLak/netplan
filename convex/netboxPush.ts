@@ -4,11 +4,7 @@
 // whose values are due. Netplan never reads them back.
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import {
-  internalAction,
-  internalMutation,
-  internalQuery,
-} from "./_generated/server";
+import { internalMutation, internalQuery } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
 import type { ActionCtx, MutationCtx, QueryCtx } from "./_generated/server";
 import { placeNamer } from "./history";
@@ -16,6 +12,7 @@ import { openConnection } from "./integrations";
 import { cycleOf, LEASE_MS } from "./lib/cycles";
 import { RetryStopped, SOURCE_RETRY } from "./lib/httpRetry";
 import { netboxPatch } from "./lib/netboxApi";
+import type { Transport } from "./lib/integrationProbe";
 import { pushedValues, pushRun } from "./siteValidators";
 import {
   customFields,
@@ -45,7 +42,7 @@ export const pushEnabled = async (ctx: QueryCtx, siteId: string) => {
 /** Called as a cycle ends: the push follows it when it is on. */
 export const schedulePush = async (ctx: MutationCtx, siteId: string) => {
   if (await pushEnabled(ctx, siteId)) {
-    await ctx.scheduler.runAfter(0, internal.netboxPush.run, { siteId });
+    await ctx.scheduler.runAfter(0, internal.sources.pushToNetBox, { siteId });
   }
 };
 
@@ -271,8 +268,9 @@ const pushDevices = async (
   siteId: string,
   runId: string,
   tally: Tally,
+  transport: Transport,
 ) => {
-  const connection = await openConnection(ctx, siteId, "netbox");
+  const connection = await openConnection(ctx, siteId, "netbox", transport);
   if ("error" in connection) {
     tally.error = connection.error;
     return;
@@ -334,26 +332,27 @@ const pushDevices = async (
   }
 };
 
-export const run = internalAction({
-  args: { siteId: v.string() },
-  returns: v.null(),
-  handler: async (ctx, { siteId }) => {
-    const runId = await ctx.runMutation(internal.netboxPush.claim, { siteId });
-    if (runId === null) return null;
-    const startedAt = Date.now();
-    const tally: Tally = { sent: 0, refused: 0 };
-    try {
-      await pushDevices(ctx, siteId, runId, tally);
-    } catch (error) {
-      // The token is never part of an error the source code builds.
-      console.error(`netbox push ${siteId}`, error);
-      tally.error = "Erreur inattendue pendant l'envoi vers NetBox.";
-    }
-    await ctx.runMutation(internal.netboxPush.finish, {
-      siteId,
-      runId,
-      result: { startedAt, finishedAt: Date.now(), ...tally },
-    });
-    return null;
-  },
-});
+/** One push to a site's NetBox, registered in `sources.ts`. */
+export const runPush = async (
+  ctx: ActionCtx,
+  siteId: string,
+  transport: Transport,
+): Promise<null> => {
+  const runId = await ctx.runMutation(internal.netboxPush.claim, { siteId });
+  if (runId === null) return null;
+  const startedAt = Date.now();
+  const tally: Tally = { sent: 0, refused: 0 };
+  try {
+    await pushDevices(ctx, siteId, runId, tally, transport);
+  } catch (error) {
+    // The token is never part of an error the source code builds.
+    console.error(`netbox push ${siteId}`, error);
+    tally.error = "Erreur inattendue pendant l'envoi vers NetBox.";
+  }
+  await ctx.runMutation(internal.netboxPush.finish, {
+    siteId,
+    runId,
+    result: { startedAt, finishedAt: Date.now(), ...tally },
+  });
+  return null;
+};

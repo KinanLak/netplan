@@ -205,11 +205,12 @@ async function siteWithLibreNMS({ defaultPorts = false } = {}) {
   await create("device:pc", "pc", [PC]);
   await create("device:printer", "endpoint", [PRINTER]);
 
-  await admin.action(api.integrations.save, {
+  await admin.action(api.sources.saveIntegration, {
     siteId,
     kind: "librenms",
     baseUrl: LIBRENMS,
     enabled: true,
+    ignoreCertificateErrors: false,
     token: TOKEN,
   });
   await admin.mutation(api.librenms.saveSettings, {

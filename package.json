@@ -27,7 +27,8 @@
     "better-auth": "1.6.33",
     "convex": "^1.46.0",
     "convex-helpers": "^0.1.128",
-    "nodemailer": "^10.1.1"
+    "nodemailer": "^10.1.1",
+    "undici": "^8.12.3"
   },
   "devDependencies": {
     "@babel/core": "^8.0.7",

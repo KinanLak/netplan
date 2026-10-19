@@ -1,10 +1,12 @@
 // A site's LibreNMS settings (ADR 0023): the LibreNMS device each Netplan
 // switch stands for, picked from what LibreNMS lists.
 import { ConvexError, v } from "convex/values";
-import type { QueryCtx } from "./_generated/server";
+import type { Infer } from "convex/values";
+import type { ActionCtx, QueryCtx } from "./_generated/server";
 import { openConnection } from "./integrations";
 import { PROBE_RETRY, sourceGet } from "./lib/integrationProbe";
-import { adminAction, adminMutation, adminQuery } from "./lib/functions";
+import type { Transport } from "./lib/integrationProbe";
+import { adminMutation, adminQuery } from "./lib/functions";
 import { requireSite } from "./sites";
 import { librenmsSettings } from "./siteValidators";
 import {
@@ -120,35 +122,40 @@ const deviceOf = (item: unknown): LibreNMSDevice | null => {
   return { id, name: name ?? `#${id}` };
 };
 
-/** The devices LibreNMS polls, for the admin to pick from. */
-export const options = adminAction({
-  args: { siteId: v.string() },
-  returns: v.union(
-    v.object({ error: v.string() }),
-    v.object({
-      baseUrl: v.string(),
-      devices: v.array(v.object({ id: v.number(), name: v.string() })),
-    }),
-  ),
-  handler: async (ctx, { siteId }) => {
-    const connection = await openConnection(ctx, siteId, "librenms", {
-      enabledOnly: false,
-    });
-    if ("error" in connection) return connection;
-    const answer = await sourceGet(connection, "/api/v0/devices", PROBE_RETRY);
-    if (!answer.ok) return { error: answer.message };
-    const listed =
-      typeof answer.body === "object" && answer.body !== null
-        ? (answer.body as Record<string, unknown>).devices
-        : undefined;
-    if (!Array.isArray(listed)) {
-      return { error: "LibreNMS n'a pas listé ses équipements." };
-    }
-    return {
-      baseUrl: connection.baseUrl,
-      devices: listed
-        .flatMap((item) => deviceOf(item) ?? [])
-        .sort((a, b) => a.name.localeCompare(b.name, "fr")),
-    };
-  },
-});
+export const devicesResult = v.union(
+  v.object({ error: v.string() }),
+  v.object({
+    baseUrl: v.string(),
+    devices: v.array(v.object({ id: v.number(), name: v.string() })),
+  }),
+);
+
+/**
+ * The devices LibreNMS polls, for the admin to pick from. Registered in
+ * `sources.ts`.
+ */
+export const listDevices = async (
+  ctx: ActionCtx,
+  siteId: string,
+  transport: Transport,
+): Promise<Infer<typeof devicesResult>> => {
+  const connection = await openConnection(ctx, siteId, "librenms", transport, {
+    enabledOnly: false,
+  });
+  if ("error" in connection) return connection;
+  const answer = await sourceGet(connection, "/api/v0/devices", PROBE_RETRY);
+  if (!answer.ok) return { error: answer.message };
+  const listed =
+    typeof answer.body === "object" && answer.body !== null
+      ? (answer.body as Record<string, unknown>).devices
+      : undefined;
+  if (!Array.isArray(listed)) {
+    return { error: "LibreNMS n'a pas listé ses équipements." };
+  }
+  return {
+    baseUrl: connection.baseUrl,
+    devices: listed
+      .flatMap((item) => deviceOf(item) ?? [])
+      .sort((a, b) => a.name.localeCompare(b.name, "fr")),
+  };
+};

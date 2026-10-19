@@ -59,11 +59,12 @@ const connect = async (
   baseUrl = NETBOX,
   enabled = true,
 ) =>
-  await admin.action(api.integrations.save, {
+  await admin.action(api.sources.saveIntegration, {
     siteId,
     kind: "netbox",
     baseUrl,
     enabled,
+    ignoreCertificateErrors: false,
     token: TOKEN,
   });
 
@@ -80,13 +81,13 @@ describe("NetBox settings", () => {
     const admin = await signedInTest("admin");
     const siteId = await createTestSite(admin);
     expect(await admin.query(api.netbox.settings, { siteId })).toBeNull();
-    expect(await admin.action(api.netbox.options, { siteId })).toEqual({
+    expect(await admin.action(api.sources.netboxChoices, { siteId })).toEqual({
       error: "NetBox n'est pas configuré.",
     });
 
     await connect(admin, siteId, NETBOX, false);
     const before = fetchStub.calls.length;
-    const options = await admin.action(api.netbox.options, { siteId });
+    const options = await admin.action(api.sources.netboxChoices, { siteId });
     if ("error" in options) throw new Error(options.error);
     expect(options.sites).toEqual([
       { id: 3, name: "Annexe" },
@@ -111,7 +112,7 @@ describe("NetBox settings", () => {
     await connect(admin, siteId);
     fetchStub.restore();
     fetchStub = stubFetch(new Response("", { status: 403 }));
-    expect(await admin.action(api.netbox.options, { siteId })).toEqual({
+    expect(await admin.action(api.sources.netboxChoices, { siteId })).toEqual({
       error: "NetBox refuse ce jeton (403).",
     });
   });
@@ -153,11 +154,12 @@ describe("NetBox settings", () => {
     );
 
     // Saving the same connection again keeps them.
-    await admin.action(api.integrations.save, {
+    await admin.action(api.sources.saveIntegration, {
       siteId,
       kind: "netbox",
       baseUrl: NETBOX,
       enabled: false,
+      ignoreCertificateErrors: false,
     });
     expect(await admin.query(api.netbox.settings, { siteId })).toEqual(
       SETTINGS,
