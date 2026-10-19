@@ -1,9 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { randomBytes } from "node:crypto";
-import { ConvexError } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { api, internal } from "./_generated/api";
-import { createTestSite, signedInTest } from "./_test/auth.setup";
-import { reencryptInPasses } from "./integrations";
+import { makeFunctionReference } from "convex/server";
+import { internalAction } from "./_generated/server";
+import {
+  createSignedInUser,
+  createTestSite,
+  signedInTest,
+  testBackend,
+} from "./_test/auth.setup";
+import { reencryptInPasses, testConnection } from "./integrations";
 import { stubFetch } from "./_test/fetch";
 import type { TestClient } from "./_test/auth.setup";
 
@@ -41,13 +48,18 @@ const stored = (t: TestClient) =>
 const saveNetBox = (
   t: TestClient,
   siteId: string,
-  input: { baseUrl?: string; token?: string } = { token: TOKEN },
+  input: {
+    baseUrl?: string;
+    token?: string;
+    ignoreCertificateErrors?: boolean;
+  } = { token: TOKEN },
 ) =>
-  t.action(api.integrations.save, {
+  t.action(api.sources.saveIntegration, {
     siteId,
     kind: "netbox",
     baseUrl: input.baseUrl ?? "https://netbox.test/api/",
     enabled: true,
+    ignoreCertificateErrors: input.ignoreCertificateErrors ?? false,
     token: input.token,
   });
 
@@ -75,6 +87,7 @@ describe("integrations", () => {
         kind: "netbox",
         baseUrl: "https://netbox.test",
         enabled: true,
+        ignoreCertificateErrors: false,
         lastCheck: {
           ok: true,
           message: "Connexion réussie : NetBox 4.6.10.",
@@ -83,6 +96,64 @@ describe("integrations", () => {
       },
     ]);
     expect(JSON.stringify(listed)).not.toContain(row.token.ciphertext);
+  });
+
+  it("sends an integration's requests leniently only when its admin says so", async () => {
+    const lenientCalls: Array<string> = [];
+    const t = testBackend({
+      "./lenientProbe.ts": () =>
+        Promise.resolve({
+          probe: internalAction({
+            args: { siteId: v.string() },
+            handler: async (ctx, { siteId }) =>
+              await testConnection(ctx, siteId, "netbox", {
+                lenient: (url) => {
+                  lenientCalls.push(url);
+                  return Promise.resolve(
+                    Response.json({ "netbox-version": "4.6.10" }),
+                  );
+                },
+              }),
+          }),
+        }),
+    });
+    const admin = t.withIdentity(
+      (await createSignedInUser(t, "admin")).identity,
+    );
+    const siteId = await createTestSite(admin);
+    const probe = makeFunctionReference<"action">("lenientProbe:probe");
+
+    await saveNetBox(admin, siteId);
+    await t.action(probe, { siteId });
+    expect(lenientCalls).toEqual([]);
+
+    await saveNetBox(admin, siteId, {
+      token: undefined,
+      ignoreCertificateErrors: true,
+    });
+    const [row] = await stored(admin);
+    expect(row.ignoreCertificateErrors).toBe(true);
+    await t.action(probe, { siteId });
+    expect(lenientCalls).toEqual(["https://netbox.test/api/status/"]);
+  });
+
+  it("forgets the last test when the certificate option changes", async () => {
+    const admin = await signedInTest("admin");
+    const siteId = await createTestSite(admin);
+    await saveNetBox(admin, siteId);
+    await admin.mutation(internal.integrations.store, {
+      siteId,
+      kind: "netbox",
+      baseUrl: "https://netbox.test",
+      enabled: true,
+      ignoreCertificateErrors: true,
+    });
+    const [row] = await stored(admin);
+    expect(row.lastCheck).toBeUndefined();
+    expect(
+      (await admin.query(api.integrations.listForSite, { siteId }))[0]
+        ?.ignoreCertificateErrors,
+    ).toBe(true);
   });
 
   it("keeps the token when it is left out, but not for a new address", async () => {
@@ -135,7 +206,7 @@ describe("integrations", () => {
     process.env.NETPLAN_SECRET_KEY = newKey();
 
     expect(
-      await admin.action(api.integrations.testConnection, {
+      await admin.action(api.sources.testIntegration, {
         siteId,
         kind: "netbox",
       }),
@@ -161,7 +232,7 @@ describe("integrations", () => {
     const [after] = await stored(admin);
     expect(after.token.keyId).not.toBe(before.token.keyId);
     delete process.env.NETPLAN_SECRET_KEY_PREVIOUS;
-    await admin.action(api.integrations.testConnection, {
+    await admin.action(api.sources.testIntegration, {
       siteId,
       kind: "netbox",
     });

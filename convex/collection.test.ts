@@ -52,11 +52,12 @@ async function siteWithNetBox(given?: TestClient) {
     ? { admin: given, editor: given, reader: given }
     : await team();
   const siteId = await createTestSite(admin);
-  await admin.action(api.integrations.save, {
+  await admin.action(api.sources.saveIntegration, {
     siteId,
     kind: "netbox",
     baseUrl: "https://netbox.test",
     enabled: true,
+    ignoreCertificateErrors: false,
     token: TOKEN,
   });
   return { admin, editor, reader, siteId };

@@ -27,7 +27,7 @@ import type {
 import { api } from "../../convex/_generated/api";
 
 type Options = Exclude<
-  FunctionReturnType<typeof api.netbox.options>,
+  FunctionReturnType<typeof api.sources.netboxChoices>,
   { error: string }
 >;
 
@@ -46,7 +46,7 @@ const typeItems: Array<{ value: RoleChoice; label: string }> = [
 /** The NetBox site a site imports and the Netplan type of each role. */
 export function NetBoxSettingsSection({ siteId }: { siteId: string }) {
   const settings = useQuery(api.netbox.settings, { siteId });
-  const loadOptions = useAction(api.netbox.options);
+  const loadOptions = useAction(api.sources.netboxChoices);
   const [options, setOptions] = useState<Options | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

@@ -88,11 +88,12 @@ async function importingSite(source: ReturnType<typeof netboxServing>) {
   );
   const admin = t.withIdentity((await createSignedInUser(t, "admin")).identity);
   const siteId = await createTestSite(admin);
-  await admin.action(api.integrations.save, {
+  await admin.action(api.sources.saveIntegration, {
     siteId,
     kind: "netbox",
     baseUrl: NETBOX,
     enabled: true,
+    ignoreCertificateErrors: false,
     token: TOKEN,
   });
   await admin.mutation(api.netbox.saveSettings, {
@@ -292,11 +293,12 @@ describe("NetBox import", () => {
     expect(await reviews()).toHaveLength(1);
 
     // Another NetBox has another device under id 12.
-    await admin.action(api.integrations.save, {
+    await admin.action(api.sources.saveIntegration, {
       siteId,
       kind: "netbox",
       baseUrl: "https://other-netbox.test",
       enabled: true,
+      ignoreCertificateErrors: false,
       token: TOKEN,
     });
 
@@ -398,11 +400,12 @@ describe("NetBox import", () => {
     // Leaving that NetBox leaves its cabling in place, as manual.
     if (laid) lists.cables.push(laid);
     await refresh(editor, siteId);
-    await admin.action(api.integrations.save, {
+    await admin.action(api.sources.saveIntegration, {
       siteId,
       kind: "netbox",
       baseUrl: "https://other-netbox.test",
       enabled: true,
+      ignoreCertificateErrors: false,
       token: TOKEN,
     });
     expect((await cables()).map((cable) => cable.source ?? null)).toEqual([

@@ -116,6 +116,17 @@ describe("probeIntegration", () => {
       message: "Cette adresse ne répond pas comme NetBox.",
     });
 
+    answer(
+      new TypeError("fetch failed", {
+        cause: { code: "ERR_TLS_CERT_ALTNAME_INVALID" },
+      }),
+    );
+    expect(
+      (await probeIntegration(source("librenms", NMS), noWait)).message,
+    ).toBe(
+      "Le certificat TLS de LibreNMS est refusé (ERR_TLS_CERT_ALTNAME_INVALID) : corrigez-le, ou cochez « Ignorer les erreurs de certificat TLS » dans la connexion.",
+    );
+
     const timeout = new DOMException("timed out", "TimeoutError");
     answer(timeout, timeout);
     expect(await probeIntegration(source("librenms", NMS), noWait)).toEqual({

@@ -48,6 +48,8 @@ export default defineSchema({
     baseUrl: v.string(),
     enabled: v.boolean(),
     token: encryptedSecret,
+    /** Sends the token to whatever certificate answers (ADR 0028). */
+    ignoreCertificateErrors: v.optional(v.boolean()),
     lastCheck: v.optional(connectionCheck),
     /** NetBox only: what the site imports from it. */
     netbox: v.optional(netboxSettings),

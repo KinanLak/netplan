@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { stubFetch } from "../_test/fetch";
-import { fetchWithRetry, RetryStopped } from "./httpRetry";
+import { certificateRefusal, fetchWithRetry, RetryStopped } from "./httpRetry";
 
 const pauses: Array<number> = [];
 const options = {
@@ -110,5 +110,38 @@ describe("fetchWithRetry", () => {
     await expect(fetchWithRetry("https://x.test", {}, options)).rejects.toThrow(
       "refused",
     );
+  });
+
+  // As Node's fetch and undici's refuse a certificate that names another host.
+  it("never retries a refused certificate", async () => {
+    const refused = new TypeError("fetch failed", {
+      cause: Object.assign(new Error("Hostname/IP does not match"), {
+        code: "ERR_TLS_CERT_ALTNAME_INVALID",
+      }),
+    });
+    const calls = answers(refused, 200);
+    await expect(fetchWithRetry("https://x.test", {}, options)).rejects.toBe(
+      refused,
+    );
+    expect(calls).toHaveLength(1);
+    expect(pauses).toEqual([]);
+  });
+});
+
+describe("certificateRefusal", () => {
+  it("reads the code where Node, undici and Bun put it", () => {
+    const bun = Object.assign(new TypeError("unable to verify"), {
+      code: "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+    });
+    const node = new TypeError("fetch failed", {
+      cause: { code: "DEPTH_ZERO_SELF_SIGNED_CERT" },
+    });
+    expect(certificateRefusal(bun)).toBe("UNABLE_TO_VERIFY_LEAF_SIGNATURE");
+    expect(certificateRefusal(node)).toBe("DEPTH_ZERO_SELF_SIGNED_CERT");
+    const refused = new TypeError("fetch failed", {
+      cause: { code: "ECONNREFUSED" },
+    });
+    expect(certificateRefusal(refused)).toBeNull();
+    expect(certificateRefusal("ERR_TLS_CERT_ALTNAME_INVALID")).toBeNull();
   });
 });

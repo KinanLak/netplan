@@ -2,7 +2,7 @@
 // rather than by following `next`, whose address NetBox builds from the
 // request's headers and could point the token elsewhere behind a proxy.
 import { fetchWithRetry, RetryStopped } from "./httpRetry";
-import { authHeaders, sourceGet } from "./integrationProbe";
+import { authHeaders, sourceGet, unansweredMessage } from "./integrationProbe";
 import type { Source, SourceAnswer } from "./integrationProbe";
 import type { RetryOptions } from "./httpRetry";
 
@@ -120,14 +120,7 @@ export async function netboxPatch(
     );
   } catch (error) {
     if (error instanceof RetryStopped) throw error;
-    const timedOut =
-      error instanceof DOMException && error.name === "TimeoutError";
-    return {
-      ok: false,
-      message: timedOut
-        ? "NetBox ne répond pas (délai dépassé)."
-        : "NetBox est injoignable à cette adresse.",
-    };
+    return { ok: false, message: unansweredMessage("netbox", error) };
   }
   let answer: unknown = null;
   try {

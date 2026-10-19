@@ -41,6 +41,37 @@ export const SOURCE_RETRY: RetryOptions = {
 export const pause = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms));
 
+// What Node, undici and Bun call a certificate they refuse.
+const CERTIFICATE_CODES = new Set([
+  "CERT_HAS_EXPIRED",
+  "CERT_NOT_YET_VALID",
+  "DEPTH_ZERO_SELF_SIGNED_CERT",
+  "ERR_TLS_CERT_ALTNAME_INVALID",
+  "SELF_SIGNED_CERT_IN_CHAIN",
+  "UNABLE_TO_GET_ISSUER_CERT",
+  "UNABLE_TO_GET_ISSUER_CERT_LOCALLY",
+  "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+]);
+
+const codeOf = (value: unknown): unknown =>
+  typeof value === "object" && value !== null && "code" in value
+    ? value.code
+    : undefined;
+
+/**
+ * Why a failed request's server certificate was refused, or `null` when it
+ * was not: Node and undici say so in the error's cause, Bun in the error.
+ */
+export const certificateRefusal = (error: unknown): string | null => {
+  for (const code of [
+    codeOf(error),
+    codeOf(error instanceof Error ? error.cause : undefined),
+  ]) {
+    if (typeof code === "string" && CERTIFICATE_CODES.has(code)) return code;
+  }
+  return null;
+};
+
 // Statuses whose response cannot carry a body.
 const NULL_BODY = new Set([101, 204, 205, 304]);
 
@@ -72,7 +103,8 @@ export async function fetchWithRetry(
       }
       await response.body?.cancel();
     } catch (error) {
-      if (last) throw error;
+      // The same certificate will be refused again.
+      if (last || certificateRefusal(error) !== null) throw error;
     }
     await sleep(delay);
     delay = Math.min(delay * 2, options.maxDelayMs);

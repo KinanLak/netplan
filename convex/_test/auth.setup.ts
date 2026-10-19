@@ -25,7 +25,12 @@ export type TestBackend = TestConvex<typeof schema>;
 export function testBackend(
   extra: Record<string, () => Promise<Record<string, unknown>>> = {},
 ): TestBackend {
-  const t = convexTest(schema, { ...modules, ...extra });
+  const t = convexTest(schema, {
+    ...modules,
+    // Only `.test.ts` files import this one, so Convex never bundles it.
+    "./sources.ts": () => import("../sources"),
+    ...extra,
+  });
   t.registerComponent("betterAuth", authSchema, authModules);
   return t;
 }

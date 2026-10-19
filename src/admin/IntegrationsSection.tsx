@@ -86,12 +86,15 @@ function IntegrationForm({
   kind: IntegrationKind;
   integration: Integration | null;
 }) {
-  const save = useAction(api.integrations.save);
-  const test = useAction(api.integrations.testConnection);
+  const save = useAction(api.sources.saveIntegration);
+  const test = useAction(api.sources.testIntegration);
   const label = INTEGRATION_LABELS[kind];
   const [baseUrl, setBaseUrl] = useState(integration?.baseUrl ?? "");
   const [token, setToken] = useState("");
   const [enabled, setEnabled] = useState(integration?.enabled ?? true);
+  const [ignoreCertificateErrors, setIgnoreCertificateErrors] = useState(
+    integration?.ignoreCertificateErrors ?? false,
+  );
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<"save" | "test" | null>(null);
   const id = (field: string) => `integration-${kind}-${field}`;
@@ -119,6 +122,7 @@ function IntegrationForm({
         kind,
         baseUrl,
         enabled,
+        ignoreCertificateErrors,
         token: keepToken ? undefined : token,
       });
       setToken("");
@@ -230,6 +234,31 @@ function IntegrationForm({
               Utiliser {label} dans la collecte
             </FieldLabel>
           </Field>
+          <Field orientation="horizontal">
+            <input
+              id={id("insecure")}
+              type="checkbox"
+              className="size-4 accent-primary"
+              checked={ignoreCertificateErrors}
+              onChange={(event) => {
+                setIgnoreCertificateErrors(event.target.checked);
+                changed();
+              }}
+            />
+            <FieldLabel htmlFor={id("insecure")}>
+              Ignorer les erreurs de certificat TLS
+            </FieldLabel>
+          </Field>
+          {ignoreCertificateErrors ? (
+            <p
+              role="note"
+              className="rounded-lg border border-down bg-down-background p-3 text-sm"
+            >
+              Rien ne prouve plus que le serveur qui répond à cette adresse est
+              bien {label} : le jeton lui est envoyé quand même. À réserver à un
+              réseau de confiance, le temps de corriger le certificat.
+            </p>
+          ) : null}
         </FieldGroup>
       </FieldSet>
       <div className="flex flex-wrap items-center gap-3">

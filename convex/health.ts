@@ -4,7 +4,7 @@ import { freshnessOf, siteFreshness } from "./collection";
 import { cycleOf } from "./lib/cycles";
 import { adminQuery } from "./lib/functions";
 import type { QueryCtx } from "./_generated/server";
-import { cycleRun, pushRun } from "./siteValidators";
+import { cycleRun, integrationKind, pushRun } from "./siteValidators";
 
 /** Failing devices the page lists; past that it says how many more. */
 const FAILING_SHOWN = 20;
@@ -83,6 +83,8 @@ export const overview = adminQuery({
         down: v.number(),
         unknown: v.number(),
       }),
+      /** The integrations that ignore certificate errors (ADR 0028). */
+      ignoringCertificates: v.array(integrationKind),
     }),
   ),
   handler: async (ctx) => {
@@ -92,19 +94,18 @@ export const overview = adminQuery({
     return await Promise.all(
       sites.map(async (site) => {
         const siteId = site.objectId;
-        const [cycle, netbox, devices] = await Promise.all([
+        const [cycle, integrations, devices] = await Promise.all([
           cycleOf(ctx, siteId),
           ctx.db
             .query("integrations")
-            .withIndex("by_site_kind", (q) =>
-              q.eq("siteId", siteId).eq("kind", "netbox"),
-            )
-            .unique(),
+            .withIndex("by_site_kind", (q) => q.eq("siteId", siteId))
+            .collect(),
           ctx.db
             .query("devices")
             .withIndex("by_site", (q) => q.eq("siteId", siteId))
             .collect(),
         ]);
+        const netbox = integrations.find((row) => row.kind === "netbox");
         const switches = { up: 0, down: 0, unknown: 0 };
         for (const device of devices) {
           if (device.type !== "switch") continue;
@@ -127,6 +128,9 @@ export const overview = adminQuery({
               }
             : null,
           switches,
+          ignoringCertificates: integrations
+            .filter((row) => row.ignoreCertificateErrors)
+            .map((row) => row.kind),
         };
       }),
     );

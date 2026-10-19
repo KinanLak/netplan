@@ -2,6 +2,7 @@
 // in actions and only internal functions ever return the ciphertext; no
 // function returns a token.
 import { ConvexError, v } from "convex/values";
+import type { ObjectType } from "convex/values";
 import { internal } from "./_generated/api";
 import {
   internalAction,
@@ -9,18 +10,21 @@ import {
   internalQuery,
 } from "./_generated/server";
 import type { ActionCtx, QueryCtx } from "./_generated/server";
-import { adminAction, adminMutation, adminQuery } from "./lib/functions";
+import { adminMutation, adminQuery } from "./lib/functions";
 import { configuredKeys, decryptSecret, encryptSecret } from "./lib/secrets";
 import type { EncryptedSecret } from "./lib/secrets";
 import { defaultFetch } from "./lib/httpRetry";
 import { probeIntegration } from "./lib/integrationProbe";
-import type { ConnectionCheck, Source } from "./lib/integrationProbe";
+import type {
+  ConnectionCheck,
+  Source,
+  Transport,
+} from "./lib/integrationProbe";
 import { releaseLibreNMS } from "./librenmsCycle";
 import { releaseNetBox } from "./netboxImport";
 import { requireSite } from "./sites";
 import {
   connectionCheck,
-  connectionResult,
   encryptedSecret,
   integrationKind,
 } from "./siteValidators";
@@ -35,6 +39,7 @@ const integrationSummary = v.object({
   kind: integrationKind,
   baseUrl: v.string(),
   enabled: v.boolean(),
+  ignoreCertificateErrors: v.boolean(),
   lastCheck: v.union(v.null(), connectionCheck),
 });
 
@@ -93,60 +98,60 @@ export const listForSite = adminQuery({
       kind: row.kind,
       baseUrl: row.baseUrl,
       enabled: row.enabled,
+      ignoreCertificateErrors: row.ignoreCertificateErrors ?? false,
       lastCheck: row.lastCheck ?? null,
     }));
   },
 });
 
+export const saveArgs = {
+  siteId: v.string(),
+  kind: integrationKind,
+  baseUrl: v.string(),
+  enabled: v.boolean(),
+  ignoreCertificateErrors: v.boolean(),
+  token: v.optional(v.string()),
+};
+
 /**
  * Saves a connection, then tests it. The token may be left out to keep the
- * stored one, unless the address changes.
+ * stored one, unless the address changes. Registered in `sources.ts`.
  */
-export const save = adminAction({
-  args: {
-    siteId: v.string(),
-    kind: integrationKind,
-    baseUrl: v.string(),
-    enabled: v.boolean(),
-    token: v.optional(v.string()),
-  },
-  returns: connectionResult,
-  handler: async (ctx, args): Promise<ConnectionCheck> => {
-    const normalized = normalizeBaseUrl(args.kind, args.baseUrl);
-    if ("error" in normalized) throw new ConvexError(normalized.error);
-    const baseUrl = normalized.url;
-    let token: EncryptedSecret | undefined;
-    if (args.token !== undefined) {
-      const refused = tokenError(args.token);
-      if (refused) throw new ConvexError(refused);
-      token = await encryptSecret(
-        (await keys()).current,
-        args.token.trim(),
-        boundTo(args.siteId, args.kind, baseUrl),
-      );
-    }
-    await ctx.runMutation(internal.integrations.store, {
-      siteId: args.siteId,
-      kind: args.kind,
-      baseUrl,
-      enabled: args.enabled,
-      token,
-    });
-    return await runCheck(ctx, args.siteId, args.kind);
-  },
-});
+export const saveConnection = async (
+  ctx: ActionCtx,
+  args: ObjectType<typeof saveArgs>,
+  transport: Transport,
+): Promise<ConnectionCheck> => {
+  const normalized = normalizeBaseUrl(args.kind, args.baseUrl);
+  if ("error" in normalized) throw new ConvexError(normalized.error);
+  const baseUrl = normalized.url;
+  let token: EncryptedSecret | undefined;
+  if (args.token !== undefined) {
+    const refused = tokenError(args.token);
+    if (refused) throw new ConvexError(refused);
+    token = await encryptSecret(
+      (await keys()).current,
+      args.token.trim(),
+      boundTo(args.siteId, args.kind, baseUrl),
+    );
+  }
+  await ctx.runMutation(internal.integrations.store, {
+    siteId: args.siteId,
+    kind: args.kind,
+    baseUrl,
+    enabled: args.enabled,
+    ignoreCertificateErrors: args.ignoreCertificateErrors,
+    token,
+  });
+  return await testConnection(ctx, args.siteId, args.kind, transport);
+};
 
-export const testConnection = adminAction({
-  args: { siteId: v.string(), kind: integrationKind },
-  returns: connectionResult,
-  handler: async (ctx, { siteId, kind }): Promise<ConnectionCheck> =>
-    await runCheck(ctx, siteId, kind),
-});
-
-const runCheck = async (
+/** "Tester la connexion", registered in `sources.ts`. */
+export const testConnection = async (
   ctx: ActionCtx,
   siteId: string,
   kind: IntegrationKind,
+  transport: Transport,
 ): Promise<ConnectionCheck> => {
   const stored = await ctx.runQuery(internal.integrations.credentials, {
     siteId,
@@ -155,7 +160,7 @@ const runCheck = async (
   if (!stored) throw new ConvexError("Cette intégration n'existe plus.");
   const token = await decryptStored(stored, stored.token);
   const result = token
-    ? await probeIntegration(sourceOf(kind, stored.baseUrl, token))
+    ? await probeIntegration(sourceOf(stored, token, transport))
     : UNREADABLE_TOKEN;
   await ctx.runMutation(internal.integrations.recordCheck, {
     siteId,
@@ -167,20 +172,30 @@ const runCheck = async (
 };
 
 const sourceOf = (
-  kind: IntegrationKind,
-  baseUrl: string,
+  stored: {
+    kind: IntegrationKind;
+    baseUrl: string;
+    ignoreCertificateErrors: boolean;
+  },
   token: string,
-): Source => ({ kind, baseUrl, token, fetch: defaultFetch });
+  transport: Transport,
+): Source => ({
+  kind: stored.kind,
+  baseUrl: stored.baseUrl,
+  token,
+  fetch: stored.ignoreCertificateErrors ? transport.lenient : defaultFetch,
+});
 
 /**
  * The source Netplan calls, with its clear token, or a French reason it
- * cannot. Only a collection cycle needs the source enabled: an
- * admin sets a source up before turning it on.
+ * cannot. Only a collection cycle needs the source enabled: an admin sets a
+ * source up before turning it on.
  */
 export const openConnection = async (
   ctx: ActionCtx,
   siteId: string,
   kind: IntegrationKind,
+  transport: Transport,
   { enabledOnly = true }: { enabledOnly?: boolean } = {},
 ): Promise<Source | { error: string }> => {
   const stored = await ctx.runQuery(internal.integrations.credentials, {
@@ -201,7 +216,7 @@ export const openConnection = async (
     throw error;
   }
   return token
-    ? sourceOf(kind, stored.baseUrl, token)
+    ? sourceOf(stored, token, transport)
     : { error: UNREADABLE_TOKEN.message };
 };
 
@@ -223,10 +238,13 @@ export const store = internalMutation({
     kind: integrationKind,
     baseUrl: v.string(),
     enabled: v.boolean(),
+    ignoreCertificateErrors: v.optional(v.boolean()),
     token: v.optional(encryptedSecret),
   },
   returns: v.null(),
-  handler: async (ctx, { siteId, kind, baseUrl, enabled, token }) => {
+  handler: async (ctx, args) => {
+    const { siteId, kind, baseUrl, enabled, token } = args;
+    const ignoreCertificateErrors = args.ignoreCertificateErrors ?? false;
     await requireSite(ctx, siteId);
     const existing = await find(ctx, siteId, kind);
     const updatedAt = Date.now();
@@ -237,6 +255,7 @@ export const store = internalMutation({
         kind,
         baseUrl,
         enabled,
+        ...(ignoreCertificateErrors && { ignoreCertificateErrors }),
         token,
         updatedAt,
       });
@@ -247,13 +266,17 @@ export const store = internalMutation({
         "Saisissez à nouveau le jeton : il n'est envoyé qu'à l'adresse pour laquelle il a été saisi.",
       );
     }
-    const changed = token !== undefined || existing.baseUrl !== baseUrl;
+    const changed =
+      token !== undefined ||
+      existing.baseUrl !== baseUrl ||
+      ignoreCertificateErrors !== (existing.ignoreCertificateErrors ?? false);
     if (kind === "netbox" && existing.baseUrl !== baseUrl) {
       await releaseNetBox(ctx, siteId);
     }
     await ctx.db.patch(existing._id, {
       baseUrl,
       enabled,
+      ignoreCertificateErrors: ignoreCertificateErrors || undefined,
       ...(token ? { token } : {}),
       // The last check described the old connection.
       ...(changed ? { lastCheck: undefined } : {}),
@@ -280,6 +303,7 @@ export const credentials = internalQuery({
       kind: integrationKind,
       baseUrl: v.string(),
       enabled: v.boolean(),
+      ignoreCertificateErrors: v.boolean(),
       token: encryptedSecret,
       updatedAt: v.number(),
     }),
@@ -292,6 +316,7 @@ export const credentials = internalQuery({
           kind,
           baseUrl: row.baseUrl,
           enabled: row.enabled,
+          ignoreCertificateErrors: row.ignoreCertificateErrors ?? false,
           token: row.token,
           updatedAt: row.updatedAt,
         }
