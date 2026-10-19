@@ -173,7 +173,7 @@ export function switchChecks({
   const { fresh, table } = freshFdb(entries, undefined, true);
   checks.push({
     level: fresh.length > 0 ? "ok" : "warn",
-    message: `${fresh.length} of ${entries.length} entries are within ${minutes(FDB_FRESH_MS)} of the newest, and would count as seen.`,
+    message: `${fresh.length} of ${entries.length} entries are within ${minutes(FDB_FRESH_MS)} of the newest: a cycle counts them as seen if the discovery before it moved the newest entry, which --discover tells.`,
   });
   if (table && discoveredAt !== null) {
     const gap = discoveredAt - table.newest;

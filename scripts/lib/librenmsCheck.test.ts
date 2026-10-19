@@ -41,7 +41,7 @@ describe("switchChecks", () => {
     });
     expect(checks.every(({ level }) => level === "ok")).toBe(true);
     expect(levels(checks)).toContain(
-      "ok 1 of 2 entries are within 2 min of the newest, and would count as seen.",
+      "ok 1 of 2 entries are within 2 min of the newest: a cycle counts them as seen if the discovery before it moved the newest entry, which --discover tells.",
     );
     expect(levels(checks)).toContain(
       "ok 2 Ethernet ports, whose names a manual switch would take.",
