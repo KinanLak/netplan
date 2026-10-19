@@ -177,23 +177,34 @@ export function readLibreNMSTime(value: unknown): number | null {
  */
 export type FdbTable = { newest: number; staleUpTo?: number };
 
+/** A table's newest entry, or `null` when none has a timestamp. */
+export const newestFdbEntry = (
+  entries: ReadonlyArray<FdbEntry>,
+): number | null =>
+  entries.reduce<number | null>(
+    (newest, { updatedAt }) =>
+      updatedAt === null || (newest !== null && newest >= updatedAt)
+        ? newest
+        : updatedAt,
+    null,
+  );
+
 /**
  * The entries of one switch's table that its latest discovery refreshed, and
  * what the next read compares with. A discovery that finished without moving
  * the newest entry refreshed nothing: every entry up to it stays unseen, in
  * this read and the later ones, until a discovery brings newer ones. A table
- * without timestamps cannot be judged and is kept whole.
+ * without timestamps cannot be judged and is kept whole. The comparison stays
+ * within the table's own clock, which may differ from the one LibreNMS dates
+ * discoveries with.
  */
 export function freshFdb(
   entries: ReadonlyArray<FdbEntry>,
   previous: FdbTable | undefined,
   discovered: boolean,
 ): { fresh: Array<FdbEntry>; table: FdbTable | null } {
-  const times = entries.flatMap(({ updatedAt }) =>
-    updatedAt === null ? [] : [updatedAt],
-  );
-  if (times.length === 0) return { fresh: [...entries], table: null };
-  const newest = times.reduce((a, b) => Math.max(a, b));
+  const newest = newestFdbEntry(entries);
+  if (newest === null) return { fresh: [...entries], table: null };
   const staleUpTo =
     discovered && previous?.newest === newest ? newest : previous?.staleUpTo;
   const fresh = entries.filter(

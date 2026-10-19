@@ -7,6 +7,7 @@ import {
   freshFdb,
   isOnline,
   matchPorts,
+  newestFdbEntry,
   readLastDiscovered,
   readLibreNMSDeviceStatus,
   readLibreNMSFdb,
@@ -139,6 +140,42 @@ describe("freshFdb", () => {
     expect(ports(freshFdb(refreshed, stale.table ?? undefined, true))).toEqual([
       5,
     ]);
+  });
+
+  it("sees nothing on a first read when the discovery left the table as it was", () => {
+    // Recorded from a Nexus whose discoveries stopped refreshing its table,
+    // before and after one; MACs and port ids replaced, timestamps and fields
+    // as LibreNMS 26.9.1 answered.
+    const fdb = {
+      status: "ok",
+      ports_fdb: [
+        ["00:00:5e:00:53:01", "2026-10-13T12:00:27.000000Z"],
+        ["00:00:5e:00:53:02", "2026-10-13T12:00:26.000000Z"],
+        ["00:00:5e:00:53:03", "2026-10-12T06:00:26.000000Z"],
+      ].map(([mac_address, updated_at], index) => ({
+        ports_fdb_id: index + 1,
+        port_id: 100 + index,
+        mac_address,
+        vlan_id: 1,
+        device_id: 2,
+        created_at: "2026-10-09T12:00:35.000000Z",
+        updated_at,
+      })),
+    };
+    const entries = readLibreNMSFdb(fdb);
+    const recorded = Date.UTC(2026, 9, 13, 12, 0, 27);
+    expect(newestFdbEntry(entries)).toBe(recorded);
+
+    const first = freshFdb(entries, { newest: recorded }, true);
+    expect(first.fresh).toEqual([]);
+    expect(first.table).toEqual({ newest: recorded, staleUpTo: recorded });
+    // A table the discovery refreshed is read as before.
+    expect(
+      ports(
+        freshFdb(table, { newest: Date.UTC(2026, 9, 16, 6, 55, 30) }, true),
+      ),
+    ).toEqual([1, 2]);
+    expect(newestFdbEntry([entry(1, null)])).toBeNull();
   });
 
   it("reads timestamps with or without a zone", () => {

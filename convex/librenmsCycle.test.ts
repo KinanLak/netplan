@@ -1083,6 +1083,16 @@ describe("the LibreNMS step", () => {
         const row = await ctx.db.query("siteCycles").first();
         if (row) await ctx.db.patch(row._id, { librenmsDiscoveryAt: 0 });
       });
+    // A first read compares with the table as it was before its discovery.
+    expect((await cycle(admin, siteId)).message).toContain(
+      "« pile » : sa dernière découverte n'a rafraîchi aucune entrée.",
+    );
+    expect(await statusOf(admin, "device:pc")).toBeNull();
+
+    librenms.state.fdb = [
+      { port_id: 101, mac_address: PC, updated_at: "2026-10-16 07:00:00" },
+    ];
+    await discoverAgain();
     await cycle(admin, siteId);
     expect(await statusOf(admin, "device:pc")).toBe("up");
 
@@ -1095,7 +1105,7 @@ describe("the LibreNMS step", () => {
     expect((await cycle(admin, siteId)).message).toContain(
       "0 MAC vue (1 passé hors ligne).",
     );
-    expect(librenms.state.discoveries).toBe(2);
+    expect(librenms.state.discoveries).toBe(3);
     expect(await statusOf(admin, "device:pc")).toBe("down");
   });
 
