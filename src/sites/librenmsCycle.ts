@@ -180,22 +180,27 @@ export type FdbTable = { newest: number; staleUpTo?: number };
 /**
  * The entries of one switch's table that its latest discovery refreshed, and
  * what the next read compares with. A discovery that finished without moving
- * the newest entry refreshed nothing: every entry up to it stays unseen, in
- * this read and the later ones, until a discovery brings newer ones. A table
- * without timestamps cannot be judged and is kept whole.
+ * the newest entry, or whose newest entry is older than the latest discovery
+ * LibreNMS reports, refreshed nothing: every entry up to it stays unseen, in
+ * this read and the later ones, until a discovery brings newer ones. The
+ * second test also judges a switch's first read. A table without timestamps
+ * cannot be judged and is kept whole.
  */
 export function freshFdb(
   entries: ReadonlyArray<FdbEntry>,
   previous: FdbTable | undefined,
   discovered: boolean,
+  discoveryStart: number | null = null,
 ): { fresh: Array<FdbEntry>; table: FdbTable | null } {
   const times = entries.flatMap(({ updatedAt }) =>
     updatedAt === null ? [] : [updatedAt],
   );
   if (times.length === 0) return { fresh: [...entries], table: null };
   const newest = times.reduce((a, b) => Math.max(a, b));
-  const staleUpTo =
-    discovered && previous?.newest === newest ? newest : previous?.staleUpTo;
+  const refreshedNothing =
+    (discovered && previous?.newest === newest) ||
+    (discoveryStart !== null && newest < discoveryStart - FDB_FRESH_MS);
+  const staleUpTo = refreshedNothing ? newest : previous?.staleUpTo;
   const fresh = entries.filter(
     ({ updatedAt }) =>
       updatedAt !== null &&
@@ -249,6 +254,24 @@ export const freshSwitches = (
       .filter((read) => !read.expired && now - read.readAt <= staleAfterMs)
       .map((read) => read.switchId),
   );
+
+/**
+ * When LibreNMS's latest discovery of a device began, from `/devices/:id`:
+ * it records when the discovery ended and how many seconds it took. The time
+ * has the zone and format of the forwarding table's, so the two compare.
+ */
+export const readDiscoveryStart = (body: unknown): number | null => {
+  const fields = fieldsOf(listOf(body, "devices").at(0));
+  const ended = readLibreNMSTime(fields.last_discovered);
+  const took = fields.last_discovered_timetaken;
+  const seconds =
+    typeof took === "number" || (typeof took === "string" && took !== "")
+      ? Number(took)
+      : Number.NaN;
+  return ended === null || !Number.isFinite(seconds)
+    ? null
+    : ended - seconds * 1000;
+};
 
 /** When LibreNMS last finished discovering a device, from `/devices/:id`. */
 export const readLastDiscovered = (body: unknown): string | null => {

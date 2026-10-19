@@ -43,6 +43,7 @@ import {
   matchPorts,
   MISSES_OFFLINE,
   portMoves,
+  readDiscoveryStart,
   readLastDiscovered,
   readLibreNMSDeviceStatus,
   readLibreNMSFdb,
@@ -950,6 +951,7 @@ export const collectFromLibreNMS = async (
       entries,
       device.fdbTable,
       finished.has(device.id),
+      readDiscoveryStart(state.body),
     );
     if (table) tables.push({ deviceId: device.id, table });
     if (entries.length > 0 && fresh.length === 0) {

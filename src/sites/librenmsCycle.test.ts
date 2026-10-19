@@ -7,6 +7,7 @@ import {
   freshFdb,
   isOnline,
   matchPorts,
+  readDiscoveryStart,
   readLastDiscovered,
   readLibreNMSDeviceStatus,
   readLibreNMSFdb,
@@ -139,6 +140,58 @@ describe("freshFdb", () => {
     expect(ports(freshFdb(refreshed, stale.table ?? undefined, true))).toEqual([
       5,
     ]);
+  });
+
+  it("sees nothing on a first read when the table is older than the latest discovery", () => {
+    // Recorded from a Nexus whose discoveries stopped refreshing its table;
+    // MACs and port ids replaced, timestamps and fields as LibreNMS 26.9.1
+    // answered.
+    const device = {
+      status: "ok",
+      devices: [
+        {
+          status: true,
+          last_discovered: "2026-10-19T12:00:33.000000Z",
+          last_discovered_timetaken: 32.153237104416,
+        },
+      ],
+    };
+    const fdb = {
+      status: "ok",
+      ports_fdb: [
+        ["00:00:5e:00:53:01", "2026-10-13T12:00:27.000000Z"],
+        ["00:00:5e:00:53:02", "2026-10-13T12:00:26.000000Z"],
+        ["00:00:5e:00:53:03", "2026-10-12T06:00:26.000000Z"],
+      ].map(([mac_address, updated_at], index) => ({
+        ports_fdb_id: index + 1,
+        port_id: 100 + index,
+        mac_address,
+        vlan_id: 1,
+        device_id: 2,
+        created_at: "2026-10-09T12:00:35.000000Z",
+        updated_at,
+      })),
+    };
+    const start = readDiscoveryStart(device);
+    expect(start).toBe(Date.UTC(2026, 9, 19, 12, 0, 33) - 32_153.237104416);
+
+    const first = freshFdb(readLibreNMSFdb(fdb), undefined, true, start);
+    expect(first.fresh).toEqual([]);
+    const recorded = Date.UTC(2026, 9, 13, 12, 0, 27);
+    expect(first.table).toEqual({ newest: recorded, staleUpTo: recorded });
+    // A table the discovery refreshed is read as before.
+    expect(ports(freshFdb(table, undefined, true, newest - 20_000))).toEqual([
+      1, 2,
+    ]);
+    // Nor can a device that does not say how long it took be judged.
+    expect(
+      readDiscoveryStart({ devices: [{ last_discovered: null }] }),
+    ).toBeNull();
+    expect(
+      readDiscoveryStart({
+        devices: [{ last_discovered: "2026-10-19T12:00:33.000000Z" }],
+      }),
+    ).toBeNull();
   });
 
   it("reads timestamps with or without a zone", () => {
