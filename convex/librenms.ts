@@ -135,14 +135,7 @@ export const options = adminAction({
       enabledOnly: false,
     });
     if ("error" in connection) return connection;
-    const { baseUrl, token } = connection;
-    const answer = await sourceGet(
-      "librenms",
-      baseUrl,
-      "/api/v0/devices",
-      token,
-      PROBE_RETRY,
-    );
+    const answer = await sourceGet(connection, "/api/v0/devices", PROBE_RETRY);
     if (!answer.ok) return { error: answer.message };
     const listed =
       typeof answer.body === "object" && answer.body !== null
@@ -152,7 +145,7 @@ export const options = adminAction({
       return { error: "LibreNMS n'a pas listé ses équipements." };
     }
     return {
-      baseUrl,
+      baseUrl: connection.baseUrl,
       devices: listed
         .flatMap((item) => deviceOf(item) ?? [])
         .sort((a, b) => a.name.localeCompare(b.name, "fr")),

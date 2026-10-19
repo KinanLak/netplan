@@ -304,8 +304,7 @@ const pushDevices = async (
       let answer;
       try {
         answer = await netboxPatch(
-          connection.baseUrl,
-          connection.token,
+          connection,
           `/api/dcim/devices/${device.netboxId}/`,
           { custom_fields: customFields(device.values) },
           retry,

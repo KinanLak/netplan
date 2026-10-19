@@ -3,7 +3,7 @@
 // request's headers and could point the token elsewhere behind a proxy.
 import { fetchWithRetry, RetryStopped } from "./httpRetry";
 import { authHeaders, sourceGet } from "./integrationProbe";
-import type { SourceAnswer } from "./integrationProbe";
+import type { Source, SourceAnswer } from "./integrationProbe";
 import type { RetryOptions } from "./httpRetry";
 
 const PAGE = 1000;
@@ -19,8 +19,7 @@ const isObject = (value: unknown): value is NetBoxObject =>
 
 /** Every object of a list endpoint, or the French reason it failed. */
 export async function netboxList(
-  baseUrl: string,
-  token: string,
+  source: Source,
   path: string,
   retry: RetryOptions,
 ): Promise<
@@ -30,10 +29,8 @@ export async function netboxList(
   const separator = path.includes("?") ? "&" : "?";
   for (let page = 0; page < MAX_PAGES; page += 1) {
     const answer = await sourceGet(
-      "netbox",
-      baseUrl,
+      source,
       `${path}${separator}limit=${PAGE}&offset=${items.length}`,
-      token,
       retry,
     );
     if (!answer.ok) return answer;
@@ -99,8 +96,7 @@ const refusal = (status: number): string => {
  * `RetryStopped` of a `stillWanted` that says no.
  */
 export async function netboxPatch(
-  baseUrl: string,
-  token: string,
+  source: Source,
   path: string,
   body: unknown,
   retry: RetryOptions,
@@ -108,11 +104,11 @@ export async function netboxPatch(
   let response: Response;
   try {
     response = await fetchWithRetry(
-      `${baseUrl}${path}`,
+      `${source.baseUrl}${path}`,
       {
         method: "PATCH",
         headers: {
-          ...authHeaders("netbox", token),
+          ...authHeaders("netbox", source.token),
           "Content-Type": "application/json",
         },
         body: JSON.stringify(body),
@@ -120,6 +116,7 @@ export async function netboxPatch(
         redirect: "manual",
       },
       retry,
+      source.fetch,
     );
   } catch (error) {
     if (error instanceof RetryStopped) throw error;

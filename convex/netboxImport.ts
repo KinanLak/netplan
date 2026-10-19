@@ -10,6 +10,7 @@ import { cycleOf } from "./lib/cycles";
 import { deletePush, deletePushes } from "./netboxPush";
 import { SOURCE_RETRY } from "./lib/httpRetry";
 import { netboxList } from "./lib/netboxApi";
+import type { Source } from "./lib/integrationProbe";
 import {
   cableRow,
   cableRowAt,
@@ -82,7 +83,7 @@ export const importFromNetBox = async (
   ctx: ActionCtx,
   siteId: string,
   cycleId: string,
-  connection: { baseUrl: string; token: string },
+  connection: Source,
 ): Promise<{ ok: boolean; message: string }> => {
   const wanted = await ctx.runQuery(internal.netboxImport.importSettings, {
     siteId,
@@ -95,7 +96,7 @@ export const importFromNetBox = async (
   if (!site || wanted.baseUrl !== connection.baseUrl) {
     return { ok: true, message: "" };
   }
-  const { baseUrl, token } = connection;
+  const { baseUrl } = connection;
 
   // Without a role NetBox would list every device of the site, so nothing is
   // read, and the empty import still retires what earlier roles brought.
@@ -110,7 +111,7 @@ export const importFromNetBox = async (
           `/api/dcim/front-ports/?site_id=${site.id}`,
           `/api/dcim/rear-ports/?site_id=${site.id}`,
           `/api/dcim/cables/?site_id=${site.id}`,
-        ].map((path) => netboxList(baseUrl, token, path, SOURCE_RETRY)),
+        ].map((path) => netboxList(connection, path, SOURCE_RETRY)),
       );
   const items = [];
   for (const list of lists) {

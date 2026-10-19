@@ -188,12 +188,7 @@ const collectFrom = async (
     if ("error" in connection) {
       return { source, ok: false, message: connection.error };
     }
-    const answer = await probeIntegration(
-      source,
-      connection.baseUrl,
-      connection.token,
-      SOURCE_RETRY,
-    );
+    const answer = await probeIntegration(connection, SOURCE_RETRY);
     if (!answer.ok) return { source, ...answer };
     const collected =
       source === "netbox"

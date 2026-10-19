@@ -6,13 +6,17 @@
 //   bun scripts/check-librenms.ts                       the API and its devices
 //   bun scripts/check-librenms.ts --device 12 [--device 13]   switches as a cycle reads them
 //   bun scripts/check-librenms.ts --device 12 --discover      and one discovery
+//   bun scripts/check-librenms.ts --insecure ...              accepting any certificate
 //
 // `--discover` asks LibreNMS to discover each device once, as a cycle does:
-// leave five minutes between two runs on the same site.
+// leave five minutes between two runs on the same site. `--insecure` is the
+// script's "Ignorer les erreurs de certificat TLS" (ADR 0028), for a
+// LibreNMS whose certificate does not match its address.
 import { parseArgs } from "node:util";
-import { pause, SOURCE_RETRY } from "../convex/lib/httpRetry";
+import { defaultFetch, pause, SOURCE_RETRY } from "../convex/lib/httpRetry";
+import type { Fetch } from "../convex/lib/httpRetry";
 import { PROBE_RETRY, sourceGet } from "../convex/lib/integrationProbe";
-import type { SourceAnswer } from "../convex/lib/integrationProbe";
+import type { Source, SourceAnswer } from "../convex/lib/integrationProbe";
 import { librenmsId } from "../src/sites/librenms";
 import { readLastDiscovered } from "../src/sites/librenmsCycle";
 import { discoveryChecks, switchChecks } from "./lib/librenmsCheck";
@@ -26,6 +30,7 @@ const { values } = parseArgs({
   options: {
     device: { type: "string", multiple: true, default: [] },
     discover: { type: "boolean", default: false },
+    insecure: { type: "boolean", default: false },
   },
 });
 
@@ -44,10 +49,17 @@ if (parsed.some((id) => id === null)) {
 // ask for a second discovery at once.
 const ids = [...new Set(parsed)];
 
-const read = (path: string) =>
-  sourceGet("librenms", baseUrl, path, token, SOURCE_RETRY);
-const readOnce = (path: string) =>
-  sourceGet("librenms", baseUrl, path, token, PROBE_RETRY);
+// Bun's own option, limited to this script's requests.
+const insecureFetch: Fetch = (url, init) =>
+  fetch(url, { ...init, tls: { rejectUnauthorized: false } });
+const source: Source = {
+  kind: "librenms",
+  baseUrl,
+  token,
+  fetch: values.insecure ? insecureFetch : defaultFetch,
+};
+const read = (path: string) => sourceGet(source, path, SOURCE_RETRY);
+const readOnce = (path: string) => sourceGet(source, path, PROBE_RETRY);
 
 const reported: Array<Check> = [];
 const report = (title: string, checks: Array<Check>) => {
@@ -132,13 +144,10 @@ for (const [index, id] of ids.entries()) {
   if (!values.discover) continue;
 
   // One attempt, as a cycle makes: a retry could ask for a second discovery.
-  const asked = await sourceGet(
-    "librenms",
-    baseUrl,
-    `/api/v0/devices/${id}/discover`,
-    token,
-    { ...PROBE_RETRY, attempts: 1 },
-  );
+  const asked = await sourceGet(source, `/api/v0/devices/${id}/discover`, {
+    ...PROBE_RETRY,
+    attempts: 1,
+  });
   if (!asked.ok && asked.status !== undefined && asked.status < 500) {
     report(`${title}, discovery`, answerOf("discover", asked));
     continue;

@@ -26,6 +26,7 @@ import { applyMapOperation, getWallCollisionRect } from "./mapOperations";
 import type { OperationInput } from "./mapOperations";
 import { pause, SOURCE_RETRY } from "./lib/httpRetry";
 import { PROBE_RETRY, sourceGet } from "./lib/integrationProbe";
+import type { Source } from "./lib/integrationProbe";
 import { cableRowAt, portRowsOf, traceRows } from "./lib/ports";
 import type { switchResult } from "./siteValidators";
 import { fdbTable } from "./siteValidators";
@@ -833,7 +834,7 @@ export const collectFromLibreNMS = async (
   ctx: ActionCtx,
   siteId: string,
   cycleId: string,
-  connection: { baseUrl: string; token: string },
+  connection: Source,
 ): Promise<{
   ok: boolean;
   message: string;
@@ -847,14 +848,13 @@ export const collectFromLibreNMS = async (
   if (!plan || plan.baseUrl !== connection.baseUrl) {
     return { ok: true, message: "" };
   }
-  const { baseUrl, token } = connection;
   const read: LibreNMSRead = async (path) =>
-    await sourceGet("librenms", baseUrl, path, token, SOURCE_RETRY);
+    await sourceGet(connection, path, SOURCE_RETRY);
   const readOnce: LibreNMSRead = async (path) =>
-    await sourceGet("librenms", baseUrl, path, token, PROBE_RETRY);
+    await sourceGet(connection, path, PROBE_RETRY);
   // Asking for a discovery has an effect: a retry could ask again at once.
   const trigger: LibreNMSRead = async (path) =>
-    await sourceGet("librenms", baseUrl, path, token, {
+    await sourceGet(connection, path, {
       ...PROBE_RETRY,
       attempts: 1,
     });
@@ -928,7 +928,7 @@ export const collectFromLibreNMS = async (
       (await ctx.runMutation(internal.librenmsCycle.adoptPortNames, {
         siteId,
         cycleId,
-        baseUrl,
+        baseUrl: connection.baseUrl,
         switchId: sole,
         librenmsDeviceId: device.id,
         names,
@@ -966,7 +966,7 @@ export const collectFromLibreNMS = async (
     {
       siteId,
       cycleId,
-      baseUrl,
+      baseUrl: connection.baseUrl,
       readSwitches,
       links,
       presence: portPresence(fdb, matched, ports),

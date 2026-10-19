@@ -79,6 +79,24 @@ describe("switchChecks", () => {
     expect(text).not.toContain("02:aa");
   });
 
+  // As LibreNMS 26.9 answers for a core switch's port channels.
+  test("entries on no port are counted, not failed", () => {
+    const checks = switchChecks({
+      device: device("2026-10-16 08:05:30"),
+      ports,
+      fdb: fdb(
+        [1, "02:aa:00:00:00:01", "2026-10-16 08:05:10"],
+        [0, "02:aa:00:00:00:02", "2026-10-16 08:05:10"],
+        [0, "02:aa:00:00:00:03", "2026-10-16 08:05:10"],
+      ),
+    });
+    expect(checks.every(({ level }) => level === "ok")).toBe(true);
+    expect(levels(checks)).toContain(
+      "ok 2 forwarding entries on no port (port_id 0), which a cycle skips.",
+    );
+    expect(levels(checks)).toContain("ok 1 forwarding entries read.");
+  });
+
   test("an old table under a recent discovery is flagged", () => {
     const checks = switchChecks({
       device: device("2026-10-16 08:05:30"),

@@ -12,8 +12,9 @@ import type { ActionCtx, QueryCtx } from "./_generated/server";
 import { adminAction, adminMutation, adminQuery } from "./lib/functions";
 import { configuredKeys, decryptSecret, encryptSecret } from "./lib/secrets";
 import type { EncryptedSecret } from "./lib/secrets";
+import { defaultFetch } from "./lib/httpRetry";
 import { probeIntegration } from "./lib/integrationProbe";
-import type { ConnectionCheck } from "./lib/integrationProbe";
+import type { ConnectionCheck, Source } from "./lib/integrationProbe";
 import { releaseLibreNMS } from "./librenmsCycle";
 import { releaseNetBox } from "./netboxImport";
 import { requireSite } from "./sites";
@@ -154,7 +155,7 @@ const runCheck = async (
   if (!stored) throw new ConvexError("Cette intégration n'existe plus.");
   const token = await decryptStored(stored, stored.token);
   const result = token
-    ? await probeIntegration(kind, stored.baseUrl, token)
+    ? await probeIntegration(sourceOf(kind, stored.baseUrl, token))
     : UNREADABLE_TOKEN;
   await ctx.runMutation(internal.integrations.recordCheck, {
     siteId,
@@ -165,9 +166,15 @@ const runCheck = async (
   return result;
 };
 
+const sourceOf = (
+  kind: IntegrationKind,
+  baseUrl: string,
+  token: string,
+): Source => ({ kind, baseUrl, token, fetch: defaultFetch });
+
 /**
- * The address and clear token Netplan calls a source with, or a French
- * reason it cannot. Only a collection cycle needs the source enabled: an
+ * The source Netplan calls, with its clear token, or a French reason it
+ * cannot. Only a collection cycle needs the source enabled: an
  * admin sets a source up before turning it on.
  */
 export const openConnection = async (
@@ -175,7 +182,7 @@ export const openConnection = async (
   siteId: string,
   kind: IntegrationKind,
   { enabledOnly = true }: { enabledOnly?: boolean } = {},
-): Promise<{ baseUrl: string; token: string } | { error: string }> => {
+): Promise<Source | { error: string }> => {
   const stored = await ctx.runQuery(internal.integrations.credentials, {
     siteId,
     kind,
@@ -194,7 +201,7 @@ export const openConnection = async (
     throw error;
   }
   return token
-    ? { baseUrl: stored.baseUrl, token }
+    ? sourceOf(kind, stored.baseUrl, token)
     : { error: UNREADABLE_TOKEN.message };
 };
 
