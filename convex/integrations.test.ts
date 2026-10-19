@@ -127,8 +127,12 @@ describe("integrations", () => {
     await t.action(probe, { siteId });
     expect(lenientCalls).toEqual([]);
 
-    await saveNetBox(admin, siteId, {
-      token: undefined,
+    // Stored directly: saving through the action would probe the real address.
+    await admin.mutation(internal.integrations.store, {
+      siteId,
+      kind: "netbox",
+      baseUrl: "https://netbox.test",
+      enabled: true,
       ignoreCertificateErrors: true,
     });
     const [row] = await stored(admin);
