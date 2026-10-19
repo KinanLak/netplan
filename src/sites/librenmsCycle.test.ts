@@ -7,7 +7,7 @@ import {
   freshFdb,
   isOnline,
   matchPorts,
-  readDiscoveryStart,
+  newestFdbEntry,
   readLastDiscovered,
   readLibreNMSDeviceStatus,
   readLibreNMSFdb,
@@ -142,20 +142,10 @@ describe("freshFdb", () => {
     ]);
   });
 
-  it("sees nothing on a first read when the table is older than the latest discovery", () => {
-    // Recorded from a Nexus whose discoveries stopped refreshing its table;
-    // MACs and port ids replaced, timestamps and fields as LibreNMS 26.9.1
-    // answered.
-    const device = {
-      status: "ok",
-      devices: [
-        {
-          status: true,
-          last_discovered: "2026-10-19T12:00:33.000000Z",
-          last_discovered_timetaken: 32.153237104416,
-        },
-      ],
-    };
+  it("sees nothing on a first read when the discovery left the table as it was", () => {
+    // Recorded from a Nexus whose discoveries stopped refreshing its table,
+    // before and after one; MACs and port ids replaced, timestamps and fields
+    // as LibreNMS 26.9.1 answered.
     const fdb = {
       status: "ok",
       ports_fdb: [
@@ -172,26 +162,20 @@ describe("freshFdb", () => {
         updated_at,
       })),
     };
-    const start = readDiscoveryStart(device);
-    expect(start).toBe(Date.UTC(2026, 9, 19, 12, 0, 33) - 32_153.237104416);
-
-    const first = freshFdb(readLibreNMSFdb(fdb), undefined, true, start);
-    expect(first.fresh).toEqual([]);
+    const entries = readLibreNMSFdb(fdb);
     const recorded = Date.UTC(2026, 9, 13, 12, 0, 27);
+    expect(newestFdbEntry(entries)).toBe(recorded);
+
+    const first = freshFdb(entries, { newest: recorded }, true);
+    expect(first.fresh).toEqual([]);
     expect(first.table).toEqual({ newest: recorded, staleUpTo: recorded });
     // A table the discovery refreshed is read as before.
-    expect(ports(freshFdb(table, undefined, true, newest - 20_000))).toEqual([
-      1, 2,
-    ]);
-    // Nor can a device that does not say how long it took be judged.
     expect(
-      readDiscoveryStart({ devices: [{ last_discovered: null }] }),
-    ).toBeNull();
-    expect(
-      readDiscoveryStart({
-        devices: [{ last_discovered: "2026-10-19T12:00:33.000000Z" }],
-      }),
-    ).toBeNull();
+      ports(
+        freshFdb(table, { newest: Date.UTC(2026, 9, 16, 6, 55, 30) }, true),
+      ),
+    ).toEqual([1, 2]);
+    expect(newestFdbEntry([entry(1, null)])).toBeNull();
   });
 
   it("reads timestamps with or without a zone", () => {

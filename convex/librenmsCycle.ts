@@ -42,8 +42,8 @@ import {
   freshSwitches,
   matchPorts,
   MISSES_OFFLINE,
+  newestFdbEntry,
   portMoves,
-  readDiscoveryStart,
   readLastDiscovered,
   readLibreNMSDeviceStatus,
   readLibreNMSFdb,
@@ -866,6 +866,10 @@ export const collectFromLibreNMS = async (
     notes.set(deviceId, [...(notes.get(deviceId) ?? []), phrase]);
   const failed = new Set<number>();
   let finished = new Set<number>();
+  // What a switch's table looked like before its discovery, when no earlier
+  // read says it: the only way to tell, on a first read, a discovery that
+  // refreshed nothing.
+  const before = new Map<number, FdbTable>();
   if (
     plan.discover &&
     plan.devices.length > 0 &&
@@ -874,6 +878,14 @@ export const collectFromLibreNMS = async (
       cycleId,
     }))
   ) {
+    for (const device of plan.devices) {
+      if (device.fdbTable) continue;
+      const answer = await readOnce(`/api/v0/devices/${device.id}/fdb`);
+      const newest = answer.ok
+        ? newestFdbEntry(readLibreNMSFdb(answer.body))
+        : null;
+      if (newest !== null) before.set(device.id, { newest });
+    }
     const discovery = await rediscover(readOnce, trigger, plan.devices);
     finished = discovery.finished;
     for (const [deviceId, reason] of discovery.failures) {
@@ -949,9 +961,8 @@ export const collectFromLibreNMS = async (
     const entries = readLibreNMSFdb(fdbList.body);
     const { fresh, table } = freshFdb(
       entries,
-      device.fdbTable,
+      device.fdbTable ?? before.get(device.id),
       finished.has(device.id),
-      readDiscoveryStart(state.body),
     );
     if (table) tables.push({ deviceId: device.id, table });
     if (entries.length > 0 && fresh.length === 0) {
