@@ -17,6 +17,14 @@ A NetBox token only reads, unless the site writes locations back to NetBox
 tables and ask for a discovery: each cycle asks for one per polled switch,
 at most every five minutes.
 
+"Ignorer les erreurs de certificat TLS", on each connection, is for a
+source whose certificate does not match its address, typically one that
+moved to a new host and kept the old certificate (ADR 0028). It is off by
+default and applies to that connection only. With it on, the token goes to
+whoever answers at that address, so **Administration › Santé** keeps a
+warning on the site until it is unticked. A certificate from an internal CA
+needs no option: give the backend that CA instead ([Install](install.md)).
+
 ## Checking a LibreNMS before relying on it
 
 A collection cycle assumes three things of LibreNMS that only a real
@@ -32,6 +40,7 @@ export LIBRENMS_URL=https://librenms.example.org LIBRENMS_TOKEN=...
 bun scripts/check-librenms.ts                          # the API and its devices
 bun scripts/check-librenms.ts --device 12 --device 13  # two switches
 bun scripts/check-librenms.ts --device 12 --discover   # and one discovery
+bun scripts/check-librenms.ts --insecure               # accepting any certificate
 ```
 
 Take the device ids from the LibreNMS web interface (the number in a
@@ -69,8 +78,9 @@ After the script passes, with an admin account and one site:
    LibreNMS <version>".
 2. **Switchs LibreNMS**: each switch of the site mapped to its LibreNMS
    device; the suggestions follow the switch's hostname or name.
-3. **Collecte** › "Lancer une collecte": the report's LibreNMS step reads
-   "N switchs lus, M MAC vues", with no failure on a switch.
+3. "Actualiser" on the map's sidebar (Shift+R), then **Collecte**: the
+   report's LibreNMS step reads "N switchs lus, M MAC vues", with no failure
+   on a switch.
 4. On the map, a PC known to be on: "En ligne" in its drawer. One that has
    been off for two cycles: "Hors ligne".
 5. A PC with no place on the map, or moved to another socket: after a

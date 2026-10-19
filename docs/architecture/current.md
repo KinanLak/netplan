@@ -102,7 +102,10 @@ otherwise, and the sidebar switches between them.
 
 A site may connect one NetBox and one LibreNMS (`integrations`): an address
 and a token, which actions encrypt with `NETPLAN_SECRET_KEY` before storing
-and no function returns. The admin tests the connection, then maps the
+and no function returns. Every request to a source runs in a Node action
+(`convex/sources.ts`), which may skip certificate checks for a connection
+whose admin ticked "Ignorer les erreurs de certificat TLS" (ADR 0028). The
+admin tests the connection, then maps the
 NetBox site and the Netplan type of each NetBox role, and each Netplan switch
 to its LibreNMS device. Settings are keyed by the source's ids, so changing
 an address forgets them; a new NetBox address also turns the devices, ports
@@ -148,7 +151,10 @@ stops every cycle on a server.
 - **LibreNMS** (`convex/librenmsCycle.ts`, the pure rules in
   `src/sites/librenmsCycle.ts`): at most every 5 minutes the cycle asks each
   polled switch to rediscover, then reads its ports and forwarding table.
-  Only entries the discovery refreshed count, and only on edge ports: a port
+  Only entries the discovery refreshed count: a discovery that leaves the table's newest entry unchanged refreshed nothing, nor do later reads until a discovery moves it.
+  The comparison stays within the table's own timestamps, so a switch's
+  first read takes one reading before its discovery. Entries count only on
+  edge ports: a port
   cabled to a wall socket, or an uncabled one with at most four MACs. Each
   MAC seen goes to `macSightings`. A pc or endpoint is online when one of its
   MACs is seen and offline after two cycles without; one seen at a new

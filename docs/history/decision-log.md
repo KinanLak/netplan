@@ -2092,3 +2092,65 @@ Questions of 2026-10-16, in the order they came up, ending with the deployment s
 - Decision: logged, not changed. `tsc --skipLibCheck false` reports no error in `convex/_generated` today; the only declaration errors are in `node_modules` (React Compiler's types against zod 4, unstorage drivers' optional peers) and in `src/types/bun-test.d.ts`, which duplicates `bun:test`'s globals. `skipLibCheck` hides them, `bun run check` is green, and none affects the build. The "undefined" models are NetBox data: role 2 and device types 1 and 4 are literally named "undefined"/"undefined2" there, so the drawer shows "Matériel undefined"; renaming them is for whoever owns that NetBox.
 - Why: Netplan shows what NetBox says; masking a name would hide a real data problem.
 - Who: agent (judgement call)
+
+### L6 — Real LibreNMS validation
+
+Questions of 2026-10-19, in the order they came up, ending with the deployed stack and the cleanup.
+
+#### How does Netplan reach a LibreNMS whose certificate names its old host?
+
+- Context: the LibreNMS moved to `librenms01-tnzpv.mountainmen.fr` and kept a certificate for the old name, so strict TLS fails with `ERR_TLS_CERT_ALTNAME_INVALID`. Convex's default runtime gives no way to relax TLS for one request.
+- Decision: a per-connection option, "Ignorer les erreurs de certificat TLS", off by default, for NetBox and LibreNMS alike (ADR 0028, #85). Every source request now runs in a Node action (`convex/sources.ts`) whose undici `fetch` uses an `Agent` with `rejectUnauthorized: false` only when the option is on. The admin form and Santé warn while it is ticked; `check-librenms --insecure` does the same for the script (#84). A refused certificate is reported as such ("Le certificat TLS de … est refusé (CODE)") and is not retried.
+- Why: the token goes to whoever answers at that address, so the trade-off is the admin's, per connection, visible until undone; an internal CA needs no option, only the backend's trust store (`NODE_EXTRA_CA_CERTS` next to `SSL_CERT_FILE`).
+- Who: owner (brief), design by agent
+
+#### Why does a switch's first read need a reading before its discovery?
+
+- Context: sw-core-01's discoveries no longer rewrite its forwarding table (newest entry 13 October, discoveries daily; `check-librenms --discover` said "refreshed no entry"). A table is judged stale when a discovery leaves its newest entry unchanged, which needs an earlier read; on a first read there was none, so 203 week-old MACs counted as seen.
+- Decision: on a switch's first read the cycle reads its table once before asking for the discovery, and judges the first read by the existing rule (#86). A first version compared the table with `last_discovered` instead; dropped in self-review, since the two dates are written separately and may differ by clock or time zone, which would blind every switch on such a LibreNMS. The script's "would count as seen" line now says it holds only if the discovery moved the newest entry.
+- Why: compare like with like; one extra request per switch, once.
+- Who: agent (judgement call)
+
+#### What did the real checks show?
+
+- Context: the brief's list, run on dev:agent against LibreNMS 26.9.1 (8 devices) and NetBox 4.6.10, on Arles (447 devices imported, 7 switches on 5 LibreNMS devices), a "L6 test push" site and an "Annecy" site.
+- Decision, check by check:
+  - `check-librenms`, with `--discover` on sw-core-01: the discovery finished in time and refreshed no entry; 62 ports, 213 FDB entries.
+  - Port names and order: NetBox's `GigabitEthernetN/0/x` match LibreNMS's `GiN/0/x`; adopted names follow LibreNMS's order on Cisco 3750-X stacks (109 ports, `Gi1/0/1`…), Nexus 3064 (`Ethernet1/x`), Dell DNOS S3124 (`GigabitEthernet 1/1`…), and FortiGate 40F (`wan`, `a`, `modem`, `lan1`…).
+  - Statuses: 17 PCs placed by real cycles next to 7 sockets; laptop-cecile offline after two cycles without a sighting, then online again; three Annecy workstations online from the Dell switch.
+  - Unknown MACs: listed in the inventory; one ignored, one turned into an endpoint placed at its socket.
+  - Santé: the per-switch list with the "n'a rafraîchi aucune entrée" note, the TLS warning, the push block.
+  - Undo of a collection move refused (ORDI-154).
+  - Snapshots: the 19:00 slot taken by the first cycle of its window, 36 addresses, shown in Historique. The test site was put in Europe/London so a window fell within the session; Arles was connected after its 16:00 window and paused through 19:00.
+  - A move reaching history and NetBox: test PC located at its socket ("located" and "online" events), then its five `netplan_*` fields written to the test device.
+  - "Inconnu": with Arles's collection paused after a last read at 16:27:57 UTC, its 7 switches and the 96 statuses of devices seen on them were cleared by 18:43:57, 2 h 15 later; Santé read "7 inconnus".
+- Why: each claim of the brief checked where it applies, with the result kept as evidence in the pull requests.
+- Who: agent (obvious)
+
+#### Which LibreNMS devices can a Netplan switch stand for?
+
+- Context: the brief asks to map the 8 LibreNMS devices. Arles's NetBox has switches for 4 of them; the FortiGate, the Annecy core switch and the Annecy CPE have no NetBox switch, and nas01 is a NetApp.
+- Decision: the 4 Arles switches mapped to their NetBox-imported switches (stacks share one device); the FortiGate, the Annecy Dell switch and the Annecy CPE mapped to manual test switches, which adopted their port names; nas01 left unmapped.
+- Why: a Netplan switch stands for a device that forwards frames; a NAS has no forwarding table worth reading.
+- Who: agent (judgement call)
+
+#### Why did the deployed stack reach nothing?
+
+- Context: after redeploying `~/l5-smoke` from main, every source answered "injoignable". The backend container, created three days earlier, still had the host's DNS from then (a Tailscale search domain) and resolved no name; containers created since resolved fine. The same session's image build hung in `bun install` under BuildKit's network and passed with `--network=host`.
+- Decision: recreated the backend (`docker compose up -d --force-recreate convex-backend`), built the two images with `docker build --network=host` under compose's tags, and documented the stale DNS in troubleshooting. The host's network is not changed.
+- Why: the stack's backend had never needed the outside before L6; a long-lived container keeps the DNS of its creation, which an operator will meet after a network change.
+- Who: agent (obvious)
+
+#### What runs where at the end?
+
+- Context: two installations could poll the same LibreNMS devices and double their discoveries.
+- Decision: the deployed stack (`netplan-l0`, main) keeps Arles collecting with both integrations, LibreNMS's certificate option on and NetBox push off. dev:agent's sites that poll switches (Arles, L6 test push, Annecy) have automatic collection off.
+- Why: one poller per device, at the product cadence; the push writes only to devices a site imported, and real devices must not receive test values.
+- Who: agent (obvious)
+
+#### What was created in NetBox, and what is left?
+
+- Context: the push test needed a NetBox device the test site imports.
+- Decision: created, tagged `netplan-test`: tag 405, site 40 `netplan-test-L6-1`, device 1183 `netplan-test-L6-2`, interface 453 `eth0`, MAC 375 (moved once to a MAC active on the test socket's port when the first went quiet). Deleted in reverse order after checking each still carried the tag, then the tag once it had no item. A sweep over 13 object types found nothing, and no device carries a `netplan_*` value.
+- Why: test objects must not outlive the lot.
+- Who: agent (obvious)
