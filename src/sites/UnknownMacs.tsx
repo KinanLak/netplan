@@ -63,6 +63,9 @@ const matches = (
     place.map((part) => part ?? undefined),
   );
 
+/** What one request may ignore or restore: `MAX_MACS` on the server. */
+const MAX_BATCH = 500;
+
 const plural = (count: number, one: string, many: string) =>
   `${count} ${count > 1 ? many : one}`;
 
@@ -204,7 +207,11 @@ export function UnknownMacs({ siteId }: { siteId: string }) {
               picked={picked.length}
               isPicked={(mac) => selected.has(mac)}
               onPickAll={(all) =>
-                setSelected(new Set(all ? shown.map((row) => row.mac) : []))
+                setSelected(
+                  new Set(
+                    all ? shown.slice(0, MAX_BATCH).map((row) => row.mac) : [],
+                  ),
+                )
               }
               onPick={(mac, on) => setSelected(toggled(selected, mac, on))}
               where={(row) => (
@@ -288,7 +295,13 @@ export function UnknownMacs({ siteId }: { siteId: string }) {
                   isPicked={(mac) => chosenIgnored.has(mac)}
                   onPickAll={(all) =>
                     setChosenIgnored(
-                      new Set(all ? shownIgnored.map((row) => row.mac) : []),
+                      new Set(
+                        all
+                          ? shownIgnored
+                              .slice(0, MAX_BATCH)
+                              .map((row) => row.mac)
+                          : [],
+                      ),
                     )
                   }
                   onPick={(mac, on) =>
@@ -380,10 +393,13 @@ function SelectionBar({
     <div className="flex min-h-8 flex-wrap items-center gap-x-3 gap-y-2 text-sm text-muted-foreground">
       {picked > 0 ? (
         <>
-          <span className="text-foreground">
+          <span
+            className={picked > MAX_BATCH ? "text-down" : "text-foreground"}
+          >
             {plural(picked, "sélectionnée", "sélectionnées")}
+            {picked >= MAX_BATCH ? ` (${MAX_BATCH} au plus à la fois)` : null}
           </span>
-          {children}
+          {picked > MAX_BATCH ? null : children}
           <Button size="sm" variant="ghost" onClick={onClear}>
             Désélectionner
           </Button>
