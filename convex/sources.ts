@@ -8,14 +8,19 @@ import { v } from "convex/values";
 import { Agent, fetch as undiciFetch } from "undici";
 import { internalAction } from "./_generated/server";
 import { runCycle } from "./collection";
-import { saveArgs, saveConnection, testConnection } from "./integrations";
+import {
+  draftArgs,
+  saveArgs,
+  saveConnection,
+  testConnection,
+} from "./integrations";
 import { adminAction } from "./lib/functions";
 import type { Fetch } from "./lib/httpRetry";
 import type { ConnectionCheck, Transport } from "./lib/integrationProbe";
 import { devicesResult, listDevices } from "./librenms";
 import { choicesResult, listChoices } from "./netbox";
 import { runPush } from "./netboxPush";
-import { connectionResult, integrationKind } from "./siteValidators";
+import { connectionResult } from "./siteValidators";
 
 // Node's own fetch refuses a dispatcher from a newer undici, so the lenient
 // requests use undici's fetch with its own Agent.
@@ -31,16 +36,16 @@ const transport: Transport = { lenient };
 
 export const saveIntegration = adminAction({
   args: saveArgs,
-  returns: connectionResult,
-  handler: async (ctx, args): Promise<ConnectionCheck> =>
+  returns: v.union(v.null(), connectionResult),
+  handler: async (ctx, args): Promise<ConnectionCheck | null> =>
     await saveConnection(ctx, args, transport),
 });
 
 export const testIntegration = adminAction({
-  args: { siteId: v.string(), kind: integrationKind },
+  args: draftArgs,
   returns: connectionResult,
-  handler: async (ctx, { siteId, kind }): Promise<ConnectionCheck> =>
-    await testConnection(ctx, siteId, kind, transport),
+  handler: async (ctx, args): Promise<ConnectionCheck> =>
+    await testConnection(ctx, args, transport),
 });
 
 export const librenmsDevices = adminAction({

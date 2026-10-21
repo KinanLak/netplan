@@ -3,6 +3,7 @@
 // function returns a token.
 import { ConvexError, v } from "convex/values";
 import type { ObjectType } from "convex/values";
+import type { FunctionReturnType } from "convex/server";
 import { internal } from "./_generated/api";
 import {
   internalAction,
@@ -104,70 +105,144 @@ export const listForSite = adminQuery({
   },
 });
 
-export const saveArgs = {
+/** What the admin's form shows: the connection to test, or to save. */
+export const draftArgs = {
   siteId: v.string(),
   kind: integrationKind,
   baseUrl: v.string(),
-  enabled: v.boolean(),
   ignoreCertificateErrors: v.boolean(),
+  /** Left out to use the stored token, which only goes to its own address. */
   token: v.optional(v.string()),
 };
 
+export const saveArgs = { ...draftArgs, enabled: v.boolean() };
+
+type Draft = ObjectType<typeof draftArgs>;
+type Stored = NonNullable<
+  FunctionReturnType<typeof internal.integrations.credentials>
+>;
+
 /**
- * Saves a connection, then tests it. The token may be left out to keep the
- * stored one, unless the address changes. Registered in `sources.ts`.
+ * The draft's normalized address and clear token, and whether it is the
+ * stored connection itself. Throws, in French, what the form must fix.
+ */
+const resolveDraft = async (
+  ctx: ActionCtx,
+  draft: Draft,
+): Promise<{
+  baseUrl: string;
+  token: string | null;
+  stored: Stored | null;
+  unchanged: boolean;
+}> => {
+  const normalized = normalizeBaseUrl(draft.kind, draft.baseUrl);
+  if ("error" in normalized) throw new ConvexError(normalized.error);
+  const baseUrl = normalized.url;
+  const stored = await ctx.runQuery(internal.integrations.credentials, {
+    siteId: draft.siteId,
+    kind: draft.kind,
+  });
+  if (draft.token !== undefined) {
+    const refused = tokenError(draft.token);
+    if (refused) throw new ConvexError(refused);
+    return { baseUrl, token: draft.token.trim(), stored, unchanged: false };
+  }
+  if (!stored) throw new ConvexError("Saisissez le jeton.");
+  if (stored.baseUrl !== baseUrl) {
+    throw new ConvexError(
+      "Saisissez à nouveau le jeton : il n'est envoyé qu'à l'adresse pour laquelle il a été saisi.",
+    );
+  }
+  return {
+    baseUrl,
+    token: await decryptStored(stored, stored.token),
+    stored,
+    unchanged: stored.ignoreCertificateErrors === draft.ignoreCertificateErrors,
+  };
+};
+
+const probeDraft = async (
+  draft: Draft,
+  resolved: { baseUrl: string; token: string | null },
+  transport: Transport,
+): Promise<ConnectionCheck> =>
+  resolved.token
+    ? await probeIntegration(
+        sourceOf(
+          {
+            kind: draft.kind,
+            baseUrl: resolved.baseUrl,
+            ignoreCertificateErrors: draft.ignoreCertificateErrors,
+          },
+          resolved.token,
+          transport,
+        ),
+      )
+    : UNREADABLE_TOKEN;
+
+/**
+ * Saves what the form shows. A new address, token or certificate option is
+ * tested first and saved only when the test succeeds; `null` when only the
+ * collection switch changed, which needs no test. Registered in `sources.ts`.
  */
 export const saveConnection = async (
   ctx: ActionCtx,
   args: ObjectType<typeof saveArgs>,
   transport: Transport,
-): Promise<ConnectionCheck> => {
-  const normalized = normalizeBaseUrl(args.kind, args.baseUrl);
-  if ("error" in normalized) throw new ConvexError(normalized.error);
-  const baseUrl = normalized.url;
-  let token: EncryptedSecret | undefined;
-  if (args.token !== undefined) {
-    const refused = tokenError(args.token);
-    if (refused) throw new ConvexError(refused);
-    token = await encryptSecret(
-      (await keys()).current,
-      args.token.trim(),
-      boundTo(args.siteId, args.kind, baseUrl),
-    );
-  }
-  await ctx.runMutation(internal.integrations.store, {
+): Promise<ConnectionCheck | null> => {
+  const resolved = await resolveDraft(ctx, args);
+  const { baseUrl, stored } = resolved;
+  const fields = {
     siteId: args.siteId,
     kind: args.kind,
     baseUrl,
     enabled: args.enabled,
     ignoreCertificateErrors: args.ignoreCertificateErrors,
+  };
+  if (resolved.unchanged) {
+    await ctx.runMutation(internal.integrations.store, fields);
+    return null;
+  }
+  const result = await probeDraft(args, resolved, transport);
+  if (!result.ok) return result;
+  const token =
+    args.token === undefined
+      ? undefined
+      : await encryptSecret(
+          (await keys()).current,
+          args.token.trim(),
+          boundTo(args.siteId, args.kind, baseUrl),
+        );
+  await ctx.runMutation(internal.integrations.store, {
+    ...fields,
     token,
+    lastCheck: { ...result, at: Date.now() },
+    // Saved by someone else since the form read it: the test said nothing
+    // about their connection.
+    ...(stored && { expectedVersion: stored.updatedAt }),
   });
-  return await testConnection(ctx, args.siteId, args.kind, transport);
+  return result;
 };
 
-/** "Tester la connexion", registered in `sources.ts`. */
+/**
+ * "Tester", on what the form shows. Only a test of the stored connection
+ * itself becomes its last check. Registered in `sources.ts`.
+ */
 export const testConnection = async (
   ctx: ActionCtx,
-  siteId: string,
-  kind: IntegrationKind,
+  draft: Draft,
   transport: Transport,
 ): Promise<ConnectionCheck> => {
-  const stored = await ctx.runQuery(internal.integrations.credentials, {
-    siteId,
-    kind,
-  });
-  if (!stored) throw new ConvexError("Cette intégration n'existe plus.");
-  const token = await decryptStored(stored, stored.token);
-  const result = token
-    ? await probeIntegration(sourceOf(stored, token, transport))
-    : UNREADABLE_TOKEN;
-  await ctx.runMutation(internal.integrations.recordCheck, {
-    siteId,
-    kind,
-    testedVersion: stored.updatedAt,
-    check: { ...result, at: Date.now() },
-  });
+  const resolved = await resolveDraft(ctx, draft);
+  const result = await probeDraft(draft, resolved, transport);
+  if (resolved.unchanged && resolved.stored) {
+    await ctx.runMutation(internal.integrations.recordCheck, {
+      siteId: draft.siteId,
+      kind: draft.kind,
+      testedVersion: resolved.stored.updatedAt,
+      check: { ...result, at: Date.now() },
+    });
+  }
   return result;
 };
 
@@ -240,10 +315,14 @@ export const store = internalMutation({
     enabled: v.boolean(),
     ignoreCertificateErrors: v.optional(v.boolean()),
     token: v.optional(encryptedSecret),
+    /** The test that let this connection be saved. */
+    lastCheck: v.optional(connectionCheck),
+    /** The `updatedAt` the saved connection had when it was tested. */
+    expectedVersion: v.optional(v.number()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const { siteId, kind, baseUrl, enabled, token } = args;
+    const { siteId, kind, baseUrl, enabled, token, lastCheck } = args;
     const ignoreCertificateErrors = args.ignoreCertificateErrors ?? false;
     await requireSite(ctx, siteId);
     const existing = await find(ctx, siteId, kind);
@@ -257,9 +336,18 @@ export const store = internalMutation({
         enabled,
         ...(ignoreCertificateErrors && { ignoreCertificateErrors }),
         token,
+        ...(lastCheck && { lastCheck }),
         updatedAt,
       });
       return null;
+    }
+    if (
+      args.expectedVersion !== undefined &&
+      existing.updatedAt !== args.expectedVersion
+    ) {
+      throw new ConvexError(
+        "Cette connexion a été modifiée pendant le test : réessayez.",
+      );
     }
     if (!token && existing.baseUrl !== baseUrl) {
       throw new ConvexError(
@@ -279,7 +367,7 @@ export const store = internalMutation({
       ignoreCertificateErrors: ignoreCertificateErrors || undefined,
       ...(token ? { token } : {}),
       // The last check described the old connection.
-      ...(changed ? { lastCheck: undefined } : {}),
+      ...(lastCheck ? { lastCheck } : changed ? { lastCheck: undefined } : {}),
       // Another NetBox has other sites and roles under the same ids, and
       // another LibreNMS other devices.
       ...(existing.baseUrl !== baseUrl

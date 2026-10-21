@@ -63,6 +63,25 @@ const enabledSources = async (
   );
 };
 
+/**
+ * A run without the steps of sources removed since: they say nothing about
+ * what the site collects now.
+ */
+export const withoutRemovedSources = <
+  Run extends { steps: Array<{ source: IntegrationKind }> },
+>(
+  run: Run | undefined,
+  configured: ReadonlyArray<{ kind: IntegrationKind }>,
+): Run | null =>
+  run
+    ? {
+        ...run,
+        steps: run.steps.filter((step) =>
+          configured.some((row) => row.kind === step.source),
+        ),
+      }
+    : null;
+
 const siteOf = async (ctx: QueryCtx, siteId: string) =>
   await ctx.db
     .query("sites")
@@ -325,10 +344,14 @@ export const status = adminQuery({
       cycle?.running && isRunning(cycle, Date.now())
         ? { startedAt: cycle.running.startedAt, manual: cycle.running.manual }
         : null;
+    const configured = await ctx.db
+      .query("integrations")
+      .withIndex("by_site_kind", (q) => q.eq("siteId", siteId))
+      .collect();
     return {
       paused: collectionPaused(),
       running,
-      last: cycle?.last ?? null,
+      last: withoutRemovedSources(cycle?.last, configured),
       nextRunAt: cycle ? cycle.nextRunAt : null,
       failures: cycle?.failures ?? 0,
     };

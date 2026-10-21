@@ -14,6 +14,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Field,
   FieldDescription,
@@ -216,13 +217,11 @@ function SiteSettingsForm({ site }: { site: Site }) {
         </FieldDescription>
         <FieldGroup>
           <Field orientation="horizontal">
-            <input
+            <Checkbox
               id="site-automatic"
-              type="checkbox"
-              className="size-4 accent-primary"
               checked={draft.automaticRefresh}
-              onChange={(event) =>
-                change({ automaticRefresh: event.target.checked })
+              onCheckedChange={(checked) =>
+                change({ automaticRefresh: checked })
               }
             />
             <FieldLabel htmlFor="site-automatic">
@@ -230,14 +229,10 @@ function SiteSettingsForm({ site }: { site: Site }) {
             </FieldLabel>
           </Field>
           <Field orientation="horizontal">
-            <input
+            <Checkbox
               id="site-manual"
-              type="checkbox"
-              className="size-4 accent-primary"
               checked={draft.manualRefresh}
-              onChange={(event) =>
-                change({ manualRefresh: event.target.checked })
-              }
+              onCheckedChange={(checked) => change({ manualRefresh: checked })}
             />
             <FieldLabel htmlFor="site-manual">
               Les éditeurs peuvent lancer une actualisation
