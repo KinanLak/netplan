@@ -95,3 +95,73 @@ export const ageHint = (
   timeZone?: string,
 ): string =>
   `${formatDateTime(at, now, timeZone)} · ${timeZoneHint(at, timeZone)}`;
+
+/**
+ * The reader's calendar day, `YYYY-MM-DD`: what groups a list by day and
+ * what a date input reads and writes.
+ */
+export const dayOf = (at: number, timeZone?: string): string => {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: timeZone ?? browserTimeZone(),
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    })
+      .formatToParts(at)
+      .map((part) => [part.type, part.value]),
+  );
+  return `${parts.year}-${parts.month}-${parts.day}`;
+};
+
+/** « Aujourd'hui », « Hier », else `mercredi 21 octobre`, with the year when not this one. */
+export const formatDay = (
+  at: number,
+  now: number,
+  timeZone?: string,
+): string => {
+  const day = dayOf(at, timeZone);
+  if (day === dayOf(now, timeZone)) return "Aujourd'hui";
+  if (day === dayOf(now - 24 * 60 * MINUTE, timeZone)) return "Hier";
+  const label = format(
+    at,
+    {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      ...(yearOf(at, timeZone) !== yearOf(now, timeZone) && {
+        year: "numeric",
+      }),
+    },
+    timeZone,
+  );
+  return label.charAt(0).toUpperCase() + label.slice(1);
+};
+
+/**
+ * The first instant of the reader's day `YYYY-MM-DD`. The offset is read at
+ * a first guess, then again in case midnight crosses a change of offset.
+ */
+export const startOfDay = (day: string, timeZone?: string): number => {
+  const asUtc = Date.parse(`${day}T00:00:00Z`);
+  const offsetAt = (at: number) => {
+    const parts = Object.fromEntries(
+      new Intl.DateTimeFormat("en-CA", {
+        timeZone: timeZone ?? browserTimeZone(),
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23",
+      })
+        .formatToParts(at)
+        .map((part) => [part.type, part.value]),
+    );
+    const shown = Date.parse(
+      `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:00Z`,
+    );
+    return shown - at;
+  };
+  return asUtc - offsetAt(asUtc - offsetAt(asUtc));
+};
