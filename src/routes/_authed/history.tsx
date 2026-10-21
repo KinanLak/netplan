@@ -235,7 +235,11 @@ function SiteSnapshots({ site }: { site: SiteSummary }) {
           {SNAPSHOT_TIMES.map((slotTime) => (
             <SlotButton
               key={slotTime}
-              at={slotInstant(site.timezone, day, slotTime)}
+              // A taken slot keeps its instant if the site's zone changes.
+              at={
+                slotOf.get(slotTime)?.at ??
+                slotInstant(site.timezone, day, slotTime)
+              }
               slot={slotOf.get(slotTime)}
               open={slotStillOpen(site.timezone, day, slotTime, now)}
               now={now}

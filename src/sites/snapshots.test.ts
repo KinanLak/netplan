@@ -74,5 +74,9 @@ describe("snapshot slots", () => {
     expect(slotInstant("Asia/Kolkata", "2026-10-21", "08:00")).toBe(
       at("2026-10-21T02:30:00Z"),
     );
+    // Los Angeles leaves daylight saving at 02:00 that morning.
+    expect(slotInstant("America/Los_Angeles", "2026-11-01", "08:00")).toBe(
+      at("2026-11-01T16:00:00Z"),
+    );
   });
 });
