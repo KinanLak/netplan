@@ -1,11 +1,18 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { Tick02Icon } from "@hugeicons/core-free-icons";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+import { useSelectedDeviceId } from "@/store/selectors";
 import {
   useMapDocumentActions,
   useMapDocumentReady,
   useMapDocumentSyncStatus,
 } from "./useMapDocument";
 import { FORBIDDEN_REJECTION } from "./outbox";
+
+// Long enough to see the tick, short enough to be gone before the next edit.
+const SETTLED_MS = 1_000;
 
 /** The server rejects map operations with French sentences (ADR 0026). */
 export const getRejectedOperationMessage = (message: string): string =>
@@ -31,8 +38,8 @@ export function MapDocumentStatus({
   } = useMapDocumentSyncStatus();
   const { dismissRejectedOperation } = useMapDocumentActions();
 
-  // A refusal is a toast like every other one; the card below only says what
-  // the document is doing.
+  // A refusal is a toast like every other one; the circle below only says
+  // what the document is doing.
   useEffect(() => {
     if (!rejectedMessage) return;
     toast.error("Modification non appliquée", {
@@ -47,25 +54,70 @@ export function MapDocumentStatus({
     isRetrying,
     hasBackgroundPendingOperations,
   });
+  const busy = statusMessage !== null;
+  const drawerOpen = useSelectedDeviceId() !== null;
 
-  if (!statusMessage) return null;
+  // A save that ends shows a tick for a moment, then the circle fades; the
+  // end of loading does not, nor a save the server refused, whichever of the
+  // refusal and the end of the save the page hears first.
+  const saving = busy && isReady;
+  const [wasSaving, setWasSaving] = useState(saving);
+  const [settled, setSettled] = useState(false);
+  const [refused, setRefused] = useState(false);
+  if (rejectedMessage !== null && !refused) {
+    setRefused(true);
+    setSettled(false);
+  }
+  if (saving !== wasSaving) {
+    setWasSaving(saving);
+    setSettled(!saving && !busy && !refused && rejectedMessage === null);
+    setRefused(false);
+  }
+  useEffect(() => {
+    if (!settled) return;
+    const timeout = window.setTimeout(() => setSettled(false), SETTLED_MS);
+    return () => window.clearTimeout(timeout);
+  }, [settled]);
+
+  if (!busy && !settled) return null;
 
   return (
-    <div className="pointer-events-none absolute right-4 bottom-4 z-30 max-w-sm">
-      <div
-        className="rounded-xl border border-border bg-card p-3 text-sm text-card-foreground shadow-lg"
-        role="status"
-        aria-live="polite"
+    <div
+      // Beside the help button, which moves with the drawer.
+      className={cn(
+        "pointer-events-none absolute bottom-5.5 z-30 transition-[right]",
+        drawerOpen ? "right-96" : "right-16",
+      )}
+      role="status"
+      aria-live="polite"
+      title={statusMessage ?? "Modifications enregistrées"}
+    >
+      <span className="sr-only">
+        {statusMessage ?? "Modifications enregistrées"}
+      </span>
+      <span
+        className={cn(
+          "flex size-7 items-center justify-center rounded-full border border-border bg-card shadow-sm animate-in fade-in-0 zoom-in-75",
+          settled &&
+            "animate-out fade-out-0 zoom-out-75 fill-mode-forwards delay-700 duration-300",
+        )}
       >
-        <div className="font-medium">
-          {!isReady
-            ? "Plan indisponible"
-            : isRetrying
-              ? "Nouvelle tentative"
-              : "Sauvegarde"}
-        </div>
-        <p className="mt-1 text-muted-foreground">{statusMessage}</p>
-      </div>
+        {busy ? (
+          <span
+            className={cn(
+              "size-3.5 animate-spin rounded-full border-2 border-muted border-t-foreground",
+              isRetrying && "border-t-down",
+            )}
+          />
+        ) : (
+          <HugeiconsIcon
+            icon={Tick02Icon}
+            size={16}
+            strokeWidth={2}
+            className="animate-in text-up zoom-in-50"
+          />
+        )}
+      </span>
     </div>
   );
 }
