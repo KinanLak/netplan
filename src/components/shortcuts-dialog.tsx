@@ -65,7 +65,14 @@ export function ShortcutsDialog({ hasRightDrawerOpen }: ShortcutsDialogProps) {
         </DialogHeader>
 
         {/* The shadows at either end say there is more to scroll. */}
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-2 scroll-shadow-y">
+        {/* Focusable, so the keyboard scrolls it where the browser does not
+            focus scroll areas on its own (Safari). */}
+        <div
+          tabIndex={0}
+          role="region"
+          aria-label="Liste des raccourcis"
+          className="min-h-0 flex-1 overflow-y-auto px-6 pb-2 outline-none scroll-shadow-y focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+        >
           <ShortcutGroupGrid groups={groups} />
         </div>
 

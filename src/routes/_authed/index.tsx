@@ -275,7 +275,8 @@ function MapWorkspace({
         <ReactFlowProvider>
           {/* The mode button and the toolbar come before the plan, so Tab
               reaches them first (ADR 0030). */}
-          <div className="absolute top-4 left-4 z-20 flex items-center gap-2">
+          {/* Above the toolbar, which can reach it on a narrow screen. */}
+          <div className="absolute top-4 left-4 z-30 flex items-center gap-2">
             <SidebarToggle />
             {canEdit ? (
               <button
