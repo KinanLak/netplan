@@ -66,7 +66,7 @@ export type ShortcutConfig = {
   scope: ShortcutScope;
   /**
    * Only for a role that may edit the map: a Lecteur neither triggers it nor
-   * sees it in the shortcuts dialog (ADR 0029).
+   * sees it in the shortcuts dialog (ADR 0030).
    */
   requiresEdit?: boolean;
 };

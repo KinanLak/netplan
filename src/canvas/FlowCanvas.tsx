@@ -58,7 +58,7 @@ import {
 const SNAP_GRID: [number, number] = [GRID_SIZE, GRID_SIZE];
 const FIT_VIEW_OPTIONS = { padding: FLOW_CANVAS_FIT_VIEW_PADDING };
 const PRO_OPTIONS = { hideAttribution: true };
-// Devices are not reached by keyboard (ADR 0029); say so in French.
+// Devices are not reached by keyboard (ADR 0030); say so in French.
 const ARIA_LABEL_CONFIG = {
   "node.a11yDescription.default":
     "Cliquez sur un équipement pour ouvrir sa fiche.",

@@ -80,7 +80,7 @@ export const shortcutGroups: Array<ShortcutGroup> = [
 
 /**
  * The groups as a role sees them: a Lecteur gets no editing shortcut, and a
- * group left empty disappears (ADR 0029).
+ * group left empty disappears (ADR 0030).
  */
 export const shortcutGroupsFor = (canEdit: boolean): Array<ShortcutGroup> =>
   shortcutGroups
