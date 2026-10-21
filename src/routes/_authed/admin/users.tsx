@@ -216,7 +216,10 @@ function UsersPage() {
   );
 }
 
-/** Online now, the last sign-in, or how long the invitation link holds. */
+/**
+ * On the plan now (presence is per floor, C9), the last sign-in, or how long
+ * the invitation link holds.
+ */
 function Activity({
   user,
   online,
@@ -230,7 +233,7 @@ function Activity({
     return (
       <span className="flex items-center gap-1.5">
         <span aria-hidden className="size-2 rounded-full bg-up" />
-        En ligne
+        Sur le plan
       </span>
     );
   }
@@ -238,7 +241,9 @@ function Activity({
     if (user.disabled) {
       return <span>Réactivez le compte pour renvoyer l'invitation.</span>;
     }
-    return user.invitationExpiresAt === null ? (
+    // The query reruns when data changes, not when a link runs out.
+    return user.invitationExpiresAt === null ||
+      user.invitationExpiresAt <= now ? (
       <span>Aucun lien valable : renvoyez l'invitation.</span>
     ) : (
       <span>
