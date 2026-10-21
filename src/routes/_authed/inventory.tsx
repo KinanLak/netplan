@@ -39,6 +39,7 @@ import {
   sortOf,
   toSearch,
 } from "@/inventory/filters";
+import type { Sort } from "@/inventory/columns";
 import type { InventoryFilters, Placement } from "@/inventory/filters";
 import { ColumnPicker, InventoryTable } from "@/inventory/InventoryTable";
 import { useRestoredScroll } from "@/inventory/useRestoredScroll";
@@ -127,7 +128,11 @@ function SiteInventory({ site }: { site: SiteSummary }) {
   const canEdit = useCanEdit();
   const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
-  const filters = filtersOf(search);
+  // Typing runs ahead of the URL: each navigation first waits for the root's
+  // session check, and a field fed only by the URL would drop keystrokes.
+  const [draft, setDraft] = useState<string | null>(null);
+  const fromUrl = filtersOf(search);
+  const filters = { ...fromUrl, query: draft ?? fromUrl.query };
   const sort = sortOf(search);
   const [creating, setCreating] = useState(false);
   const [hidden, setHidden] = useState(readHiddenColumns);
@@ -136,14 +141,24 @@ function SiteInventory({ site }: { site: SiteSummary }) {
   useRestoredScroll("inventory-page", devices !== undefined);
   useRestoredScroll("inventory-table", devices !== undefined);
 
-  const update = (next: Partial<InventoryFilters>, nextSort = sort) =>
-    void navigate({
+  const navigateTo = (next: Partial<InventoryFilters>, nextSort: Sort) =>
+    navigate({
       search: (current) => ({
         ...siteSearch(current),
         ...toSearch({ ...filters, ...next }, nextSort),
       }),
       replace: true,
     });
+  const update = (next: Partial<InventoryFilters>, nextSort = sort) => {
+    if (next.query !== undefined) setDraft(null);
+    void navigateTo(next, nextSort);
+  };
+  const typeQuery = (query: string) => {
+    setDraft(query);
+    void navigateTo({ query }, sort).then(() =>
+      setDraft((current) => (current === query ? null : current)),
+    );
+  };
 
   const all = devices ?? [];
   const coverage = coverageByType(all);
@@ -228,7 +243,7 @@ function SiteInventory({ site }: { site: SiteSummary }) {
                 ref={searchRef}
                 type="search"
                 value={filters.query}
-                onChange={(event) => update({ query: event.target.value })}
+                onChange={(event) => typeQuery(event.target.value)}
                 placeholder="Nom, hostname, MAC, IP, emplacement…"
                 aria-label="Rechercher un équipement"
                 aria-keyshortcuts="/"
