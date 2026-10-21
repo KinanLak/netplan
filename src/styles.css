@@ -345,6 +345,7 @@ button:hover {
     animation: none;
     display: none;
   }
+}
 
 /* A scroll container's shadows at either end show only while more content
    lies there: the covers scroll with the content, the shadows stay. */
