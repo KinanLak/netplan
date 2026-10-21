@@ -1057,8 +1057,12 @@ describe("the LibreNMS step", () => {
     expect(uncertain.message).toContain(
       "« pile » : sa découverte n'a pas pu être lancée. LibreNMS a répondu 503.",
     );
-    // It ran anyway, so the tables are read.
+    // It ran anyway, so the tables are read, and the freshness card counts
+    // the switch as read, with a note.
     expect(await statusOf(admin, "device:pc")).toBe("up");
+    expect(
+      (await admin.query(api.collection.freshness, { siteId }))?.switches,
+    ).toEqual({ read: 1, noted: 1 });
 
     // Five minutes later.
     await admin.run(async (ctx) => {

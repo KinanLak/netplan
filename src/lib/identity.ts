@@ -76,7 +76,8 @@ export const colorForHue = (
     case "stroke":
       return `hsl(${hue} 65% 35%)`;
     case "label":
-      return `hsl(${hue} 80% 25%)`;
+      // Light enough that two hues tell apart, dark enough for white text.
+      return `hsl(${hue} 65% 38%)`;
   }
 };
 

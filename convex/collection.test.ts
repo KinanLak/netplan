@@ -211,6 +211,9 @@ describe("collection cycles", () => {
       running: null,
       last: { startedAt, failed: [] },
       lastSuccessAt: startedAt,
+      // No NetBox site is chosen, so nothing was imported.
+      sources: [{ source: "netbox", at: null, failed: false }],
+      switches: null,
     });
 
     // A failed cycle leaves the data as fresh as the last good one.
@@ -222,6 +225,7 @@ describe("collection cycles", () => {
       last: { startedAt: failedAt, failed: ["netbox"] },
       lastSuccessAt: startedAt,
       failures: 1,
+      sources: [{ source: "netbox", failed: true }],
     });
 
     expect(
