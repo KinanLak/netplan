@@ -1,6 +1,9 @@
 import { describe, expect, it } from "bun:test";
 import {
   ageHint,
+  dayOf,
+  formatDay,
+  startOfDay,
   formatAge,
   formatDateTime,
   formatTime,
@@ -60,6 +63,32 @@ describe("timeZoneHint", () => {
   it("says when a relative time was, and where", () => {
     expect(ageHint(AT, AT, "Europe/Paris")).toMatch(
       /^mer\. 21 oct\.,? 14:05 · Europe\/Paris • UTC\+2$/,
+    );
+  });
+});
+
+describe("days", () => {
+  it("names a day as the reader's calendar does", () => {
+    expect(dayOf(Date.parse("2026-10-21T22:30:00Z"), "Europe/Paris")).toBe(
+      "2026-10-22",
+    );
+    expect(formatDay(AT, AT, "Europe/Paris")).toBe("Aujourd'hui");
+    expect(formatDay(AT - 24 * 60 * MINUTE, AT, "Europe/Paris")).toBe("Hier");
+    expect(formatDay(AT - 2 * 24 * 60 * MINUTE, AT, "Europe/Paris")).toBe(
+      "Lundi 19 octobre",
+    );
+  });
+
+  it("starts a day at the reader's midnight, across a change of offset", () => {
+    expect(startOfDay("2026-10-21", "Europe/Paris")).toBe(
+      Date.parse("2026-10-20T22:00:00Z"),
+    );
+    // Paris leaves summer time at 03:00 on 25 October.
+    expect(startOfDay("2026-10-26", "Europe/Paris")).toBe(
+      Date.parse("2026-10-25T23:00:00Z"),
+    );
+    expect(startOfDay("2026-10-21", "America/Sao_Paulo")).toBe(
+      Date.parse("2026-10-21T03:00:00Z"),
     );
   });
 });

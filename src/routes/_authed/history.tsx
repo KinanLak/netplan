@@ -1,20 +1,31 @@
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Search01Icon } from "@hugeicons/core-free-icons";
-import { Link, createFileRoute } from "@tanstack/react-router";
+import { Location01Icon, Search01Icon } from "@hugeicons/core-free-icons";
+import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { usePaginatedQuery, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ModeToggle } from "@/components/mode-toggle";
 import { ListSkeleton } from "@/components/loading-skeletons";
 import { AppNavLinks, UserMenu } from "@/components/app-nav";
 import { NetplanLogo } from "@/components/netplan-logo";
+import { Segmented } from "@/components/segmented";
 import { Time } from "@/components/time";
+import { UnderlineTabs } from "@/components/underline-tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EventSummary, LoadMore, PlaceLabel } from "@/history/HistoryLists";
+import { DeviceHistoryDialog } from "@/history/DeviceHistoryDialog";
+import { timeline } from "@/history/timeline";
 import { useCanEdit } from "@/hooks/use-current-user";
+import { showOnMap } from "@/inventory/showOnMap";
 import { useNow } from "@/hooks/use-now";
-import { formatTime, timeZoneHint } from "@/lib/time";
+import {
+  dayOf,
+  formatDay,
+  formatTime,
+  startOfDay,
+  timeZoneHint,
+} from "@/lib/time";
 import { cn } from "@/lib/utils";
 import { SiteSwitcher } from "@/sites/SiteSwitcher";
 import {
@@ -28,9 +39,35 @@ import { siteSearch, useCurrentSite } from "@/sites/useCurrentSite";
 import type { SiteSummary } from "@/sites/useCurrentSite";
 import { api } from "../../../convex/_generated/api";
 
+type KindFilter = "all" | "located" | "online" | "offline";
+
+const isDay = (value: unknown): value is string =>
+  typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
+
+/** The view and its filters, in the URL so a reload or Back keeps them (A62). */
+type HistorySearch = {
+  site?: string;
+  view?: "snapshots";
+  q?: string;
+  kind?: Exclude<KindFilter, "all">;
+  from?: string;
+  to?: string;
+};
+
+const historySearch = (search: Record<string, unknown>): HistorySearch => ({
+  ...siteSearch(search),
+  ...(search.view === "snapshots" && { view: "snapshots" as const }),
+  ...(typeof search.q === "string" && search.q !== "" && { q: search.q }),
+  ...((search.kind === "located" ||
+    search.kind === "online" ||
+    search.kind === "offline") && { kind: search.kind }),
+  ...(isDay(search.from) && { from: search.from }),
+  ...(isDay(search.to) && { to: search.to }),
+});
+
 export const Route = createFileRoute("/_authed/history")({
   ssr: false,
-  validateSearch: siteSearch,
+  validateSearch: historySearch,
   head: () => ({ meta: [{ title: "Historique" }] }),
   component: HistoryPage,
 });
@@ -82,8 +119,17 @@ function HistoryPage() {
 
 type View = "events" | "snapshots";
 
+const KIND_FILTERS: Array<{ value: KindFilter; label: string }> = [
+  { value: "all", label: "Tous" },
+  { value: "located", label: "Déplacements" },
+  { value: "online", label: "En ligne" },
+  { value: "offline", label: "Hors ligne" },
+];
+
 function SiteHistory({ site }: { site: SiteSummary }) {
-  const [view, setView] = useState<View>("events");
+  const search = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
+  const view: View = search.view ?? "events";
   return (
     <div className="space-y-6">
       <header>
@@ -93,114 +139,279 @@ function SiteHistory({ site }: { site: SiteSummary }) {
           déplacements, mises en ligne et hors ligne, et cinq relevés par jour.
         </p>
       </header>
+      <UnderlineTabs
+        label="Vue"
+        idPrefix="history"
+        value={view}
+        onChange={(next) =>
+          void navigate({
+            search: (current) => ({
+              site: current.site,
+              ...(next === "snapshots" && { view: "snapshots" as const }),
+            }),
+            replace: true,
+          })
+        }
+        tabs={[
+          { value: "events", label: "Événements" },
+          { value: "snapshots", label: "Relevés" },
+        ]}
+      />
       <div
-        role="group"
-        aria-label="Vue"
-        className="flex w-fit gap-1 rounded-lg border p-1"
+        id="history-panel"
+        role="tabpanel"
+        aria-labelledby={`history-tab-${view}`}
       >
-        <Button
-          size="sm"
-          variant={view === "events" ? "secondary" : "ghost"}
-          aria-pressed={view === "events"}
-          onClick={() => setView("events")}
-        >
-          Événements
-        </Button>
-        <Button
-          size="sm"
-          variant={view === "snapshots" ? "secondary" : "ghost"}
-          aria-pressed={view === "snapshots"}
-          onClick={() => setView("snapshots")}
-        >
-          Relevés
-        </Button>
+        {view === "events" ? (
+          <SiteEvents site={site} />
+        ) : (
+          <SiteSnapshots site={site} />
+        )}
       </div>
-      {view === "events" ? (
-        <SiteEvents site={site} />
-      ) : (
-        <SiteSnapshots site={site} />
-      )}
     </div>
   );
 }
 
-type KindFilter = "all" | "located" | "online" | "offline";
-
-const KIND_FILTERS: Array<{ value: KindFilter; label: string }> = [
-  { value: "all", label: "Tous" },
-  { value: "located", label: "Déplacements" },
-  { value: "online", label: "En ligne" },
-  { value: "offline", label: "Hors ligne" },
-];
-
 const PAGE = 50;
 
 function SiteEvents({ site }: { site: SiteSummary }) {
-  const [kind, setKind] = useState<KindFilter>("all");
+  const search = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
+  const now = useNow(60_000);
+  // Typing runs ahead of the URL, which each navigation updates only after
+  // the root's session check.
+  const [draft, setDraft] = useState<string | null>(null);
+  const query = draft ?? search.q ?? "";
+  const kind = search.kind ?? "all";
+  const [opened, setOpened] = useState<{ id: string; name: string } | null>(
+    null,
+  );
+  const devices = useQuery(api.devices.listForSite, { siteId: site.id });
+  const placeOf = new Map(
+    (devices ?? []).flatMap((device) =>
+      device.location ? [[device.id, device.location] as const] : [],
+    ),
+  );
+  const goTo = useNavigate();
+
+  const setSearch = (next: Partial<HistorySearch>) =>
+    navigate({
+      search: (current) => {
+        const merged = { ...current, q: query || undefined, ...next };
+        return Object.fromEntries(
+          Object.entries(merged).filter(([, value]) => value !== undefined),
+        );
+      },
+      replace: true,
+    });
+  const typeQuery = (text: string) => {
+    setDraft(text);
+    void setSearch({ q: text || undefined }).then(() =>
+      setDraft((current) => (current === text ? null : current)),
+    );
+  };
+  const filtered =
+    query.trim() !== "" ||
+    kind !== "all" ||
+    search.from !== undefined ||
+    search.to !== undefined;
+  const reset = () => {
+    setDraft(null);
+    void setSearch({
+      q: undefined,
+      kind: undefined,
+      from: undefined,
+      to: undefined,
+    });
+  };
+
   const { results, status, loadMore } = usePaginatedQuery(
     api.history.forSite,
-    { siteId: site.id, ...(kind !== "all" && { kind }) },
+    {
+      siteId: site.id,
+      ...(kind !== "all" && { kind }),
+      ...(query.trim() && { search: query }),
+      ...(search.from && { from: startOfDay(search.from) }),
+      ...(search.to && { to: startOfDay(nextDay(search.to)) }),
+    },
     { initialNumItems: PAGE },
   );
+  // A search filters before paging, so a page may hold few rows: read on
+  // until a page's worth shows or the history ends.
+  useEffect(() => {
+    if (query.trim() && status === "CanLoadMore" && results.length < PAGE) {
+      loadMore(PAGE);
+    }
+  }, [query, status, results.length, loadMore]);
+
+  const earliest = dayOf(now - 30 * DAY_MS);
+  const today = dayOf(now);
+
   return (
-    <section className="space-y-3">
-      <div
-        role="group"
-        aria-label="Type d'événement"
-        className="flex w-fit gap-1 rounded-lg border p-1"
-      >
-        {KIND_FILTERS.map(({ value, label }) => (
-          <Button
-            key={value}
-            size="sm"
-            variant={kind === value ? "secondary" : "ghost"}
-            aria-pressed={kind === value}
-            onClick={() => setKind(value)}
-          >
-            {label}
-          </Button>
-        ))}
+    <section className="space-y-4">
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="relative min-w-60 flex-1">
+          <HugeiconsIcon
+            icon={Search01Icon}
+            size={16}
+            strokeWidth={1.5}
+            className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-muted-foreground"
+          />
+          <Input
+            type="search"
+            value={query}
+            onChange={(event) => typeQuery(event.target.value)}
+            placeholder="Équipement, MAC, prise, switch…"
+            aria-label="Rechercher dans l'historique"
+            className="pl-8"
+          />
+        </div>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="text-muted-foreground">Du</span>
+          <Input
+            type="date"
+            value={search.from ?? ""}
+            min={earliest}
+            max={search.to ?? today}
+            onChange={(event) =>
+              void setSearch({ from: event.target.value || undefined })
+            }
+            className="w-40"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="text-muted-foreground">Au</span>
+          <Input
+            type="date"
+            value={search.to ?? ""}
+            min={search.from ?? earliest}
+            max={today}
+            onChange={(event) =>
+              void setSearch({ to: event.target.value || undefined })
+            }
+            className="w-40"
+          />
+        </label>
+        <Segmented
+          label="Type d'événement"
+          value={kind}
+          onChange={(next) =>
+            void setSearch({ kind: next === "all" ? undefined : next })
+          }
+          options={KIND_FILTERS}
+        />
       </div>
       {status === "LoadingFirstPage" ? null : results.length === 0 ? (
-        <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-          Rien n'a été observé ces 30 derniers jours. L'historique se remplit à
-          chaque collecte LibreNMS.
-        </p>
+        status === "Exhausted" ? (
+          filtered ? (
+            <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+              <p>
+                {kind === "offline" && !query.trim()
+                  ? "Aucun événement hors ligne sur la période."
+                  : "Aucun événement ne correspond à ces filtres."}
+              </p>
+              <Button variant="outline" size="sm" onClick={reset}>
+                Réinitialiser les filtres
+              </Button>
+            </div>
+          ) : (
+            <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+              Rien n'a été observé ces 30 derniers jours. L'historique se
+              remplit à chaque collecte LibreNMS.
+            </p>
+          )
+        ) : null
       ) : (
-        <div className="overflow-x-auto rounded-lg border">
-          <table className="w-full text-sm">
-            <thead className="border-b bg-muted text-left text-xs text-muted-foreground">
-              <tr>
-                <th className="px-4 py-2 font-medium">Quand</th>
-                <th className="px-4 py-2 font-medium">Équipement</th>
-                <th className="px-4 py-2 font-medium">Observé</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {results.map((event) => (
-                <tr
-                  key={`${event.deviceId}-${event.at}-${event.kind}`}
-                  className="align-top"
-                >
-                  <td className="px-4 py-2.5 whitespace-nowrap text-muted-foreground tabular-nums">
-                    <Time at={event.at} />
-                  </td>
-                  <td className="px-4 py-2.5 font-medium">
-                    {event.deviceName}
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <EventSummary event={event} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="space-y-6">
+          {timeline(results).map((day) => (
+            <section key={day.day} aria-label={formatDay(day.at, now)}>
+              <h2 className="mb-2 text-sm font-medium">
+                {formatDay(day.at, now)}
+              </h2>
+              <div className="overflow-x-auto rounded-lg border">
+                <table className="w-full text-sm">
+                  <tbody className="divide-y">
+                    {day.rows.map(({ event, cameOnline }) => {
+                      const location = placeOf.get(event.deviceId);
+                      return (
+                        <tr
+                          key={`${event.deviceId}-${event.at}-${event.kind}`}
+                          className="group align-top hover:bg-muted"
+                        >
+                          <td className="w-20 px-4 py-2.5 whitespace-nowrap text-muted-foreground tabular-nums">
+                            <Time at={event.at} format="time" />
+                          </td>
+                          <td className="w-64 px-4 py-2.5">
+                            <span className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setOpened({
+                                    id: event.deviceId,
+                                    name: event.deviceName,
+                                  })
+                                }
+                                className="truncate rounded-sm text-left font-medium underline-offset-2 outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring"
+                                title={`Historique de « ${event.deviceName} »`}
+                              >
+                                {event.deviceName}
+                              </button>
+                              {location ? (
+                                <Button
+                                  variant="ghost"
+                                  size="icon-xs"
+                                  aria-label={`Voir « ${event.deviceName} » sur le plan`}
+                                  title="Voir sur le plan"
+                                  className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                                  onClick={() =>
+                                    showOnMap(
+                                      goTo,
+                                      site.id,
+                                      event.deviceId,
+                                      location,
+                                    )
+                                  }
+                                >
+                                  <HugeiconsIcon
+                                    icon={Location01Icon}
+                                    strokeWidth={1.5}
+                                  />
+                                </Button>
+                              ) : null}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2.5">
+                            <EventSummary
+                              event={event}
+                              cameOnline={cameOnline}
+                            />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          ))}
         </div>
       )}
       <LoadMore status={status} onLoadMore={() => loadMore(PAGE)} />
+      {opened ? (
+        <DeviceHistoryDialog
+          device={opened}
+          open
+          onOpenChange={(open) => {
+            if (!open) setOpened(null);
+          }}
+        />
+      ) : null}
     </section>
   );
 }
+
+const nextDay = (day: string) =>
+  new Date(Date.parse(`${day}T12:00:00Z`) + DAY_MS).toISOString().slice(0, 10);
 
 type Slot = FunctionReturnType<typeof api.history.slotsForDay>[number];
 
