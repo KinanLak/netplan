@@ -70,7 +70,8 @@ export function DrawerConnectionsSection({
                     {portLabel(port)}
                   </span>
                   <span aria-hidden>→</span>
-                  <span className="truncate">un autre étage</span>
+                  {/* Another floor, or no floor at all: the port table says which. */}
+                  <span className="truncate">hors de cet étage</span>
                 </div>
               )}
             </li>

@@ -58,13 +58,20 @@ export function MapDocumentStatus({
   const drawerOpen = useSelectedDeviceId() !== null;
 
   // A save that ends shows a tick for a moment, then the circle fades; the
-  // end of loading does not.
+  // end of loading does not, nor a save the server refused, whichever of the
+  // refusal and the end of the save the page hears first.
   const saving = busy && isReady;
   const [wasSaving, setWasSaving] = useState(saving);
   const [settled, setSettled] = useState(false);
+  const [refused, setRefused] = useState(false);
+  if (rejectedMessage !== null && !refused) {
+    setRefused(true);
+    setSettled(false);
+  }
   if (saving !== wasSaving) {
     setWasSaving(saving);
-    setSettled(!saving && !busy);
+    setSettled(!saving && !busy && !refused && rejectedMessage === null);
+    setRefused(false);
   }
   useEffect(() => {
     if (!settled) return;
