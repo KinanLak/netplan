@@ -26,7 +26,7 @@ const EMPTY_FLOOR_VIEW: Viewport = { x: 0, y: 0, zoom: 1 };
 /**
  * Each floor opens on its last view in this tab, or, the first time, fitted
  * to what is drawn on it; the view is never refitted when devices arrive
- * (ADR 0029). Returns the fit, for "Centrer la vue".
+ * (ADR 0030). Returns the fit, for "Centrer la vue".
  */
 export function useFloorViewport(reactFlow: ReactFlowInstance) {
   const currentFloorId = useCurrentFloorId();

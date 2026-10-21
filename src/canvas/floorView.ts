@@ -6,7 +6,7 @@ import type { MapDocumentSnapshot } from "@/types/map";
 
 /**
  * A floor seen for the first time is fitted no closer than this, so a lone
- * device shows its room rather than filling the screen (ADR 0029).
+ * device shows its room rather than filling the screen (ADR 0030).
  */
 export const FLOOR_FIT_MAX_ZOOM = 1;
 

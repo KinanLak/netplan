@@ -373,7 +373,7 @@ function MapWorkspace({
 
 /**
  * Keeps `?floor=` and `?device=` in step with the map, both ways, so a link
- * or a reload opens the same floor and device (ADR 0029). The URL is applied
+ * or a reload opens the same floor and device (ADR 0030). The URL is applied
  * only when it changes, and the map writes back only what differs, so the
  * two never fight.
  */
