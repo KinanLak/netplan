@@ -226,6 +226,18 @@ describe("cables", () => {
       "pc-1",
       "02:00:00:00:00:99",
     ]);
+    // A source may model a socket with a rear port alone.
+    await t.run(async (ctx) => {
+      const port = await ctx.db
+        .query("ports")
+        .withIndex("by_device", (q) => q.eq("deviceId", "device:socket"))
+        .unique();
+      if (port) await ctx.db.patch(port._id, { kind: "rear" });
+    });
+    const rearOnly = await t.query(api.cables.portTable, {
+      deviceId: "device:socket",
+    });
+    expect(rearOnly?.ports[0]?.observed).toHaveLength(2);
     // The panel's ports see nothing themselves.
     const panelFront = await portOf(
       t,

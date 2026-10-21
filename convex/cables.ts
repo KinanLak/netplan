@@ -75,11 +75,16 @@ export const lastSighting = v.union(
   v.object({ place: historyPlace, at: v.number(), current: v.boolean() }),
 );
 
-/** What a switch port or a socket saw, named by the devices of the site. */
+/**
+ * What a switch port or a socket saw, named by the devices of the site. A
+ * socket's sightings go on its front port, or on its only port when a source
+ * models it with a rear port alone.
+ */
 const observedOn = async (
   ctx: QueryCtx,
   device: Doc<"devices">,
   port: Doc<"ports">,
+  socketPortId: string | undefined,
 ) => {
   const rows =
     device.type === "switch"
@@ -92,7 +97,7 @@ const observedOn = async (
               .eq("portId", port.objectId),
           )
           .collect()
-      : device.type === "wall-port" && port.kind === "front"
+      : port.objectId === socketPortId
         ? await ctx.db
             .query("macSightings")
             .withIndex("by_site_socket", (q) =>
@@ -210,6 +215,10 @@ export const portTable = readerQuery({
     if (!device) return null;
     const nameEnd = portEndNamer(ctx);
     const rows = (await portRowsOf(ctx, deviceId)).sort(comparePorts);
+    const socketPortId =
+      device.type === "wall-port"
+        ? (rows.find((row) => row.kind === "front") ?? rows.at(0))?.objectId
+        : undefined;
     const ports = await Promise.all(
       rows.map(async (row) => {
         const cable = await cableRowAt(ctx, row.objectId);
@@ -229,7 +238,7 @@ export const portTable = readerQuery({
               ? { id: cable.objectId, source: cable.source, far }
               : null,
           traceEnd: last && hops.length > 1 ? await nameEnd(last) : null,
-          observed: await observedOn(ctx, device, row),
+          observed: await observedOn(ctx, device, row, socketPortId),
         };
       }),
     );

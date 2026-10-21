@@ -285,7 +285,7 @@ function PortTableLine({
         focused ? (row) => row?.scrollIntoView({ block: "center" }) : undefined
       }
       className={cn(
-        "flex items-center gap-3 py-2 pr-3",
+        "flex flex-wrap items-center gap-x-3 gap-y-1 py-2 pr-3",
         focused && "-mx-2 rounded-md bg-muted px-2",
       )}
     >
@@ -317,7 +317,8 @@ function PortTableLine({
         )}
       </div>
       {withObserved ? (
-        <div className="w-36 shrink-0 text-xs">
+        // Its own column where there is room, under the line otherwise.
+        <div className="order-last basis-full pl-[calc(4rem+0.75rem)] text-xs sm:order-none sm:w-36 sm:shrink-0 sm:basis-auto sm:pl-0">
           {port.observed.map((seen) => (
             <div
               key={`${seen.name}-${seen.at}`}
