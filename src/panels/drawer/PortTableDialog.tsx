@@ -22,7 +22,10 @@ import { getDeviceKindLabel } from "@/devices/deviceKindRegistry";
 import { matchesDeviceSearch } from "@/devices/search";
 import { createStandaloneObjectId } from "@/lib/identity";
 import { INTEGRATION_LABELS } from "@/sites/integrations";
-import { endLabel, portLabel } from "@/devices/portState";
+import { endLabel, portLabel, shortPortName } from "@/devices/portState";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+import type { DeviceType } from "@/types/map";
 import { useCableCommands } from "@/devices/useCableCommands";
 import { api } from "../../../convex/_generated/api";
 
@@ -30,6 +33,12 @@ type PortTable = NonNullable<FunctionReturnType<typeof api.cables.portTable>>;
 type PortRow = PortTable["ports"][number];
 type PortEnd = NonNullable<PortRow["traceEnd"]>;
 type InventoryRow = FunctionReturnType<typeof api.devices.listForSite>[number];
+type CableFrom = {
+  deviceId: string;
+  deviceName: string;
+  deviceType: DeviceType;
+  port: PortRow;
+};
 
 const byName = new Intl.Collator("fr", { numeric: true, sensitivity: "base" });
 
@@ -46,12 +55,15 @@ export function PortTableDialog({
   editable,
   open,
   onOpenChange,
+  focusPortId,
 }: {
   device: { id: string; name: string };
   /** Whether cables can be changed here: edit mode on the map, the role elsewhere. */
   editable: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** The port the table opens on, scrolled to and highlighted. */
+  focusPortId?: string | null;
 }) {
   return (
     <Dialog
@@ -65,7 +77,8 @@ export function PortTableDialog({
         onOpenChange(next);
       }}
     >
-      <DialogContent className="sm:max-w-2xl">
+      {/* Anchored at the top, so the dialog does not jump as its body changes. */}
+      <DialogContent className="top-[8vh] max-h-[84vh] translate-y-0 grid-rows-[auto_minmax(0,1fr)] sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Câbles de « {device.name} »</DialogTitle>
           <DialogDescription>
@@ -74,22 +87,51 @@ export function PortTableDialog({
           </DialogDescription>
         </DialogHeader>
         {/* Mounted on open, so a half-chosen cable starts over. */}
-        {open ? <PortTableBody device={device} editable={editable} /> : null}
+        {open ? (
+          <PortTableBody
+            device={device}
+            editable={editable}
+            focusPortId={focusPortId ?? null}
+          />
+        ) : null}
       </DialogContent>
     </Dialog>
   );
 }
 
+type PortFilter = "all" | "cabled" | "free";
+
+const FILTER_LABELS: Record<PortFilter, string> = {
+  all: "Tous",
+  cabled: "Câblés",
+  free: "Libres",
+};
+
+// Past this many ports, a search and a filter earn their place.
+const SEARCHABLE_FROM = 12;
+
+const timeOf = (at: number) =>
+  new Intl.DateTimeFormat("fr-FR", {
+    hourCycle: "h23",
+    ...(new Date(at).toDateString() === new Date().toDateString()
+      ? { hour: "2-digit", minute: "2-digit" }
+      : { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }),
+  }).format(at);
+
 function PortTableBody({
   device,
   editable,
+  focusPortId,
 }: {
   device: { id: string; name: string };
   editable: boolean;
+  focusPortId: string | null;
 }) {
   const deviceId = device.id;
   const table = useQuery(api.cables.portTable, { deviceId });
   const [cablingFrom, setCablingFrom] = useState<PortRow | null>(null);
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<PortFilter>("all");
 
   if (table === undefined) {
     return <p className="text-sm text-muted-foreground">Chargement…</p>;
@@ -112,45 +154,147 @@ function PortTableBody({
     return (
       <CablePicker
         siteId={table.siteId}
-        from={{ deviceId, deviceName: device.name, port: cablingFrom }}
+        from={{
+          deviceId,
+          deviceName: device.name,
+          deviceType: table.deviceType,
+          port: cablingFrom,
+        }}
         onDone={() => setCablingFrom(null)}
       />
     );
   }
+
+  const counts: Record<PortFilter, number> = {
+    all: table.ports.length,
+    cabled: table.ports.filter((port) => port.cable).length,
+    free: table.ports.filter((port) => !port.cable).length,
+  };
+  const needle = query.trim().toLowerCase();
+  const shown = table.ports.filter(
+    (port) =>
+      (filter === "all" || (filter === "cabled") === Boolean(port.cable)) &&
+      (needle === "" ||
+        port.name.toLowerCase().includes(needle) ||
+        shortPortName(port.name).toLowerCase().includes(needle)),
+  );
+  const withObserved = table.ports.some((port) => port.observed.length > 0);
+
   return (
-    <ScrollArea className="max-h-[60vh]">
-      <ul className="divide-y divide-border">
-        {table.ports.map((port) => (
-          <PortTableLine
-            key={port.id}
-            port={port}
-            deviceName={device.name}
-            editable={editable}
-            onCable={() => setCablingFrom(port)}
+    <div className="flex min-h-0 flex-col gap-3">
+      {table.lastSeen ? (
+        <p className="text-sm text-muted-foreground">
+          Vu sur le réseau : <LastSeen lastSeen={table.lastSeen} />
+        </p>
+      ) : null}
+      {table.ports.length > SEARCHABLE_FROM ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <Input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Port…"
+            aria-label="Chercher un port"
+            className="h-8 w-40"
           />
-        ))}
-      </ul>
-    </ScrollArea>
+          <div className="flex gap-1" role="group" aria-label="Ports">
+            {(Object.keys(FILTER_LABELS) as Array<PortFilter>).map((value) => (
+              <Button
+                key={value}
+                type="button"
+                size="sm"
+                variant={filter === value ? "secondary" : "ghost"}
+                aria-pressed={filter === value}
+                onClick={() => setFilter(value)}
+              >
+                {FILTER_LABELS[value]}
+                <span className="text-muted-foreground tabular-nums">
+                  {counts[value]}
+                </span>
+              </Button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+      <ScrollArea className="min-h-0">
+        {shown.length === 0 ? (
+          <p className="py-2 text-sm text-muted-foreground">
+            Aucun port ne correspond.
+          </p>
+        ) : (
+          <ul className="divide-y divide-border">
+            {shown.map((port) => (
+              <PortTableLine
+                key={port.id}
+                port={port}
+                deviceName={device.name}
+                deviceType={table.deviceType}
+                editable={editable}
+                withObserved={withObserved}
+                focused={port.id === focusPortId}
+                onCable={() => setCablingFrom(port)}
+              />
+            ))}
+          </ul>
+        )}
+      </ScrollArea>
+    </div>
+  );
+}
+
+function LastSeen({
+  lastSeen,
+}: {
+  lastSeen: NonNullable<PortTable["lastSeen"]>;
+}) {
+  const { place, at } = lastSeen;
+  return (
+    <>
+      <span className="text-foreground">{place.switchName}</span>{" "}
+      <span className="font-mono" title={place.portName}>
+        {shortPortName(place.portName)}
+      </span>
+      {place.socketName ? <> · {place.socketName}</> : null} · {timeOf(at)}
+    </>
   );
 }
 
 function PortTableLine({
   port,
   deviceName,
+  deviceType,
   editable,
+  withObserved,
+  focused,
   onCable,
 }: {
   port: PortRow;
   deviceName: string;
+  deviceType: DeviceType;
   editable: boolean;
+  withObserved: boolean;
+  focused: boolean;
   onCable: () => void;
 }) {
   const { unplug } = useCableCommands();
   const { cable } = port;
+  const label = portLabel(port, deviceType);
 
   return (
-    <li className="flex items-center gap-3 py-2 pr-3">
-      <span className="w-24 shrink-0 font-mono text-sm">{portLabel(port)}</span>
+    <li
+      ref={
+        focused ? (row) => row?.scrollIntoView({ block: "center" }) : undefined
+      }
+      className={cn(
+        "flex items-center gap-3 py-2 pr-3",
+        focused && "-mx-2 rounded-md bg-muted px-2",
+      )}
+    >
+      <span
+        className="min-w-16 shrink-0 font-mono text-sm"
+        title={label === port.name ? port.name : `${label} (${port.name})`}
+      >
+        {deviceType === "patch-panel" ? label : shortPortName(port.name)}
+      </span>
       <div className="min-w-0 flex-1 text-sm">
         {cable ? (
           <>
@@ -169,9 +313,25 @@ function PortTableLine({
             ) : null}
           </>
         ) : (
-          <span className="text-muted-foreground">Libre</span>
+          <span className="text-muted-foreground">Pas de câble documenté</span>
         )}
       </div>
+      {withObserved ? (
+        <div className="w-36 shrink-0 text-xs">
+          {port.observed.map((seen) => (
+            <div
+              key={`${seen.name}-${seen.at}`}
+              className={cn(
+                "truncate",
+                seen.current ? "text-foreground" : "text-muted-foreground",
+              )}
+              title={`Vu ${seen.current ? "à la dernière lecture" : "pour la dernière fois"} à ${timeOf(seen.at)}`}
+            >
+              {seen.name} · {timeOf(seen.at)}
+            </div>
+          ))}
+        </div>
+      ) : null}
       {editable && !cable ? (
         <Button variant="outline" size="sm" onClick={onCable}>
           Câbler
@@ -181,7 +341,9 @@ function PortTableLine({
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => void unplug(cable.id, endLabel(deviceName, port))}
+          onClick={() =>
+            void unplug(cable.id, endLabel(deviceName, port, deviceType))
+          }
         >
           Débrancher
         </Button>
@@ -190,14 +352,26 @@ function PortTableLine({
   );
 }
 
+// A socket or a PC has one port: its name says nothing more than the device's.
+const NAMES_ITS_PORTS = new Set<DeviceType>(["switch", "patch-panel"]);
+
 function PortEndLabel({ end }: { end: PortEnd }) {
   return (
     <span>
       <span className="font-medium text-foreground">{end.deviceName}</span>
-      {" · "}
-      <span className="font-mono">
-        {portLabel({ name: end.portName, kind: end.portKind })}
-      </span>
+      {NAMES_ITS_PORTS.has(end.deviceType) ? (
+        <>
+          {" · "}
+          <span className="font-mono" title={end.portName}>
+            {end.deviceType === "patch-panel"
+              ? portLabel(
+                  { name: end.portName, kind: end.portKind },
+                  end.deviceType,
+                )
+              : shortPortName(end.portName)}
+          </span>
+        </>
+      ) : null}
       <span className="text-muted-foreground">
         {" "}
         ({end.place ?? "hors plan"})
@@ -213,7 +387,7 @@ function CablePicker({
   onDone,
 }: {
   siteId: string;
-  from: { deviceId: string; deviceName: string; port: PortRow };
+  from: CableFrom;
   onDone: () => void;
 }) {
   const [target, setTarget] = useState<InventoryRow | null>(null);
@@ -221,7 +395,10 @@ function CablePicker({
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2 text-sm">
         <span>
-          Câbler <span className="font-mono">{portLabel(from.port)}</span>
+          Câbler{" "}
+          <span className="font-mono">
+            {portLabel(from.port, from.deviceType)}
+          </span>
           {target ? (
             <>
               {" "}
@@ -263,7 +440,11 @@ function DeviceList({
   const [query, setQuery] = useState("");
   const shown = devices
     ?.filter(
-      (device) => device.id !== excluded && matchesDeviceSearch(device, query),
+      (device) =>
+        // A rack has no port to cable.
+        device.type !== "rack" &&
+        device.id !== excluded &&
+        matchesDeviceSearch(device, query),
     )
     .sort((a, b) => byName.compare(a.name, b.name));
   return (
@@ -272,8 +453,9 @@ function DeviceList({
         value={query}
         onValueChange={setQuery}
         placeholder="Équipement : nom, hostname, MAC, IP…"
+        autoFocus
       />
-      <CommandList>
+      <CommandList className="max-h-[50vh]">
         <CommandEmpty>
           {devices === undefined
             ? "Chargement…"
@@ -308,7 +490,7 @@ function FreePortList({
   target,
   onDone,
 }: {
-  from: { deviceId: string; deviceName: string; port: PortRow };
+  from: CableFrom;
   target: InventoryRow;
   onDone: () => void;
 }) {
@@ -324,7 +506,7 @@ function FreePortList({
         a: { deviceId: from.deviceId, portId: from.port.id },
         b: { deviceId: target.id, portId: port.id },
       },
-      `${endLabel(from.deviceName, from.port)} ↔ ${endLabel(target.name, port)}`,
+      `${endLabel(from.deviceName, from.port, from.deviceType)} ↔ ${endLabel(target.name, port, target.type)}`,
     );
     if (refusal) setError(refusal);
     else onDone();
@@ -332,8 +514,8 @@ function FreePortList({
 
   return (
     <Command className="rounded-lg! border">
-      <CommandInput placeholder="Port libre…" />
-      <CommandList>
+      <CommandInput placeholder="Port libre…" autoFocus />
+      <CommandList className="max-h-[50vh]">
         <CommandEmpty>
           {table === undefined
             ? "Chargement…"
@@ -342,10 +524,14 @@ function FreePortList({
         {free?.map((port) => (
           <CommandItem
             key={port.id}
-            value={portLabel(port)}
+            value={`${portLabel(port, target.type)} ${shortPortName(port.name)}`}
             onSelect={() => void cable(port)}
           >
-            <span className="font-mono">{portLabel(port)}</span>
+            <span className="font-mono">
+              {target.type === "patch-panel"
+                ? portLabel(port, target.type)
+                : shortPortName(port.name)}
+            </span>
           </CommandItem>
         ))}
       </CommandList>
