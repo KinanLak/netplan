@@ -445,6 +445,7 @@ describe("the LibreNMS step", () => {
 
     // A device made from a MAC already seen starts its history where it is.
     await admin.mutation(api.unknownMacs.createDevice, {
+      type: "endpoint",
       siteId,
       mac: STRANGER,
       deviceId: "device:stranger",
@@ -870,6 +871,7 @@ describe("the LibreNMS step", () => {
     const later = await signIn();
     await tick(later);
     await later.mutation(api.unknownMacs.createDevice, {
+      type: "endpoint",
       siteId,
       mac: STRANGER,
       deviceId: "device:stranger",
@@ -1008,6 +1010,7 @@ describe("the LibreNMS step", () => {
     expect(restored.status).toBe("applied");
     expect(await statusOf(later, "device:pc")).toBe("stale");
     await later.mutation(api.unknownMacs.createDevice, {
+      type: "endpoint",
       siteId,
       mac: STRANGER,
       deviceId: "device:stranger",
@@ -1059,7 +1062,7 @@ describe("the LibreNMS step", () => {
     librenms.state.fdb = [{ port_id: 101, mac_address: STRANGER }];
     await cycle(admin, siteId);
     expect(await sightings(admin)).toHaveLength(1);
-    await admin.mutation(api.unknownMacs.ignore, { siteId, mac: STRANGER });
+    await admin.mutation(api.unknownMacs.ignore, { siteId, macs: [STRANGER] });
     await admin.mutation(api.sites.remove, { siteId });
     expect(await sightings(admin)).toEqual([]);
     expect(
@@ -1339,12 +1342,15 @@ describe("the LibreNMS step", () => {
 
     expect(
       await admin.mutation(api.unknownMacs.createDevice, {
+        type: "endpoint",
         siteId,
         mac: STRANGER,
         deviceId: "device:stranger",
         name: "  Imprimante  ",
       }),
-    ).toEqual({ placed: true });
+    ).toEqual({
+      location: { buildingId: "building:cycle", floorId: "floor:cycle" },
+    });
     const created = await admin.run(
       async (ctx) =>
         await ctx.db
@@ -1378,6 +1384,7 @@ describe("the LibreNMS step", () => {
     // Already carried now.
     await expect(
       admin.mutation(api.unknownMacs.createDevice, {
+        type: "endpoint",
         siteId,
         mac: STRANGER,
         deviceId: "device:again",
@@ -1387,12 +1394,24 @@ describe("the LibreNMS step", () => {
     // Seen at no socket: created on no floor.
     expect(
       await admin.mutation(api.unknownMacs.createDevice, {
+        type: "pc",
         siteId,
         mac: LOOSE,
         deviceId: "device:loose",
         name: "Portable",
+        hostname: "pc-portable",
       }),
-    ).toEqual({ placed: false });
+    ).toEqual({ location: null });
+
+    expect(
+      await admin.run(
+        async (ctx) =>
+          await ctx.db
+            .query("devices")
+            .withIndex("by_object_id", (q) => q.eq("objectId", "device:loose"))
+            .unique(),
+      ),
+    ).toMatchObject({ type: "pc", hostname: "pc-portable" });
 
     const next = (await cycle(admin, siteId)).message;
     expect(next).toContain("2 MAC vues.");
@@ -1418,9 +1437,9 @@ describe("the LibreNMS step", () => {
     // Any notation names the same MAC, and ignoring twice changes nothing.
     await admin.mutation(api.unknownMacs.ignore, {
       siteId,
-      mac: STRANGER.toUpperCase().replaceAll(":", "-"),
+      macs: [STRANGER.toUpperCase().replaceAll(":", "-")],
     });
-    await admin.mutation(api.unknownMacs.ignore, { siteId, mac: STRANGER });
+    await admin.mutation(api.unknownMacs.ignore, { siteId, macs: [STRANGER] });
     expect(await unknown()).toEqual([LOOSE]);
     expect(await ignored()).toEqual([STRANGER]);
     expect((await cycle(admin, siteId)).message).toContain("1 inconnue");
@@ -1435,26 +1454,26 @@ describe("the LibreNMS step", () => {
     expect(await unknown()).toEqual([]);
     expect(await ignored()).toEqual([STRANGER]);
 
-    await admin.mutation(api.unknownMacs.restore, { siteId, mac: STRANGER });
-    await admin.mutation(api.unknownMacs.restore, { siteId, mac: STRANGER });
+    await admin.mutation(api.unknownMacs.restore, { siteId, macs: [STRANGER] });
+    await admin.mutation(api.unknownMacs.restore, { siteId, macs: [STRANGER] });
     expect(await ignored()).toEqual([]);
     expect(await unknown()).toEqual([STRANGER]);
 
     await expect(
-      admin.mutation(api.unknownMacs.ignore, { siteId, mac: PC }),
+      admin.mutation(api.unknownMacs.ignore, { siteId, macs: [PC] }),
     ).rejects.toThrow("est celle de pc");
     await expect(
-      admin.mutation(api.unknownMacs.ignore, { siteId, mac: "pas une MAC" }),
+      admin.mutation(api.unknownMacs.ignore, { siteId, macs: ["pas une MAC"] }),
     ).rejects.toThrow("illisible");
     await expect(
       admin.mutation(api.unknownMacs.ignore, {
         siteId: "site:gone",
-        mac: LOOSE,
+        macs: [LOOSE],
       }),
     ).rejects.toThrow("n'existe plus");
 
     // A device that gains an ignored MAC takes it out of both lists.
-    await admin.mutation(api.unknownMacs.ignore, { siteId, mac: STRANGER });
+    await admin.mutation(api.unknownMacs.ignore, { siteId, macs: [STRANGER] });
     await admin.mutation(api.devices.create, {
       siteId,
       deviceId: "device:phone",
@@ -1463,6 +1482,54 @@ describe("the LibreNMS step", () => {
     });
     expect(await ignored()).toEqual([]);
     expect(await unknown()).toEqual([]);
+  });
+
+  it("ignores and restores several MACs at once, all or none, and remembers where each was", async () => {
+    const { admin, siteId } = await siteWithLibreNMS();
+    const LOOSE = macOf(4);
+    librenms.state.fdb = [
+      { port_id: 101, mac_address: STRANGER },
+      { port_id: 102, mac_address: LOOSE },
+    ];
+    await cycle(admin, siteId);
+    const ignored = async () =>
+      await admin.query(api.unknownMacs.listIgnored, { siteId });
+
+    // One MAC a device carries refuses the whole request.
+    await expect(
+      admin.mutation(api.unknownMacs.ignore, {
+        siteId,
+        macs: [STRANGER, PC],
+      }),
+    ).rejects.toThrow("est celle de pc");
+    expect(await ignored()).toEqual([]);
+
+    await admin.mutation(api.unknownMacs.ignore, {
+      siteId,
+      macs: [STRANGER, LOOSE],
+    });
+    expect(await admin.query(api.unknownMacs.listForSite, { siteId })).toEqual(
+      [],
+    );
+
+    // Gone from the network, each keeps the place it was ignored at.
+    librenms.state.fdb = [];
+    await cycle(admin, siteId);
+    await cycle(admin, siteId);
+    expect(await sightings(admin)).toEqual([]);
+    expect(
+      (await ignored()).find(({ mac }) => mac === STRANGER)?.lastSeen,
+    ).toMatchObject({
+      switchName: "sw",
+      portName: "GigabitEthernet1/0/1",
+      socketName: "socket",
+    });
+
+    await admin.mutation(api.unknownMacs.restore, {
+      siteId,
+      macs: [STRANGER, LOOSE],
+    });
+    expect(await ignored()).toEqual([]);
   });
 
   it("names no port of a switch mapped elsewhere during the read", async () => {

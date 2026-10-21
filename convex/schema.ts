@@ -247,6 +247,15 @@ export default defineSchema({
     /** The name at the time, so the list reads without the auth tables. */
     ignoredByName: v.string(),
     ignoredAt: v.number(),
+    /** Where it was last seen when ignored: its sighting goes, this stays. */
+    lastSeen: v.optional(
+      v.object({
+        at: v.number(),
+        switchName: v.union(v.string(), v.null()),
+        portName: v.union(v.string(), v.null()),
+        socketName: v.union(v.string(), v.null()),
+      }),
+    ),
   }).index("by_site_mac", ["siteId", "mac"]),
 
   walls: defineTable({
