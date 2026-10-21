@@ -283,6 +283,8 @@ export interface MapInteractionState {
   wallEraserSize: number;
   /** The calque panel; while open, the calque is what the canvas edits. */
   isOverlayPanelOpen: boolean;
+  /** The panel that places inventory devices on the floor (C2). */
+  isPlacePanelOpen: boolean;
   /** Personal and per session: hiding the calque changes nothing for others. */
   isOverlayHidden: boolean;
   /** The calque as a gesture in progress shows it, committed on release. */
@@ -320,6 +322,7 @@ export interface MapInteractionActions {
   showCables: (deviceId: DeviceId | null) => void;
   setCableDraft: (draft: CableDraft | null) => void;
   setOverlayPanelOpen: (open: boolean) => void;
+  setPlacePanelOpen: (open: boolean) => void;
   toggleOverlayHidden: () => void;
   setOverlayDraft: (draft: OverlayDraft | null) => void;
   setOverlayCalibration: (calibration: OverlayCalibration | null) => void;

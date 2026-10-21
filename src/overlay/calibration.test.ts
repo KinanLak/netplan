@@ -6,6 +6,7 @@ import {
   calibrationPatch,
   imageToPlan,
   isInsideImage,
+  overlayBounds,
   planToImage,
 } from "./calibration";
 
@@ -111,5 +112,22 @@ describe("calibrationPatch", () => {
     expect(
       calibrationPatch(wide, { x: 10, y: 100 }, { x: 30, y: 100 }, 100),
     ).toEqual({ ok: false, reason: "invalid-distance" });
+  });
+});
+
+describe("overlayBounds", () => {
+  it("covers the calque on the plan, turned or not", () => {
+    expect(overlayBounds(overlay())).toEqual({
+      x: 0,
+      y: 0,
+      width: 200,
+      height: 100,
+    });
+    // A quarter turn swaps its sides around the same centre.
+    const turned = overlayBounds(overlay({ rotation: 90 }));
+    expect(turned.x).toBeCloseTo(50);
+    expect(turned.y).toBeCloseTo(-50);
+    expect(turned.width).toBeCloseTo(100);
+    expect(turned.height).toBeCloseTo(200);
   });
 });

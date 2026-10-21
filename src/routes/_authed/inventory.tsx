@@ -7,8 +7,7 @@ import {
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { Fragment, useId, useState } from "react";
-import type { FormEvent } from "react";
+import { useId, useState } from "react";
 import { toast } from "sonner";
 import { ModeToggle } from "@/components/mode-toggle";
 import { ListSkeleton } from "@/components/loading-skeletons";
@@ -18,26 +17,11 @@ import { StatusDot } from "@/components/StatusDot";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Field,
-  FieldDescription,
-  FieldError,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -46,21 +30,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { CollectionFreshness } from "@/sites/CollectionFreshness";
 import { coverageByType } from "@/devices/coverage";
 import type { TypeCoverage } from "@/devices/coverage";
-import { deviceKinds, getDeviceKindLabel } from "@/devices/deviceKindRegistry";
-import {
-  IDENTITY_TEXT_LIMITS,
-  identityEditError,
-  normalizeIdentityEdit,
-} from "@/devices/identity";
-import { parseMacList } from "@/devices/mac";
+import { getDeviceKindLabel } from "@/devices/deviceKindRegistry";
 import { DEVICE_STATUS_LABELS, hasStatus } from "@/devices/status";
 import { failureMessage } from "@/lib/errors";
 import { useCanEdit } from "@/hooks/use-current-user";
-import { createStandaloneObjectId } from "@/lib/identity";
 import { asBuildingId, asDeviceId, asFloorId } from "@/lib/objectIds";
 import { cn } from "@/lib/utils";
 import { DeviceIdentityDialog } from "@/panels/drawer/DeviceIdentityDialog";
@@ -74,6 +50,7 @@ import { ImportReviews } from "@/sites/ImportReviews";
 import { INTEGRATION_LABELS } from "@/sites/integrations";
 import { SiteSwitcher } from "@/sites/SiteSwitcher";
 import { UnknownMacs } from "@/sites/UnknownMacs";
+import { CreateDeviceDialog } from "@/devices/CreateDeviceDialog";
 import { siteSearch, useCurrentSite } from "@/sites/useCurrentSite";
 import type { SiteSummary } from "@/sites/useCurrentSite";
 import { useMapStore } from "@/store/useMapStore";
@@ -642,194 +619,6 @@ function InventoryItem({
         ) : null}
       </td>
     </tr>
-  );
-}
-
-const typeItems = deviceKinds.map((kind) => ({
-  value: kind.type,
-  label: kind.drawerLabel,
-}));
-
-type TextField = "name" | "hostname" | "ip" | "model" | "serial";
-
-const TEXT_FIELDS: Array<{ field: TextField; label: string; mono?: boolean }> =
-  [
-    { field: "name", label: "Nom" },
-    { field: "hostname", label: "Hostname", mono: true },
-    { field: "ip", label: "Adresse IP", mono: true },
-    { field: "model", label: "Modèle" },
-    { field: "serial", label: "N° de série", mono: true },
-  ];
-
-function CreateDeviceDialog({
-  site,
-  open,
-  onOpenChange,
-}: {
-  site: SiteSummary;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      {/* The fields scroll between a fixed title and fixed buttons. */}
-      <DialogContent className="max-h-[85vh] grid-rows-[auto_minmax(0,1fr)] sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Nouvel équipement</DialogTitle>
-          <DialogDescription>
-            Il rejoint l'inventaire de {site.name}, hors plan.
-          </DialogDescription>
-        </DialogHeader>
-        {/* Mounted on open, so each new device starts from an empty form. */}
-        {open ? (
-          <CreateDeviceForm site={site} onDone={() => onOpenChange(false)} />
-        ) : null}
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-const EMPTY_TEXT: Record<TextField, string> = {
-  name: "",
-  hostname: "",
-  ip: "",
-  model: "",
-  serial: "",
-};
-
-function CreateDeviceForm({
-  site,
-  onDone,
-}: {
-  site: SiteSummary;
-  onDone: () => void;
-}) {
-  const createDevice = useMutation(api.devices.create);
-  const id = useId();
-  // One id per form, so a retry after a lost answer finds the device made.
-  const [deviceId] = useState(() => createStandaloneObjectId("device"));
-  const [type, setType] = useState<DeviceType>("endpoint");
-  const [text, setText] = useState(EMPTY_TEXT);
-  const [macs, setMacs] = useState("");
-  const [notes, setNotes] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-
-  const handleSubmit = async (event: FormEvent) => {
-    event.preventDefault();
-    const parsed = parseMacList(macs);
-    if ("unreadable" in parsed) {
-      setError(`« ${parsed.unreadable} » n'est pas une adresse MAC.`);
-      return;
-    }
-    const identity = normalizeIdentityEdit({
-      ...text,
-      macs: parsed.macs,
-      notes,
-    });
-    const invalid = identityEditError(identity);
-    if (invalid) {
-      setError(invalid);
-      return;
-    }
-
-    setSaving(true);
-    setError(null);
-    try {
-      await createDevice({ siteId: site.id, deviceId, type, identity });
-      onDone();
-    } catch (caught) {
-      setError(failureMessage(caught, "editor"));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <form
-      onSubmit={(event) => void handleSubmit(event)}
-      className="flex min-h-0 flex-col gap-4"
-    >
-      <FieldGroup className="-mx-1 min-h-0 gap-4 overflow-y-auto px-1 pb-1">
-        {TEXT_FIELDS.map(({ field, label, mono }) => (
-          <Fragment key={field}>
-            <Field>
-              <FieldLabel htmlFor={`${id}-${field}`}>{label}</FieldLabel>
-              <Input
-                id={`${id}-${field}`}
-                value={text[field]}
-                maxLength={IDENTITY_TEXT_LIMITS[field]}
-                required={field === "name"}
-                // The one required field comes first and takes the focus.
-                autoFocus={field === "name"}
-                className={mono ? "font-mono" : undefined}
-                onChange={(event) =>
-                  setText((current) => ({
-                    ...current,
-                    [field]: event.target.value,
-                  }))
-                }
-              />
-            </Field>
-            {field === "name" ? (
-              <Field>
-                <FieldLabel htmlFor={`${id}-type`}>Type</FieldLabel>
-                <Select
-                  items={typeItems}
-                  value={type}
-                  onValueChange={(value) => {
-                    if (value) setType(value);
-                  }}
-                >
-                  <SelectTrigger id={`${id}-type`} className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {typeItems.map((item) => (
-                      <SelectItem key={item.value} value={item.value}>
-                        {item.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
-            ) : null}
-          </Fragment>
-        ))}
-        <Field>
-          <FieldLabel htmlFor={`${id}-macs`}>Adresses MAC</FieldLabel>
-          <Textarea
-            id={`${id}-macs`}
-            value={macs}
-            rows={3}
-            className="font-mono"
-            onChange={(event) => setMacs(event.target.value)}
-          />
-          <FieldDescription>
-            Une par ligne, dans n'importe quelle notation.
-          </FieldDescription>
-        </Field>
-        <Field>
-          <FieldLabel htmlFor={`${id}-notes`}>Notes</FieldLabel>
-          <Textarea
-            id={`${id}-notes`}
-            value={notes}
-            maxLength={IDENTITY_TEXT_LIMITS.notes}
-            rows={3}
-            onChange={(event) => setNotes(event.target.value)}
-          />
-        </Field>
-      </FieldGroup>
-      {error ? <FieldError>{error}</FieldError> : null}
-      <DialogFooter>
-        <Button type="button" variant="outline" onClick={onDone}>
-          Annuler
-        </Button>
-        <Button type="submit" disabled={saving}>
-          Créer
-        </Button>
-      </DialogFooter>
-    </form>
   );
 }
 

@@ -67,3 +67,36 @@ describe("calque panel state", () => {
     expect(useMapStore.getState().overlayCalibration).toBeNull();
   });
 });
+
+describe("placing panel state", () => {
+  beforeEach(() => {
+    useMapStore.setState(initialState, true);
+  });
+
+  it("takes the right edge from the calque panel, and gives it back", () => {
+    useMapStore.getState().setOverlayPanelOpen(true);
+    useMapStore.getState().setPlacePanelOpen(true);
+    expect(useMapStore.getState().isOverlayPanelOpen).toBe(false);
+    expect(useMapStore.getState().isPlacePanelOpen).toBe(true);
+
+    useMapStore.getState().setOverlayPanelOpen(true);
+    expect(useMapStore.getState().isPlacePanelOpen).toBe(false);
+  });
+
+  it("closes when another mode takes the canvas, not when a device is placed", () => {
+    const leave: Array<() => void> = [
+      () => useMapStore.getState().setActiveDrawTool("room"),
+      () => useMapStore.getState().toggleMultiSelectMode(),
+      () => useMapStore.getState().toggleEditMode(),
+      () => useMapStore.getState().selectDevice(did("a")),
+    ];
+    for (const action of leave) {
+      useMapStore.getState().setPlacePanelOpen(true);
+      action();
+      expect(useMapStore.getState().isPlacePanelOpen).toBe(false);
+    }
+    useMapStore.getState().setPlacePanelOpen(true);
+    useMapStore.getState().selectDevice(null);
+    expect(useMapStore.getState().isPlacePanelOpen).toBe(true);
+  });
+});

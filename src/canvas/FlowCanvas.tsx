@@ -34,6 +34,7 @@ import {
 import { edgeTypes } from "@/canvas/edges/CablePathEdge";
 import { SeenSocketsContext, useFloorSeenSockets } from "@/canvas/seenSockets";
 import { BlockedSpots } from "@/canvas/components/BlockedSpots";
+import { EmptyFloorHint } from "@/canvas/components/EmptyFloorHint";
 import { CanvasZoomControls } from "@/canvas/components/CanvasZoomControls";
 import { DeviceNameTooltip } from "@/canvas/components/DeviceNameTooltip";
 import { ContextMenu, ContextMenuTrigger } from "@/components/ui/context-menu";
@@ -48,6 +49,12 @@ import { useCanvasKeyboardShortcuts } from "@/canvas/hooks/useCanvasKeyboardShor
 import { FloorOverlayLayer } from "@/overlay/FloorOverlayLayer";
 import { OverlayGizmo } from "@/overlay/OverlayGizmo";
 import { OverlayPanel } from "@/overlay/OverlayPanel";
+import { PlaceDevicePanel } from "@/panels/PlaceDevicePanel";
+import {
+  INVENTORY_DEVICE_MIME,
+  usePlaceFromInventory,
+} from "@/devices/usePlaceFromInventory";
+import { toast } from "sonner";
 import { OverlayVisibilityButton } from "@/overlay/OverlayVisibilityButton";
 import {
   FLOW_CANVAS_BACKGROUND_COLOR,
@@ -300,6 +307,25 @@ export default function FlowCanvas() {
     reactFlow,
   });
   const cablePaths = useShownCablePaths();
+  const { placeAtPointer } = usePlaceFromInventory();
+
+  // A device dragged from the « Placer » panel lands where it is dropped (C2).
+  const handleDragOver = (event: React.DragEvent) => {
+    if (!canEditDevices) return;
+    if (!event.dataTransfer.types.includes(INVENTORY_DEVICE_MIME)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+  };
+  const handleDrop = (event: React.DragEvent) => {
+    const deviceId = event.dataTransfer.getData(INVENTORY_DEVICE_MIME);
+    if (!deviceId || !canEditDevices) return;
+    event.preventDefault();
+    const failure = placeAtPointer(deviceId, {
+      x: event.clientX,
+      y: event.clientY,
+    });
+    if (failure) toast.error(failure);
+  };
   const seenSockets = useFloorSeenSockets(document.floorId);
 
   const handleNodeContextMenu = (_: React.MouseEvent, node: DeviceNode) => {
@@ -344,7 +370,11 @@ export default function FlowCanvas() {
     : lastVisibleHaloColor;
 
   return (
-    <div className="relative h-full w-full">
+    <div
+      className="relative h-full w-full"
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
       <ContextMenu
         open={isContextMenuOpen}
         onOpenChange={(nextOpen) =>
@@ -429,8 +459,10 @@ export default function FlowCanvas() {
         onZoomOut={zoomOut}
         onCenterViewport={fitFloor}
       />
+      {isReady ? <EmptyFloorHint /> : null}
       <OverlayVisibilityButton />
       <OverlayPanel />
+      <PlaceDevicePanel />
 
       <div
         className={`pointer-events-none absolute inset-0 z-10 transition-opacity duration-300 ${

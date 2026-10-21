@@ -17,12 +17,12 @@ import {
   useIsEditMode,
   useIsMultiSelectMode,
   useIsOverlayPanelOpen,
+  useIsPlacePanelOpen,
   useSelectedDeviceIds,
   useSelectedWallColor,
 } from "@/store/selectors";
 import { useMapStore } from "@/store/useMapStore";
 import { useMapDocumentReady } from "@/map-session/useMapDocument";
-import { PlaceDeviceDialog } from "@/panels/PlaceDeviceDialog";
 import { drawToolbarActions } from "@/panels/toolbar-actions";
 import type { DrawToolbarAction } from "@/panels/toolbar-actions";
 import type { DrawTool } from "@/types/map";
@@ -47,8 +47,9 @@ export default function Toolbar() {
     (state) => state.toggleMultiSelectMode,
   );
   const setOverlayPanelOpen = useMapStore((state) => state.setOverlayPanelOpen);
+  const isPlacePanelOpen = useIsPlacePanelOpen();
+  const setPlacePanelOpen = useMapStore((state) => state.setPlacePanelOpen);
   const [flashType, setFlashType] = useState<MapFlash | null>(null);
-  const [placing, setPlacing] = useState(false);
 
   useEffect(() => {
     let timeout: ReturnType<typeof setTimeout> | null = null;
@@ -92,14 +93,11 @@ export default function Toolbar() {
   };
   useShortcutIntentEffect("toggle-overlay-panel", toggleOverlayPanel);
 
-  const openPlaceDevice = () => {
+  const togglePlacePanel = () => {
     if (!currentFloorId || !isReady) return;
-    // A draw tool would swallow the click that selects the placed device.
-    if (isMultiSelectMode) toggleMultiSelectMode();
-    setActiveDrawTool("device");
-    setPlacing(true);
+    setPlacePanelOpen(!isPlacePanelOpen);
   };
-  useShortcutIntentEffect("place-device", openPlaceDevice);
+  useShortcutIntentEffect("place-device", togglePlacePanel);
 
   if (!isEditMode) return null;
 
@@ -219,11 +217,12 @@ export default function Toolbar() {
         <div className="relative">
           <Button
             type="button"
-            variant="ghost"
+            variant={isPlacePanelOpen ? "secondary" : "ghost"}
             size="sm"
-            onClick={openPlaceDevice}
+            onClick={togglePlacePanel}
             disabled={!currentFloorId || !isReady}
-            className="gap-2"
+            aria-pressed={isPlacePanelOpen}
+            className={cn("gap-2", isPlacePanelOpen && "ring-2 ring-ring")}
             title="Placer sur l'étage un équipement de l'inventaire"
           >
             <HugeiconsIcon icon={PackageIcon} strokeWidth={2} />
@@ -254,7 +253,6 @@ export default function Toolbar() {
           />
         </div>
       </div>
-      <PlaceDeviceDialog open={placing} onOpenChange={setPlacing} />
     </div>
   );
 }

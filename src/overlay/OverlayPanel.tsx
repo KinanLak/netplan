@@ -20,6 +20,7 @@ import { OverlayControls } from "./OverlayControls";
 import { PdfPageDialog } from "./PdfPageDialog";
 import { OVERLAY_FILE_ACCEPT } from "./rasterize";
 import { useOverlayImport } from "./useOverlayImport";
+import { formatDecimal, overlayWidthMetres } from "./units";
 
 export function OverlayPanel() {
   const isOpen = useIsOverlayPanelOpen();
@@ -91,14 +92,20 @@ function OverlayPanelContent() {
           <p className="truncate" title={image?.name}>
             {image?.name || "Plan importé"}
           </p>
+          {/* Its size on the plan, not its pixels: a SVG has none (A26). */}
           <p className="text-xs text-muted-foreground">
-            {overlay.imageWidth} × {overlay.imageHeight} px
+            {formatDecimal(overlayWidthMetres(overlay))} ×{" "}
+            {formatDecimal(
+              overlayWidthMetres(overlay) *
+                (overlay.imageHeight / overlay.imageWidth),
+            )}
+            {"\u00a0"}m
           </p>
         </div>
       ) : (
         <p className="text-muted-foreground">
           Aucun calque sur cet étage. Importez un plan (PNG, JPG, SVG ou PDF)
-          pour tracer les murs par-dessus.
+          pour dessiner les murs par-dessus.
         </p>
       )}
 
