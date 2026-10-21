@@ -12,6 +12,7 @@ import {
   customMutation,
   customQuery,
 } from "convex-helpers/server/customFunctions";
+import { components } from "../_generated/api";
 import { authComponent } from "../auth";
 import { hasRole, roleOf } from "./roles";
 import type { Role } from "./roles";
@@ -25,6 +26,9 @@ export type SignedInUser = {
 };
 
 export type AuthErrorCode = "unauthenticated" | "forbidden";
+
+/** Why a caller with a token has no session, for the sign-in page. */
+export type SessionLostReason = "expired" | "disabled";
 
 export async function getSignedInUser(
   ctx: QueryCtx | ActionCtx,
@@ -40,13 +44,31 @@ export async function getSignedInUser(
   };
 }
 
+// A disabled account loses its sessions with its ban; anything else that
+// ends a session (expiry, signing out elsewhere, a password reset) reads as
+// expired.
+async function sessionLostReason(
+  ctx: QueryCtx | ActionCtx,
+): Promise<SessionLostReason> {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) return "expired";
+  const user = (await ctx.runQuery(components.betterAuth.adapter.findOne, {
+    model: "user",
+    where: [{ field: "_id", value: identity.subject }],
+  })) as { banned?: boolean | null } | null;
+  return user?.banned === true ? "disabled" : "expired";
+}
+
 async function requireRole(
   ctx: QueryCtx | ActionCtx,
   required: Role,
 ): Promise<SignedInUser> {
   const user = await getSignedInUser(ctx);
   if (!user) {
-    throw new ConvexError({ code: "unauthenticated" satisfies AuthErrorCode });
+    throw new ConvexError({
+      code: "unauthenticated" satisfies AuthErrorCode,
+      reason: await sessionLostReason(ctx),
+    });
   }
   if (!hasRole(user.role, required)) {
     throw new ConvexError({ code: "forbidden" satisfies AuthErrorCode });

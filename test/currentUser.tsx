@@ -11,7 +11,9 @@ export function SignedInAs({
   children: ReactNode;
 }) {
   return (
-    <CurrentUserContext.Provider value={{ id: "user-1", name: "Test", role }}>
+    <CurrentUserContext.Provider
+      value={{ id: "user-1", name: "Test", role, sso: false }}
+    >
       {children}
     </CurrentUserContext.Provider>
   );

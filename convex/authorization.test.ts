@@ -122,6 +122,16 @@ const errorCode = async (call: Promise<unknown>) => {
   }
 };
 
+const errorData = async (call: Promise<unknown>) => {
+  try {
+    await call;
+    return null;
+  } catch (error) {
+    if (error instanceof ConvexError) return error.data as unknown;
+    throw error;
+  }
+};
+
 const as = async (
   t: TestBackend,
   role: Role,
@@ -151,16 +161,18 @@ describe("authorization", () => {
     );
   });
 
-  it("refuses a disabled user and an expired session", async () => {
+  it("refuses a disabled user and an expired session, and says which", async () => {
     const t = testBackend();
     const banned = await as(t, "admin", { banned: true });
     const expired = await as(t, "admin", { expired: true });
-    expect(await errorCode(banned.query(api.buildings.list, {}))).toBe(
-      "unauthenticated",
-    );
-    expect(await errorCode(expired.query(api.buildings.list, {}))).toBe(
-      "unauthenticated",
-    );
+    expect(await errorData(banned.query(api.buildings.list, {}))).toEqual({
+      code: "unauthenticated",
+      reason: "disabled",
+    });
+    expect(await errorData(expired.query(api.buildings.list, {}))).toEqual({
+      code: "unauthenticated",
+      reason: "expired",
+    });
   });
 
   it("lets a reader read and refuses their edits", async () => {
@@ -196,6 +208,7 @@ describe("authorization", () => {
       id: identity.subject,
       name,
       role: "editor",
+      sso: false,
     });
   });
 

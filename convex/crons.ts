@@ -26,4 +26,11 @@ crons.daily(
   {},
 );
 
+crons.hourly(
+  "purge ended sign-in windows",
+  { minuteUTC: 23 },
+  internal.signInAttempts.purge,
+  {},
+);
+
 export default crons;

@@ -13,15 +13,20 @@ import {
   FieldSeparator,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/password-input";
+import { useHydrated } from "@/hooks/use-hydrated";
 import { authClient } from "@/lib/auth-client";
 import { getSignInOptions } from "@/lib/auth-server";
 import {
+  SESSION_LOST_MESSAGES,
   isEmail,
+  isSessionLostReason,
   keycloakErrorMessage,
   loginErrorMessage,
   requestFailure,
   safeRedirect,
 } from "@/lib/login";
+import type { SessionLostReason } from "@/lib/login";
 
 const signInOptions = createServerFn({ method: "GET" }).handler(
   getSignInOptions,
@@ -30,10 +35,19 @@ const signInOptions = createServerFn({ method: "GET" }).handler(
 export const Route = createFileRoute("/login")({
   validateSearch: (
     search: Record<string, unknown>,
-  ): { redirect?: string; error?: string } => ({
+  ): {
+    redirect?: string;
+    error?: string;
+    reason?: SessionLostReason;
+    login?: string;
+  } => ({
     redirect: safeRedirect(search.redirect),
     // Set by a failed Keycloak sign-in on its way back.
     error: typeof search.error === "string" ? search.error : undefined,
+    // Set when a session ended while a page was open.
+    reason: isSessionLostReason(search.reason) ? search.reason : undefined,
+    // Set once a password has been chosen, to fill the identifier in.
+    login: typeof search.login === "string" ? search.login : undefined,
   }),
   beforeLoad: ({ context, search }) => {
     if (context.token) throw redirect({ href: search.redirect ?? "/" });
@@ -44,10 +58,15 @@ export const Route = createFileRoute("/login")({
 });
 
 function LoginPage() {
-  const { redirect: target, error: keycloakError } = Route.useSearch();
+  const {
+    redirect: target,
+    error: keycloakError,
+    reason,
+    login: knownLogin,
+  } = Route.useSearch();
   const { keycloak } = Route.useLoaderData();
-  const [identifier, setIdentifier] = useState("");
-  const [password, setPassword] = useState("");
+  // Before hydration the form would submit natively, which is no sign-in.
+  const hydrated = useHydrated();
   const [error, setError] = useState<string | null>(
     keycloakError ? keycloakErrorMessage(keycloakError) : null,
   );
@@ -75,7 +94,11 @@ function LoginPage() {
     event.preventDefault();
     setPending(true);
     setError(null);
-    const login = identifier.trim();
+    // Read from the form, not from state: a password manager may fill the
+    // fields before React hydrates, and React never hears of it.
+    const form = new FormData(event.currentTarget);
+    const login = String(form.get("username") ?? "").trim();
+    const password = String(form.get("password") ?? "");
     const failure = await requestFailure(
       isEmail(login)
         ? authClient.signIn.email({ email: login, password })
@@ -95,37 +118,43 @@ function LoginPage() {
       title="Connexion à NetPlan"
       description="Utilisez le compte que votre administrateur vous a créé."
     >
-      <form onSubmit={(event) => void submit(event)}>
+      {/* POST, so a submission before hydration never puts the password in
+          the address. */}
+      <form method="post" onSubmit={(event) => void submit(event)}>
         <FieldGroup>
+          {reason ? (
+            <p role="status" className="rounded-md border p-3 text-sm">
+              {SESSION_LOST_MESSAGES[reason]}
+            </p>
+          ) : null}
           <Field>
             <FieldLabel htmlFor="identifier">Identifiant ou e-mail</FieldLabel>
             <Input
               id="identifier"
               name="username"
               autoComplete="username"
-              autoFocus
+              autoFocus={!knownLogin}
               required
-              value={identifier}
-              onChange={(event) => setIdentifier(event.target.value)}
+              defaultValue={knownLogin}
+              onChange={() => setError(null)}
             />
           </Field>
           <Field>
             <FieldLabel htmlFor="password">Mot de passe</FieldLabel>
-            <Input
+            <PasswordInput
               id="password"
               name="password"
-              type="password"
               autoComplete="current-password"
+              autoFocus={Boolean(knownLogin)}
               required
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
+              onChange={() => setError(null)}
             />
             <FieldDescription>
               <Link to="/forgot-password">Mot de passe oublié ?</Link>
             </FieldDescription>
           </Field>
           {error ? <FieldError>{error}</FieldError> : null}
-          <Button type="submit" disabled={pending}>
+          <Button type="submit" disabled={!hydrated || pending}>
             {pending ? "Connexion…" : "Se connecter"}
           </Button>
           {keycloak ? (
@@ -134,7 +163,7 @@ function LoginPage() {
               <Button
                 type="button"
                 variant="outline"
-                disabled={pending}
+                disabled={!hydrated || pending}
                 onClick={() => void signInWithKeycloak()}
               >
                 Se connecter avec Keycloak

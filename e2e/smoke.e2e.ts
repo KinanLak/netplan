@@ -14,7 +14,7 @@ test("an editor signs in and the seeded demo map opens on both floors", async ({
   await expect(page).toHaveURL(/\/login/);
   const editor = DEV_ACCOUNTS.find((account) => account.role === "editor");
   await page.getByLabel("Identifiant ou e-mail").fill(editor?.username ?? "");
-  await page.getByLabel("Mot de passe").fill(DEV_PASSWORD);
+  await page.getByLabel("Mot de passe", { exact: true }).fill(DEV_PASSWORD);
   await page.getByRole("button", { name: "Se connecter" }).click();
 
   await expect(

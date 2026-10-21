@@ -163,6 +163,7 @@ function MapWorkspace({
   const selectedDeviceId = useSelectedDeviceId();
   const isEditMode = useIsEditMode();
   const canEdit = useCanEdit();
+  const me = useCurrentUser();
   const isReady = useMapDocumentReady();
   const { site } = useCurrentSite();
   const { commands, undo, redo, getDocument } = useMapDocumentActions();
@@ -325,7 +326,11 @@ function MapWorkspace({
             ) : (
               <div
                 className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-muted-foreground shadow-lg"
-                title="Votre rôle permet de consulter le plan, pas de le modifier"
+                title={
+                  me?.sso
+                    ? "Votre rôle permet de consulter le plan, pas de le modifier. Il vient de Keycloak : demandez à un administrateur de vous en donner un autre."
+                    : "Votre rôle permet de consulter le plan, pas de le modifier"
+                }
               >
                 <HugeiconsIcon
                   icon={ViewIcon}

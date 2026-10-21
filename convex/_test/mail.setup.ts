@@ -80,5 +80,9 @@ export async function tokenFromLink(t: TestBackend, mail: SentMail) {
     redirect: "manual",
   });
   const page = new URL(landing.headers.get("location") ?? "");
-  return { path: page.pathname, token: page.searchParams.get("token") };
+  return {
+    path: page.pathname,
+    token: page.searchParams.get("token"),
+    login: page.searchParams.get("login"),
+  };
 }
