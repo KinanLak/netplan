@@ -28,6 +28,7 @@ const PORTS_QUERY = getFunctionName(api.mapDocument.getFloorPorts);
 const CABLES_QUERY = getFunctionName(api.mapDocument.getFloorCables);
 const REVISION_QUERY = getFunctionName(api.mapDocument.getFloorRevision);
 const OVERLAY_QUERY = getFunctionName(api.mapDocument.getFloorOverlay);
+const LABELS_QUERY = getFunctionName(api.mapDocument.getFloorLabels);
 const OBSERVE_QUERY = getFunctionName(api.mapOperations.observePending);
 
 // Mirrors the split subscriptions: collection arrays keep their identity
@@ -40,6 +41,7 @@ const setFloorDocument = (doc: MapDocumentSnapshot) => {
   backend.setQueryResult(CABLES_QUERY, doc.cables);
   backend.setQueryResult(REVISION_QUERY, doc.revision);
   backend.setQueryResult(OVERLAY_QUERY, doc.overlay);
+  backend.setQueryResult(LABELS_QUERY, doc.labels);
 };
 
 const collected: Record<string, Record<string, SubtreeStats>> = {};

@@ -27,6 +27,7 @@ const seededSnapshot = (floor: ReturnType<typeof buildDemoFloors>[number]) => {
     ports: [],
     cables: [],
     overlay: null,
+    labels: [],
   };
   return applyOperation(empty, {
     kind: "batch",

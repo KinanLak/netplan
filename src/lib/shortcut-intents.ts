@@ -71,6 +71,7 @@ const shortcutRoutingPriority: Array<ShortcutAction> = [
   "tool-room",
   "tool-wall-brush",
   "tool-wall-erase",
+  "tool-label",
   "place-device",
   "toggle-overlay-panel",
   "toggle-overlay-visibility",
@@ -87,6 +88,7 @@ const toolShortcutActions = new Set<ShortcutAction>([
   "tool-room",
   "tool-wall-brush",
   "tool-wall-erase",
+  "tool-label",
 ]);
 
 const hasNoExtraModifiers = (event: ShortcutIntentEvent): boolean => {

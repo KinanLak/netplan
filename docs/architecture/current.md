@@ -256,6 +256,11 @@ Built by lot 3b (ADR 0025) and redrawn by the UX lot U3 (ADR 0029).
   `useCableCommands`, the port table's mutations and its "Annuler" toast,
   outside the map's undo. Cables an integration made, and cables to another
   floor, stay with the port table.
+- **Text labels.** A floor carries free text labels (`mapLabels`, ADR
+  0029), such as room names, with no link to its walls. They are map
+  operations (`label.create`, `label.patch`, `label.delete`) with an inverse
+  and the same server planning as the rest; the « Texte » tool (5 or T)
+  puts one where the plan is clicked. They go with a deleted floor.
 - **Moves made by others.** The cycle moves devices through
   `applyMapOperation`, so they reach every client and enter no history. An
   undo or redo carries where it expects the device (`expected` on

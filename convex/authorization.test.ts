@@ -50,6 +50,7 @@ const POLICY: Record<string, Role> = {
   "librenms:settings": "admin",
   "mapDocument:getFloorCables": "reader",
   "mapDocument:getFloorDevices": "reader",
+  "mapDocument:getFloorLabels": "reader",
   "mapDocument:getFloorOverlay": "reader",
   "mapDocument:getFloorPathEnds": "reader",
   "mapDocument:getFloorPorts": "reader",

@@ -35,6 +35,7 @@ describe("materializeDocument", () => {
         ports: [],
         cables: [],
         overlay: null,
+        labels: [],
       },
       [
         {

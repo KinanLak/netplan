@@ -154,6 +154,7 @@ export const buildBenchDocument = ({
     buildBenchCable(index, devices),
   ),
   overlay: null,
+  labels: [],
 });
 
 export const buildBenchMeta = (sequence: number): OperationMeta => ({

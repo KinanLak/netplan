@@ -36,6 +36,7 @@ describe("validation", () => {
         ports: [],
         cables: [],
         overlay: null,
+        labels: [],
       },
       {
         kind: "device.create",
@@ -66,6 +67,7 @@ describe("validation", () => {
         ports: [],
         cables: [],
         overlay: null,
+        labels: [],
       },
       {
         kind: "device.create",

@@ -82,7 +82,8 @@ export async function floorContent(
 
 /**
  * Removes a floor known to be empty, with what only described it: who was
- * looking at it and its revision. Operation receipts stay: they are keyed by
+ * looking at it, its revision and its free text labels, which name parts of
+ * a floor that is going (C4). Operation receipts stay: they are keyed by
  * operation, so a retried operation still finds its answer.
  */
 export async function deleteEmptyFloor(ctx: MutationCtx, floor: Doc<"floors">) {
@@ -98,6 +99,12 @@ export async function deleteEmptyFloor(ctx: MutationCtx, floor: Doc<"floors">) {
     .withIndex("by_floor", (q) => q.eq("floorId", floorId))
     .collect();
   for (const revision of revisions) await ctx.db.delete(revision._id);
+
+  const labels = await ctx.db
+    .query("mapLabels")
+    .withIndex("by_floor", (q) => q.eq("floorId", floorId))
+    .collect();
+  for (const label of labels) await ctx.db.delete(label._id);
 
   await ctx.db.delete(floor._id);
 }

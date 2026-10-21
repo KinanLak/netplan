@@ -40,6 +40,7 @@ const snapshot = (current: FloorOverlay | null): MapDocumentSnapshot => ({
   ports: [],
   cables: [],
   overlay: current,
+  labels: [],
 });
 
 const set = (next: FloorOverlay | null, seq = 1): MapOperation => ({

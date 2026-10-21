@@ -4,7 +4,9 @@ import type {
   DeviceId,
   FloorId,
   FloorOverlay,
+  LabelId,
   MapDocumentSnapshot,
+  MapLabel,
   NewDevice,
   OperationMeta,
   Port,
@@ -13,6 +15,9 @@ import type {
   WallId,
   WallSegment,
 } from "@/types/map";
+import type { LabelPatch } from "./labels";
+
+export type { LabelPatch } from "./labels";
 
 /** The map edits only where a device stands; its identity is edited apart. */
 export interface DevicePatch {
@@ -82,7 +87,17 @@ export type AtomicMapOperation =
       meta: OperationMeta;
       floorId: FloorId;
       patch: OverlayPatch;
-    };
+    }
+  | { kind: "label.create"; meta: OperationMeta; label: MapLabel }
+  | {
+      kind: "label.patch";
+      meta: OperationMeta;
+      labelId: LabelId;
+      patch: LabelPatch;
+      /** What an undo or a redo expects to replace, as for `device.patch`. */
+      expected?: LabelPatch;
+    }
+  | { kind: "label.delete"; meta: OperationMeta; labelId: LabelId };
 
 type DistributiveOmit<T, K extends keyof T> = T extends T ? Omit<T, K> : never;
 
@@ -104,6 +119,8 @@ export type ApplyOperationReason =
   | "invalid-ports"
   | "duplicate-wall-geometry"
   | "missing-overlay"
+  | "missing-label"
+  | "invalid-label"
   | "overlay-locked"
   | "invalid-overlay"
   | "wrong-floor"

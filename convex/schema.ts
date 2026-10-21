@@ -308,6 +308,18 @@ export default defineSchema({
       "source.externalId",
     ]),
 
+  // Free text labels on a floor, such as a room's name (C4, ADR 0029).
+  mapLabels: defineTable({
+    objectId: v.string(),
+    floorId: v.string(),
+    text: v.string(),
+    position,
+    updatedAt: v.number(),
+    updatedBy: v.string(),
+  })
+    .index("by_object_id", ["objectId"])
+    .index("by_floor", ["floorId"]),
+
   // One calque per floor (ADR 0024); `fileId` is a `floorOverlayFiles` object id.
   floorOverlays: defineTable({
     floorId: v.string(),

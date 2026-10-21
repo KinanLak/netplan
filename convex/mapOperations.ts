@@ -11,6 +11,11 @@ import {
   sameOverlay,
 } from "../src/map-engine/overlay";
 import { isAsExpected } from "../src/map-engine/devicePatch";
+import {
+  applyLabelPatch,
+  labelError,
+  labelIsAsExpected,
+} from "../src/map-engine/labels";
 import { deleteDeviceMacs } from "./lib/deviceMacs";
 import { observedMetadata, observedPort } from "./lib/statuses";
 import { recordArrival } from "./history";
@@ -48,6 +53,9 @@ type WallAddOperation = Extract<OperationInput, { kind: "walls.add" }>;
 type WallDeleteOperation = Extract<OperationInput, { kind: "walls.delete" }>;
 type OverlaySetOperation = Extract<OperationInput, { kind: "overlay.set" }>;
 type OverlayPatchOperation = Extract<OperationInput, { kind: "overlay.patch" }>;
+type LabelCreateOperation = Extract<OperationInput, { kind: "label.create" }>;
+type LabelPatchOperation = Extract<OperationInput, { kind: "label.patch" }>;
+type LabelDeleteOperation = Extract<OperationInput, { kind: "label.delete" }>;
 
 type DeviceInput = DeviceCreateOperation["device"];
 type WallInput = WallAddOperation["walls"][number];
@@ -60,6 +68,7 @@ type WallInsert = Omit<Doc<"walls">, "_id" | "_creationTime">;
 type PortInsert = Omit<Doc<"ports">, "_id" | "_creationTime">;
 type CableInsert = Omit<Doc<"cables">, "_id" | "_creationTime">;
 type OverlayValue = Omit<Doc<"floorOverlays">, "_id" | "_creationTime">;
+type LabelInsert = Omit<Doc<"mapLabels">, "_id" | "_creationTime">;
 
 type DevicePatch = Pick<DeviceRow, "placement" | "updatedAt" | "updatedBy">;
 type PlannedDevice = DeviceInsert & { rowId?: Id<"devices"> };
@@ -67,6 +76,7 @@ type UnplacedDevice = Omit<DeviceRow, "placement"> & { rowId: Id<"devices"> };
 type PlannedWall = WallInsert & { rowId?: Id<"walls"> };
 type PlannedPort = PortInsert & { rowId?: Id<"ports"> };
 type PlannedCable = CableInsert & { rowId?: Id<"cables"> };
+type PlannedLabel = LabelInsert & { rowId?: Id<"mapLabels"> };
 
 type WritePlan = Array<
   | { kind: "insertDevice"; value: DeviceInsert }
@@ -84,6 +94,9 @@ type WritePlan = Array<
       value: OverlayValue | null;
       floorId: string;
     }
+  | { kind: "insertLabel"; value: LabelInsert }
+  | { kind: "replaceLabel"; rowId: Id<"mapLabels">; value: LabelInsert }
+  | { kind: "deleteLabel"; rowId: Id<"mapLabels"> }
 >;
 
 interface PlanningState {
@@ -109,6 +122,8 @@ interface PlanningState {
   overlayRowIds: Map<string, Id<"floorOverlays">>;
   overlayFiles: Map<string, { width: number; height: number }>;
   touchedOverlayFileIds: Set<string>;
+  /** The free text labels of the loaded floors, and those the scope names. */
+  labels: Map<string, PlannedLabel>;
   affectedFloorIds: Set<string>;
   plan: WritePlan;
 }
@@ -334,6 +349,7 @@ interface OperationScope {
   newPortIds: Set<string>;
   cableIds: Set<string>;
   overlayFileIds: Set<string>;
+  labelIds: Set<string>;
 }
 
 /**
@@ -353,6 +369,7 @@ const collectOperationScope = (
     newPortIds: new Set(),
     cableIds: new Set(),
     overlayFileIds: new Set(),
+    labelIds: new Set(),
   },
 ): OperationScope => {
   switch (operation.kind) {
@@ -411,6 +428,14 @@ const collectOperationScope = (
       break;
     case "overlay.patch":
       scope.floorIds.add(operation.floorId);
+      break;
+    case "label.create":
+      scope.floorIds.add(operation.label.floorId);
+      scope.labelIds.add(operation.label.id);
+      break;
+    case "label.patch":
+    case "label.delete":
+      scope.labelIds.add(operation.labelId);
       break;
     case "batch":
       for (const subOperation of operation.operations) {
@@ -530,7 +555,7 @@ const buildPlanningState = async (
 
   // Resolve the floors of referenced objects through point lookups, then
   // load only those floors' rows.
-  const [deviceRefs, wallRefs] = await Promise.all([
+  const [deviceRefs, wallRefs, labelRefs] = await Promise.all([
     Promise.all(
       [...scope.deviceIds].map((objectId) =>
         ctx.db
@@ -543,6 +568,14 @@ const buildPlanningState = async (
       [...scope.wallIds].map((objectId) =>
         ctx.db
           .query("walls")
+          .withIndex("by_object_id", (q) => q.eq("objectId", objectId))
+          .unique(),
+      ),
+    ),
+    Promise.all(
+      [...scope.labelIds].map((objectId) =>
+        ctx.db
+          .query("mapLabels")
           .withIndex("by_object_id", (q) => q.eq("objectId", objectId))
           .unique(),
       ),
@@ -560,6 +593,9 @@ const buildPlanningState = async (
   for (const row of wallRefs) {
     if (row) floorIds.add(row.floorId);
   }
+  for (const row of labelRefs) {
+    if (row) floorIds.add(row.floorId);
+  }
 
   const floorIdList = [...floorIds];
   const floorSites = await loadFloorSites(ctx, floorIdList);
@@ -573,42 +609,56 @@ const buildPlanningState = async (
         .unique();
     }),
   );
-  const [devicesByFloor, wallsByFloor, overlayRows, overlayFileRows, cabling] =
-    await Promise.all([
-      Promise.all(
-        floorIdList.map((floorId) =>
-          ctx.db
-            .query("devices")
-            .withIndex("by_floor", (q) => q.eq("placement.floorId", floorId))
-            .collect(),
-        ),
+  const [
+    devicesByFloor,
+    wallsByFloor,
+    overlayRows,
+    overlayFileRows,
+    cabling,
+    labelsByFloor,
+  ] = await Promise.all([
+    Promise.all(
+      floorIdList.map((floorId) =>
+        ctx.db
+          .query("devices")
+          .withIndex("by_floor", (q) => q.eq("placement.floorId", floorId))
+          .collect(),
       ),
-      Promise.all(
-        floorIdList.map((floorId) =>
-          ctx.db
-            .query("walls")
-            .withIndex("by_floor", (q) => q.eq("floorId", floorId))
-            .collect(),
-        ),
+    ),
+    Promise.all(
+      floorIdList.map((floorId) =>
+        ctx.db
+          .query("walls")
+          .withIndex("by_floor", (q) => q.eq("floorId", floorId))
+          .collect(),
       ),
-      Promise.all(
-        floorIdList.map((floorId) =>
-          ctx.db
-            .query("floorOverlays")
-            .withIndex("by_floor", (q) => q.eq("floorId", floorId))
-            .unique(),
-        ),
+    ),
+    Promise.all(
+      floorIdList.map((floorId) =>
+        ctx.db
+          .query("floorOverlays")
+          .withIndex("by_floor", (q) => q.eq("floorId", floorId))
+          .unique(),
       ),
-      Promise.all(
-        [...scope.overlayFileIds].map((fileId) =>
-          ctx.db
-            .query("floorOverlayFiles")
-            .withIndex("by_object_id", (q) => q.eq("objectId", fileId))
-            .unique(),
-        ),
+    ),
+    Promise.all(
+      [...scope.overlayFileIds].map((fileId) =>
+        ctx.db
+          .query("floorOverlayFiles")
+          .withIndex("by_object_id", (q) => q.eq("objectId", fileId))
+          .unique(),
       ),
-      loadCabling(ctx, scope),
-    ]);
+    ),
+    loadCabling(ctx, scope),
+    Promise.all(
+      floorIdList.map((floorId) =>
+        ctx.db
+          .query("mapLabels")
+          .withIndex("by_floor", (q) => q.eq("floorId", floorId))
+          .collect(),
+      ),
+    ),
+  ]);
   const loadedOverlays = overlayRows.flatMap((row) => (row ? [row] : []));
 
   const devices = devicesByFloor.flat();
@@ -674,6 +724,14 @@ const buildPlanningState = async (
       ),
     ),
     touchedOverlayFileIds: new Set(),
+    labels: new Map(
+      labelsByFloor
+        .flat()
+        .map(({ _id, _creationTime, ...label }) => [
+          label.objectId,
+          { ...label, rowId: _id },
+        ]),
+    ),
     affectedFloorIds: new Set(),
     plan: [],
   };
@@ -1305,6 +1363,107 @@ const planOverlayPatch = (
   return null;
 };
 
+const LABEL_ID = /^label:[\w:.-]{1,120}$/;
+
+/** Records a label's final value as one write, as `putOverlay` does. */
+const putLabel = (
+  state: PlanningState,
+  value: PlannedLabel | null,
+  objectId: string,
+) => {
+  const previous = state.labels.get(objectId);
+  state.plan = state.plan.filter(
+    (write) =>
+      !(
+        (write.kind === "insertLabel" && write.value.objectId === objectId) ||
+        (write.kind === "replaceLabel" && write.rowId === previous?.rowId)
+      ),
+  );
+  if (value) {
+    const { rowId, ...row } = value;
+    state.plan.push(
+      rowId
+        ? { kind: "replaceLabel", rowId, value: row }
+        : { kind: "insertLabel", value: row },
+    );
+    state.labels.set(objectId, value);
+  } else {
+    if (previous?.rowId) {
+      state.plan.push({ kind: "deleteLabel", rowId: previous.rowId });
+    }
+    state.labels.delete(objectId);
+  }
+  markAffectedFloor(state, (value ?? previous)?.floorId ?? "");
+};
+
+const planLabelCreate = (
+  state: PlanningState,
+  operation: LabelCreateOperation,
+): string | null => {
+  const { label } = operation;
+  const existingFloorError = floorError(state, label.floorId);
+  if (existingFloorError) return existingFloorError;
+  if (!LABEL_ID.test(label.id)) return "Identifiant d'étiquette invalide.";
+  if (state.labels.has(label.id)) {
+    const current = state.labels.get(label.id);
+    if (
+      current?.floorId === label.floorId &&
+      current.text === label.text &&
+      arePositionsEqual(current.position, label.position)
+    ) {
+      markAffectedFloor(state, label.floorId);
+      return null;
+    }
+    return "Cette étiquette existe déjà.";
+  }
+  const invalid = labelError(label);
+  if (invalid) return invalid;
+  putLabel(
+    state,
+    {
+      objectId: label.id,
+      floorId: label.floorId,
+      text: label.text,
+      position: label.position,
+      updatedAt: operation.meta.createdAt,
+      updatedBy: operation.meta.clientId,
+    },
+    label.id,
+  );
+  return null;
+};
+
+const planLabelPatch = (
+  state: PlanningState,
+  operation: LabelPatchOperation,
+): string | null => {
+  const current = state.labels.get(operation.labelId);
+  if (!current) return "Cette étiquette n'existe plus.";
+  if (!labelIsAsExpected(current, operation.expected)) {
+    return "L'étiquette a été modifiée depuis, par une autre personne.";
+  }
+  const next = {
+    ...applyLabelPatch(current, operation.patch),
+    updatedAt: operation.meta.createdAt,
+    updatedBy: operation.meta.clientId,
+  };
+  const invalid = labelError(next);
+  if (invalid) return invalid;
+  putLabel(state, next, operation.labelId);
+  return null;
+};
+
+const planLabelDelete = (
+  state: PlanningState,
+  operation: LabelDeleteOperation,
+): string | null => {
+  if (!state.labels.has(operation.labelId)) {
+    return "Cette étiquette n'existe plus.";
+  }
+  putLabel(state, null, operation.labelId);
+  return null;
+};
+
 const planOperation = (
   state: PlanningState,
   operation: OperationInput,
@@ -1328,6 +1487,12 @@ const planOperation = (
       return planOverlaySet(state, operation);
     case "overlay.patch":
       return planOverlayPatch(state, operation);
+    case "label.create":
+      return planLabelCreate(state, operation);
+    case "label.patch":
+      return planLabelPatch(state, operation);
+    case "label.delete":
+      return planLabelDelete(state, operation);
     case "batch": {
       if (operation.operations.length > MAX_BATCH_OPERATIONS) {
         return "Trop de modifications en une fois.";
@@ -1423,6 +1588,15 @@ const executePlan = async (ctx: MutationCtx, plan: WritePlan) => {
           await ctx.db.insert("floorOverlays", write.value);
         }
         break;
+      case "insertLabel":
+        await ctx.db.insert("mapLabels", write.value);
+        break;
+      case "replaceLabel":
+        await ctx.db.replace(write.rowId, write.value);
+        break;
+      case "deleteLabel":
+        await ctx.db.delete(write.rowId);
+        break;
     }
   }
 };
@@ -1437,6 +1611,8 @@ const operationFloorId = (operation: OperationInput): string | undefined => {
     case "overlay.set":
     case "overlay.patch":
       return operation.floorId;
+    case "label.create":
+      return operation.label.floorId;
     case "batch":
       return operation.operations[0]
         ? operationFloorId({
@@ -1448,6 +1624,8 @@ const operationFloorId = (operation: OperationInput): string | undefined => {
     case "device.delete":
     case "device.unplace":
     case "walls.delete":
+    case "label.patch":
+    case "label.delete":
       return undefined;
   }
 };

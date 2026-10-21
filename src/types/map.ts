@@ -12,6 +12,7 @@ export type FloorId = Brand<string, "FloorId">;
 export type BuildingId = Brand<string, "BuildingId">;
 export type PortId = Brand<string, "PortId">;
 export type CableId = Brand<string, "CableId">;
+export type LabelId = Brand<string, "LabelId">;
 export type SiteId = Brand<string, "SiteId">;
 /** A calque image file, the object id of its `floorOverlayFiles` row. */
 export type OverlayFileId = Brand<string, "OverlayFileId">;
@@ -23,8 +24,15 @@ export type ObjectId =
   | BuildingId
   | PortId
   | CableId
+  | LabelId
   | SiteId;
-export type ObjectKind = "building" | "floor" | "device" | "wall" | "cable";
+export type ObjectKind =
+  | "building"
+  | "floor"
+  | "device"
+  | "wall"
+  | "cable"
+  | "label";
 
 // ── Domain enums ─────────────────────────────────────────────────────────────
 
@@ -185,6 +193,17 @@ export interface FloorOverlay {
   locked: boolean;
 }
 
+/**
+ * A free text on a floor, such as a room's name (C4, ADR 0029): it has no
+ * link to the walls around it. Its position is the middle of the text.
+ */
+export interface MapLabel {
+  id: LabelId;
+  floorId: FloorId;
+  text: string;
+  position: Position;
+}
+
 export interface MapDocumentSnapshot {
   floorId: FloorId;
   revision: number;
@@ -195,6 +214,7 @@ export interface MapDocumentSnapshot {
   /** The cables with at least one end on a device of the floor. */
   cables: Array<Cable>;
   overlay: FloorOverlay | null;
+  labels: Array<MapLabel>;
 }
 
 // ── Operation metadata ───────────────────────────────────────────────────────
@@ -291,6 +311,8 @@ export interface MapInteractionState {
   isOverlayPanelOpen: boolean;
   /** The panel that places inventory devices on the floor (C2). */
   isPlacePanelOpen: boolean;
+  /** The next click on the plan puts a text label there (C4). */
+  isLabelToolActive: boolean;
   /** Personal and per session: hiding the calque changes nothing for others. */
   isOverlayHidden: boolean;
   /** The calque as a gesture in progress shows it, committed on release. */
@@ -329,6 +351,7 @@ export interface MapInteractionActions {
   setCableDraft: (draft: CableDraft | null) => void;
   setOverlayPanelOpen: (open: boolean) => void;
   setPlacePanelOpen: (open: boolean) => void;
+  setLabelToolActive: (active: boolean) => void;
   toggleOverlayHidden: () => void;
   setOverlayDraft: (draft: OverlayDraft | null) => void;
   setOverlayCalibration: (calibration: OverlayCalibration | null) => void;

@@ -53,6 +53,7 @@ const cabledPair = () => {
       ports: [...defaultPorts(a.id, "pc"), ...defaultPorts(b.id, "pc")],
       cables: [cable],
       overlay: null,
+      labels: [],
     },
   };
 };
@@ -68,6 +69,7 @@ describe("buildInverseOperation", () => {
       ports: [],
       cables: [],
       overlay: null,
+      labels: [],
     };
     const move: MapOperation = {
       kind: "device.patch",
@@ -97,6 +99,7 @@ describe("buildInverseOperation", () => {
       ports: [],
       cables: [],
       overlay: null,
+      labels: [],
     };
     const move: MapOperation = {
       kind: "device.patch",
@@ -212,6 +215,7 @@ describe("buildInverseOperation", () => {
       ports: [],
       cables: [],
       overlay: null,
+      labels: [],
     };
     const batch: MapOperation = {
       kind: "batch",
@@ -258,6 +262,7 @@ describe("buildInverseOperation", () => {
         ports: [],
         cables: [],
         overlay: null,
+        labels: [],
       },
       { kind: "walls.delete", meta: meta(5), wallIds: [wall.id] },
     );

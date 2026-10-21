@@ -378,3 +378,8 @@ button:hover {
     radial-gradient(farthest-side at 50% 100%, rgb(0 0 0 / 0.14), transparent)
       bottom / 100% 0.75rem no-repeat scroll;
 }
+
+/* The « Texte » tool puts a label where the plan is clicked (C4). */
+.label-cursor-text .react-flow__pane {
+  cursor: text !important;
+}

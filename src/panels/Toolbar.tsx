@@ -1,9 +1,14 @@
 import { useEffect, useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Layers01Icon, PackageIcon } from "@hugeicons/core-free-icons";
+import {
+  Layers01Icon,
+  PackageIcon,
+  TextIcon,
+} from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
 import { ShortcutHintAbsolute } from "@/components/ui/shortcut-hint";
 import {
+  TOOLBAR_ICON_SIZE_CLASS,
   TOOLBAR_WALL_COLOR_SELECTION_ENABLED,
   UNDO_REDO_EVENT_NAME,
   UNDO_REDO_FLASH_DURATION_MS,
@@ -17,6 +22,7 @@ import {
   useIsEditMode,
   useIsMultiSelectMode,
   useIsOverlayPanelOpen,
+  useIsLabelToolActive,
   useIsPlacePanelOpen,
   useSelectedDeviceIds,
   useSelectedWallColor,
@@ -86,6 +92,15 @@ export default function Toolbar() {
     handleDrawToolClick("wall-brush"),
   );
   useShortcutIntentEffect("tool-room", () => handleDrawToolClick("room"));
+
+  const isLabelToolActive = useIsLabelToolActive();
+  const setLabelToolActive = useMapStore((state) => state.setLabelToolActive);
+  const toggleLabelTool = () => {
+    if (!currentFloorId || !isReady) return;
+    setLabelToolActive(!isLabelToolActive);
+    selectDevice(null);
+  };
+  useShortcutIntentEffect("tool-label", toggleLabelTool);
 
   const toggleOverlayPanel = () => {
     if (!currentFloorId) return;
@@ -173,6 +188,31 @@ export default function Toolbar() {
         <div className="h-6 w-px bg-border" aria-hidden />
         <div className="flex items-center gap-1">
           {drawToolbarActions.map((action) => renderToolbarAction(action))}
+          <div className="relative">
+            <Button
+              variant={isLabelToolActive ? "secondary" : "ghost"}
+              size="sm"
+              onClick={toggleLabelTool}
+              disabled={!currentFloorId || !isReady}
+              aria-pressed={isLabelToolActive}
+              className={cn(
+                "flex h-auto flex-col items-center px-2 py-1.5",
+                isLabelToolActive && "ring-2 ring-ring",
+              )}
+              title="Poser une étiquette de texte"
+              aria-label="Poser une étiquette de texte"
+            >
+              <HugeiconsIcon
+                icon={TextIcon}
+                className={TOOLBAR_ICON_SIZE_CLASS}
+                strokeWidth={1.5}
+              />
+            </Button>
+            <ShortcutHintAbsolute
+              action="tool-label"
+              position="bottom-center"
+            />
+          </div>
         </div>
 
         {showWallColors ? (

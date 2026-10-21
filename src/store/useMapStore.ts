@@ -25,6 +25,7 @@ const withoutEditTools = (state: MapInteractionState) => ({
   activeDrawTool: "device" as const,
   isOverlayPanelOpen: false,
   isPlacePanelOpen: false,
+  isLabelToolActive: false,
 });
 
 export const useMapStore = create<MapStore>()((set) => ({
@@ -43,6 +44,7 @@ export const useMapStore = create<MapStore>()((set) => ({
   wallEraserSize: WALL_ERASER_DEFAULT_SIZE,
   isOverlayPanelOpen: false,
   isPlacePanelOpen: false,
+  isLabelToolActive: false,
   isOverlayHidden: false,
   overlayDraft: null,
   overlayCalibration: null,
@@ -127,6 +129,7 @@ export const useMapStore = create<MapStore>()((set) => ({
       activeDrawTool: "device",
       isOverlayPanelOpen: false,
       isPlacePanelOpen: false,
+      isLabelToolActive: false,
       selectedDeviceId: null,
       selectedDeviceIds: [],
       selectedDeviceIdSet: new Set(),
@@ -137,6 +140,7 @@ export const useMapStore = create<MapStore>()((set) => ({
       activeDrawTool: tool,
       isOverlayPanelOpen: tool === "device" && state.isOverlayPanelOpen,
       isPlacePanelOpen: tool === "device" && state.isPlacePanelOpen,
+      isLabelToolActive: false,
     }));
   },
   setSelectedWallColor: (color) => {
@@ -181,6 +185,21 @@ export const useMapStore = create<MapStore>()((set) => ({
           }
         : state.isPlacePanelOpen
           ? { isPlacePanelOpen: false }
+          : state,
+    );
+  },
+  setLabelToolActive: (active) => {
+    set((state) =>
+      active
+        ? {
+            isLabelToolActive: true,
+            activeDrawTool: "device",
+            isMultiSelectMode: false,
+            isOverlayPanelOpen: false,
+            isPlacePanelOpen: false,
+          }
+        : state.isLabelToolActive
+          ? { isLabelToolActive: false }
           : state,
     );
   },
