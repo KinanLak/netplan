@@ -435,10 +435,13 @@ function RemoveIntegration({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Retirer {label} de ce site ?</AlertDialogTitle>
-            <AlertDialogDescription>{LOSSES[kind]}</AlertDialogDescription>
+            {/* One description: the dialog announces only one. */}
             <AlertDialogDescription>
-              Pour seulement suspendre la collecte, décochez plutôt « Utiliser{" "}
-              {label} dans la collecte » et enregistrez.
+              {LOSSES[kind]}
+              <span className="mt-2 block">
+                Pour seulement suspendre la collecte, décochez plutôt « Utiliser{" "}
+                {label} dans la collecte » et enregistrez.
+              </span>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
