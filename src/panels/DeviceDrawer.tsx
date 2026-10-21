@@ -1,4 +1,3 @@
-import { useReactFlow } from "@xyflow/react";
 import { useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -57,7 +56,6 @@ export default function DeviceDrawer() {
   const { devices, ports, cables } = document;
   const { deleteDevice, unplaceDevice } = commands;
 
-  const reactFlow = useReactFlow();
   // Held by device, so the dialog never reopens on another one.
   const [identityDeviceId, setIdentityDeviceId] = useState<DeviceId | null>(
     null,
@@ -106,16 +104,19 @@ export default function DeviceDrawer() {
 
   const handleSelectConnected = (deviceId: DeviceId) => {
     const targetDevice = devices.find((d) => d.id === deviceId);
-    if (targetDevice) {
-      const centerX = targetDevice.position.x + targetDevice.size.width / 2;
-      const centerY = targetDevice.position.y + targetDevice.size.height / 2;
-      const currentZoom = reactFlow.getZoom();
-      reactFlow.setCenter(centerX, centerY, {
-        duration: 500,
-        zoom: currentZoom,
-      });
+    const { currentBuildingId, locateDevice } = useMapStore.getState();
+    if (targetDevice && currentBuildingId) {
+      locateDevice(
+        {
+          deviceId,
+          buildingId: currentBuildingId,
+          floorId: targetDevice.floorId,
+        },
+        { select: true },
+      );
+    } else {
+      selectDevice(deviceId);
     }
-    selectDevice(deviceId);
   };
 
   const handleCloseDrawer = () => {

@@ -485,11 +485,14 @@ function InventoryItem({
 
   const showOnMap = () => {
     if (!location) return;
-    const { setCurrentBuilding, setCurrentFloor, selectDevice } =
-      useMapStore.getState();
-    setCurrentBuilding(asBuildingId(location.buildingId));
-    setCurrentFloor(asFloorId(location.floorId));
-    selectDevice(asDeviceId(device.id));
+    useMapStore.getState().locateDevice(
+      {
+        deviceId: asDeviceId(device.id),
+        buildingId: asBuildingId(location.buildingId),
+        floorId: asFloorId(location.floorId),
+      },
+      { select: true },
+    );
     void navigate({ to: "/", search: { site: site.id } });
   };
 

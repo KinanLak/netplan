@@ -319,6 +319,24 @@ export interface MapInteractionState {
   overlayDraft: OverlayDraft | null;
   /** A two-point scale calibration being picked on the calque. */
   overlayCalibration: OverlayCalibration | null;
+  /**
+   * A device to bring into view once its floor shows, asked from outside
+   * the plan: the inventory, the search, a link (ADR 0029).
+   */
+  locateRequest: LocateRequest | null;
+}
+
+export interface LocateRequest {
+  deviceId: DeviceId;
+  /** Distinguishes asking twice for the same device. */
+  nonce: number;
+}
+
+/** Where a device stands, enough to open its floor. */
+export interface DeviceLocation {
+  deviceId: DeviceId;
+  buildingId: BuildingId;
+  floorId: FloorId;
 }
 
 export type OverlayDraft = Partial<
@@ -355,6 +373,15 @@ export interface MapInteractionActions {
   toggleOverlayHidden: () => void;
   setOverlayDraft: (draft: OverlayDraft | null) => void;
   setOverlayCalibration: (calibration: OverlayCalibration | null) => void;
+  /**
+   * Opens the device's floor and brings it into view; with `select`, its
+   * drawer opens too.
+   */
+  locateDevice: (
+    location: DeviceLocation,
+    options?: { select?: boolean },
+  ) => void;
+  clearLocateRequest: (nonce: number) => void;
 }
 
 export type MapStore = MapInteractionState & MapInteractionActions;

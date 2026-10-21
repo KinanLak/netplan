@@ -65,6 +65,8 @@ const shortcutRoutingPriority: Array<ShortcutAction> = [
   "zoom-out",
   "zoom-reset",
   "fit-view",
+  "focus-device-search",
+  "find-device",
   "floor-up",
   "floor-down",
   "tool-wall",
