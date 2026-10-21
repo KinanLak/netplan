@@ -1,5 +1,6 @@
 import { useCanEdit } from "@/hooks/use-current-user";
 import type { DeviceId } from "@/types/map";
+import { useConnectionStore } from "./useConnectionStore";
 import { useMapStore } from "./useMapStore";
 
 // ── State selectors ──────────────────────────────────────────────────────────
@@ -12,11 +13,13 @@ export const useSelectedDeviceIds = () =>
   useMapStore((s) => s.selectedDeviceIds);
 export const useHoveredDeviceId = () => useMapStore((s) => s.hoveredDeviceId);
 // The store flag is the user's choice; a reader's map stays read-only whatever
-// it says.
+// it says, and so does a map frozen by a lost connection (ADR 0031), until
+// it returns.
 export const useIsEditMode = () => {
   const isEditMode = useMapStore((s) => s.isEditMode);
+  const isMapFrozen = useConnectionStore((s) => s.isMapFrozen);
   const canEdit = useCanEdit();
-  return isEditMode && canEdit;
+  return isEditMode && canEdit && !isMapFrozen;
 };
 export const useIsMultiSelectMode = () =>
   useMapStore((s) => s.isMultiSelectMode);

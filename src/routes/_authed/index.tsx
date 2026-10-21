@@ -11,6 +11,7 @@ import { useEffect, useMemo } from "react";
 import type { ComponentProps } from "react";
 import { useQuery } from "convex/react";
 import FlowCanvas from "@/canvas/FlowCanvas";
+import { MapSkeleton } from "@/components/loading-skeletons";
 import AppSidebar from "@/panels/Sidebar";
 import { MapEmptyState } from "@/buildings/MapEmptyState";
 import { StructureDialog } from "@/buildings/StructureDialog";
@@ -21,6 +22,7 @@ import {
   useMapDocumentActions,
   useMapDocumentReady,
 } from "@/map-session/useMapDocument";
+import { useConnectionStore } from "@/store/useConnectionStore";
 import { useMapStore } from "@/store/useMapStore";
 import {
   useCurrentBuildingId,
@@ -144,7 +146,7 @@ function HomePage() {
   return (
     <SidebarProvider>
       {isBootstrappingMap ? (
-        <div className="h-screen w-screen bg-background" />
+        <MapSkeleton />
       ) : (
         <MapWorkspace sortedFloors={sortedFloors} empty={empty} />
       )}
@@ -220,7 +222,13 @@ function MapWorkspace({
     showCables(toggledCableDisplay(shownCablesDeviceId, target));
   };
 
-  useShortcutIntentEffect("toggle-edit-mode", toggleEditMode);
+  // Frozen, the map keeps the user's choice for when the connection returns.
+  const isMapFrozen = useConnectionStore((s) => s.isMapFrozen);
+  const toggleEditModeIfLive = () => {
+    if (!isMapFrozen) toggleEditMode();
+  };
+
+  useShortcutIntentEffect("toggle-edit-mode", toggleEditModeIfLive);
   // Escape abandons a cable being drawn before it closes anything else.
   const abandonCable = () => {
     const { cableDraft, setCableDraft } = useMapStore.getState();
@@ -284,17 +292,21 @@ function MapWorkspace({
             <SidebarToggle />
             {canEdit ? (
               <button
-                onClick={toggleEditMode}
+                onClick={toggleEditModeIfLive}
                 // Without a floor, edit mode still holds the building's own
                 // actions in the sidebar.
-                disabled={currentFloorId !== null && !isReady}
-                className={`relative flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium shadow-lg transition-all ${
+                disabled={isMapFrozen || (currentFloorId !== null && !isReady)}
+                className={`relative flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium shadow-lg transition-all disabled:cursor-not-allowed disabled:opacity-60 ${
                   isEditMode
                     ? "border-accent bg-accent text-accent-foreground"
                     : "border-primary bg-primary text-primary-foreground"
                 } `}
                 title={
-                  isEditMode ? "Terminer les modifications" : "Modifier le plan"
+                  isMapFrozen
+                    ? "Hors connexion : le plan est en lecture seule"
+                    : isEditMode
+                      ? "Terminer les modifications"
+                      : "Modifier le plan"
                 }
               >
                 {isEditMode ? (

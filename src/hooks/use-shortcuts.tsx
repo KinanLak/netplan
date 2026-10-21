@@ -21,6 +21,7 @@ import {
   OVERLAY_MODIFIER_KEY_BY_PLATFORM,
   OVERLAY_VISIBILITY_DELAY_MS,
 } from "@/lib/constants";
+import { useConnectionStore } from "@/store/useConnectionStore";
 import { useMapStore } from "@/store/useMapStore";
 import { useCanEdit } from "@/hooks/use-current-user";
 
@@ -86,7 +87,10 @@ export function ShortcutIntentProvider({
           activeDrawTool: state.activeDrawTool,
           canEdit,
           currentFloorId: state.currentFloorId,
-          isEditMode: state.isEditMode && canEdit,
+          isEditMode:
+            state.isEditMode &&
+            canEdit &&
+            !useConnectionStore.getState().isMapFrozen,
           isInputFocused: isShortcutInputTarget(event.target),
           isWidgetFocused: isShortcutWidgetTarget(event.target),
           selectedDeviceId: state.selectedDeviceId,

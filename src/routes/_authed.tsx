@@ -1,8 +1,10 @@
 import type { ReactNode } from "react";
 import { AuthBoundary } from "@convex-dev/better-auth/react";
 import { Outlet, createFileRoute, redirect } from "@tanstack/react-router";
+import { ConnectionBanner } from "@/components/connection-banner";
 import { ThemeShortcut } from "@/components/mode-toggle";
 import { Toaster } from "@/components/ui/sonner";
+import { useConnectionStore } from "@/store/useConnectionStore";
 import { CurrentUserProvider } from "@/hooks/use-current-user";
 import { ShortcutIntentProvider } from "@/hooks/use-shortcuts";
 import { MapDocumentProvider } from "@/map-session/MapDocumentProvider";
@@ -59,6 +61,7 @@ function AuthedLayout() {
           <ThemeShortcut />
           <MapSession>
             <Outlet />
+            <ConnectionBanner />
           </MapSession>
         </ShortcutIntentProvider>
         <RefreshOutcomes />
@@ -66,8 +69,16 @@ function AuthedLayout() {
       {/* The only toaster, so a toast survives a change of page. Bottom
           centre: every corner of the map is taken, and React Scan's toolbar
           snaps to one in development. */}
-      <Toaster position="bottom-center" />
+      <ShellToaster />
     </AuthBoundary>
+  );
+}
+
+// Toasts rise above the connection banner while it shows.
+function ShellToaster() {
+  const isBannerShown = useConnectionStore((s) => s.isBannerShown);
+  return (
+    <Toaster position="bottom-center" offset={isBannerShown ? 56 : undefined} />
   );
 }
 

@@ -12,6 +12,7 @@ import { Fragment, useId, useState } from "react";
 import type { FormEvent } from "react";
 import { toast } from "sonner";
 import { ModeToggle } from "@/components/mode-toggle";
+import { ListSkeleton } from "@/components/loading-skeletons";
 import { NetplanLogo } from "@/components/netplan-logo";
 import { StatusDot } from "@/components/StatusDot";
 import { Badge } from "@/components/ui/badge";
@@ -138,7 +139,9 @@ function InventoryPage() {
       </header>
       <main className="min-w-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-6xl p-4 md:p-8">
-          {site === undefined ? null : site === null ? (
+          {site === undefined ? (
+            <ListSkeleton />
+          ) : site === null ? (
             <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
               Aucun site n'est encore configuré.
             </p>
@@ -259,7 +262,9 @@ function SiteInventory({ site }: { site: SiteSummary }) {
         />
       ) : null}
 
-      {devices === undefined ? null : sorted.length === 0 ? (
+      {devices === undefined ? (
+        <ListSkeleton />
+      ) : sorted.length === 0 ? (
         <InventoryEmpty canEdit={canEdit} onCreate={() => setCreating(true)} />
       ) : (
         <>
