@@ -310,15 +310,19 @@ export default function FlowCanvas() {
   const { placeAtPointer } = usePlaceFromInventory();
 
   // A device dragged from the « Placer » panel lands where it is dropped (C2).
+  // Only the map takes a drop: releasing over a panel above it places nothing.
+  const isOverMap = (event: React.DragEvent) =>
+    event.target instanceof Element &&
+    event.target.closest(".react-flow") !== null;
   const handleDragOver = (event: React.DragEvent) => {
-    if (!canEditDevices) return;
+    if (!canEditDevices || !isOverMap(event)) return;
     if (!event.dataTransfer.types.includes(INVENTORY_DEVICE_MIME)) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = "copy";
   };
   const handleDrop = (event: React.DragEvent) => {
     const deviceId = event.dataTransfer.getData(INVENTORY_DEVICE_MIME);
-    if (!deviceId || !canEditDevices) return;
+    if (!deviceId || !canEditDevices || !isOverMap(event)) return;
     event.preventDefault();
     const failure = placeAtPointer(deviceId, {
       x: event.clientX,

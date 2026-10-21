@@ -1,5 +1,5 @@
-import { useState } from "react";
-import type { DragEvent } from "react";
+import { useId, useState } from "react";
+import type { DragEvent, KeyboardEvent } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Add01Icon, Cancel01Icon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
@@ -36,10 +36,13 @@ function PlaceDevicePanelContent() {
   const { site, devices, placeAtCentre } = usePlaceFromInventory();
   const isReady = useMapDocumentReady();
   const setPlacePanelOpen = useMapStore((s) => s.setPlacePanelOpen);
+  const listId = useId();
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
-  const [created, setCreated] = useState<string | null>(null);
+  // The row the search field's arrows move and Enter places; a new device
+  // starts there.
+  const [activeId, setActiveId] = useState<string | null>(null);
 
   const unplaced = devices
     ?.filter((device) => !device.location)
@@ -50,6 +53,26 @@ function PlaceDevicePanelContent() {
 
   const place = (row: InventoryRow) => {
     setError(placeAtCentre(row.id));
+  };
+
+  const active =
+    shown?.find((device) => device.id === activeId) ?? shown?.at(0) ?? null;
+  const onSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setPlacePanelOpen(false);
+      return;
+    }
+    if (!shown || shown.length === 0) return;
+    const index = active ? shown.indexOf(active) : -1;
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      const step = event.key === "ArrowDown" ? 1 : -1;
+      setActiveId(shown[(index + step + shown.length) % shown.length].id);
+    } else if (event.key === "Enter" && active) {
+      event.preventDefault();
+      place(active);
+    }
   };
 
   const startDrag = (
@@ -97,31 +120,40 @@ function PlaceDevicePanelContent() {
       <Input
         value={query}
         onChange={(event) => setQuery(event.target.value)}
+        onKeyDown={onSearchKeyDown}
         placeholder="Nom, hostname, MAC, IP…"
         aria-label="Chercher dans l'inventaire"
+        aria-controls={listId}
+        aria-activedescendant={active ? `${listId}-${active.id}` : undefined}
         autoFocus
       />
       <div className="-mx-1 min-h-0 flex-1 overflow-y-auto">
         {empty ? (
           <p className="px-1 py-2 text-muted-foreground">{empty}</p>
         ) : (
-          <ul className="flex flex-col">
+          <ul id={listId} role="listbox" className="flex flex-col">
             {shown?.map((device) => (
-              <li key={device.id}>
+              <li
+                key={device.id}
+                id={`${listId}-${device.id}`}
+                role="option"
+                aria-selected={device === active}
+              >
                 <button
                   type="button"
                   draggable={isReady}
                   disabled={!isReady}
                   onDragStart={(event) => startDrag(event, device)}
                   onClick={() => place(device)}
+                  tabIndex={-1}
                   ref={(element) => {
-                    if (element && device.id === created) {
+                    if (element && device === active) {
                       element.scrollIntoView({ block: "nearest" });
                     }
                   }}
                   className={cn(
                     "flex w-full cursor-grab flex-col rounded-md px-2 py-1.5 text-left hover:bg-accent active:cursor-grabbing",
-                    device.id === created && "bg-accent",
+                    device === active && "bg-accent",
                   )}
                 >
                   <span className="truncate">{device.name}</span>
@@ -157,7 +189,7 @@ function PlaceDevicePanelContent() {
             onOpenChange={setCreating}
             onCreated={(deviceId) => {
               setQuery("");
-              setCreated(deviceId);
+              setActiveId(deviceId);
             }}
           />
         </>
