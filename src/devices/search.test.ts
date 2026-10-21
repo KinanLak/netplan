@@ -47,3 +47,19 @@ describe("finding a device on the map", () => {
     ).toEqual(["Poste 3", "Poste 12", "Imprimante"]);
   });
 });
+
+describe("searching what a list shows", () => {
+  it("matches the type and place it is given, accents or not", () => {
+    const also = ["Poste de travail", "Bâtiment A · Étage 1"];
+    expect(matchesDeviceSearch(device, "etage 1", also)).toBe(true);
+    expect(matchesDeviceSearch(device, "poste de travail", also)).toBe(true);
+    expect(matchesDeviceSearch(device, "étage 4", also)).toBe(false);
+  });
+
+  it("wants every word, in any order", () => {
+    const also = ["Poste de travail", "Bâtiment A · Étage 1"];
+    expect(matchesDeviceSearch(device, "etage 1 poste 3", also)).toBe(true);
+    expect(matchesDeviceSearch(device, "poste 3 0105", also)).toBe(true);
+    expect(matchesDeviceSearch(device, "poste imprimante", also)).toBe(false);
+  });
+});

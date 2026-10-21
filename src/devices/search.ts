@@ -5,26 +5,37 @@ type Searchable = Pick<
   "name" | "hostname" | "ip" | "serial" | "model" | "macs"
 >;
 
-/** Whether a device answers a search, MACs matched in any notation. */
-export function matchesDeviceSearch(device: Searchable, query: string) {
-  const needle = query.trim().toLowerCase();
-  if (!needle) return true;
-  const text = [
-    device.name,
-    device.hostname,
-    device.ip,
-    device.serial,
-    device.model,
-  ]
-    .filter(Boolean)
-    .join("\n")
+/** Lower case without accents, so « etage » finds « Étage ». */
+const fold = (text: string) =>
+  text
+    .normalize("NFD")
+    .replaceAll(/\p{Diacritic}/gu, "")
     .toLowerCase();
-  if (text.includes(needle)) return true;
-  const hex = needle.replaceAll(/[\s:.-]/g, "");
-  return (
-    hex !== "" &&
-    device.macs.some((mac) => mac.replaceAll(":", "").includes(hex))
+
+/**
+ * Whether a device answers a search: every word of it, in any order, MACs
+ * matched in any notation. `also` holds what a list shows of it besides its
+ * identity: its type, its place.
+ */
+export function matchesDeviceSearch(
+  device: Searchable,
+  query: string,
+  also: ReadonlyArray<string | undefined> = [],
+) {
+  const words = fold(query).split(/\s+/).filter(Boolean);
+  if (words.length === 0) return true;
+  const text = fold(
+    [device.name, device.hostname, device.ip, device.serial, device.model]
+      .concat(also)
+      .filter(Boolean)
+      .join("\n"),
   );
+  const macs = device.macs.map((mac) => mac.replaceAll(":", ""));
+  return words.every((word) => {
+    if (text.includes(word)) return true;
+    const hex = word.replaceAll(/[:.-]/g, "");
+    return hex !== "" && macs.some((mac) => mac.includes(hex));
+  });
 }
 
 /** Whether a device's name or hostname holds the query, for the map's find. */

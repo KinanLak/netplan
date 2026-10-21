@@ -2,6 +2,7 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/plus-jakarta-sans";
+@import "@fontsource-variable/jetbrains-mono";
 @import "@xyflow/react/dist/style.css";
 
 @custom-variant dark (&:is(.dark *));
@@ -114,7 +115,7 @@
   /* Borders and inputs - Subtle but visible */
   --border: oklch(0.32 0 0);
   --input: oklch(0.32 0 0);
-  --ring: oklch(0.5 0 0);
+  --ring: oklch(0.7 0 0);
 
   /* Chart colors - Same palette */
   --chart-1: oklch(0.8 0.1 252);
@@ -153,6 +154,8 @@
 
 @theme inline {
   --font-sans: "Plus Jakarta Sans Variable", sans-serif;
+  /* Bundled, so MACs and IPs never fall back to a system Courier. */
+  --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
   --font-size-2xs: 0.625rem;
   --font-size-2xs--line-height: 0.875rem;
   --color-sidebar-ring: var(--sidebar-ring);

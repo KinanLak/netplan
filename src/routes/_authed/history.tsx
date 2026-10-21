@@ -297,7 +297,7 @@ function SlotButton({
       aria-pressed={active}
       onClick={onSelect}
       className={cn(
-        "flex min-w-28 flex-col rounded-lg border px-3 py-2 text-left text-sm outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 enabled:hover:bg-muted",
+        "flex min-w-28 flex-col rounded-lg border px-3 py-2 text-left text-sm outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring enabled:hover:bg-muted",
         active && "border-primary bg-muted",
       )}
     >
