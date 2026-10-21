@@ -12,6 +12,7 @@ import {
   preferredPorts,
   publishedPort,
   renderEnvFile,
+  browserUrl,
   resourceName,
 } from "./devAgent";
 
@@ -33,6 +34,14 @@ describe("resourceName", () => {
     expect(mailName(name)).not.toBe(name);
     expect(backendOf(mailName(name))).toBe(name);
     expect(backendOf(name)).toBe(name);
+  });
+});
+
+describe("browserUrl", () => {
+  it("gives each worktree its own loopback name, so cookies do not mix", () => {
+    const url = browserUrl("/w/netplan/UX_U5", "http://127.0.0.1:3109");
+    expect(url).toMatch(/^http:\/\/ux-u5-[0-9a-f]{6}\.localhost:3109$/);
+    expect(browserUrl("/other/UX_U5", "http://127.0.0.1:3109")).not.toBe(url);
   });
 });
 

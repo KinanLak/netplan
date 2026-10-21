@@ -20,15 +20,26 @@ const digest = (worktree: string): string =>
  * Docker name of the worktree's container and volume: readable, and unique
  * per path even when two worktrees share a directory name.
  */
-export const resourceName = (worktree: string): string => {
-  const slug =
-    basename(worktree)
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, 32) || "worktree";
-  return `netplan-cvx-${slug}-${digest(worktree).slice(0, 6)}`;
-};
+const slugOf = (worktree: string): string =>
+  basename(worktree)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 32) || "worktree";
+
+export const resourceName = (worktree: string): string =>
+  `netplan-cvx-${slugOf(worktree)}-${digest(worktree).slice(0, 6)}`;
+
+/**
+ * The app's URL in a browser: a `.localhost` name of its own, which resolves
+ * to loopback. Cookies are scoped by host, not port, so on 127.0.0.1 the
+ * worktrees sharing a browser would sign each other out.
+ */
+export const browserUrl = (worktree: string, loopbackUrl: string): string =>
+  loopbackUrl.replace(
+    "//127.0.0.1:",
+    `//${slugOf(worktree)}-${digest(worktree).slice(0, 6)}.localhost:`,
+  );
 
 /**
  * Bumped when the backend container's command changes: a container with

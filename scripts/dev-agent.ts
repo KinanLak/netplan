@@ -47,6 +47,7 @@ import {
   preferredPorts,
   publishedPort,
   renderEnvFile,
+  browserUrl,
   resourceName,
 } from "./lib/devAgent";
 
@@ -489,7 +490,9 @@ if (flags.has("--status")) {
       `  Convex   ${convex}${silent(await backendAnswers(convex))}`,
   );
   if (web) {
-    console.log(`  App      ${web}${silent(await servesThisWorktree(web))}`);
+    console.log(
+      `  App      ${browserUrl(root, web)}${silent(await servesThisWorktree(web))}`,
+    );
   }
   const inbox = await inspectContainer(mail, 8025);
   if (inbox?.port) {
@@ -609,10 +612,11 @@ const variables = parseEnvLines(
 );
 const authEnv: Record<string, string> = {
   ALLOW_DEV_SEED: "true",
-  // better-auth accepts requests only from these origins: the app, and the
-  // production build `bun run test:e2e` serves against this backend.
-  SITE_URL: servedUrl ?? webUrl,
-  TRUSTED_ORIGINS: "http://127.0.0.1:4310",
+  // better-auth accepts requests only from these origins: the app, under its
+  // own name and on loopback, and the production build `bun run test:e2e`
+  // serves against this backend.
+  SITE_URL: browserUrl(root, servedUrl ?? webUrl),
+  TRUSTED_ORIGINS: `http://127.0.0.1:4310,${servedUrl ?? webUrl}`,
   // The backend checks each token against its own JWKS; its published port
   // does not answer inside its container.
   AUTH_JWKS_URL: "http://127.0.0.1:3211/api/auth/convex/jwks",
@@ -688,7 +692,7 @@ if (!up) fail(`${webUrl} did not answer within a minute.`);
 
 console.log(`
 Netplan is running for ${root}
-  App      ${webUrl}
+  App      ${browserUrl(root, webUrl)}
   Convex   ${convexUrl}  (container ${name})
   Mail     ${mailUrl}  (every mail the app sends)
   Data     Site de démonstration, Bâtiment A, two floors
