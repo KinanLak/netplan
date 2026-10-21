@@ -359,6 +359,23 @@ export const siteFreshness = v.object({
   lastSuccessAt: v.union(v.null(), v.number()),
   nextRunAt: v.union(v.null(), v.number()),
   failures: v.number(),
+  /**
+   * Each enabled source on its own: when it last brought data, and whether
+   * it failed in the last cycle. NetBox's is its last import, LibreNMS's its
+   * newest switch read.
+   */
+  sources: v.array(
+    v.object({
+      source: integrationKind,
+      at: v.union(v.null(), v.number()),
+      failed: v.boolean(),
+    }),
+  ),
+  /** The switches LibreNMS read in the last cycle, and those with a note. */
+  switches: v.union(
+    v.null(),
+    v.object({ read: v.number(), noted: v.number() }),
+  ),
 });
 
 export const freshnessOf = async (
@@ -367,9 +384,14 @@ export const freshnessOf = async (
   cycle: Doc<"siteCycles"> | null,
 ): Promise<Infer<typeof siteFreshness>> => {
   const last = cycle?.last;
+  const sources = await enabledSources(ctx, site.objectId);
+  const reads = cycle?.switchReads ?? [];
+  const polled = last?.steps.find(
+    (step) => step.source === "librenms",
+  )?.switches;
   return {
     paused: collectionPaused(),
-    hasSources: (await enabledSources(ctx, site.objectId)).length > 0,
+    hasSources: sources.length > 0,
     automaticRefresh: site.automaticRefresh,
     manualRefresh: site.manualRefresh,
     cadence: site.cadence,
@@ -390,6 +412,25 @@ export const freshnessOf = async (
     lastSuccessAt: cycle?.lastSuccessAt ?? null,
     nextRunAt: cycle ? cycle.nextRunAt : null,
     failures: cycle?.failures ?? 0,
+    sources: sources.map((source) => ({
+      source,
+      at:
+        source === "netbox"
+          ? (cycle?.netboxImportedAt ?? null)
+          : reads.length > 0
+            ? Math.max(...reads.map((read) => read.readAt))
+            : null,
+      failed: Boolean(
+        last?.steps.some((step) => step.source === source && !step.ok),
+      ),
+    })),
+    switches: polled
+      ? {
+          read: polled.filter((polledSwitch) => polledSwitch.ok).length,
+          noted: polled.filter((polledSwitch) => polledSwitch.notes.length > 0)
+            .length,
+        }
+      : null,
   };
 };
 

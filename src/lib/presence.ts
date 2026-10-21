@@ -70,13 +70,15 @@ export function activePresences(
   return Array.from(byUser.values());
 }
 
-/** Self first, then alphabetically by display name. */
-export function sortPresences(
+/**
+ * The other users in a place, alphabetically: the signed-in user already
+ * knows where they are, and the current floor is highlighted.
+ */
+export function othersOn(
   presences: ReadonlyArray<ActivePresence>,
+  isHere: (presence: ActivePresence) => boolean,
 ): Array<ActivePresence> {
-  return [...presences].toSorted((a, b) => {
-    if (a.isSelf) return -1;
-    if (b.isSelf) return 1;
-    return a.displayName.localeCompare(b.displayName);
-  });
+  return presences
+    .filter((presence) => !presence.isSelf && isHere(presence))
+    .toSorted((a, b) => a.displayName.localeCompare(b.displayName, "fr"));
 }

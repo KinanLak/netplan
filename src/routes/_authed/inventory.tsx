@@ -87,12 +87,19 @@ type TypeFilter = "all" | DeviceType;
 const isStatus = (value: unknown): value is DeviceStatus =>
   typeof value === "string" && Object.hasOwn(DEVICE_STATUS_LABELS, value);
 
-/** `status` opens the list filtered, as the map's offline list links it. */
+const isPlacement = (value: unknown): value is Placement =>
+  value === "all" || value === "placed" || value === "unplaced";
+
+/**
+ * `status` and `placement` open the list filtered: the map links its
+ * « hors plan » count to the devices it does not show.
+ */
 const inventorySearch = (
   search: Record<string, unknown>,
-): { site?: string; status?: DeviceStatus } => ({
+): { site?: string; status?: DeviceStatus; placement?: Placement } => ({
   ...siteSearch(search),
   ...(isStatus(search.status) && { status: search.status }),
+  ...(isPlacement(search.placement) && { placement: search.placement }),
 });
 
 export const Route = createFileRoute("/_authed/inventory")({
@@ -167,7 +174,9 @@ function SiteInventory({ site }: { site: SiteSummary }) {
   const canEdit = useCanEdit();
   const search = Route.useSearch();
   const [query, setQuery] = useState("");
-  const [placement, setPlacement] = useState<Placement>("all");
+  const [placement, setPlacement] = useState<Placement>(
+    search.placement ?? "all",
+  );
   const [status, setStatus] = useState<StatusFilter>(search.status ?? "all");
   const [chosenType, setType] = useState<TypeFilter>("all");
   const [creating, setCreating] = useState(false);

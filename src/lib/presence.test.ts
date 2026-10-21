@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { FloorId } from "@/types/map";
-import { activePresences, sortPresences } from "./presence";
+import { activePresences, othersOn } from "./presence";
 import type { RawPresence, SelfPresence } from "./presence";
 
 const raw = (over: Partial<RawPresence>): RawPresence => ({
@@ -129,17 +129,25 @@ describe("activePresences", () => {
   });
 });
 
-describe("sortPresences", () => {
-  it("puts self first then sorts others by name", () => {
-    const sorted = sortPresences([
-      { ...raw({ userId: "c", displayName: "Charlie" }), isSelf: false },
-      { ...raw({ userId: "me", displayName: "Moi" }), isSelf: true },
-      { ...raw({ userId: "a", displayName: "Alice" }), isSelf: false },
-    ]);
-    expect(sorted.map((p) => p.displayName)).toEqual([
-      "Moi",
+describe("othersOn", () => {
+  it("leaves the signed-in user out and sorts the others by name", () => {
+    const others = othersOn(
+      [
+        { ...raw({ userId: "c", displayName: "Charlie" }), isSelf: false },
+        { ...raw({ userId: "me", displayName: "Moi" }), isSelf: true },
+        { ...raw({ userId: "e", displayName: "Émile" }), isSelf: false },
+        { ...raw({ userId: "a", displayName: "Alice" }), isSelf: false },
+        {
+          ...raw({ userId: "z", displayName: "Zoé", floorId: "floor:b" }),
+          isSelf: false,
+        },
+      ],
+      (presence) => presence.floorId === "floor:a",
+    );
+    expect(others.map((p) => p.displayName)).toEqual([
       "Alice",
       "Charlie",
+      "Émile",
     ]);
   });
 });

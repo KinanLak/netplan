@@ -17,8 +17,8 @@ function RefreshWatcher({
     if (freshness === undefined) return;
     const outcome = refreshOutcome(freshness, startedAt);
     if (outcome.kind === "pending") return;
-    usePendingRefreshes.getState().settle(siteId);
-    if (outcome.kind === "succeeded") toast.success("Données actualisées");
+    // A success shows on the button and in the freshness line, not a toast.
+    usePendingRefreshes.getState().settle(siteId, outcome.kind === "succeeded");
     if (outcome.kind === "failed") {
       toast.error("L'actualisation a échoué", {
         description: `Échec côté ${outcome.sources}. Un administrateur en voit le détail.`,
@@ -34,7 +34,7 @@ function RefreshWatcher({
 }
 
 /**
- * Tells whoever pressed "Actualiser" how their cycle ended. Automatic cycles
+ * Tells whoever pressed "Actualiser" when their cycle failed. Automatic cycles
  * stay silent: their failures show as late data.
  */
 export function RefreshOutcomes() {

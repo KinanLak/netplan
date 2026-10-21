@@ -26,6 +26,12 @@ export interface SiteFreshness {
   lastSuccessAt: number | null;
   nextRunAt: number | null;
   failures: number;
+  sources: Array<{
+    source: IntegrationKind;
+    at: number | null;
+    failed: boolean;
+  }>;
+  switches: { read: number; noted: number } | null;
 }
 
 /**
@@ -152,6 +158,40 @@ export const describeFreshness = (
     ? { headline: `Données en retard : ${age}`, tone: "late" }
     : { headline: `Données collectées ${age}`, tone: "fresh" };
 };
+
+/**
+ * When the last cycle failed after the last good one: it stays said until a
+ * cycle succeeds, so a failed "Actualiser" leaves a trace for everyone.
+ */
+export const failedAttemptAt = (freshness: SiteFreshness): number | null => {
+  const { last, lastSuccessAt } = freshness;
+  if (!last || last.failed.length === 0) return null;
+  if (lastSuccessAt !== null && lastSuccessAt >= last.startedAt) return null;
+  return last.finishedAt;
+};
+
+const plural = (count: number, word: string) =>
+  `${count} ${word}${count > 1 ? "s" : ""}`;
+
+/** One line per source for the freshness hover card, each with its own age. */
+export const describeSources = (
+  freshness: SiteFreshness,
+  now: number,
+): Array<{ label: string; detail: string; failed: boolean }> =>
+  freshness.sources.map(({ source, at, failed }) => {
+    const age = at === null ? null : describeAge(at, now, freshness.timezone);
+    let detail: string;
+    if (source === "librenms" && freshness.switches) {
+      const { read, noted } = freshness.switches;
+      detail = `${plural(read, "switch")} lu${read > 1 ? "s" : ""}`;
+      if (noted > 0) detail += `, ${noted} avec remarque`;
+      if (age) detail += ` · ${age}`;
+    } else {
+      detail = age ? `Importé ${age}` : "Rien d'importé";
+    }
+    if (failed) detail += " · échec à la dernière collecte";
+    return { label: INTEGRATION_LABELS[source], detail, failed };
+  });
 
 const listSources = (sources: Array<IntegrationKind>) =>
   sources.map((source) => INTEGRATION_LABELS[source]).join(" et ");

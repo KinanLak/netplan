@@ -1,6 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import {
   describeAge,
+  describeSources,
+  failedAttemptAt,
   describeFreshness,
   describeNextRun,
   isLate,
@@ -29,6 +31,8 @@ const site = (overrides: Partial<SiteFreshness> = {}): SiteFreshness => ({
   lastSuccessAt: WEDNESDAY_10H,
   nextRunAt: WEDNESDAY_10H + 5 * MINUTE,
   failures: 0,
+  sources: [],
+  switches: null,
   ...overrides,
 });
 
@@ -163,5 +167,69 @@ describe("refreshOutcome", () => {
   it("knows a cycle that died, and a site that went", () => {
     expect(refreshOutcome(site(), startedAt)).toEqual({ kind: "interrupted" });
     expect(refreshOutcome(null, startedAt)).toEqual({ kind: "gone" });
+  });
+});
+
+describe("failedAttemptAt", () => {
+  const failed = (startedAt: number) => ({
+    startedAt,
+    finishedAt: startedAt + MINUTE,
+    failed: ["librenms" as const],
+  });
+
+  it("keeps a failure said until a cycle succeeds", () => {
+    expect(
+      failedAttemptAt(site({ last: failed(WEDNESDAY_10H + MINUTE) })),
+    ).toBe(WEDNESDAY_10H + 2 * MINUTE);
+    expect(
+      failedAttemptAt(
+        site({ last: failed(WEDNESDAY_10H + MINUTE), lastSuccessAt: null }),
+      ),
+    ).toBe(WEDNESDAY_10H + 2 * MINUTE);
+  });
+
+  it("says nothing once the last cycle succeeded", () => {
+    expect(failedAttemptAt(site())).toBeNull();
+    expect(
+      failedAttemptAt(
+        site({
+          last: {
+            startedAt: WEDNESDAY_10H,
+            finishedAt: WEDNESDAY_10H + MINUTE,
+            failed: [],
+          },
+        }),
+      ),
+    ).toBeNull();
+  });
+});
+
+describe("describeSources", () => {
+  it("gives each source its own age, and LibreNMS its switches", () => {
+    const freshness = site({
+      sources: [
+        { source: "netbox", at: WEDNESDAY_10H - 5 * MINUTE, failed: false },
+        { source: "librenms", at: WEDNESDAY_10H - 3 * MINUTE, failed: true },
+      ],
+      switches: { read: 6, noted: 1 },
+    });
+    expect(describeSources(freshness, WEDNESDAY_10H)).toEqual([
+      { label: "NetBox", detail: "Importé il y a 5 min", failed: false },
+      {
+        label: "LibreNMS",
+        detail:
+          "6 switchs lus, 1 avec remarque · il y a 3 min · échec à la dernière collecte",
+        failed: true,
+      },
+    ]);
+  });
+
+  it("says when a source never brought anything", () => {
+    const freshness = site({
+      sources: [{ source: "netbox", at: null, failed: false }],
+    });
+    expect(describeSources(freshness, WEDNESDAY_10H)).toEqual([
+      { label: "NetBox", detail: "Rien d'importé", failed: false },
+    ]);
   });
 });

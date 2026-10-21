@@ -24,7 +24,7 @@ export function SidebarAccount() {
   const { signingOut, signOut } = useSignOut();
 
   return (
-    <div className="mt-3 flex items-center justify-between gap-2 border-t pt-3">
+    <div className="flex items-center justify-between gap-2">
       <div className="min-w-0">
         <div className="truncate text-sm font-medium">{me?.name ?? "…"}</div>
         <div className="text-xs text-muted-foreground">

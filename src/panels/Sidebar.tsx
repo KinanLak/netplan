@@ -25,8 +25,14 @@ import { useTemporalStore, useUndoRedo } from "@/hooks/use-undo-redo";
 import { Kbd, KbdGroup } from "@/components/ui/kbd";
 import { NetplanLogo } from "@/components/netplan-logo";
 import { UserAvatarStack } from "@/components/user-avatar";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import type { ActivePresence } from "@/lib/presence";
 import { usePresence } from "@/hooks/use-presence";
-import { sortPresences } from "@/lib/presence";
+import { othersOn } from "@/lib/presence";
 import {
   Sidebar,
   SidebarContent,
@@ -47,8 +53,10 @@ import { ModeToggle } from "@/components/mode-toggle";
 import { StructureMenu } from "@/buildings/StructureMenu";
 import { useStructureDialog } from "@/buildings/useStructureDialog";
 import { SidebarAccount } from "@/panels/SidebarAccount";
-import { CollectionFreshness } from "@/sites/CollectionFreshness";
-import { OfflineDevices } from "@/sites/OfflineDevices";
+import {
+  CollectionFreshness,
+  SiteRefreshButton,
+} from "@/sites/CollectionFreshness";
 import { SiteSwitcher } from "@/sites/SiteSwitcher";
 import { useCurrentSite } from "@/sites/useCurrentSite";
 import { useCanEdit } from "@/hooks/use-current-user";
@@ -133,6 +141,53 @@ function SidebarUndoRedo() {
   );
 }
 
+/**
+ * A row's « ⋯ » shows while its own row is hovered or focused, or its menu
+ * is open; a touch screen, which cannot hover, always shows it.
+ */
+const REVEALED_ON_HOVER =
+  "pointer-fine:opacity-0 peer-hover/menu-button:opacity-100 hover:opacity-100 focus-visible:opacity-100 data-popup-open:opacity-100";
+
+/** Who else is here, named on hover: two avatars, then a count. */
+function PresenceStack({
+  users,
+  className,
+}: {
+  users: ReadonlyArray<ActivePresence>;
+  className?: string;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={<span className={cn("flex shrink-0", className)} />}
+      >
+        <UserAvatarStack users={users} max={2} size="sm" />
+      </TooltipTrigger>
+      <TooltipContent side="right">
+        {users.map((user) => user.displayName).join(", ")}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+/**
+ * The map shows placed devices only; this says how many it leaves out and
+ * links to them in the inventory.
+ */
+function UnplacedDevicesLink({ siteId }: { siteId: string }) {
+  const count = useQuery(api.devices.unplacedCount, { siteId });
+  if (!count) return null;
+  return (
+    <Link
+      to="/inventory"
+      search={{ site: siteId, placement: "unplaced" }}
+      className="w-fit rounded-sm px-2 text-xs text-muted-foreground underline-offset-2 outline-hidden hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+    >
+      {count} {count > 1 ? "équipements" : "équipement"} hors plan
+    </Link>
+  );
+}
+
 export default function AppSidebar() {
   const { site } = useCurrentSite();
   const canEdit = useCanEdit();
@@ -154,7 +209,6 @@ export default function AppSidebar() {
     currentBuildingId ? { buildingId: currentBuildingId } : "skip",
   );
 
-  const currentBuilding = buildings.find((b) => b.id === currentBuildingId);
   const sortedFloors = floorsForCurrent
     ? [...floorsForCurrent].sort((a, b) => a.order - b.order)
     : [];
@@ -163,38 +217,34 @@ export default function AppSidebar() {
 
   return (
     <Sidebar collapsible="offcanvas" className="border-r">
-      <SidebarHeader className="border-b py-4 pr-4 pl-0.5">
-        <div className="flex items-center justify-between">
-          <h1 className="rounded-sm bg-transparent pb-0.5 leading-none">
-            <Link to="/" aria-label="Retour à l'accueil">
-              <NetplanLogo size={34} />
-            </Link>
-          </h1>
-          <ModeToggle />
-        </div>
+      <SidebarHeader className="h-14 flex-row items-center justify-between border-b py-0 pr-3 pl-0.5">
+        <h1 className="rounded-sm bg-transparent pb-0.5 leading-none">
+          <Link to="/" aria-label="Retour à l'accueil">
+            <NetplanLogo size={30} />
+          </Link>
+        </h1>
+        <ModeToggle />
       </SidebarHeader>
 
-      <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Site</SidebarGroupLabel>
-          <SidebarGroupContent className="flex flex-col gap-1">
-            <SiteSwitcher />
-            {site ? (
-              <CollectionFreshness
-                siteId={site.id}
-                withShortcut
-                className="px-2 py-1"
-              />
-            ) : null}
-            <SidebarMenu>
+      <SidebarContent className="gap-0">
+        {site ? (
+          <SidebarGroup className="gap-1.5">
+            <div className="flex min-w-0 items-center gap-1">
+              <div className="min-w-0 flex-1">
+                <SiteSwitcher />
+              </div>
+              <SiteRefreshButton siteId={site.id} withShortcut />
+            </div>
+            <CollectionFreshness
+              siteId={site.id}
+              withRefresh={false}
+              className="px-2"
+            />
+            <UnplacedDevicesLink siteId={site.id} />
+            <SidebarMenu className="mt-1">
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  render={
-                    <Link
-                      to="/inventory"
-                      search={site ? { site: site.id } : {}}
-                    />
-                  }
+                  render={<Link to="/inventory" search={{ site: site.id }} />}
                 >
                   <HugeiconsIcon
                     icon={PackageIcon}
@@ -207,12 +257,7 @@ export default function AppSidebar() {
               {canEdit ? (
                 <SidebarMenuItem>
                   <SidebarMenuButton
-                    render={
-                      <Link
-                        to="/history"
-                        search={site ? { site: site.id } : {}}
-                      />
-                    }
+                    render={<Link to="/history" search={{ site: site.id }} />}
                   >
                     <HugeiconsIcon
                       icon={WorkHistoryIcon}
@@ -224,8 +269,8 @@ export default function AppSidebar() {
                 </SidebarMenuItem>
               ) : null}
             </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+          </SidebarGroup>
+        ) : null}
         <SidebarGroup>
           <div className="flex items-center justify-between px-2">
             <SidebarGroupLabel className="px-0">Bâtiments</SidebarGroupLabel>
@@ -253,11 +298,10 @@ export default function AppSidebar() {
             <SidebarMenu>
               {buildings.map((building) => {
                 const isCurrentBuilding = building.id === currentBuildingId;
-                const buildingPresences = sortPresences(
-                  presences.filter(
-                    (presence) =>
-                      buildingIdByFloor.get(presence.floorId) === building.id,
-                  ),
+                const buildingPresences = othersOn(
+                  presences,
+                  (presence) =>
+                    buildingIdByFloor.get(presence.floorId) === building.id,
                 );
 
                 return (
@@ -276,12 +320,12 @@ export default function AppSidebar() {
                         size={16}
                         strokeWidth={1.5}
                       />
-                      <span>{building.name}</span>
+                      <span className="truncate" title={building.name}>
+                        {building.name}
+                      </span>
                       {!isCurrentBuilding && buildingPresences.length > 0 ? (
-                        <UserAvatarStack
+                        <PresenceStack
                           users={buildingPresences}
-                          max={3}
-                          size="sm"
                           className="ml-auto"
                         />
                       ) : null}
@@ -291,18 +335,19 @@ export default function AppSidebar() {
                         target="building"
                         id={building.id}
                         name={building.name}
-                        trigger={<SidebarMenuAction />}
+                        trigger={
+                          <SidebarMenuAction className={REVEALED_ON_HOVER} />
+                        }
                       />
                     ) : null}
 
                     {isCurrentBuilding && sortedFloors.length > 0 ? (
-                      <SidebarMenuSub>
+                      <SidebarMenuSub className="mr-0 pr-0">
                         {sortedFloors.map((floor) => {
                           const isActive = floor.id === currentFloorId;
-                          const floorPresences = sortPresences(
-                            presences.filter(
-                              (presence) => presence.floorId === floor.id,
-                            ),
+                          const floorPresences = othersOn(
+                            presences,
+                            (presence) => presence.floorId === floor.id,
                           );
 
                           return (
@@ -313,7 +358,6 @@ export default function AppSidebar() {
                                 }
                                 className={cn(
                                   "cursor-pointer justify-between",
-                                  isEditMode && "pr-8",
                                   isActive &&
                                     "bg-primary font-semibold text-primary-foreground hover:bg-primary hover:text-primary-foreground",
                                 )}
@@ -328,13 +372,18 @@ export default function AppSidebar() {
                                     size={16}
                                     strokeWidth={1}
                                   />
-                                  <span className="truncate">{floor.name}</span>
+                                  <span className="truncate" title={floor.name}>
+                                    {floor.name}
+                                  </span>
                                 </span>
                                 {floorPresences.length > 0 ? (
-                                  <UserAvatarStack
+                                  <PresenceStack
                                     users={floorPresences}
-                                    max={3}
-                                    size="sm"
+                                    // The actions take the avatars' place.
+                                    className={cn(
+                                      isEditMode &&
+                                        "group-focus-within/menu-sub-item:invisible group-hover/menu-sub-item:invisible",
+                                    )}
                                   />
                                 ) : null}
                               </SidebarMenuSubButton>
@@ -348,6 +397,8 @@ export default function AppSidebar() {
                                       type="button"
                                       className={cn(
                                         "absolute top-0.5 right-1 flex size-6 items-center justify-center rounded-md ring-sidebar-ring outline-hidden focus-visible:ring-2",
+                                        REVEALED_ON_HOVER,
+                                        "group-hover/menu-sub-item:opacity-100",
                                         isActive
                                           ? "text-primary-foreground hover:bg-primary"
                                           : "text-sidebar-foreground hover:bg-sidebar-accent",
@@ -367,17 +418,11 @@ export default function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-        {site ? <OfflineDevices siteId={site.id} /> : null}
       </SidebarContent>
 
       <SidebarUndoRedo />
 
       <SidebarFooter className="border-t px-4 py-3">
-        <div className="flex items-center justify-between gap-2">
-          <div className="truncate text-xs text-muted-foreground">
-            {currentBuilding?.name ?? "Aucun bâtiment"}
-          </div>
-        </div>
         <SidebarAccount />
       </SidebarFooter>
     </Sidebar>

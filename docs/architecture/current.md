@@ -184,8 +184,9 @@ Built by lot 4 (ADR 0026).
   failure into one. The authenticated layout holds the app's only toaster,
   bottom centre.
 - **Inventory views.** Per-type coverage cards filter to what is left to
-  place; a status filter, also reached by `?status=`, backs the sidebar's
-  "Hors ligne" group. An Éditeur ignores an unknown MAC in `ignoredMacs`,
+  place; the status and placement filters are also reached by `?status=`
+  and `?placement=`, which the sidebar's « hors plan » count links to. An
+  Éditeur ignores an unknown MAC in `ignoredMacs`,
   undone or restored by the inverse mutation.
 - **Buildings and floors.** Éditeurs create, rename and remove them through
   `convex/buildings.ts` and `convex/floors.ts`, outside the map's undo, so

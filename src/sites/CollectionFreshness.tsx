@@ -1,16 +1,28 @@
 import { HugeiconsIcon } from "@hugeicons/react";
-import { RefreshIcon } from "@hugeicons/core-free-icons";
+import { RefreshIcon, Tick02Icon } from "@hugeicons/core-free-icons";
 import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { ShortcutHint } from "@/components/ui/shortcut-hint";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { useShortcutIntentEffect } from "@/hooks/use-shortcuts";
 import { useNow } from "@/hooks/use-now";
 import { isAdmin } from "@/lib/roles";
 import { cn } from "@/lib/utils";
-import { describeFreshness, describeNextRun, nextRun } from "@/sites/freshness";
+import {
+  describeFreshness,
+  describeNextRun,
+  describeSources,
+  failedAttemptAt,
+  formatSiteTime,
+  nextRun,
+} from "@/sites/freshness";
 import type { FreshnessTone } from "@/sites/freshness";
-import { useSiteRefresh } from "@/sites/useSiteRefresh";
+import { usePendingRefreshes, useSiteRefresh } from "@/sites/useSiteRefresh";
 
 export const FRESHNESS_DOT: Record<FreshnessTone, string> = {
   fresh: "bg-up",
@@ -31,13 +43,68 @@ export function SiteRefreshShortcut({ siteId }: { siteId: string }) {
 }
 
 /**
- * How fresh the site's data is and when it is next collected, with
- * "Actualiser" for Éditeurs and Admins (ADR 0026). The same block on the map
- * and in the inventory.
+ * "Actualiser" for Éditeurs and Admins (ADR 0026). A success shows as a
+ * check mark on the button rather than a toast: the freshness line already
+ * says the data is new.
+ */
+export function SiteRefreshButton({
+  siteId,
+  withShortcut = false,
+}: {
+  siteId: string;
+  /** The page listens to Shift+R, so the button shows its hint. */
+  withShortcut?: boolean;
+}) {
+  const { freshness, offered, busy, start } = useSiteRefresh(siteId);
+  const justSucceeded = usePendingRefreshes((state) =>
+    Object.hasOwn(state.succeeded, siteId),
+  );
+  if (!offered) return null;
+  const succeeded = justSucceeded && !busy;
+
+  return (
+    <span className="flex shrink-0 items-center gap-1">
+      {withShortcut ? <ShortcutHint action="refresh-site" size="sm" /> : null}
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        disabled={busy || freshness?.paused}
+        onClick={() => void start()}
+        aria-label={
+          succeeded ? "Données actualisées" : "Actualiser les données"
+        }
+        title={
+          busy
+            ? "Collecte en cours…"
+            : succeeded
+              ? "Données actualisées"
+              : "Actualiser les données"
+        }
+      >
+        <HugeiconsIcon
+          icon={succeeded ? Tick02Icon : RefreshIcon}
+          size={16}
+          strokeWidth={1.5}
+          className={cn(
+            busy && "animate-spin",
+            succeeded && "text-up animate-in zoom-in-50",
+          )}
+        />
+      </Button>
+    </span>
+  );
+}
+
+/**
+ * How fresh the site's data is and when it is next collected, with each
+ * source's own age on hover. The same block on the map, in the inventory and
+ * in the site's admin page; the map puts "Actualiser" on the site's line.
  */
 export function CollectionFreshness({
   siteId,
   withShortcut = false,
+  withRefresh = true,
   linkToSettings = true,
   className,
 }: {
@@ -46,27 +113,87 @@ export function CollectionFreshness({
   linkToSettings?: boolean;
   /** The page listens to Shift+R, so the button shows its hint. */
   withShortcut?: boolean;
+  /** Whether "Actualiser" sits at the end of the block. */
+  withRefresh?: boolean;
   className?: string;
 }) {
-  const { freshness, offered, busy, start } = useSiteRefresh(siteId);
+  const { freshness } = useSiteRefresh(siteId);
   const now = useNow(30_000);
   const me = useCurrentUser();
   if (!freshness) return null;
 
   const { headline, tone } = describeFreshness(freshness, now);
   const late = tone === "late";
+  const failedAt = failedAttemptAt(freshness);
+  const sources = describeSources(freshness, now);
+  const admin = Boolean(me && isAdmin(me.role));
+
+  const headlineText = (
+    <span className={cn("text-pretty", late && "text-down")}>{headline}</span>
+  );
 
   return (
-    <div className={cn("flex items-center gap-2 text-sm", className)}>
+    <div className={cn("flex items-start gap-2 text-sm", className)}>
       <span
         aria-hidden
-        className={cn("size-2 shrink-0 rounded-full", FRESHNESS_DOT[tone])}
+        className={cn(
+          "mt-1.5 size-2 shrink-0 rounded-full",
+          FRESHNESS_DOT[tone],
+        )}
       />
       <div className="min-w-0 flex-1">
-        <p className={cn("text-pretty", late && "text-down")}>{headline}</p>
-        <p className="text-xs text-pretty text-muted-foreground">
-          {describeNextRun(nextRun(freshness, now), now, freshness.timezone)}
-          {!freshness.hasSources && linkToSettings && me && isAdmin(me.role) ? (
+        {sources.length > 0 ? (
+          <Popover>
+            <PopoverTrigger
+              openOnHover
+              delay={150}
+              className="cursor-default rounded-sm text-left outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {headlineText}
+            </PopoverTrigger>
+            <PopoverContent
+              side="right"
+              align="start"
+              className="w-64 gap-2 p-3 text-xs"
+            >
+              <ul className="space-y-1.5">
+                {sources.map((line) => (
+                  <li key={line.label}>
+                    <span className="font-medium">{line.label}</span>
+                    <span
+                      className={cn(
+                        "block",
+                        line.failed ? "text-down" : "text-muted-foreground",
+                      )}
+                    >
+                      {line.detail}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              {admin ? (
+                <Link
+                  to="/admin/health"
+                  className="text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                >
+                  Voir la santé de la collecte
+                </Link>
+              ) : null}
+            </PopoverContent>
+          </Popover>
+        ) : (
+          <p>{headlineText}</p>
+        )}
+        <p
+          className={cn(
+            "text-xs text-pretty",
+            failedAt === null ? "text-muted-foreground" : "text-down",
+          )}
+        >
+          {failedAt === null
+            ? describeNextRun(nextRun(freshness, now), now, freshness.timezone)
+            : `Dernière tentative en échec à ${formatSiteTime(failedAt, now, freshness.timezone)}`}
+          {!freshness.hasSources && linkToSettings && admin ? (
             <>
               {" · "}
               <Link
@@ -80,26 +207,8 @@ export function CollectionFreshness({
           ) : null}
         </p>
       </div>
-      {offered && withShortcut ? (
-        <ShortcutHint action="refresh-site" size="sm" />
-      ) : null}
-      {offered ? (
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          disabled={busy || freshness.paused}
-          onClick={() => void start()}
-          aria-label="Actualiser les données"
-          title={busy ? "Collecte en cours…" : "Actualiser les données"}
-        >
-          <HugeiconsIcon
-            icon={RefreshIcon}
-            size={16}
-            strokeWidth={1.5}
-            className={cn(busy && "animate-spin")}
-          />
-        </Button>
+      {withRefresh ? (
+        <SiteRefreshButton siteId={siteId} withShortcut={withShortcut} />
       ) : null}
     </div>
   );
