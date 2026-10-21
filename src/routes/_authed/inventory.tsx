@@ -1,6 +1,6 @@
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Add01Icon, Search01Icon } from "@hugeicons/core-free-icons";
-import { Link, createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import { useEffect, useId, useRef, useState } from "react";
 import type { RefObject } from "react";
@@ -25,17 +25,23 @@ import { getDeviceKindLabel } from "@/devices/deviceKindRegistry";
 import { DEVICE_STATUS_LABELS } from "@/devices/status";
 import { useCanEdit } from "@/hooks/use-current-user";
 import { cn } from "@/lib/utils";
-import { matchesDeviceSearch } from "@/devices/search";
 import {
-  DEFAULT_SORT,
-  locationLabel,
   readHiddenColumns,
   sortRows,
-  statusOf,
   writeHiddenColumns,
 } from "@/inventory/columns";
-import type { Sort } from "@/inventory/columns";
+import {
+  applyFilters,
+  facetCounts,
+  filtersOf,
+  isFiltered,
+  parseInventorySearch,
+  sortOf,
+  toSearch,
+} from "@/inventory/filters";
+import type { InventoryFilters, Placement } from "@/inventory/filters";
 import { ColumnPicker, InventoryTable } from "@/inventory/InventoryTable";
+import { useRestoredScroll } from "@/inventory/useRestoredScroll";
 import { ImportReviews } from "@/sites/ImportReviews";
 import { SiteSwitcher } from "@/sites/SiteSwitcher";
 import { UnknownMacs } from "@/sites/UnknownMacs";
@@ -45,26 +51,13 @@ import type { SiteSummary } from "@/sites/useCurrentSite";
 import type { DeviceStatus, DeviceType } from "@/types/map";
 import { api } from "../../../convex/_generated/api";
 
-type Placement = "all" | "placed" | "unplaced";
 type StatusFilter = "all" | DeviceStatus;
 type TypeFilter = "all" | DeviceType;
 
-const isStatus = (value: unknown): value is DeviceStatus =>
-  typeof value === "string" && Object.hasOwn(DEVICE_STATUS_LABELS, value);
-
-const isPlacement = (value: unknown): value is Placement =>
-  value === "all" || value === "placed" || value === "unplaced";
-
-/**
- * `status` and `placement` open the list filtered: the map links its
- * « hors plan » count to the devices it does not show.
- */
-const inventorySearch = (
-  search: Record<string, unknown>,
-): { site?: string; status?: DeviceStatus; placement?: Placement } => ({
+/** Filters and order live in the URL (A62); the map's links open it filtered. */
+const inventorySearch = (search: Record<string, unknown>) => ({
   ...siteSearch(search),
-  ...(isStatus(search.status) && { status: search.status }),
-  ...(isPlacement(search.placement) && { placement: search.placement }),
+  ...parseInventorySearch(search),
 });
 
 export const Route = createFileRoute("/_authed/inventory")({
@@ -95,7 +88,10 @@ function InventoryPage() {
           <UserMenu />
         </div>
       </header>
-      <main className="min-w-0 flex-1 overflow-y-auto">
+      <main
+        data-scroll-restoration-id="inventory-page"
+        className="min-w-0 flex-1 overflow-y-auto"
+      >
         <div className="mx-auto max-w-6xl p-4 md:p-8">
           {site === undefined ? (
             <ListSkeleton />
@@ -130,36 +126,33 @@ function SiteInventory({ site }: { site: SiteSummary }) {
   const devices = useQuery(api.devices.listForSite, { siteId: site.id });
   const canEdit = useCanEdit();
   const search = Route.useSearch();
-  const [query, setQuery] = useState("");
-  const [placement, setPlacement] = useState<Placement>(
-    search.placement ?? "all",
-  );
-  const [status, setStatus] = useState<StatusFilter>(search.status ?? "all");
-  const [chosenType, setType] = useState<TypeFilter>("all");
+  const navigate = useNavigate({ from: Route.fullPath });
+  const filters = filtersOf(search);
+  const sort = sortOf(search);
   const [creating, setCreating] = useState(false);
-  const [sort, setSort] = useState<Sort>(DEFAULT_SORT);
   const [hidden, setHidden] = useState(readHiddenColumns);
   const searchRef = useRef<HTMLInputElement>(null);
   useSlashToSearch(searchRef);
+  useRestoredScroll("inventory-page", devices !== undefined);
+  useRestoredScroll("inventory-table", devices !== undefined);
 
-  const sorted = devices ? sortRows(devices, sort) : [];
-  const counts: Record<Placement, number> = {
-    all: sorted.length,
-    placed: sorted.filter((device) => device.location).length,
-    unplaced: sorted.filter((device) => !device.location).length,
-  };
-  const statusCounts: Record<StatusFilter, number> = {
-    all: sorted.length,
-    up: sorted.filter((device) => statusOf(device) === "up").length,
-    down: sorted.filter((device) => statusOf(device) === "down").length,
-    stale: sorted.filter((device) => statusOf(device) === "stale").length,
-    unknown: sorted.filter((device) => statusOf(device) === "unknown").length,
-  };
-  const coverage = coverageByType(sorted);
+  const update = (next: Partial<InventoryFilters>, nextSort = sort) =>
+    void navigate({
+      search: (current) => ({
+        ...siteSearch(current),
+        ...toSearch({ ...filters, ...next }, nextSort),
+      }),
+      replace: true,
+    });
+
+  const all = devices ?? [];
+  const coverage = coverageByType(all);
   // A type whose last device went away, here or in another tab, filters nothing.
-  const type = coverage.some((entry) => entry.type === chosenType)
-    ? chosenType
+  const type = coverage.some((entry) => entry.type === filters.type)
+    ? filters.type
     : "all";
+  const active = { ...filters, type };
+  const counts = facetCounts(all, active);
   const typeFilters = [
     { value: "all" as const, label: "Tous les types" },
     ...coverage.map((entry) => ({
@@ -167,25 +160,20 @@ function SiteInventory({ site }: { site: SiteSummary }) {
       label: getDeviceKindLabel(entry.type),
     })),
   ];
-  const shown = sorted.filter(
-    (device) =>
-      (placement === "all" ||
-        (placement === "placed") === Boolean(device.location)) &&
-      (status === "all" || statusOf(device) === status) &&
-      (type === "all" || device.type === type) &&
-      matchesDeviceSearch(device, query, [
-        getDeviceKindLabel(device.type),
-        locationLabel(device),
-      ]),
-  );
+  const shown = sortRows(applyFilters(all, active), sort);
+  const filtered = isFiltered(active);
+  const reset = () =>
+    update({ query: "", placement: "all", status: "all", type: "all" });
 
   // A coverage count shows what is left to draw, so no other filter may hide it.
   const showUnplaced = (next: TypeFilter) => {
-    const active = type === next && placement === "unplaced";
-    setQuery("");
-    setStatus("all");
-    setType(active ? "all" : next);
-    setPlacement(active ? "all" : "unplaced");
+    const again = type === next && filters.placement === "unplaced";
+    update({
+      query: "",
+      status: "all",
+      type: again ? "all" : next,
+      placement: again ? "all" : "unplaced",
+    });
   };
 
   return (
@@ -202,7 +190,7 @@ function SiteInventory({ site }: { site: SiteSummary }) {
           />
         </div>
         {/* An empty inventory offers the same button in its message. */}
-        {canEdit && sorted.length > 0 ? (
+        {canEdit && all.length > 0 ? (
           <Button onClick={() => setCreating(true)}>
             <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
             Nouvel équipement
@@ -216,7 +204,7 @@ function SiteInventory({ site }: { site: SiteSummary }) {
       {coverage.length > 0 ? (
         <PlanCoverage
           coverage={coverage}
-          active={placement === "unplaced" ? type : null}
+          active={filters.placement === "unplaced" ? type : null}
           canEdit={canEdit}
           onSelect={showUnplaced}
         />
@@ -224,7 +212,7 @@ function SiteInventory({ site }: { site: SiteSummary }) {
 
       {devices === undefined ? (
         <ListSkeleton />
-      ) : sorted.length === 0 ? (
+      ) : all.length === 0 ? (
         <InventoryEmpty canEdit={canEdit} onCreate={() => setCreating(true)} />
       ) : (
         <>
@@ -239,14 +227,14 @@ function SiteInventory({ site }: { site: SiteSummary }) {
               <Input
                 ref={searchRef}
                 type="search"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
+                value={filters.query}
+                onChange={(event) => update({ query: event.target.value })}
                 placeholder="Nom, hostname, MAC, IP, emplacement…"
                 aria-label="Rechercher un équipement"
                 aria-keyshortcuts="/"
                 className="pr-9 pl-8"
               />
-              {query ? null : (
+              {filters.query ? null : (
                 <Kbd className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2">
                   /
                 </Kbd>
@@ -261,13 +249,13 @@ function SiteInventory({ site }: { site: SiteSummary }) {
                 <Button
                   key={value}
                   size="sm"
-                  variant={placement === value ? "secondary" : "ghost"}
-                  aria-pressed={placement === value}
-                  onClick={() => setPlacement(value)}
+                  variant={filters.placement === value ? "secondary" : "ghost"}
+                  aria-pressed={filters.placement === value}
+                  onClick={() => update({ placement: value })}
                 >
                   {label}
                   <span className="text-muted-foreground tabular-nums">
-                    {counts[value]}
+                    {counts.placement[value]}
                   </span>
                 </Button>
               ))}
@@ -281,13 +269,13 @@ function SiteInventory({ site }: { site: SiteSummary }) {
                 <Button
                   key={value}
                   size="sm"
-                  variant={status === value ? "secondary" : "ghost"}
-                  aria-pressed={status === value}
-                  onClick={() => setStatus(value)}
+                  variant={filters.status === value ? "secondary" : "ghost"}
+                  aria-pressed={filters.status === value}
+                  onClick={() => update({ status: value })}
                 >
                   {label}
                   <span className="text-muted-foreground tabular-nums">
-                    {statusCounts[value]}
+                    {counts.status[value]}
                   </span>
                 </Button>
               ))}
@@ -296,7 +284,7 @@ function SiteInventory({ site }: { site: SiteSummary }) {
               items={typeFilters}
               value={type}
               onValueChange={(value) => {
-                if (value) setType(value);
+                if (value) update({ type: value });
               }}
             >
               <SelectTrigger aria-label="Type" className="w-48">
@@ -310,6 +298,27 @@ function SiteInventory({ site }: { site: SiteSummary }) {
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm text-muted-foreground" aria-live="polite">
+              {filtered
+                ? `${shown.length} sur ${all.length} équipement${all.length > 1 ? "s" : ""}`
+                : `${all.length} équipement${all.length > 1 ? "s" : ""}`}
+              {/* An empty list offers the same button in its message. */}
+              {filtered && shown.length > 0 ? (
+                <>
+                  {" · "}
+                  <button
+                    type="button"
+                    onClick={reset}
+                    className="rounded-sm underline-offset-2 outline-none hover:text-foreground hover:underline focus-visible:ring-[3px] focus-visible:ring-ring"
+                  >
+                    Réinitialiser les filtres
+                  </button>
+                </>
+              ) : null}
+            </p>
             <ColumnPicker
               hidden={hidden}
               onChange={(next) => {
@@ -320,9 +329,12 @@ function SiteInventory({ site }: { site: SiteSummary }) {
           </div>
 
           {shown.length === 0 ? (
-            <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-              Aucun équipement ne correspond.
-            </p>
+            <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+              <p>Aucun équipement ne correspond à ces filtres.</p>
+              <Button variant="outline" size="sm" onClick={reset}>
+                Réinitialiser les filtres
+              </Button>
+            </div>
           ) : (
             <InventoryTable
               rows={shown}
@@ -330,7 +342,7 @@ function SiteInventory({ site }: { site: SiteSummary }) {
               canEdit={canEdit}
               hidden={hidden}
               sort={sort}
-              onSort={setSort}
+              onSort={(next) => update({}, next)}
             />
           )}
         </>

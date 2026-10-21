@@ -126,7 +126,10 @@ export function InventoryTable({
   const shows = (id: ColumnId) => columns.some((column) => column.id === id);
 
   return (
-    <div className="max-h-[calc(100svh-8rem)] overflow-auto rounded-lg border">
+    <div
+      data-scroll-restoration-id="inventory-table"
+      className="max-h-[calc(100svh-8rem)] overflow-auto rounded-lg border"
+    >
       <table
         className="w-full table-fixed border-separate border-spacing-0 text-sm"
         style={{ minWidth: `${minWidth}rem` }}
