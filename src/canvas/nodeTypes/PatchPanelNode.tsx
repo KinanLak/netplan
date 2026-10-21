@@ -1,6 +1,6 @@
 import { memo } from "react";
-import { Handle, Position } from "@xyflow/react";
 import NetworkNode from "./NetworkNode";
+import { CableHandle, useRemeasuredHandles } from "./CableHandle";
 import { areDeviceNodePropsEqual } from "./memo";
 import type { Node, NodeProps } from "@xyflow/react";
 import type { DeviceNodeData } from "@/devices/reactFlowDeviceAdapter";
@@ -19,6 +19,10 @@ const PANEL_COLUMNS = 24;
 function PatchPanelNode({ data: device, id }: NodeProps<PatchPanelNodeType>) {
   const ports = shownPorts(device.ports);
   const grip = useCableGrip(id as DeviceId);
+  useRemeasuredHandles(
+    id,
+    ports.map((port) => port.id),
+  );
   return (
     <NetworkNode
       id={id}
@@ -44,17 +48,16 @@ function PatchPanelNode({ data: device, id }: NodeProps<PatchPanelNodeType>) {
             key={port.id}
             {...{ [PORT_ID_ATTRIBUTE]: port.id }}
             className={cn(
-              "h-2 rounded-xs border border-border bg-muted",
+              "relative h-2 rounded-xs border border-border bg-muted",
               // In edit mode a port draws a cable rather than moving the panel.
               grip.isGrip && "nodrag cursor-crosshair hover:bg-primary",
             )}
             title={port.name}
-          />
+          >
+            <CableHandle id={port.id} />
+          </div>
         ))}
       </div>
-
-      <Handle type="target" position={Position.Left} className="opacity-0" />
-      <Handle type="source" position={Position.Right} className="opacity-0" />
     </NetworkNode>
   );
 }
