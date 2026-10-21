@@ -11,7 +11,7 @@ import { useMapStore } from "@/store/useMapStore";
 /**
  * Ctrl+F on the map: a small find bar that moves the view to the device
  * whose name or hostname holds the query, on whatever floor, without
- * opening anything. Enter goes to the next one (ADR 0029).
+ * opening anything. Enter goes to the next one (ADR 0030).
  */
 export function MapFind({
   hasRightDrawerOpen,

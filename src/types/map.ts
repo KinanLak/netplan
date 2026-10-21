@@ -321,7 +321,7 @@ export interface MapInteractionState {
   overlayCalibration: OverlayCalibration | null;
   /**
    * A device to bring into view once its floor shows, asked from outside
-   * the plan: the inventory, the search, a link (ADR 0029).
+   * the plan: the inventory, the search, a link (ADR 0030).
    */
   locateRequest: LocateRequest | null;
 }
