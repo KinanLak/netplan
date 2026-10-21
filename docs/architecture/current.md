@@ -196,11 +196,15 @@ Built by lot 4 (ADR 0026).
   rejections included, and `failureMessage` (`src/lib/errors.ts`) turns any
   failure into one. The authenticated layout holds the app's only toaster,
   bottom centre.
-- **Inventory views.** Per-type coverage cards filter to what is left to
-  place; the status and placement filters are also reached by `?status=`
-  and `?placement=`, which the sidebar's « hors plan » count links to. An
-  Éditeur ignores an unknown MAC in `ignoredMacs`,
-  undone or restored by the inverse mutation.
+- **Inventory views.** Search, filters and order live in the URL
+  (`src/inventory/filters.ts`), so links such as the sidebar's « hors plan » count
+  (`?placement=unplaced`) and Back restore a list; counts follow the other filters. Per-type coverage
+  cards filter to what is left to place. Unknown MACs have their own tab
+  (`?view=unknown`, Éditeurs only); `ignore` and `restore` take a list, all or
+  none, and `ignoredMacs` keeps where each MAC was last seen.
+- **Dates and times** are always shown in the reader's zone on a 24-hour
+  clock, the zone on hover (`src/lib/time.ts`, `<Time>`); a site's zone only
+  schedules its cycles and snapshot slots.
 - **Buildings and floors.** Éditeurs create, rename and remove them through
   `convex/buildings.ts` and `convex/floors.ts`, outside the map's undo, so
   removal is refused unless nothing stands on the floor. Names are unique
