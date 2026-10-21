@@ -7,6 +7,7 @@ import {
   isTimeZone,
   parseMinuteOfDay,
   siteSettingsError,
+  siteSettingsProblem,
 } from "./settings";
 
 const settings = {
@@ -29,6 +30,20 @@ describe("site settings", () => {
     ).toMatch(/fuseau/);
     expect(isTimeZone("")).toBe(false);
     expect(isTimeZone("America/Montreal")).toBe(true);
+  });
+
+  it("names the field each problem belongs to", () => {
+    expect(siteSettingsProblem({ ...settings, name: "" })?.field).toBe("name");
+    expect(
+      siteSettingsProblem({
+        ...settings,
+        cadence: { ...DEFAULT_CADENCE, otherIntervalMinutes: 2 },
+      }),
+    ).toEqual({
+      field: "otherIntervalMinutes",
+      message:
+        "L'intervalle hors heures ouvrées va de 5 à 1\u202f440 minutes (24 heures).",
+    });
   });
 
   it("keeps cycles at least five minutes apart", () => {

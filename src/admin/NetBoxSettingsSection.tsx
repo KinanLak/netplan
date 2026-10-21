@@ -27,6 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { failureMessage } from "@/lib/errors";
+import { useUnsavedSection } from "@/admin/unsaved";
 import { getDeviceKindLabel } from "@/devices/deviceKindRegistry";
 import { NETBOX_ROLE_TYPES } from "@/sites/netbox";
 import { PUSH_FIELDS } from "@/sites/netboxPush";
@@ -265,6 +266,18 @@ function SettingsForm({
   );
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const savedTypes = new Map<number, RoleChoice>(
+    settings.roles.map((role) => [role.id, role.type]),
+  );
+  useUnsavedSection(
+    "correspondances",
+    "Import NetBox",
+    (site?.id ?? null) !== (settings.site?.id ?? null) ||
+      options.roles.some(
+        (role) =>
+          (types[role.id] ?? IGNORE) !== (savedTypes.get(role.id) ?? IGNORE),
+      ),
+  );
 
   const listed = new Set(options.roles.map((role) => role.id));
   const gone = settings.roles.filter((role) => !listed.has(role.id));

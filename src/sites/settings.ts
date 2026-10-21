@@ -75,20 +75,45 @@ export function siteNameError(name: string): string | null {
   return null;
 }
 
+/** The form field a settings problem belongs to. */
+export type SiteField =
+  | "name"
+  | "timezone"
+  | "businessIntervalMinutes"
+  | "otherIntervalMinutes"
+  | "businessHours"
+  | "businessDays";
+
+export type SiteProblem = { field: SiteField; message: string };
+
+/** "de 5 à 1 440 minutes", with French digit grouping. */
+export const INTERVAL_RANGE = `de ${MIN_INTERVAL_MINUTES} à ${MAX_INTERVAL_MINUTES.toLocaleString("fr-FR")} minutes`;
+
+const INTERVAL_BOUNDS = `${INTERVAL_RANGE} (24 heures)`;
+
 /** The first problem with a cadence, in French for the admin. */
-export function cadenceError(cadence: SiteCadence): string | null {
-  if (
-    !isInterval(cadence.businessIntervalMinutes) ||
-    !isInterval(cadence.otherIntervalMinutes)
-  ) {
-    return `Un intervalle va de ${MIN_INTERVAL_MINUTES} minutes à 24 heures.`;
+export function cadenceProblem(cadence: SiteCadence): SiteProblem | null {
+  if (!isInterval(cadence.businessIntervalMinutes)) {
+    return {
+      field: "businessIntervalMinutes",
+      message: `L'intervalle en heures ouvrées va ${INTERVAL_BOUNDS}.`,
+    };
+  }
+  if (!isInterval(cadence.otherIntervalMinutes)) {
+    return {
+      field: "otherIntervalMinutes",
+      message: `L'intervalle hors heures ouvrées va ${INTERVAL_BOUNDS}.`,
+    };
   }
   if (
     !isMinuteOfDay(cadence.businessStartMinute) ||
     !isMinuteOfDay(cadence.businessEndMinute) ||
     cadence.businessStartMinute >= cadence.businessEndMinute
   ) {
-    return "Les heures ouvrées commencent avant de finir.";
+    return {
+      field: "businessHours",
+      message: "Les heures ouvrées commencent avant de finir.",
+    };
   }
   const days = new Set(cadence.businessDays);
   if (
@@ -97,19 +122,37 @@ export function cadenceError(cadence: SiteCadence): string | null {
       (day) => !Number.isInteger(day) || day < 1 || day > 7,
     )
   ) {
-    return "Les jours ouvrés sont invalides.";
+    return {
+      field: "businessDays",
+      message: "Les jours ouvrés sont invalides.",
+    };
   }
   return null;
 }
 
+export function cadenceError(cadence: SiteCadence): string | null {
+  return cadenceProblem(cadence)?.message ?? null;
+}
+
+/** The first problem with a site's settings, with the field to fix. */
+export function siteSettingsProblem(
+  settings: SiteSettings,
+): SiteProblem | null {
+  const name = siteNameError(settings.name);
+  if (name) return { field: "name", message: name };
+  if (!isTimeZone(settings.timezone)) {
+    return { field: "timezone", message: "Ce fuseau horaire est inconnu." };
+  }
+  return cadenceProblem(settings.cadence);
+}
+
 /** The first problem with a site's settings, in French for the admin. */
 export function siteSettingsError(settings: SiteSettings): string | null {
-  return (
-    siteNameError(settings.name) ??
-    (isTimeZone(settings.timezone) ? null : "Ce fuseau horaire est inconnu.") ??
-    cadenceError(settings.cadence)
-  );
+  return siteSettingsProblem(settings)?.message ?? null;
 }
+
+/** Refused by the server; the form shows it under the name. */
+export const SITE_NAME_TAKEN = "Un site porte déjà ce nom.";
 
 /** "07:30" for 450. */
 export function formatMinuteOfDay(minute: number): string {

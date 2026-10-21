@@ -3,6 +3,7 @@ import { useMutation, useQuery } from "convex/react";
 import { useState } from "react";
 import type { FormEvent } from "react";
 import type { FunctionReturnType } from "convex/server";
+import { toast } from "sonner";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,15 +32,22 @@ import { IntegrationsSection } from "@/admin/IntegrationsSection";
 import { NetBoxSettingsSection } from "@/admin/NetBoxSettingsSection";
 import { LibreNMSSettingsSection } from "@/admin/LibreNMSSettingsSection";
 import { TimeZoneField } from "@/admin/TimeZoneField";
+import { BuildingsSection } from "@/admin/BuildingsSection";
+import { SITE_PARTS, SiteNav } from "@/admin/SiteNav";
+import { SiteSetupSteps } from "@/admin/SiteSetupSteps";
+import { UnsavedChanges, useUnsavedSection } from "@/admin/unsaved";
+import { useFlash } from "@/hooks/use-flash";
 import {
   MAX_INTERVAL_MINUTES,
   MIN_INTERVAL_MINUTES,
   WEEKDAYS,
   formatMinuteOfDay,
+  INTERVAL_RANGE,
+  SITE_NAME_TAKEN,
   parseMinuteOfDay,
-  siteSettingsError,
+  siteSettingsProblem,
 } from "@/sites/settings";
-import type { SiteSettings } from "@/sites/settings";
+import type { SiteField, SiteProblem, SiteSettings } from "@/sites/settings";
 import { api } from "../../../../../convex/_generated/api";
 
 export const Route = createFileRoute("/_authed/admin/sites/$siteId")({
@@ -72,6 +80,21 @@ function SitePage() {
   }
 
   return (
+    <UnsavedChanges>
+      <SiteContent site={site} />
+    </UnsavedChanges>
+  );
+}
+
+function SiteContent({ site }: { site: Site }) {
+  const integrations = useQuery(api.integrations.listForSite, {
+    siteId: site.id,
+  });
+  // Correspondances only exist for a connected tool.
+  const parts = SITE_PARTS.filter(
+    (part) => part.id !== "correspondances" || (integrations?.length ?? 0) > 0,
+  );
+  return (
     <div className="space-y-8">
       <header className="space-y-1">
         <Link
@@ -91,12 +114,25 @@ function SitePage() {
           </Link>
         </div>
       </header>
-      <SiteSettingsForm key={site.id} site={site} />
-      <IntegrationsSection siteId={site.id} />
-      <NetBoxSettingsSection siteId={site.id} />
-      <LibreNMSSettingsSection siteId={site.id} />
-      <CollectionSection siteId={site.id} />
-      <DeleteSite site={site} />
+      <SiteNav parts={parts} />
+      <SiteSetupSteps siteId={site.id} buildingCount={site.buildingCount} />
+      <div id="general" className="scroll-mt-14">
+        <SiteSettingsForm key={site.id} site={site} />
+      </div>
+      <div id="integrations" className="scroll-mt-14">
+        <IntegrationsSection siteId={site.id} />
+      </div>
+      <div id="correspondances" className="scroll-mt-14 space-y-8">
+        <NetBoxSettingsSection siteId={site.id} />
+        <LibreNMSSettingsSection siteId={site.id} />
+      </div>
+      <BuildingsSection siteId={site.id} />
+      <div id="collections" className="scroll-mt-14">
+        <CollectionSection siteId={site.id} />
+      </div>
+      <div id="danger" className="scroll-mt-14">
+        <DeleteSite site={site} />
+      </div>
     </div>
   );
 }
@@ -121,11 +157,14 @@ const toDraft = (site: Site): Draft => ({
   businessDays: site.cadence.businessDays,
 });
 
-const fromDraft = (draft: Draft): SiteSettings | string => {
+const fromDraft = (draft: Draft): SiteSettings | SiteProblem => {
   const businessStartMinute = parseMinuteOfDay(draft.businessStart);
   const businessEndMinute = parseMinuteOfDay(draft.businessEnd);
   if (businessStartMinute === null || businessEndMinute === null) {
-    return "Les heures ouvrées s'écrivent HH:MM.";
+    return {
+      field: "businessHours",
+      message: "Les heures ouvrées s'écrivent HH:MM.",
+    };
   }
   const settings: SiteSettings = {
     name: draft.name,
@@ -140,20 +179,37 @@ const fromDraft = (draft: Draft): SiteSettings | string => {
       businessDays: [...draft.businessDays].sort((a, b) => a - b),
     },
   };
-  return siteSettingsError(settings) ?? settings;
+  return siteSettingsProblem(settings) ?? settings;
 };
+
+// The field that takes focus for each problem.
+const FIELD_INPUT: Record<SiteField, string> = {
+  name: "site-name",
+  timezone: "site-timezone",
+  businessIntervalMinutes: "site-business-interval",
+  otherIntervalMinutes: "site-other-interval",
+  businessHours: "site-business-start",
+  businessDays: "site-day-1",
+};
+
+const sameDraft = (a: Draft, b: Draft) =>
+  JSON.stringify({ ...a, businessDays: a.businessDays.toSorted() }) ===
+  JSON.stringify({ ...b, businessDays: b.businessDays.toSorted() });
 
 function SiteSettingsForm({ site }: { site: Site }) {
   const update = useMutation(api.sites.update);
   const [draft, setDraft] = useState(() => toDraft(site));
-  const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
+  const [problem, setProblem] = useState<
+    (SiteProblem | { field: null; message: string }) | null
+  >(null);
+  const [saved, flashSaved] = useFlash();
   const [pending, setPending] = useState(false);
+  const dirty = !sameDraft(draft, toDraft(site));
+  useUnsavedSection("general", "Général", dirty);
 
   const change = (patch: Partial<Draft>) => {
     setDraft((current) => ({ ...current, ...patch }));
-    setSaved(false);
-    setError(null);
+    setProblem(null);
   };
 
   const toggleDay = (day: number) =>
@@ -163,24 +219,42 @@ function SiteSettingsForm({ site }: { site: Site }) {
         : [...draft.businessDays, day],
     });
 
+  const refuse = (found: SiteProblem) => {
+    setProblem(found);
+    document.getElementById(FIELD_INPUT[found.field])?.focus();
+  };
+
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const settings = fromDraft(draft);
-    if (typeof settings === "string") {
-      setError(settings);
+    if ("field" in settings) {
+      refuse(settings);
       return;
     }
     setPending(true);
-    setError(null);
+    setProblem(null);
     try {
       await update({ siteId: site.id, ...settings });
-      setSaved(true);
+      flashSaved();
     } catch (failure) {
-      setError(failureMessage(failure, "admin"));
+      const message = failureMessage(failure, "admin");
+      if (message === SITE_NAME_TAKEN) refuse({ field: "name", message });
+      else setProblem({ field: null, message });
     } finally {
       setPending(false);
     }
   };
+
+  const errorOf = (field: SiteField) =>
+    problem?.field === field ? problem.message : null;
+  const invalid = (field: SiteField, id: string) => ({
+    "aria-invalid": errorOf(field) !== null,
+    "aria-describedby": errorOf(field) ? `${id}-error` : undefined,
+  });
+  const error = (field: SiteField, id: string) =>
+    errorOf(field) ? (
+      <FieldError id={`${id}-error`}>{errorOf(field)}</FieldError>
+    ) : null;
 
   return (
     // The form checks itself, so its errors read in French whatever the
@@ -193,13 +267,15 @@ function SiteSettingsForm({ site }: { site: Site }) {
       <FieldSet>
         <FieldLegend>Général</FieldLegend>
         <FieldGroup>
-          <Field>
+          <Field data-invalid={errorOf("name") !== null}>
             <FieldLabel htmlFor="site-name">Nom</FieldLabel>
             <Input
               id="site-name"
               value={draft.name}
+              {...invalid("name", "site-name")}
               onChange={(event) => change({ name: event.target.value })}
             />
+            {error("name", "site-name")}
           </Field>
           <TimeZoneField
             id="site-timezone"
@@ -239,36 +315,41 @@ function SiteSettingsForm({ site }: { site: Site }) {
             </FieldLabel>
           </Field>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field>
-              <FieldLabel htmlFor="site-business-start">
-                Début des heures ouvrées
-              </FieldLabel>
-              <Input
-                id="site-business-start"
-                type="time"
-                value={draft.businessStart}
-                onChange={(event) =>
-                  change({ businessStart: event.target.value })
-                }
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="site-business-end">
-                Fin des heures ouvrées
-              </FieldLabel>
-              <Input
-                id="site-business-end"
-                type="time"
-                value={draft.businessEnd}
-                onChange={(event) =>
-                  change({ businessEnd: event.target.value })
-                }
-              />
-            </Field>
+          <div className="space-y-2">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field data-invalid={errorOf("businessHours") !== null}>
+                <FieldLabel htmlFor="site-business-start">
+                  Début des heures ouvrées
+                </FieldLabel>
+                <Input
+                  id="site-business-start"
+                  type="time"
+                  value={draft.businessStart}
+                  {...invalid("businessHours", "site-business-hours")}
+                  onChange={(event) =>
+                    change({ businessStart: event.target.value })
+                  }
+                />
+              </Field>
+              <Field data-invalid={errorOf("businessHours") !== null}>
+                <FieldLabel htmlFor="site-business-end">
+                  Fin des heures ouvrées
+                </FieldLabel>
+                <Input
+                  id="site-business-end"
+                  type="time"
+                  value={draft.businessEnd}
+                  {...invalid("businessHours", "site-business-hours")}
+                  onChange={(event) =>
+                    change({ businessEnd: event.target.value })
+                  }
+                />
+              </Field>
+            </div>
+            {error("businessHours", "site-business-hours")}
           </div>
 
-          <Field>
+          <Field data-invalid={errorOf("businessDays") !== null}>
             <FieldLabel>Jours ouvrés</FieldLabel>
             <div className="flex flex-wrap gap-2">
               {WEEKDAYS.map(({ day, label, short }) => {
@@ -276,6 +357,7 @@ function SiteSettingsForm({ site }: { site: Site }) {
                 return (
                   <Button
                     key={day}
+                    id={`site-day-${day}`}
                     type="button"
                     size="sm"
                     variant={on ? "default" : "outline"}
@@ -288,53 +370,58 @@ function SiteSettingsForm({ site }: { site: Site }) {
                 );
               })}
             </div>
+            {error("businessDays", "site-days")}
           </Field>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field>
-              <FieldLabel htmlFor="site-business-interval">
-                Intervalle en heures ouvrées (minutes)
-              </FieldLabel>
-              <Input
-                id="site-business-interval"
-                type="number"
-                min={MIN_INTERVAL_MINUTES}
-                max={MAX_INTERVAL_MINUTES}
-                value={draft.businessIntervalMinutes}
-                onChange={(event) =>
-                  change({ businessIntervalMinutes: event.target.value })
-                }
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="site-other-interval">
-                Intervalle le reste du temps (minutes)
-              </FieldLabel>
-              <Input
-                id="site-other-interval"
-                type="number"
-                min={MIN_INTERVAL_MINUTES}
-                max={MAX_INTERVAL_MINUTES}
-                value={draft.otherIntervalMinutes}
-                onChange={(event) =>
-                  change({ otherIntervalMinutes: event.target.value })
-                }
-              />
-            </Field>
+            {(
+              [
+                [
+                  "businessIntervalMinutes",
+                  "site-business-interval",
+                  "Intervalle en heures ouvrées (minutes)",
+                ],
+                [
+                  "otherIntervalMinutes",
+                  "site-other-interval",
+                  "Intervalle le reste du temps (minutes)",
+                ],
+              ] as const
+            ).map(([field, id, label]) => (
+              <Field key={field} data-invalid={errorOf(field) !== null}>
+                <FieldLabel htmlFor={id}>{label}</FieldLabel>
+                <Input
+                  id={id}
+                  type="number"
+                  min={MIN_INTERVAL_MINUTES}
+                  max={MAX_INTERVAL_MINUTES}
+                  value={draft[field]}
+                  {...invalid(field, id)}
+                  onChange={(event) => change({ [field]: event.target.value })}
+                />
+                {error(field, id) ?? (
+                  <FieldDescription>
+                    {INTERVAL_RANGE.charAt(0).toUpperCase()}
+                    {INTERVAL_RANGE.slice(1)}.
+                  </FieldDescription>
+                )}
+              </Field>
+            ))}
           </div>
         </FieldGroup>
       </FieldSet>
 
       <div className="flex items-center gap-3">
-        <Button type="submit" disabled={pending}>
-          {pending ? "Enregistrement…" : "Enregistrer"}
+        <Button type="submit" disabled={pending || (!dirty && !problem)}>
+          {pending
+            ? "Enregistrement…"
+            : saved && !dirty
+              ? "Enregistré"
+              : "Enregistrer"}
         </Button>
-        {saved ? (
-          <span role="status" className="text-sm text-muted-foreground">
-            Enregistré.
-          </span>
+        {problem?.field === null ? (
+          <FieldError>{problem.message}</FieldError>
         ) : null}
-        {error ? <FieldError>{error}</FieldError> : null}
       </div>
     </form>
   );
@@ -353,6 +440,8 @@ function DeleteSite({ site }: { site: Site }) {
       await remove({ siteId: site.id });
       setOpen(false);
       await navigate({ to: "/admin/sites" });
+      // The list it lands on no longer names it.
+      toast.success(`Site « ${site.name} » supprimé.`);
     } catch (failure) {
       setError(failureMessage(failure, "admin"));
     }
@@ -361,11 +450,27 @@ function DeleteSite({ site }: { site: Site }) {
   return (
     <section className="space-y-2 border-t pt-6">
       <h2 className="font-medium">Supprimer le site</h2>
-      <p className="text-sm text-muted-foreground">
-        {blocked
-          ? "Ce site a encore des bâtiments. Supprimez-les d'abord : un site ne part jamais avec son plan."
-          : "Le site n'a aucun bâtiment ; le supprimer ne retire rien du plan."}
-      </p>
+      {blocked ? (
+        <p className="text-sm text-muted-foreground">
+          Ce site a encore{" "}
+          {site.buildingCount === 1
+            ? "un bâtiment"
+            : `${site.buildingCount} bâtiments`}
+          , listés plus haut. Supprimez-les d'abord{" "}
+          <Link
+            to="/"
+            search={{ site: site.id }}
+            className="underline underline-offset-4 hover:text-foreground"
+          >
+            sur le plan
+          </Link>{" "}
+          : un site ne part jamais avec son plan.
+        </p>
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          Le site n'a aucun bâtiment ; le supprimer ne retire rien du plan.
+        </p>
+      )}
       <Button
         variant="destructive"
         disabled={blocked}

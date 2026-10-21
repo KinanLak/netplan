@@ -140,6 +140,58 @@ describe("sites", () => {
     });
   });
 
+  it("lists each site with what it holds and connects to, and its floors", async () => {
+    const admin = await signedInTest("admin");
+    const siteId = await admin.mutation(api.sites.create, arles);
+    await admin.mutation(api.buildings.create, {
+      siteId,
+      objectId: "building:a",
+      name: "A",
+      firstFloor: { objectId: "floor:rdc", name: "RDC" },
+    });
+    await admin.run(async (ctx) => {
+      const floor = await ctx.db.query("floors").first();
+      await ctx.db.insert("devices", {
+        objectId: "device:pc",
+        siteId,
+        type: "pc",
+        name: "pc",
+        macs: [],
+        metadata: {},
+        updatedAt: 0,
+        updatedBy: "test",
+        placement: {
+          floorId: floor?.objectId ?? "",
+          position: { x: 0, y: 0 },
+          size: { width: 20, height: 20 },
+        },
+      });
+      await ctx.db.insert("integrations", {
+        siteId,
+        kind: "librenms",
+        baseUrl: "https://librenms.test",
+        enabled: false,
+        token: { keyId: "k", iv: "iv", ciphertext: "c" },
+        updatedAt: 0,
+      });
+    });
+
+    const [listed] = await admin.query(api.sites.listSettings, {});
+    expect(listed).toMatchObject({
+      buildingCount: 1,
+      floorCount: 1,
+      deviceCount: 1,
+      integrations: [{ kind: "librenms", enabled: false }],
+    });
+    expect(await admin.query(api.sites.structure, { siteId })).toEqual([
+      {
+        id: "building:a",
+        name: "A",
+        floors: [{ id: "floor:rdc", name: "RDC", devices: 1 }],
+      },
+    ]);
+  });
+
   it("removes an empty site", async () => {
     const admin = await signedInTest("admin");
     const siteId = await admin.mutation(api.sites.create, arles);

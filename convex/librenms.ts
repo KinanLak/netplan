@@ -47,6 +47,8 @@ export const settings = adminQuery({
           id: v.string(),
           name: v.string(),
           hostname: v.optional(v.string()),
+          /** Where it is placed, to tell switches of one name apart. */
+          floor: v.optional(v.string()),
         }),
       ),
     }),
@@ -54,12 +56,27 @@ export const settings = adminQuery({
   handler: async (ctx, { siteId }) => {
     const row = await librenmsRow(ctx, siteId);
     if (!row) return null;
-    const switches = (await switchesOf(ctx, siteId))
-      .map((device) => ({
-        id: device.objectId,
-        name: device.name,
-        ...(device.hostname ? { hostname: device.hostname } : {}),
-      }))
+    const devices = await switchesOf(ctx, siteId);
+    const floorNames = new Map<string, string>();
+    for (const device of devices) {
+      const floorId = device.placement?.floorId;
+      if (!floorId || floorNames.has(floorId)) continue;
+      const floor = await ctx.db
+        .query("floors")
+        .withIndex("by_object_id", (q) => q.eq("objectId", floorId))
+        .unique();
+      if (floor) floorNames.set(floorId, floor.name);
+    }
+    const switches = devices
+      .map((device) => {
+        const floor = floorNames.get(device.placement?.floorId ?? "");
+        return {
+          id: device.objectId,
+          name: device.name,
+          ...(device.hostname ? { hostname: device.hostname } : {}),
+          ...(floor ? { floor } : {}),
+        };
+      })
       .sort((a, b) => a.name.localeCompare(b.name, "fr"));
     const present = new Set(switches.map((device) => device.id));
     const saved = row.librenms ?? EMPTY_LIBRENMS_SETTINGS;

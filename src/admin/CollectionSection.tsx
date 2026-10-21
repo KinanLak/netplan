@@ -18,7 +18,7 @@ export function CollectionSection({ siteId }: { siteId: string }) {
   return (
     <section className="space-y-4 border-t pt-6">
       <div className="space-y-1">
-        <h2 className="font-medium">Collecte</h2>
+        <h2 className="font-medium">Dernières collectes</h2>
         <p className="text-sm text-muted-foreground">
           Chaque collecte interroge les intégrations actives, NetBox d'abord.
         </p>
