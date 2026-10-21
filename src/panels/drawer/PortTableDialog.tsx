@@ -22,6 +22,7 @@ import { getDeviceKindLabel } from "@/devices/deviceKindRegistry";
 import { matchesDeviceSearch } from "@/devices/search";
 import { createStandaloneObjectId } from "@/lib/identity";
 import { INTEGRATION_LABELS } from "@/sites/integrations";
+import type { IntegrationKind } from "@/sites/integrations";
 import { endLabel, portLabel, shortPortName } from "@/devices/portState";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -99,6 +100,19 @@ export function PortTableDialog({
   );
 }
 
+/**
+ * Why a device shows no port. One its source brings without a physical port
+ * is out of the ordinary (a core switch whose interfaces NetBox only models
+ * as virtual ones), and the message says so; a rack has none by nature.
+ */
+const noPortMessage = (
+  type: DeviceType,
+  source: IntegrationKind | undefined,
+): string => {
+  if (!source || type === "rack") return "Cet équipement n'a aucun port.";
+  return `${INTEGRATION_LABELS[source]} ne décrit aucun port physique pour cet équipement, ce qui est inhabituel.`;
+};
+
 type PortFilter = "all" | "cabled" | "free";
 
 const FILTER_LABELS: Record<PortFilter, string> = {
@@ -146,7 +160,7 @@ function PortTableBody({
   if (table.ports.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
-        Cet équipement n'a aucun port.
+        {noPortMessage(table.deviceType, table.source)}
       </p>
     );
   }

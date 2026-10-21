@@ -8,7 +8,7 @@ import {
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { useId, useState } from "react";
+import { Fragment, useId, useState } from "react";
 import type { FormEvent } from "react";
 import { toast } from "sonner";
 import { ModeToggle } from "@/components/mode-toggle";
@@ -682,7 +682,8 @@ function CreateDeviceDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+      {/* The fields scroll between a fixed title and fixed buttons. */}
+      <DialogContent className="max-h-[85vh] grid-rows-[auto_minmax(0,1fr)] sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Nouvel équipement</DialogTitle>
           <DialogDescription>
@@ -755,46 +756,55 @@ function CreateDeviceForm({
   };
 
   return (
-    <form onSubmit={(event) => void handleSubmit(event)} className="grid gap-6">
-      <FieldGroup className="gap-4">
-        <Field>
-          <FieldLabel htmlFor={`${id}-type`}>Type</FieldLabel>
-          <Select
-            items={typeItems}
-            value={type}
-            onValueChange={(value) => {
-              if (value) setType(value);
-            }}
-          >
-            <SelectTrigger id={`${id}-type`} className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {typeItems.map(({ value, label }) => (
-                <SelectItem key={value} value={value}>
-                  {label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
+    <form
+      onSubmit={(event) => void handleSubmit(event)}
+      className="flex min-h-0 flex-col gap-4"
+    >
+      <FieldGroup className="-mx-1 min-h-0 gap-4 overflow-y-auto px-1 pb-1">
         {TEXT_FIELDS.map(({ field, label, mono }) => (
-          <Field key={field}>
-            <FieldLabel htmlFor={`${id}-${field}`}>{label}</FieldLabel>
-            <Input
-              id={`${id}-${field}`}
-              value={text[field]}
-              maxLength={IDENTITY_TEXT_LIMITS[field]}
-              required={field === "name"}
-              className={mono ? "font-mono" : undefined}
-              onChange={(event) =>
-                setText((current) => ({
-                  ...current,
-                  [field]: event.target.value,
-                }))
-              }
-            />
-          </Field>
+          <Fragment key={field}>
+            <Field>
+              <FieldLabel htmlFor={`${id}-${field}`}>{label}</FieldLabel>
+              <Input
+                id={`${id}-${field}`}
+                value={text[field]}
+                maxLength={IDENTITY_TEXT_LIMITS[field]}
+                required={field === "name"}
+                // The one required field comes first and takes the focus.
+                autoFocus={field === "name"}
+                className={mono ? "font-mono" : undefined}
+                onChange={(event) =>
+                  setText((current) => ({
+                    ...current,
+                    [field]: event.target.value,
+                  }))
+                }
+              />
+            </Field>
+            {field === "name" ? (
+              <Field>
+                <FieldLabel htmlFor={`${id}-type`}>Type</FieldLabel>
+                <Select
+                  items={typeItems}
+                  value={type}
+                  onValueChange={(value) => {
+                    if (value) setType(value);
+                  }}
+                >
+                  <SelectTrigger id={`${id}-type`} className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {typeItems.map((item) => (
+                      <SelectItem key={item.value} value={item.value}>
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+            ) : null}
+          </Fragment>
         ))}
         <Field>
           <FieldLabel htmlFor={`${id}-macs`}>Adresses MAC</FieldLabel>

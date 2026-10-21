@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import {
   importSummary,
+  isPhysicalInterface,
   planDevicePorts,
   planNetBoxImport,
   sameImport,
@@ -257,6 +258,68 @@ describe("sameImport", () => {
 });
 
 describe("readNetBoxCabling", () => {
+  it("leaves out virtual interfaces, by their type or by a name systems give them", () => {
+    const named = (name: string) =>
+      isPhysicalInterface({ name, type: { value: "1000base-t" } });
+    for (const name of [
+      "vmbr0",
+      "vmbr0v12",
+      "bond0",
+      "veth12ab",
+      "br-3",
+      "Po1",
+      "Port-channel10",
+      "lo",
+      "Gi1/0/1.100",
+      "docker0",
+    ]) {
+      expect(named(name)).toBe(false);
+    }
+    for (const name of [
+      "eno1",
+      "enp179s0f0np0",
+      "IDRac",
+      "GigabitEthernet1/0/1",
+      "Ethernet1/49",
+      "wlan0",
+      "bri0",
+      "1",
+    ]) {
+      expect(named(name)).toBe(true);
+    }
+  });
+
+  it("leaves out virtual, bridge and aggregate interfaces", () => {
+    const { ports } = readNetBoxCabling([netbox("1")], {
+      interfaces: [
+        {
+          id: 1,
+          device: { id: 1 },
+          name: "eno1",
+          type: { value: "1000base-t" },
+        },
+        { id: 2, device: { id: 1 }, name: "vmbr0", type: { value: "bridge" } },
+        {
+          id: 3,
+          device: { id: 1 },
+          name: "vmbr0v12",
+          type: { value: "virtual" },
+        },
+        { id: 4, device: { id: 1 }, name: "Po1", type: { value: "lag" } },
+        {
+          id: 5,
+          device: { id: 1 },
+          name: "wlan0",
+          type: { value: "ieee802.11ax" },
+        },
+      ],
+      rearPorts: [],
+      frontPorts: [],
+      cables: [],
+    });
+    expect(ports.map((port) => port.name)).toEqual(["eno1", "wlan0"]);
+  });
+
   const devices = [netbox("1"), netbox("2")];
   const term = (objectType: string, id: number) => [
     { object_type: objectType, object_id: id },

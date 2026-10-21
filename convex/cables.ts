@@ -20,6 +20,7 @@ import { comparePorts, isCableId } from "../src/devices/ports";
 import { INTEGRATION_LABELS } from "../src/sites/integrations";
 import { placeNamer } from "./history";
 import { historyPlace } from "./historyValidators";
+import { integrationKind } from "./siteValidators";
 import { ownerOf } from "./librenmsCycle";
 import type { Doc } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
@@ -202,6 +203,8 @@ export const portTable = readerQuery({
     v.object({
       siteId: v.string(),
       deviceType,
+      /** The integration the device comes from, if any. */
+      source: v.optional(integrationKind),
       ports: v.array(portTableRow),
       /** Where the network last saw the device itself, by its MACs. */
       lastSeen: lastSighting,
@@ -245,6 +248,7 @@ export const portTable = readerQuery({
     return {
       siteId: device.siteId,
       deviceType: device.type,
+      ...(device.source && { source: device.source.integration }),
       ports,
       lastSeen: await lastSightingOf(ctx, device),
     };

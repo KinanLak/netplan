@@ -68,7 +68,8 @@ export function DeviceIdentityDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+      {/* The fields scroll between a fixed title and fixed buttons. */}
+      <DialogContent className="max-h-[85vh] grid-rows-[auto_minmax(0,1fr)] sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Identité de {device.name}</DialogTitle>
           <DialogDescription>
@@ -162,8 +163,8 @@ function IdentityForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="grid gap-6">
-      <FieldGroup className="gap-4">
+    <form onSubmit={handleSubmit} className="flex min-h-0 flex-col gap-4">
+      <FieldGroup className="-mx-1 min-h-0 gap-4 overflow-y-auto px-1 pb-1">
         {TEXT_FIELDS.map(({ field, label, mono }) => (
           <Field key={field}>
             <FieldLabel htmlFor={`${id}-${field}`}>{label}</FieldLabel>
@@ -173,6 +174,7 @@ function IdentityForm({
               disabled={owned(field)}
               maxLength={IDENTITY_TEXT_LIMITS[field]}
               required={field === "name"}
+              autoFocus={field === "name" && !owned(field)}
               className={mono ? "font-mono" : undefined}
               onChange={(event) =>
                 setText((current) => ({
@@ -213,6 +215,7 @@ function IdentityForm({
           />
         </Field>
       </FieldGroup>
+      {/* Beside the buttons, so a refusal shows whatever the scroll. */}
       {error ? <FieldError>{error}</FieldError> : null}
       <DialogFooter>
         <Button type="button" variant="outline" onClick={onDone}>

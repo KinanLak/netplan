@@ -99,6 +99,22 @@ export function normalizeIdentityEdit(edit: IdentityEdit): IdentityEdit {
   return normalized;
 }
 
+const IPV4 =
+  /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
+
+/** An IPv4 or IPv6 address, without a prefix length. */
+export function isIpAddress(value: string): boolean {
+  if (IPV4.test(value)) return true;
+  if (!value.includes(":") || !/^[0-9a-f:.]+$/i.test(value)) return false;
+  try {
+    // The URL parser knows every IPv6 notation, the embedded IPv4 included.
+    new URL(`http://[${value}]/`);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** A French reason a normalized identity edit is refused, or null. */
 export function identityEditError(edit: IdentityEdit): string | null {
   if (edit.name !== undefined && edit.name.trim() === "") {
@@ -112,6 +128,9 @@ export function identityEditError(edit: IdentityEdit): string | null {
     if (typeof value === "string" && value.length > limit) {
       return `Trop long : ${IDENTITY_FIELD_NAMES[field]} (${limit} caractères au plus).`;
     }
+  }
+  if (typeof edit.ip === "string" && !isIpAddress(edit.ip)) {
+    return `« ${edit.ip} » n'est pas une adresse IP.`;
   }
   if (edit.macs) {
     const problem = macListProblem(edit.macs);
