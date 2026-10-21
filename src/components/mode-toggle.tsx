@@ -13,7 +13,20 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ShortcutHint } from "@/components/ui/shortcut-hint";
 import { useTheme } from "@/components/theme-provider";
+import { useShortcutIntentEffect } from "@/hooks/use-shortcuts";
 import { cn } from "@/lib/utils";
+
+/**
+ * Shift+T on every page: the theme the user sees flips, so the first press
+ * from "Système" is never a no-op.
+ */
+export function ThemeShortcut() {
+  const { resolvedTheme, setTheme } = useTheme();
+  useShortcutIntentEffect("cycle-theme", () =>
+    setTheme(resolvedTheme === "dark" ? "light" : "dark"),
+  );
+  return null;
+}
 
 export function ModeToggle() {
   const { theme, setTheme } = useTheme();

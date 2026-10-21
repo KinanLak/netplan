@@ -49,12 +49,10 @@ import { OverlayVisibilityButton } from "@/overlay/OverlayVisibilityButton";
 import {
   FLOW_CANVAS_BACKGROUND_COLOR,
   FLOW_CANVAS_BACKGROUND_DOT_SIZE,
-  FLOW_CANVAS_CENTER_DURATION_MS,
   FLOW_CANVAS_FIT_VIEW_PADDING,
   FLOW_CANVAS_HALO_SHADOWS,
   FLOW_CANVAS_MAX_ZOOM,
   FLOW_CANVAS_MIN_ZOOM,
-  FLOW_CANVAS_ZOOM_DURATION_MS,
 } from "@/lib/constants";
 
 const SNAP_GRID: [number, number] = [GRID_SIZE, GRID_SIZE];
@@ -287,23 +285,10 @@ export default function FlowCanvas() {
   // only hands ReactFlow these identity-stable bridge callbacks.
   const [paneBridge] = useState(createWallPaneEventBridge);
 
-  useCanvasKeyboardShortcuts({ reactFlow });
+  const { zoomIn, zoomOut, fitFloor } = useCanvasKeyboardShortcuts({
+    reactFlow,
+  });
   const cablePaths = useShownCablePaths();
-
-  const handleZoomInClick = () => {
-    reactFlow.zoomIn({ duration: FLOW_CANVAS_ZOOM_DURATION_MS });
-  };
-
-  const handleZoomOutClick = () => {
-    reactFlow.zoomOut({ duration: FLOW_CANVAS_ZOOM_DURATION_MS });
-  };
-
-  const handleCenterViewportClick = () => {
-    reactFlow.fitView({
-      padding: FLOW_CANVAS_FIT_VIEW_PADDING,
-      duration: FLOW_CANVAS_CENTER_DURATION_MS,
-    });
-  };
 
   const handleNodeContextMenu = (_: React.MouseEvent, node: DeviceNode) => {
     const deviceId = node.id as DeviceId;
@@ -392,7 +377,12 @@ export default function FlowCanvas() {
             minZoom={FLOW_CANVAS_MIN_ZOOM}
             maxZoom={FLOW_CANVAS_MAX_ZOOM}
             panOnDrag={isMultiSelectMode ? RIGHT_MOUSE_PAN_BUTTON : panOnDrag}
-            panOnScroll={true}
+            // The wheel zooms; arrow keys and Tab never reach the nodes, whose
+            // own keyboard moves were never saved (ADR 0030).
+            zoomOnScroll
+            panOnScroll={false}
+            disableKeyboardA11y
+            nodesFocusable={false}
             selectionOnDrag={isMultiSelectMode}
             deleteKeyCode={null}
             nodesDraggable={canEditDevices}
@@ -414,9 +404,9 @@ export default function FlowCanvas() {
       </ContextMenu>
 
       <CanvasZoomControls
-        onZoomIn={handleZoomInClick}
-        onZoomOut={handleZoomOutClick}
-        onCenterViewport={handleCenterViewportClick}
+        onZoomIn={zoomIn}
+        onZoomOut={zoomOut}
+        onCenterViewport={fitFloor}
       />
       <OverlayVisibilityButton />
       <OverlayPanel />

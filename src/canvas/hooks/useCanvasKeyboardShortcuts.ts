@@ -1,52 +1,40 @@
 import type { ReactFlowInstance } from "@xyflow/react";
 import { useShortcutIntentEffect } from "@/hooks/use-shortcuts";
 import {
+  FLOW_CANVAS_CENTER_DURATION_MS,
+  FLOW_CANVAS_FIT_VIEW_PADDING,
   FLOW_CANVAS_RESET_DURATION_MS,
   FLOW_CANVAS_ZOOM_DURATION_MS,
-  PAN_AMOUNT,
 } from "@/lib/constants";
 
 interface UseCanvasKeyboardShortcutsOptions {
   reactFlow: ReactFlowInstance;
 }
 
+/** The view's shortcuts; arrow keys never pan the map (ADR 0030). */
 export function useCanvasKeyboardShortcuts({
   reactFlow,
 }: UseCanvasKeyboardShortcutsOptions) {
-  useShortcutIntentEffect("zoom-in", () => {
-    reactFlow.zoomIn({ duration: FLOW_CANVAS_ZOOM_DURATION_MS });
-  });
-
-  useShortcutIntentEffect("zoom-out", () => {
-    reactFlow.zoomOut({ duration: FLOW_CANVAS_ZOOM_DURATION_MS });
-  });
-
-  useShortcutIntentEffect("zoom-reset", () => {
-    reactFlow.setViewport(
-      { x: 0, y: 0, zoom: 1 },
-      { duration: FLOW_CANVAS_RESET_DURATION_MS },
-    );
-  });
-
-  // Pan shortcuts — move the canvas with arrow keys
-  const applyPan = (dx: number, dy: number) => {
-    const { x, y, zoom } = reactFlow.getViewport();
-    reactFlow.setViewport({ x: x + dx, y: y + dy, zoom });
+  const zoomIn = () => {
+    void reactFlow.zoomIn({ duration: FLOW_CANVAS_ZOOM_DURATION_MS });
+  };
+  const zoomOut = () => {
+    void reactFlow.zoomOut({ duration: FLOW_CANVAS_ZOOM_DURATION_MS });
+  };
+  const fitFloor = () => {
+    void reactFlow.fitView({
+      padding: FLOW_CANVAS_FIT_VIEW_PADDING,
+      duration: FLOW_CANVAS_CENTER_DURATION_MS,
+    });
   };
 
-  useShortcutIntentEffect("pan-up", () => {
-    applyPan(0, PAN_AMOUNT);
+  useShortcutIntentEffect("zoom-in", zoomIn);
+  useShortcutIntentEffect("zoom-out", zoomOut);
+  // Around the centre of the view, so what the user looks at stays there.
+  useShortcutIntentEffect("zoom-reset", () => {
+    void reactFlow.zoomTo(1, { duration: FLOW_CANVAS_RESET_DURATION_MS });
   });
+  useShortcutIntentEffect("fit-view", fitFloor);
 
-  useShortcutIntentEffect("pan-down", () => {
-    applyPan(0, -PAN_AMOUNT);
-  });
-
-  useShortcutIntentEffect("pan-left", () => {
-    applyPan(PAN_AMOUNT, 0);
-  });
-
-  useShortcutIntentEffect("pan-right", () => {
-    applyPan(-PAN_AMOUNT, 0);
-  });
+  return { zoomIn, zoomOut, fitFloor };
 }

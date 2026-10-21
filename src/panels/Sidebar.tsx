@@ -162,7 +162,7 @@ export default function AppSidebar() {
   const openStructureDialog = useStructureDialog((state) => state.open);
 
   return (
-    <Sidebar collapsible="none" className="border-r">
+    <Sidebar collapsible="offcanvas" className="border-r">
       <SidebarHeader className="border-b py-4 pr-4 pl-0.5">
         <div className="flex items-center justify-between">
           <h1 className="rounded-sm bg-transparent pb-0.5 leading-none">

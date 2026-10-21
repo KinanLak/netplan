@@ -13,7 +13,7 @@ import type { ShortcutAction } from "@/lib/shortcuts";
 import { isMac } from "@/lib/shortcuts";
 import {
   isShortcutInputTarget,
-  isShortcutModalTarget,
+  isShortcutWidgetTarget,
   resolveShortcutIntent,
 } from "@/lib/shortcut-intents";
 import type { ShortcutIntentRegistration } from "@/lib/shortcut-intents";
@@ -88,7 +88,7 @@ export function ShortcutIntentProvider({
           currentFloorId: state.currentFloorId,
           isEditMode: state.isEditMode && canEdit,
           isInputFocused: isShortcutInputTarget(event.target),
-          isModalFocused: isShortcutModalTarget(event.target),
+          isWidgetFocused: isShortcutWidgetTarget(event.target),
           selectedDeviceId: state.selectedDeviceId,
         },
       });
@@ -170,9 +170,9 @@ export function useShortcutIntentEffects(
 }
 
 /**
- * Hook to track if the overlay modifier key is held.
- * Ctrl on Windows/Linux, Cmd on macOS.
- * Used for showing shortcuts overlay (Linear-style).
+ * Whether the shortcut badges show: Ctrl (Cmd on macOS) held alone for
+ * `delay`. Any other key, a click or the wheel cancels them until the
+ * modifier is pressed again, so Ctrl+wheel and Ctrl+Z never flash them.
  *
  * Kept as native addEventListener — this tracks modifier hold state, not a hotkey.
  */
@@ -183,46 +183,57 @@ export function useOptionHeld(delay = OVERLAY_VISIBILITY_DELAY_MS) {
   useEffect(() => {
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === OVERLAY_MODIFIER_KEY && !event.repeat) {
-        setIsHeld(true);
-        timeoutId = setTimeout(() => {
-          setIsVisible(true);
-        }, delay);
-      }
-    };
-
-    const handleKeyUp = (event: KeyboardEvent) => {
-      if (event.key === OVERLAY_MODIFIER_KEY) {
-        setIsHeld(false);
-        setIsVisible(false);
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-          timeoutId = null;
-        }
-      }
-    };
-
-    const handleBlur = () => {
-      setIsHeld(false);
-      setIsVisible(false);
+    const clearPending = () => {
       if (timeoutId) {
         clearTimeout(timeoutId);
         timeoutId = null;
       }
     };
 
+    const cancel = () => {
+      clearPending();
+      setIsVisible(false);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== OVERLAY_MODIFIER_KEY) {
+        cancel();
+        return;
+      }
+      if (event.repeat) return;
+      setIsHeld(true);
+      clearPending();
+      timeoutId = setTimeout(() => {
+        timeoutId = null;
+        setIsVisible(true);
+      }, delay);
+    };
+
+    const handleKeyUp = (event: KeyboardEvent) => {
+      if (event.key === OVERLAY_MODIFIER_KEY) {
+        setIsHeld(false);
+        cancel();
+      }
+    };
+
+    const handleBlur = () => {
+      setIsHeld(false);
+      cancel();
+    };
+
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", handleKeyUp);
     window.addEventListener("blur", handleBlur);
+    window.addEventListener("pointerdown", cancel, true);
+    window.addEventListener("wheel", cancel, { capture: true, passive: true });
 
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
       window.removeEventListener("blur", handleBlur);
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
+      window.removeEventListener("pointerdown", cancel, true);
+      window.removeEventListener("wheel", cancel, { capture: true });
+      clearPending();
     };
   }, [delay]);
 

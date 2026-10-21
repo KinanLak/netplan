@@ -18,9 +18,15 @@ export const FRESHNESS_DOT: Record<FreshnessTone, string> = {
   none: "bg-muted-foreground",
 };
 
-/** Only where a `ShortcutIntentProvider` listens: the map. */
-function RefreshShortcut({ run }: { run: () => void }) {
-  useShortcutIntentEffect("refresh-site", run);
+/**
+ * Shift+R on the map. Mounted by the map itself, not the sidebar, which
+ * unmounts while folded on a small screen.
+ */
+export function SiteRefreshShortcut({ siteId }: { siteId: string }) {
+  const { offered, start } = useSiteRefresh(siteId);
+  useShortcutIntentEffect("refresh-site", () => void start(), {
+    enabled: offered,
+  });
   return null;
 }
 
@@ -38,7 +44,7 @@ export function CollectionFreshness({
   siteId: string;
   /** Admins get a link to the site's integrations when it has none. */
   linkToSettings?: boolean;
-  /** The page listens to the shortcut, so the button shows its hint. */
+  /** The page listens to Shift+R, so the button shows its hint. */
   withShortcut?: boolean;
   className?: string;
 }) {
@@ -74,9 +80,6 @@ export function CollectionFreshness({
           ) : null}
         </p>
       </div>
-      {offered && withShortcut ? (
-        <RefreshShortcut run={() => void start()} />
-      ) : null}
       {offered && withShortcut ? (
         <ShortcutHint action="refresh-site" size="sm" />
       ) : null}

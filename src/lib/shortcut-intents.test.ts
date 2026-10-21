@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import {
+  isShortcutWidgetTarget,
   matchesShortcutBinding,
   resolveShortcutIntent,
 } from "@/lib/shortcut-intents";
@@ -8,6 +9,7 @@ import type {
   ShortcutIntentRegistration,
   ShortcutIntentRuntime,
 } from "@/lib/shortcut-intents";
+import { shortcuts } from "@/lib/shortcuts";
 import type { ShortcutAction } from "@/lib/shortcuts";
 
 const baseRuntime: ShortcutIntentRuntime = {
@@ -16,7 +18,7 @@ const baseRuntime: ShortcutIntentRuntime = {
   currentFloorId: "floor-1",
   isEditMode: true,
   isInputFocused: false,
-  isModalFocused: false,
+  isWidgetFocused: false,
   selectedDeviceId: null,
 };
 
@@ -142,7 +144,7 @@ describe("shortcut intents", () => {
         runtime: {
           ...baseRuntime,
           activeDrawTool: "wall",
-          isModalFocused: true,
+          isWidgetFocused: true,
           selectedDeviceId: "device-1",
         },
       }),
@@ -278,5 +280,53 @@ describe("shortcut intents", () => {
         runtime: { ...baseRuntime, isEditMode: false },
       }),
     ).toBe(null);
+  });
+
+  it("leaves the arrow keys to the browser: they never pan the map", () => {
+    const actions = Object.keys(shortcuts) as Array<ShortcutAction>;
+    for (const key of ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]) {
+      expect(
+        resolveAction({ actions, event: keyEvent({ code: key, key }) }),
+      ).toBe(null);
+    }
+  });
+
+  it("fits the floor with Shift+1 whatever the layout prints", () => {
+    expect(
+      resolveAction({
+        actions: ["fit-view", "tool-wall"],
+        // QWERTY prints "!", AZERTY prints "1"; both are the Digit1 key.
+        event: keyEvent({ code: "Digit1", key: "!", shiftKey: true }),
+      }),
+    ).toBe("fit-view");
+    expect(
+      resolveAction({
+        actions: ["fit-view", "tool-wall"],
+        event: keyEvent({ code: "Digit1", key: "1", shiftKey: true }),
+      }),
+    ).toBe("fit-view");
+    expect(
+      resolveAction({
+        actions: ["fit-view", "tool-wall"],
+        event: keyEvent({ code: "Digit1", key: "1" }),
+      }),
+    ).toBe("tool-wall");
+  });
+
+  it("treats a key from an open menu or list as the widget's own", () => {
+    document.body.innerHTML = `
+      <div data-slot="dropdown-menu-content"><button id="item">Clair</button></div>
+      <div role="listbox"><div id="option" tabindex="0">Option</div></div>
+      <div data-slot="sheet-content" role="dialog"><a id="floor">Étage 1</a></div>
+      <button id="plain">Inventaire</button>`;
+    expect(isShortcutWidgetTarget(document.getElementById("item"))).toBe(true);
+    expect(isShortcutWidgetTarget(document.getElementById("option"))).toBe(
+      true,
+    );
+    expect(isShortcutWidgetTarget(document.getElementById("floor"))).toBe(true);
+    expect(isShortcutWidgetTarget(document.getElementById("plain"))).toBe(
+      false,
+    );
+    document.body.innerHTML = "";
   });
 });
