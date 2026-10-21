@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, mock } from "bun:test";
+import { afterEach, describe, expect, it, jest, mock } from "bun:test";
 import { act, cleanup, render, renderHook } from "@testing-library/react";
 import type { ReactNode } from "react";
 import {
@@ -236,27 +236,58 @@ describe("useShortcutIntentEffects", () => {
 describe("useOptionHeld", () => {
   const wrapper = ({ children }: { children: ReactNode }) => <>{children}</>;
 
-  it("becomes held immediately and visible after the configured delay", async () => {
-    const { result } = renderHook(() => useOptionHeld(0), { wrapper });
-
-    expect(result.current.isHeld).toBe(false);
-    expect(result.current.isVisible).toBe(false);
-
+  const press = (type: "keydown" | "keyup", key: string) => {
     act(() => {
-      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Control" }));
+      window.dispatchEvent(new KeyboardEvent(type, { key }));
     });
-    expect(result.current.isHeld).toBe(true);
+  };
 
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 5));
-    });
-    expect(result.current.isVisible).toBe(true);
-
+  const wait = (ms: number) => {
     act(() => {
-      window.dispatchEvent(new KeyboardEvent("keyup", { key: "Control" }));
+      jest.advanceTimersByTime(ms);
     });
-    expect(result.current.isHeld).toBe(false);
-    expect(result.current.isVisible).toBe(false);
+  };
+
+  it("shows the badges only once Ctrl has been held alone for the delay", () => {
+    jest.useFakeTimers();
+    try {
+      const { result } = renderHook(() => useOptionHeld(350), { wrapper });
+
+      press("keydown", "Control");
+      expect(result.current.isHeld).toBe(true);
+      wait(300);
+      expect(result.current.isVisible).toBe(false);
+      wait(100);
+      expect(result.current.isVisible).toBe(true);
+
+      press("keyup", "Control");
+      expect(result.current.isHeld).toBe(false);
+      expect(result.current.isVisible).toBe(false);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("never shows them for Ctrl+Z or Ctrl+wheel", () => {
+    jest.useFakeTimers();
+    try {
+      const { result } = renderHook(() => useOptionHeld(350), { wrapper });
+
+      press("keydown", "Control");
+      press("keydown", "z");
+      wait(400);
+      expect(result.current.isVisible).toBe(false);
+      press("keyup", "Control");
+
+      press("keydown", "Control");
+      act(() => {
+        window.dispatchEvent(new WheelEvent("wheel", { ctrlKey: true }));
+      });
+      wait(400);
+      expect(result.current.isVisible).toBe(false);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it("ignores key repeat events", () => {

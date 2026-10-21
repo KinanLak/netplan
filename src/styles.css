@@ -279,7 +279,7 @@ button:hover {
   cursor: s-resize !important;
 }
 
-/* Where a drawn cable meets a node (ADR 0029): a point, never a target. */
+/* Where a drawn cable meets a node (ADR 0030): a point, never a target. */
 .react-flow__handle.cable-handle {
   top: 50%;
   left: 50%;

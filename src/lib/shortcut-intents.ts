@@ -16,7 +16,8 @@ export type ShortcutIntentRuntime = {
   /** Edit mode as the user sees it: their choice, and only if `canEdit`. */
   isEditMode: boolean;
   isInputFocused: boolean;
-  isModalFocused: boolean;
+  /** The key comes from a dialog or an open menu, which owns its keys. */
+  isWidgetFocused: boolean;
   selectedDeviceId: string | null;
 };
 
@@ -63,10 +64,7 @@ const shortcutRoutingPriority: Array<ShortcutAction> = [
   "zoom-in",
   "zoom-out",
   "zoom-reset",
-  "pan-up",
-  "pan-down",
-  "pan-left",
-  "pan-right",
+  "fit-view",
   "floor-up",
   "floor-down",
   "tool-wall",
@@ -199,16 +197,28 @@ export const isShortcutInputTarget = (target: EventTarget | null): boolean => {
   );
 };
 
-export const isShortcutModalTarget = (target: EventTarget | null): boolean => {
+// Dialogs, menus, popovers and lists handle their own keys: Escape in a menu
+// closes the menu and nothing else (ADR 0030).
+const WIDGET_SELECTOR = [
+  '[data-slot="dialog-content"]',
+  '[data-slot="alert-dialog-content"]',
+  '[data-slot="dropdown-menu-content"]',
+  '[data-slot="dropdown-menu-sub-content"]',
+  '[data-slot="context-menu-content"]',
+  '[data-slot="context-menu-sub-content"]',
+  '[data-slot="popover-content"]',
+  '[data-slot="select-content"]',
+  '[data-slot="combobox-content"]',
+  '[role="menu"]',
+  '[role="listbox"]',
+].join(", ");
+
+export const isShortcutWidgetTarget = (target: EventTarget | null): boolean => {
   if (typeof HTMLElement === "undefined" || !(target instanceof HTMLElement)) {
     return false;
   }
 
-  return (
-    target.closest(
-      '[data-slot="dialog-content"], [data-slot="alert-dialog-content"]',
-    ) !== null
-  );
+  return target.closest(WIDGET_SELECTOR) !== null;
 };
 
 const isScopeActive = (
@@ -295,7 +305,7 @@ export const resolveShortcutIntent = ({
   registrations: Array<ShortcutIntentRegistration>;
   runtime: ShortcutIntentRuntime;
 }): ShortcutIntentMatch | null => {
-  if (runtime.isInputFocused || runtime.isModalFocused) {
+  if (runtime.isInputFocused || runtime.isWidgetFocused) {
     return null;
   }
 

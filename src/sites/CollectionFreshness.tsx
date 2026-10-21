@@ -18,7 +18,7 @@ export const FRESHNESS_DOT: Record<FreshnessTone, string> = {
   none: "bg-muted-foreground",
 };
 
-/** Only where a `ShortcutIntentProvider` listens: the map. */
+/** Only on the map, which asks for it with `withShortcut`. */
 function RefreshShortcut({ run }: { run: () => void }) {
   useShortcutIntentEffect("refresh-site", run);
   return null;

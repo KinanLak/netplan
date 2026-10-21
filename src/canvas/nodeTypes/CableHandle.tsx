@@ -2,7 +2,7 @@ import { Handle, Position, useUpdateNodeInternals } from "@xyflow/react";
 import { useEffect } from "react";
 
 /**
- * Where a drawn cable meets a node (ADR 0029): a point at the middle of its
+ * Where a drawn cable meets a node (ADR 0030): a point at the middle of its
  * parent, which must be positioned. Nobody connects through it: cables are
  * drawn by `CableDraftLayer`, so it takes no pointer events.
  */

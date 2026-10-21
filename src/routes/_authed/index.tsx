@@ -1,7 +1,12 @@
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { ReactFlowProvider } from "@xyflow/react";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Edit01Icon, Tick01Icon, ViewIcon } from "@hugeicons/core-free-icons";
+import {
+  Edit01Icon,
+  SidebarLeftIcon,
+  Tick01Icon,
+  ViewIcon,
+} from "@hugeicons/core-free-icons";
 import { useEffect, useMemo } from "react";
 import type { ComponentProps } from "react";
 import { useQuery } from "convex/react";
@@ -24,12 +29,12 @@ import {
   useSelectedDeviceId,
 } from "@/store/selectors";
 import type { Floor } from "@/types/map";
-import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
-import { useTheme } from "@/components/theme-provider";
 import {
-  ShortcutIntentProvider,
-  useShortcutIntentEffect,
-} from "@/hooks/use-shortcuts";
+  SidebarInset,
+  SidebarProvider,
+  useSidebar,
+} from "@/components/ui/sidebar";
+import { useShortcutIntentEffect } from "@/hooks/use-shortcuts";
 import { useCanEdit, useCurrentUser } from "@/hooks/use-current-user";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { useSignOut } from "@/panels/SidebarAccount";
@@ -48,14 +53,6 @@ export const Route = createFileRoute("/_authed/")({
 });
 
 function HomePage() {
-  return (
-    <ShortcutIntentProvider>
-      <HomePageContent />
-    </ShortcutIntentProvider>
-  );
-}
-
-function HomePageContent() {
   const { site: requestedSiteId } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const { site } = useCurrentSite();
@@ -172,8 +169,6 @@ function MapWorkspace({
     if (!canEdit) leaveEditTools();
   }, [canEdit, leaveEditTools]);
 
-  const { theme, setTheme } = useTheme();
-
   const currentFloorIndex = sortedFloors.findIndex(
     (floor) => floor.id === currentFloorId,
   );
@@ -188,13 +183,6 @@ function MapWorkspace({
     if (currentFloorIndex >= 0 && currentFloorIndex < sortedFloors.length - 1) {
       setCurrentFloor(sortedFloors[currentFloorIndex + 1].id);
     }
-  };
-
-  const cycleTheme = () => {
-    const themeOrder = ["light", "dark", "system"] as const;
-    const currentIndex = themeOrder.indexOf(theme);
-    const nextIndex = (currentIndex + 1) % themeOrder.length;
-    setTheme(themeOrder[nextIndex]);
   };
 
   const closeDrawer = () => {
@@ -220,7 +208,6 @@ function MapWorkspace({
   };
 
   useShortcutIntentEffect("toggle-edit-mode", toggleEditMode);
-  useShortcutIntentEffect("cycle-theme", cycleTheme);
   // Escape abandons a cable being drawn before it closes anything else.
   const abandonCable = () => {
     const { cableDraft, setCableDraft } = useMapStore.getState();
@@ -238,6 +225,8 @@ function MapWorkspace({
     selectDevice(null);
   });
   useShortcutIntentEffect("toggle-device-cables", toggleDeviceCables);
+  // Escape closes, abandons or deselects; it never leaves edit mode, which
+  // "Terminer" and E do (ADR 0030).
   useShortcutIntentEffect("escape", () => {
     if (abandonCable()) return;
     const {
@@ -246,14 +235,15 @@ function MapWorkspace({
       overlayCalibration,
       setOverlayCalibration,
       setOverlayPanelOpen,
+      setSelectedDevices,
+      selectedDeviceIds,
       shownCablesDeviceId,
     } = useMapStore.getState();
     const isEditing = isEditMode && activeDrawTool === "device";
     if (isEditing && overlayCalibration) setOverlayCalibration(null);
     else if (isEditing && isOverlayPanelOpen) setOverlayPanelOpen(false);
-    // Hiding the cables a switch shows comes before leaving edit mode.
     else if (shownCablesDeviceId) showCables(null);
-    else if (isEditing) toggleEditMode();
+    else if (selectedDeviceIds.length > 0) setSelectedDevices([]);
   });
   useShortcutIntentEffect("undo", () => {
     if (isEditMode && isReady) undo();
@@ -277,6 +267,7 @@ function MapWorkspace({
           <MapDocumentStatus floorless={empty !== null} />
 
           <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
+            <SidebarToggle />
             {canEdit ? (
               <button
                 onClick={toggleEditMode}
@@ -339,6 +330,28 @@ function MapWorkspace({
         <StructureDialog />
       </SidebarInset>
     </div>
+  );
+}
+
+/** Folds the sidebar away and back, as Ctrl+B does; the choice is kept. */
+function SidebarToggle() {
+  const { isMobile, open, openMobile, toggleSidebar } = useSidebar();
+  const shown = isMobile ? openMobile : open;
+  const label = shown
+    ? "Masquer le panneau latéral"
+    : "Afficher le panneau latéral";
+  return (
+    <button
+      type="button"
+      onClick={toggleSidebar}
+      aria-label={label}
+      aria-expanded={shown}
+      title={label}
+      className="relative flex size-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground shadow-lg transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-hidden"
+    >
+      <HugeiconsIcon icon={SidebarLeftIcon} size={18} strokeWidth={1.5} />
+      <ShortcutHintAbsolute action="sidebar-toggle" position="bottom-right" />
+    </button>
   );
 }
 

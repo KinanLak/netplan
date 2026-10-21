@@ -56,6 +56,15 @@ function useSidebar() {
   return context;
 }
 
+const readSidebarCookie = (): boolean | null => {
+  if (typeof document === "undefined") return null;
+  const value = document.cookie
+    .split("; ")
+    .find((entry) => entry.startsWith(`${SIDEBAR_COOKIE_NAME}=`))
+    ?.split("=")[1];
+  return value === "true" ? true : value === "false" ? false : null;
+};
+
 function SidebarProvider({
   defaultOpen = true,
   open: openProp,
@@ -74,7 +83,11 @@ function SidebarProvider({
 
   // This is the internal state of the sidebar.
   // We use openProp and setOpenProp for control from outside the component.
-  const [_open, _setOpen] = React.useState(defaultOpen);
+  // The last choice of this browser, written below; the map renders client
+  // side only, so the cookie is readable on the first render.
+  const [_open, _setOpen] = React.useState(
+    () => readSidebarCookie() ?? defaultOpen,
+  );
   const open = openProp ?? _open;
   const setOpen = React.useCallback(
     (value: boolean | ((value: boolean) => boolean)) => {
@@ -184,8 +197,8 @@ function Sidebar({
           side={side}
         >
           <SheetHeader className="sr-only">
-            <SheetTitle>Sidebar</SheetTitle>
-            <SheetDescription>Displays the mobile sidebar.</SheetDescription>
+            <SheetTitle>Panneau latéral</SheetTitle>
+            <SheetDescription>Sites, bâtiments et étages.</SheetDescription>
           </SheetHeader>
           <div className="flex h-full w-full flex-col">{children}</div>
         </SheetContent>
@@ -262,7 +275,7 @@ function SidebarTrigger({
       {...props}
     >
       <HugeiconsIcon icon={SidebarLeftIcon} strokeWidth={2} />
-      <span className="sr-only">Toggle Sidebar</span>
+      <span className="sr-only">Afficher ou masquer le panneau latéral</span>
     </Button>
   );
 }

@@ -1,5 +1,6 @@
 // Shortcuts
-export const OVERLAY_VISIBILITY_DELAY_MS = 50;
+// Long enough that Ctrl+wheel or Ctrl+Z never flashes the badges.
+export const OVERLAY_VISIBILITY_DELAY_MS = 350;
 export const OVERLAY_MODIFIER_KEY_BY_PLATFORM = {
   mac: "Meta",
   nonMac: "Control",
@@ -57,6 +58,3 @@ export const SIDEBAR_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
 export const SIDEBAR_WIDTH = "16rem";
 export const SIDEBAR_WIDTH_MOBILE = "18rem";
 export const SIDEBAR_WIDTH_ICON = "3rem";
-
-// Canvas panning
-export const PAN_AMOUNT = 50;

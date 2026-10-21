@@ -76,7 +76,7 @@ export type PathEnd =
     };
 
 /**
- * What a drawn cable says about its link (ADR 0029): live when the switch
+ * What a drawn cable says about its link (ADR 0030): live when the switch
  * port it leads to has its link up or sees a device, down when that link is
  * down, unknown when nothing observes it.
  */
@@ -394,7 +394,7 @@ export const STATUS_HANDLE = "status";
 export const SOCKET_HANDLE = "socket";
 
 /**
- * The handle of the node where a cable reaches `port` (ADR 0029): a PC's or
+ * The handle of the node where a cable reaches `port` (ADR 0030): a PC's or
  * an endpoint's status dot, a socket's icon, or the port itself on a switch
  * or a patch panel. A rear port behind one front port shows as that front
  * port. `null` lets React Flow take the node's first handle.

@@ -29,10 +29,7 @@ export type ShortcutAction =
   | "zoom-in"
   | "zoom-out"
   | "zoom-reset"
-  | "pan-up"
-  | "pan-down"
-  | "pan-left"
-  | "pan-right"
+  | "fit-view"
   | "floor-up"
   | "floor-down"
   | "cancel-wall-tool"
@@ -110,7 +107,7 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
   "cycle-theme": {
     keys: ["Shift+T"],
     label: "Thème",
-    description: "Changer le thème",
+    description: "Basculer entre thème clair et sombre",
     scope: "global",
   },
   "refresh-site": {
@@ -151,32 +148,14 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
   },
   "zoom-reset": {
     keys: ["Mod+0", { key: "0", code: "Numpad0", display: "Num 0" }],
-    label: "Réinitialiser zoom",
-    description: "Remettre le zoom à 100%",
+    label: "Zoom 100 %",
+    description: "Remettre le zoom à 100 % autour du centre",
     scope: "global",
   },
-  "pan-up": {
-    keys: ["ArrowUp"],
-    label: "Haut",
-    description: "Déplacer le canvas vers le haut",
-    scope: "global",
-  },
-  "pan-down": {
-    keys: ["ArrowDown"],
-    label: "Bas",
-    description: "Déplacer le canvas vers le bas",
-    scope: "global",
-  },
-  "pan-left": {
-    keys: ["ArrowLeft"],
-    label: "Gauche",
-    description: "Déplacer le canvas vers la gauche",
-    scope: "global",
-  },
-  "pan-right": {
-    keys: ["ArrowRight"],
-    label: "Droite",
-    description: "Déplacer le canvas vers la droite",
+  "fit-view": {
+    keys: [{ key: "1", code: "Digit1", shift: true, display: "Shift 1" }],
+    label: "Centrer la vue",
+    description: "Cadrer tout l'étage",
     scope: "global",
   },
   "floor-up": {
