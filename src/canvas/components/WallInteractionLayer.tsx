@@ -9,7 +9,10 @@ import {
   useMapDocumentReady,
 } from "@/map-session/useMapDocument";
 import { wallConflicts } from "@/walls/gridGeometry";
-import { createBrushWallDraft } from "@/walls/gridGeometry/drafts";
+import {
+  createBrushWallDraft,
+  splitWallDraftIntoBlocks,
+} from "@/walls/gridGeometry/drafts";
 import { useMapStore } from "@/store/useMapStore";
 import {
   useActiveDrawTool,
@@ -117,8 +120,38 @@ export function WallInteractionLayer({
   }, [bridge]);
 
   // React Flow has no pane press callback, so the layer listens itself.
+  // Space pans and Shift selects with the left button, as React Flow
+  // reads them; such a press is navigation, not the first point of a shape.
+  const isSpaceHeldRef = useRef(false);
+  useEffect(() => {
+    const track = (event: KeyboardEvent) => {
+      if (event.code === "Space")
+        isSpaceHeldRef.current = event.type === "keydown";
+    };
+    const release = () => {
+      isSpaceHeldRef.current = false;
+    };
+    window.addEventListener("keydown", track);
+    window.addEventListener("keyup", track);
+    window.addEventListener("blur", release);
+    return () => {
+      window.removeEventListener("keydown", track);
+      window.removeEventListener("keyup", track);
+      window.removeEventListener("blur", release);
+    };
+  }, []);
+
   const handlePanePointerDown = (event: PointerEvent) => {
     if (!isReady || !isEditMode || activeDrawTool === "device") return;
+    if (
+      isSpaceHeldRef.current ||
+      event.shiftKey ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.altKey
+    ) {
+      return;
+    }
     if (!(event.target as Element).classList.contains("react-flow__pane")) {
       return;
     }
@@ -156,13 +189,14 @@ export function WallInteractionLayer({
   // click that would be refused (A13).
   const drawn =
     activeDrawTool === "wall-brush" && session.hoverSnapPoint && currentFloorId
-      ? [
+      ? // The brush draft is a stub the engine widens into its cell.
+        splitWallDraftIntoBlocks(
           createBrushWallDraft(
             currentFloorId,
             session.hoverSnapPoint,
             selectedWallColor,
           ),
-        ]
+        )
       : session.previewSegments;
   const conflicts = isEditMode
     ? wallConflicts(
