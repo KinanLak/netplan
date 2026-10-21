@@ -41,9 +41,6 @@ export function matchesFilter(user: ListedUser, filter: UserFilter): boolean {
   return words.every((word) => haystack.includes(word));
 }
 
-/** A page with a heartbeat this recent is still open. */
-export const ONLINE_MS = 90_000;
-
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;

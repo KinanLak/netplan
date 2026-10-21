@@ -48,7 +48,6 @@ import {
 } from "@/components/ui/tooltip";
 import {
   NO_FILTER,
-  ONLINE_MS,
   describeSince,
   describeUntil,
   matchesFilter,
@@ -58,6 +57,7 @@ import { failureMessage } from "@/lib/errors";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { useFlash } from "@/hooks/use-flash";
 import { useNow } from "@/hooks/use-now";
+import { PRESENCE_STALE_AFTER_MS, activePresences } from "@/lib/presence";
 import { ROLE_LABELS } from "@/lib/roles";
 import { api } from "../../../../convex/_generated/api";
 import { ROLES } from "../../../../convex/lib/roles";
@@ -93,8 +93,12 @@ const statusFilterItems: Array<{ value: UserStatus | "all"; label: string }> = [
 
 function UsersPage() {
   const users = useQuery(api.users.list);
+  const presences = useQuery(api.presences.list);
   const me = useCurrentUser();
-  const now = useNow(30_000);
+  const now = useNow(PRESENCE_STALE_AFTER_MS);
+  const online = new Set(
+    activePresences(presences ?? [], null, now).map(({ userId }) => userId),
+  );
   const [inviting, setInviting] = useState(false);
   const [filter, setFilter] = useState<UserFilter>(NO_FILTER);
   const shown = users?.filter((user) => matchesFilter(user, filter));
@@ -196,6 +200,7 @@ function UsersPage() {
                   key={user.id}
                   user={user}
                   isMe={user.id === me?.id}
+                  online={online.has(user.id)}
                   now={now}
                 />
               ))}
@@ -212,8 +217,16 @@ function UsersPage() {
 }
 
 /** Online now, the last sign-in, or how long the invitation link holds. */
-function Activity({ user, now }: { user: UserRow; now: number }) {
-  if (user.lastSeenAt !== null && now - user.lastSeenAt < ONLINE_MS) {
+function Activity({
+  user,
+  online,
+  now,
+}: {
+  user: UserRow;
+  online: boolean;
+  now: number;
+}) {
+  if (online) {
     return (
       <span className="flex items-center gap-1.5">
         <span aria-hidden className="size-2 rounded-full bg-up" />
@@ -222,6 +235,9 @@ function Activity({ user, now }: { user: UserRow; now: number }) {
     );
   }
   if (user.kind === "invited") {
+    if (user.disabled) {
+      return <span>Réactivez le compte pour renvoyer l'invitation.</span>;
+    }
     return user.invitationExpiresAt === null ? (
       <span>Aucun lien valable : renvoyez l'invitation.</span>
     ) : (
@@ -238,10 +254,12 @@ function Activity({ user, now }: { user: UserRow; now: number }) {
 function UserItem({
   user,
   isMe,
+  online,
   now,
 }: {
   user: UserRow;
   isMe: boolean;
+  online: boolean;
   now: number;
 }) {
   const setRole = useMutation(api.users.setRole);
@@ -372,7 +390,7 @@ function UserItem({
           {user.username ? ` · ${user.username}` : null}
         </p>
         <p className="text-xs text-muted-foreground">
-          <Activity user={user} now={now} />
+          <Activity user={user} online={online} now={now} />
         </p>
         {notice ? (
           notice.error ? (

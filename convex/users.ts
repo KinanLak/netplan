@@ -98,8 +98,6 @@ const userRow = v.object({
   role,
   disabled: v.boolean(),
   kind: v.union(v.literal("local"), v.literal("sso"), v.literal("invited")),
-  /** The last heartbeat of one of its pages, while it has one open. */
-  lastSeenAt: v.union(v.number(), v.null()),
   lastSignInAt: v.union(v.number(), v.null()),
   /** Invited only: when its latest link stops working; `null` without one. */
   invitationExpiresAt: v.union(v.number(), v.null()),
@@ -108,7 +106,10 @@ const userRow = v.object({
 /** The identifier of a password link, which invitations reuse. */
 const RESET_LINK = "reset-password:";
 
-/** Every account, for the users page. */
+/**
+ * Every account, for the users page. Who is online comes from
+ * `presences.list` instead: it changes at every heartbeat.
+ */
 export const list = adminQuery({
   args: {},
   returns: v.array(userRow),
@@ -131,38 +132,39 @@ export const list = adminQuery({
       const userId = String(row.value);
       links.set(userId, Math.max(links.get(userId) ?? 0, expiresAt));
     }
-    const seen = new Map<string, number>();
-    for (const presence of await ctx.db.query("presences").collect()) {
-      seen.set(
-        presence.userId,
-        Math.max(seen.get(presence.userId) ?? 0, presence.updatedAt),
-      );
-    }
     const signIns = new Map(
       (await ctx.db.query("signIns").collect()).map((row) => [
         row.userId,
         row.at,
       ]),
     );
-    return (await findAll(ctx, "user"))
-      .map((user) => ({
-        id: user._id,
-        name: String(user.name),
-        email: String(user.email),
-        username:
-          typeof user.displayUsername === "string"
-            ? user.displayUsername
-            : typeof user.username === "string"
-              ? user.username
-              : null,
-        role: roleOf(user.role),
-        disabled: user.banned === true,
-        kind: accountKind(providers.get(user._id) ?? []),
-        lastSeenAt: seen.get(user._id) ?? null,
-        lastSignInAt: signIns.get(user._id) ?? null,
-        invitationExpiresAt: links.get(user._id) ?? null,
-      }))
-      .sort((a, b) => a.name.localeCompare(b.name, "fr"));
+    return (
+      (await findAll(ctx, "user"))
+        .map((user) => ({
+          id: user._id,
+          name: String(user.name),
+          email: String(user.email),
+          username:
+            typeof user.displayUsername === "string"
+              ? user.displayUsername
+              : typeof user.username === "string"
+                ? user.username
+                : null,
+          role: roleOf(user.role),
+          disabled: user.banned === true,
+          kind: accountKind(providers.get(user._id) ?? []),
+          lastSignInAt: signIns.get(user._id) ?? null,
+          invitationExpiresAt: links.get(user._id) ?? null,
+        }))
+        // A forgotten-password link is not an invitation, and a disabled
+        // invitation has nothing pending.
+        .map((user) =>
+          user.kind === "invited" && !user.disabled
+            ? user
+            : { ...user, invitationExpiresAt: null },
+        )
+        .sort((a, b) => a.name.localeCompare(b.name, "fr"))
+    );
   },
 });
 
