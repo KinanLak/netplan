@@ -24,11 +24,12 @@ export function NodeLabel({
   box: LabelBox;
   className?: string;
 }) {
-  const { text, fontSize } = fitLabel(name, box);
+  const { text, fontSize, breaksAnywhere } = fitLabel(name, box);
   return (
     <span
       className={cn(
-        "overflow-hidden leading-[1.15] break-normal [overflow-wrap:anywhere]",
+        "overflow-hidden leading-[1.15]",
+        breaksAnywhere ? "break-all" : "break-normal [overflow-wrap:anywhere]",
         className,
       )}
       style={{

@@ -53,6 +53,7 @@ const POLICY: Record<string, Role> = {
   "mapDocument:getFloorPathEnds": "reader",
   "mapDocument:getFloorPorts": "reader",
   "mapDocument:getFloorRevision": "reader",
+  "mapDocument:getFloorSeenSockets": "reader",
   "mapDocument:getFloorWalls": "reader",
   "mapOperations:apply": "editor",
   "mapOperations:observePending": "reader",

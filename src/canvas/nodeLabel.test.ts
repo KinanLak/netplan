@@ -5,7 +5,11 @@ const box = { width: 68, lines: 2, max: 10, min: 7 };
 
 describe("fitLabel", () => {
   it("keeps a short name at full size, in capitals", () => {
-    expect(fitLabel("Poste 3", box)).toEqual({ text: "POSTE 3", fontSize: 10 });
+    expect(fitLabel("Poste 3", box)).toEqual({
+      text: "POSTE 3",
+      fontSize: 10,
+      breaksAnywhere: false,
+    });
   });
 
   it("shrinks a long name until it fits, breaking at hyphens", () => {
@@ -20,6 +24,9 @@ describe("fitLabel", () => {
     expect(fitted.fontSize).toBe(7);
     expect(fitted.text).toContain("…");
     expect(fitted.text.endsWith("ACCUEIL")).toBe(true);
+    // Cut text wraps at any letter: by hyphens it would take a third line,
+    // which the clamp would hide, end first.
+    expect(fitted.breaksAnywhere).toBe(true);
   });
 });
 

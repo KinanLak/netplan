@@ -14,7 +14,12 @@ export type LabelBox = {
   min: number;
 };
 
-export type FittedLabel = { text: string; fontSize: number };
+export type FittedLabel = {
+  text: string;
+  fontSize: number;
+  /** The text was cut to fit, so it wraps at any letter to keep its end. */
+  breaksAnywhere: boolean;
+};
 
 /** Pieces a line may break after: a hyphen, a dot, an underscore, a space. */
 const pieces = (text: string): Array<string> =>
@@ -52,13 +57,15 @@ export const fitLabel = (name: string, box: LabelBox): FittedLabel => {
   const text = name.trim().toLocaleUpperCase("fr");
   for (let size = box.max; size >= box.min; size -= 0.5) {
     if (linesFor(text, perLineAt(box, size)) <= box.lines) {
-      return { text, fontSize: size };
+      return { text, fontSize: size, breaksAnywhere: false };
     }
   }
-  // At the floor, the text wraps anywhere and loses its middle.
+  // At the floor, the text loses its middle and wraps at any letter, so the
+  // lines hold exactly what was counted and the end stays in view.
   return {
     text: middleEllipsis(text, perLineAt(box, box.min) * box.lines),
     fontSize: box.min,
+    breaksAnywhere: true,
   };
 };
 

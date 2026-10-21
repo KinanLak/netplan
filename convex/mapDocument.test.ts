@@ -165,3 +165,46 @@ describe("getFloorPathEnds", () => {
     expect(await seenAt()).toMatchObject([{ socketId: "device:socket" }]);
   });
 });
+
+describe("getFloorSeenSockets", () => {
+  it("names a socket seen behind, whoever owns the MAC, while its read vouches for it", async () => {
+    const { t, siteId, ground } = await twoFloors();
+    const seenSockets = () =>
+      t.query(api.mapDocument.getFloorSeenSockets, { floorId: ground });
+    const readSwitch = (readAt: number) =>
+      t.run(async (ctx) => {
+        const cycle = await ctx.db.query("siteCycles").first();
+        const switchReads = [{ switchId: "device:sw", readAt }];
+        if (cycle) await ctx.db.patch(cycle._id, { switchReads });
+        else {
+          await ctx.db.insert("siteCycles", {
+            siteId,
+            nextRunAt: 0,
+            failures: 0,
+            switchReads,
+          });
+        }
+      });
+
+    await t.run(async (ctx) => {
+      // A MAC no device owns, seen now; another missed in the last read.
+      await ctx.db.insert(
+        "macSightings",
+        sighting(siteId, "bb:bb:bb:bb:bb:01", "device:socket", 0),
+      );
+      await ctx.db.insert(
+        "macSightings",
+        sighting(siteId, "bb:bb:bb:bb:bb:02", "device:old-socket", 2),
+      );
+    });
+    // No read vouches for the sighting yet.
+    expect(await seenSockets()).toEqual([]);
+
+    await readSwitch(Date.now());
+    expect(await seenSockets()).toEqual(["device:socket"]);
+
+    // A read that has gone stale vouches for nothing.
+    await readSwitch(0);
+    expect(await seenSockets()).toEqual([]);
+  });
+});

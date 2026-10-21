@@ -9,8 +9,8 @@ export const SeenSocketsContext =
   createContext<ReadonlySet<string>>(NO_SOCKETS);
 
 export const useFloorSeenSockets = (floorId: string): ReadonlySet<string> => {
-  const ends = useQuery(api.mapDocument.getFloorPathEnds, { floorId });
-  return ends ? new Set(ends.seenAt.map((seen) => seen.socketId)) : NO_SOCKETS;
+  const seen = useQuery(api.mapDocument.getFloorSeenSockets, { floorId });
+  return seen ? new Set(seen) : NO_SOCKETS;
 };
 
 export const useIsSocketSeen = (socketId: string): boolean =>
