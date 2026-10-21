@@ -25,6 +25,7 @@ import {
 } from "./lib/keycloak";
 import type { KeycloakConfig } from "./lib/keycloak";
 import { resetPasswordMail } from "./lib/mailTemplates";
+import { noteSignIn } from "./lib/signIns";
 
 // A session ends after 24 hours without use, and 7 days after login
 // whatever its use (ADR 0031). Use extends it at most once an hour.
@@ -232,6 +233,18 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
               context?.path.startsWith("/oauth2/callback/")
             ) {
               await applyKeycloakRole(ctx, keycloakConfig, session.userId);
+            }
+          },
+          // Sign-ins come through HTTP actions; a test or the seed may create
+          // a session from a mutation.
+          after: async (session) => {
+            if ("db" in ctx && "scheduler" in ctx) {
+              await noteSignIn(ctx, session.userId);
+            } else {
+              await requireActionCtx(ctx).runMutation(
+                internal.users.recordSignIn,
+                { userId: session.userId },
+              );
             }
           },
         },

@@ -5,6 +5,7 @@ import { useAction, useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
 import type { FormEvent } from "react";
+import { toast } from "sonner";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -40,13 +41,29 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  NO_FILTER,
+  ONLINE_MS,
+  describeSince,
+  describeUntil,
+  matchesFilter,
+} from "@/admin/users";
+import type { UserFilter, UserStatus } from "@/admin/users";
 import { failureMessage } from "@/lib/errors";
 import { useCurrentUser } from "@/hooks/use-current-user";
+import { useFlash } from "@/hooks/use-flash";
+import { useNow } from "@/hooks/use-now";
 import { ROLE_LABELS } from "@/lib/roles";
 import { api } from "../../../../convex/_generated/api";
 import { ROLES } from "../../../../convex/lib/roles";
 import type { Role } from "../../../../convex/lib/roles";
-import { invitationError } from "../../../../convex/lib/userAccounts";
+import { invitationProblem } from "../../../../convex/lib/userAccounts";
+import type { InvitationField } from "../../../../convex/lib/userAccounts";
 
 export const Route = createFileRoute("/_authed/admin/users")({
   head: () => ({
@@ -62,16 +79,44 @@ const roleItems = ROLES.map((role) => ({
   label: ROLE_LABELS[role],
 }));
 
+const roleFilterItems: Array<{ value: Role | "all"; label: string }> = [
+  { value: "all", label: "Tous les rôles" },
+  ...roleItems,
+];
+
+const statusFilterItems: Array<{ value: UserStatus | "all"; label: string }> = [
+  { value: "all", label: "Tous les statuts" },
+  { value: "active", label: "Actifs" },
+  { value: "invited", label: "Invitations en attente" },
+  { value: "disabled", label: "Désactivés" },
+];
+
 function UsersPage() {
   const users = useQuery(api.users.list);
   const me = useCurrentUser();
+  const now = useNow(30_000);
   const [inviting, setInviting] = useState(false);
+  const [filter, setFilter] = useState<UserFilter>(NO_FILTER);
+  const shown = users?.filter((user) => matchesFilter(user, filter));
+  const filtered =
+    filter.search.trim() !== "" ||
+    filter.role !== "all" ||
+    filter.status !== "all";
 
   return (
     <div className="space-y-6">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold">Utilisateurs</h1>
+          <h1 className="text-xl font-semibold">
+            Utilisateurs
+            {users ? (
+              <span className="ms-2 font-normal text-muted-foreground tabular-nums">
+                {filtered && shown
+                  ? `${shown.length} sur ${users.length}`
+                  : users.length}
+              </span>
+            ) : null}
+          </h1>
           <p className="text-sm text-muted-foreground">
             Qui peut ouvrir NetPlan, et avec quel rôle.
           </p>
@@ -84,12 +129,79 @@ function UsersPage() {
 
       <EmptyRoleMappingNotice />
 
-      {users === undefined ? null : (
-        <ul className="divide-y rounded-lg border">
-          {users.map((user) => (
-            <UserItem key={user.id} user={user} isMe={user.id === me?.id} />
-          ))}
-        </ul>
+      {users === undefined || shown === undefined ? null : (
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            <Input
+              aria-label="Rechercher un utilisateur"
+              placeholder="Nom, adresse e-mail ou identifiant"
+              className="w-full sm:w-72"
+              value={filter.search}
+              onChange={(event) =>
+                setFilter({ ...filter, search: event.target.value })
+              }
+            />
+            <Select
+              items={roleFilterItems}
+              value={filter.role}
+              onValueChange={(role) => {
+                if (role) setFilter({ ...filter, role });
+              }}
+            >
+              <SelectTrigger aria-label="Rôle" className="w-40">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {roleFilterItems.map(({ value, label }) => (
+                  <SelectItem key={value} value={value}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select
+              items={statusFilterItems}
+              value={filter.status}
+              onValueChange={(status) => {
+                if (status) setFilter({ ...filter, status });
+              }}
+            >
+              <SelectTrigger aria-label="Statut" className="w-52">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {statusFilterItems.map(({ value, label }) => (
+                  <SelectItem key={value} value={value}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {shown.length === 0 ? (
+            <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+              <p>Aucun utilisateur ne correspond.</p>
+              <Button
+                variant="link"
+                size="sm"
+                onClick={() => setFilter(NO_FILTER)}
+              >
+                Effacer les filtres
+              </Button>
+            </div>
+          ) : (
+            <ul className="divide-y rounded-lg border">
+              {shown.map((user) => (
+                <UserItem
+                  key={user.id}
+                  user={user}
+                  isMe={user.id === me?.id}
+                  now={now}
+                />
+              ))}
+            </ul>
+          )}
+        </div>
       )}
 
       <KeycloakSettings />
@@ -99,20 +211,60 @@ function UsersPage() {
   );
 }
 
-function UserItem({ user, isMe }: { user: UserRow; isMe: boolean }) {
+/** Online now, the last sign-in, or how long the invitation link holds. */
+function Activity({ user, now }: { user: UserRow; now: number }) {
+  if (user.lastSeenAt !== null && now - user.lastSeenAt < ONLINE_MS) {
+    return (
+      <span className="flex items-center gap-1.5">
+        <span aria-hidden className="size-2 rounded-full bg-up" />
+        En ligne
+      </span>
+    );
+  }
+  if (user.kind === "invited") {
+    return user.invitationExpiresAt === null ? (
+      <span>Aucun lien valable : renvoyez l'invitation.</span>
+    ) : (
+      <span>
+        Lien valable encore {describeUntil(user.invitationExpiresAt, now)}
+      </span>
+    );
+  }
+  return user.lastSignInAt === null ? null : (
+    <span>Dernière connexion {describeSince(user.lastSignInAt, now)}</span>
+  );
+}
+
+function UserItem({
+  user,
+  isMe,
+  now,
+}: {
+  user: UserRow;
+  isMe: boolean;
+  now: number;
+}) {
   const setRole = useMutation(api.users.setRole);
   const setDisabled = useMutation(api.users.setDisabled);
+  const cancelInvitation = useMutation(api.users.cancelInvitation);
   const resend = useAction(api.users.resendInvitation);
-  const [confirming, setConfirming] = useState(false);
+  const [confirming, setConfirming] = useState<
+    "disable" | "cancel" | { role: Role } | null
+  >(null);
   const [pending, setPending] = useState(false);
   const [notice, setNotice] = useState<{ error: boolean; text: string }>();
+  const [roleSaved, flashRoleSaved] = useFlash();
 
-  const run = async (change: () => Promise<unknown>, done?: string) => {
+  const run = async (
+    change: () => Promise<unknown>,
+    done?: string | (() => void),
+  ) => {
     setPending(true);
     setNotice(undefined);
     try {
       await change();
-      if (done) setNotice({ error: false, text: done });
+      if (typeof done === "string") setNotice({ error: false, text: done });
+      else done?.();
     } catch (failure) {
       setNotice({ error: true, text: failureMessage(failure, "admin") });
     } finally {
@@ -120,9 +272,84 @@ function UserItem({ user, isMe }: { user: UserRow; isMe: boolean }) {
     }
   };
 
+  const changeRole = (role: Role) =>
+    void run(() => setRole({ userId: user.id, role }), flashRoleSaved);
+
   // A Keycloak account's role follows the role mapping at each login, and
   // an admin keeps their own role so the site always has one.
-  const roleLocked = isMe || user.kind === "sso";
+  const roleLock = isMe
+    ? "Un autre administrateur doit changer votre rôle."
+    : user.kind === "sso"
+      ? "Suit la correspondance des rôles Keycloak, relue à chaque connexion."
+      : null;
+
+  const roleSelect = (
+    <Select
+      items={roleItems}
+      value={user.role}
+      disabled={roleLock !== null || pending}
+      onValueChange={(role) => {
+        if (!role || role === user.role) return;
+        // Admin opens users, sites and integrations: giving or taking it
+        // is confirmed.
+        if (role === "admin" || user.role === "admin") {
+          setConfirming({ role });
+        } else changeRole(role);
+      }}
+    >
+      <SelectTrigger aria-label={`Rôle de ${user.name}`} className="w-32">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {roleItems.map(({ value, label }) => (
+          <SelectItem key={value} value={value}>
+            {label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+
+  const confirmation =
+    confirming === null
+      ? null
+      : confirming === "disable"
+        ? {
+            title: `Désactiver « ${user.name} » ?`,
+            text: "Ses sessions se ferment tout de suite et le compte ne peut plus se connecter jusqu'à sa réactivation. Rien de ce qu'il a fait sur le plan ne disparaît.",
+            action: "Désactiver",
+            destructive: true,
+            run: () =>
+              void run(() => setDisabled({ userId: user.id, disabled: true })),
+          }
+        : confirming === "cancel"
+          ? {
+              title: `Annuler l'invitation de « ${user.name} » ?`,
+              text: "Le compte, qui n'a jamais servi, est supprimé et son lien ne fonctionne plus. Vous pourrez inviter cette adresse à nouveau.",
+              action: "Annuler l'invitation",
+              destructive: true,
+              run: () =>
+                void run(
+                  () => cancelInvitation({ userId: user.id }),
+                  () => toast.success(`Invitation de ${user.email} annulée.`),
+                ),
+            }
+          : {
+              title:
+                confirming.role === "admin"
+                  ? `Donner le rôle Admin à « ${user.name} » ?`
+                  : `Retirer le rôle Admin à « ${user.name} » ?`,
+              text:
+                confirming.role === "admin"
+                  ? "Il pourra gérer les utilisateurs, les sites et leurs intégrations, et changer le rôle des autres administrateurs."
+                  : `Il devient ${ROLE_LABELS[confirming.role]} : il ne verra plus l'administration.`,
+              action:
+                confirming.role === "admin"
+                  ? "Donner le rôle Admin"
+                  : "Retirer le rôle Admin",
+              destructive: false,
+              run: () => changeRole(confirming.role),
+            };
 
   return (
     <li className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -143,6 +370,9 @@ function UserItem({ user, isMe }: { user: UserRow; isMe: boolean }) {
         <p className="truncate text-sm text-muted-foreground">
           {user.email}
           {user.username ? ` · ${user.username}` : null}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          <Activity user={user} now={now} />
         </p>
         {notice ? (
           notice.error ? (
@@ -170,6 +400,16 @@ function UserItem({ user, isMe }: { user: UserRow; isMe: boolean }) {
             Renvoyer l'invitation
           </Button>
         ) : null}
+        {user.kind === "invited" ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={pending}
+            onClick={() => setConfirming("cancel")}
+          >
+            Annuler l'invitation
+          </Button>
+        ) : null}
         {isMe ? null : user.disabled ? (
           <Button
             variant="outline"
@@ -186,63 +426,51 @@ function UserItem({ user, isMe }: { user: UserRow; isMe: boolean }) {
             variant="outline"
             size="sm"
             disabled={pending}
-            onClick={() => setConfirming(true)}
+            onClick={() => setConfirming("disable")}
           >
             Désactiver
           </Button>
         )}
-        <Select
-          items={roleItems}
-          value={user.role}
-          disabled={roleLocked || pending}
-          onValueChange={(role) => {
-            if (role && role !== user.role) {
-              void run(() => setRole({ userId: user.id, role }));
-            }
-          }}
-        >
-          <SelectTrigger
-            aria-label={`Rôle de ${user.name}`}
-            className="w-32"
-            title={
-              user.kind === "sso"
-                ? "Suit la correspondance des rôles Keycloak"
-                : undefined
-            }
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {roleItems.map(({ value, label }) => (
-              <SelectItem key={value} value={value}>
-                {label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {roleSaved ? (
+          <span role="status" className="text-sm text-muted-foreground">
+            Enregistré
+          </span>
+        ) : null}
+        {roleLock ? (
+          <Tooltip>
+            {/* A disabled select gets no pointer events: the wrapper does. */}
+            <TooltipTrigger render={<span tabIndex={0} />}>
+              {roleSelect}
+            </TooltipTrigger>
+            <TooltipContent>{roleLock}</TooltipContent>
+          </Tooltip>
+        ) : (
+          roleSelect
+        )}
       </div>
-      <AlertDialog open={confirming} onOpenChange={setConfirming}>
+      <AlertDialog
+        open={confirmation !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirming(null);
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Désactiver « {user.name} » ?</AlertDialogTitle>
+            <AlertDialogTitle>{confirmation?.title}</AlertDialogTitle>
             <AlertDialogDescription>
-              Ses sessions se ferment tout de suite et le compte ne peut plus se
-              connecter jusqu'à sa réactivation. Rien de ce qu'il a fait sur le
-              plan ne disparaît.
+              {confirmation?.text}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogCancel>Retour</AlertDialogCancel>
             <AlertDialogAction
-              variant="destructive"
+              variant={confirmation?.destructive ? "destructive" : "default"}
               onClick={() => {
-                setConfirming(false);
-                void run(() =>
-                  setDisabled({ userId: user.id, disabled: true }),
-                );
+                confirmation?.run();
+                setConfirming(null);
               }}
             >
-              Désactiver
+              {confirmation?.action}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -438,7 +666,10 @@ function InviteDialog({
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
   const [role, setRole] = useState<Role>("reader");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{
+    field: InvitationField | null;
+    text: string;
+  } | null>(null);
   const [pending, setPending] = useState(false);
 
   const close = (next: boolean) => {
@@ -459,9 +690,10 @@ function InviteDialog({
       email: email.trim().toLowerCase(),
       username: username.trim() || undefined,
     };
-    const invalid = invitationError(fields);
-    if (invalid) {
-      setError(invalid);
+    const problem = invitationProblem(fields);
+    if (problem) {
+      setError({ field: problem.field, text: problem.message });
+      document.getElementById(`invite-${problem.field}`)?.focus();
       return;
     }
     setPending(true);
@@ -469,22 +701,62 @@ function InviteDialog({
     try {
       await invite({ ...fields, role });
       close(false);
+      // The new row shows the account, not that the mail left.
+      toast.success(`Invitation envoyée à ${fields.email}.`);
     } catch (failure) {
-      setError(failureMessage(failure, "admin"));
+      setError({ field: null, text: failureMessage(failure, "admin") });
     } finally {
       setPending(false);
     }
   };
 
-  const edit = (set: (value: string) => void) => (value: string) => {
-    set(value);
-    setError(null);
+  const dirty = name !== "" || email !== "" || username !== "";
+
+  const field = (
+    key: InvitationField,
+    label: string,
+    value: string,
+    set: (value: string) => void,
+    more: { type?: string; autoFocus?: boolean; hint?: string } = {},
+  ) => {
+    const invalid = error?.field === key;
+    return (
+      <Field data-invalid={invalid}>
+        <FieldLabel htmlFor={`invite-${key}`}>{label}</FieldLabel>
+        <Input
+          id={`invite-${key}`}
+          type={more.type}
+          value={value}
+          autoFocus={more.autoFocus}
+          autoComplete="off"
+          aria-invalid={invalid}
+          aria-describedby={invalid ? `invite-${key}-error` : undefined}
+          onChange={(event) => {
+            set(event.target.value);
+            setError(null);
+          }}
+        />
+        {invalid ? (
+          <FieldError id={`invite-${key}-error`}>{error.text}</FieldError>
+        ) : more.hint ? (
+          <FieldDescription>{more.hint}</FieldDescription>
+        ) : null}
+      </Field>
+    );
   };
 
   return (
-    <Dialog open={open} onOpenChange={close}>
+    <Dialog
+      open={open}
+      onOpenChange={(next, details) => {
+        // A click beside a filled-in form is more often a slip than a "no".
+        if (!next && details.reason === "outside-press" && dirty) return;
+        close(next);
+      }}
+    >
       <DialogContent>
-        <form onSubmit={(event) => void submit(event)}>
+        {/* The form checks itself, so its errors read in French. */}
+        <form noValidate onSubmit={(event) => void submit(event)}>
           <DialogHeader>
             <DialogTitle>Inviter un utilisateur</DialogTitle>
             <DialogDescription>
@@ -492,39 +764,13 @@ function InviteDialog({
             </DialogDescription>
           </DialogHeader>
           <FieldGroup className="py-4">
-            <Field>
-              <FieldLabel htmlFor="invite-name">Nom</FieldLabel>
-              <Input
-                id="invite-name"
-                value={name}
-                autoFocus
-                autoComplete="off"
-                onChange={(event) => edit(setName)(event.target.value)}
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="invite-email">Adresse e-mail</FieldLabel>
-              <Input
-                id="invite-email"
-                type="email"
-                value={email}
-                autoComplete="off"
-                onChange={(event) => edit(setEmail)(event.target.value)}
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="invite-username">Identifiant</FieldLabel>
-              <Input
-                id="invite-username"
-                value={username}
-                autoComplete="off"
-                onChange={(event) => edit(setUsername)(event.target.value)}
-              />
-              <FieldDescription>
-                Facultatif : la personne pourra aussi se connecter avec son
-                adresse e-mail.
-              </FieldDescription>
-            </Field>
+            {field("name", "Nom", name, setName, { autoFocus: true })}
+            {field("email", "Adresse e-mail", email, setEmail, {
+              type: "email",
+            })}
+            {field("username", "Identifiant", username, setUsername, {
+              hint: "Facultatif : la personne pourra aussi se connecter avec son adresse e-mail.",
+            })}
             <Field>
               <FieldLabel htmlFor="invite-role">Rôle</FieldLabel>
               <Select
@@ -546,7 +792,9 @@ function InviteDialog({
                 </SelectContent>
               </Select>
             </Field>
-            {error ? <FieldError>{error}</FieldError> : null}
+            {error?.field === null ? (
+              <FieldError>{error.text}</FieldError>
+            ) : null}
           </FieldGroup>
           <DialogFooter>
             <Button type="submit" disabled={pending}>

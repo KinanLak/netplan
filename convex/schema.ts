@@ -365,6 +365,13 @@ export default defineSchema({
 
   // One row per open page, keyed by the page's random id (ADR 0021); the
   // name is the signed-in user's, copied at each heartbeat.
+  // When each account last signed in, for the users page (ADR 0021). One
+  // row per account, written by the session hook in `auth.ts`.
+  signIns: defineTable({
+    userId: v.string(),
+    at: v.number(),
+  }).index("by_user", ["userId"]),
+
   presences: defineTable({
     clientId: v.string(),
     userId: v.string(),
