@@ -1,6 +1,7 @@
 import { memo } from "react";
 import NetworkNode from "./NetworkNode";
 import { CableHandle, useRemeasuredHandles } from "./CableHandle";
+import { BAR_LABEL, NodeLabel } from "./NodeLabel";
 import { areDeviceNodePropsEqual } from "./memo";
 import type { Node, NodeProps } from "@xyflow/react";
 import type { DeviceNodeData } from "@/devices/reactFlowDeviceAdapter";
@@ -26,15 +27,17 @@ function PatchPanelNode({ data: device, id }: NodeProps<PatchPanelNodeType>) {
   return (
     <NetworkNode
       id={id}
-      status="unknown"
+      status={null}
       width={device.size.width}
       height={device.size.height}
       className="bg-linear-to-b from-secondary to-secondary/80"
     >
       <div className="flex items-center border-b border-border px-2 py-0.5">
-        <span className="truncate text-[9px] font-bold tracking-wider text-muted-foreground uppercase">
-          {device.name}
-        </span>
+        <NodeLabel
+          name={device.name}
+          box={BAR_LABEL}
+          className="font-bold tracking-wider text-muted-foreground"
+        />
       </div>
       <div
         className="grid gap-0.5 overflow-hidden p-1"

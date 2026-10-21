@@ -469,7 +469,7 @@ export function WallOverlay({
                     : undefined
                 }
               >
-                <path d={group.path} fill={tone.fill} />
+                <path d={group.path} style={{ fill: tone.fill }} />
               </g>
             );
           })}
@@ -482,7 +482,7 @@ export function WallOverlay({
                 key={`wall-stroke-${group.color}`}
                 d={group.path}
                 fill="none"
-                stroke={tone.stroke}
+                style={{ stroke: tone.stroke }}
                 strokeWidth={2}
                 strokeLinejoin="round"
                 strokeLinecap="round"

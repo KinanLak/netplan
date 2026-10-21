@@ -6,6 +6,7 @@ import type { Node, NodeProps } from "@xyflow/react";
 import type { DeviceStatus, DeviceId } from "@/types/map";
 import type { DeviceNodeData } from "@/devices/reactFlowDeviceAdapter";
 import { StatusDot } from "@/components/StatusDot";
+import { BAR_LABEL, NodeLabel } from "./NodeLabel";
 import {
   PORT_STATE_CLASSES,
   PORT_STATE_LABELS,
@@ -37,9 +38,11 @@ function SwitchNode({ data: device, id }: NodeProps<SwitchNodeType>) {
     >
       {/* Top bar with status */}
       <div className="flex items-center justify-between border-b border-border px-2 py-1">
-        <span className="max-w-30 truncate text-[9px] font-bold tracking-wider text-muted-foreground uppercase">
-          {device.hostname ?? device.name}
-        </span>
+        <NodeLabel
+          name={device.name}
+          box={BAR_LABEL}
+          className="font-bold tracking-wider text-muted-foreground"
+        />
         <StatusDot status={status} className="shadow-sm" />
       </div>
 

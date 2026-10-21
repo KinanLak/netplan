@@ -32,7 +32,9 @@ import {
   useShownCablePaths,
 } from "@/canvas/components/CablePathLayer";
 import { edgeTypes } from "@/canvas/edges/CablePathEdge";
+import { SeenSocketsContext, useFloorSeenSockets } from "@/canvas/seenSockets";
 import { CanvasZoomControls } from "@/canvas/components/CanvasZoomControls";
+import { DeviceNameTooltip } from "@/canvas/components/DeviceNameTooltip";
 import { ContextMenu, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { DeviceContextMenu } from "./DeviceContextMenu";
 import {
@@ -296,6 +298,7 @@ export default function FlowCanvas() {
     reactFlow,
   });
   const cablePaths = useShownCablePaths();
+  const seenSockets = useFloorSeenSockets(document.floorId);
 
   const handleNodeContextMenu = (_: React.MouseEvent, node: DeviceNode) => {
     const deviceId = node.id as DeviceId;
@@ -349,62 +352,68 @@ export default function FlowCanvas() {
           render={<div className="h-full w-full" />}
           className="h-full w-full"
         >
-          <ReactFlow<DeviceNode>
-            nodes={nodes}
-            edges={cablePaths.edges}
-            edgeTypes={edgeTypes}
-            // Cables join port handles whatever their type (ADR 0029); the
-            // map draws them itself, so nothing connects through React Flow.
-            connectionMode={ConnectionMode.Loose}
-            nodesConnectable={false}
-            edgesFocusable={false}
-            onNodesChange={handleNodesChange}
-            onNodeClick={handleNodeClick}
-            onNodeMouseEnter={handleNodeMouseEnter}
-            onNodeMouseLeave={handleNodeMouseLeave}
-            onNodeDragStart={handleNodeDragStart}
-            onNodeDragStop={handleNodeDragStop}
-            onNodeContextMenu={handleNodeContextMenu}
-            onSelectionChange={({ nodes: selectedNodes }) => {
-              if (!isMultiSelectMode) return;
-              setSelectedDevices(
-                selectedNodes.map((node) => node.id as DeviceId),
-              );
-            }}
-            onPaneClick={paneBridge.onPaneClick}
-            onPaneMouseMove={paneBridge.onPaneMouseMove}
-            onPaneContextMenu={handlePaneContextMenu}
-            onMoveStart={handleMoveStart}
-            onMoveEnd={handleMoveEnd}
-            nodeTypes={nodeTypes}
-            snapToGrid={true}
-            snapGrid={SNAP_GRID}
-            fitView
-            fitViewOptions={FIT_VIEW_OPTIONS}
-            minZoom={FLOW_CANVAS_MIN_ZOOM}
-            maxZoom={FLOW_CANVAS_MAX_ZOOM}
-            panOnDrag={isMultiSelectMode ? RIGHT_MOUSE_PAN_BUTTON : panOnDrag}
-            // The wheel zooms; arrow keys and Tab never reach the nodes, whose
-            // own keyboard moves were never saved (ADR 0030).
-            zoomOnScroll
-            panOnScroll={false}
-            disableKeyboardA11y
-            nodesFocusable={false}
-            selectionOnDrag={isMultiSelectMode}
-            deleteKeyCode={null}
-            nodesDraggable={canEditDevices}
-            className={cn(isCursorDragging && "canvas-cursor-grabbing")}
-            proOptions={PRO_OPTIONS}
-            ariaLabelConfig={ARIA_LABEL_CONFIG}
-          >
-            <FlowCanvasBackground />
-            <FloorOverlayLayer />
-            <OverlayGizmo />
+          <SeenSocketsContext value={seenSockets}>
+            <ReactFlow<DeviceNode>
+              nodes={nodes}
+              edges={cablePaths.edges}
+              edgeTypes={edgeTypes}
+              // Cables join port handles whatever their type (ADR 0029); the
+              // map draws them itself, so nothing connects through React Flow.
+              connectionMode={ConnectionMode.Loose}
+              nodesConnectable={false}
+              edgesFocusable={false}
+              onNodesChange={handleNodesChange}
+              onNodeClick={handleNodeClick}
+              onNodeMouseEnter={handleNodeMouseEnter}
+              onNodeMouseLeave={handleNodeMouseLeave}
+              onNodeDragStart={handleNodeDragStart}
+              onNodeDragStop={handleNodeDragStop}
+              onNodeContextMenu={handleNodeContextMenu}
+              onSelectionChange={({ nodes: selectedNodes }) => {
+                if (!isMultiSelectMode) return;
+                setSelectedDevices(
+                  selectedNodes.map((node) => node.id as DeviceId),
+                );
+              }}
+              onPaneClick={paneBridge.onPaneClick}
+              onPaneMouseMove={paneBridge.onPaneMouseMove}
+              onPaneContextMenu={handlePaneContextMenu}
+              onMoveStart={handleMoveStart}
+              onMoveEnd={handleMoveEnd}
+              nodeTypes={nodeTypes}
+              snapToGrid={true}
+              snapGrid={SNAP_GRID}
+              fitView
+              fitViewOptions={FIT_VIEW_OPTIONS}
+              minZoom={FLOW_CANVAS_MIN_ZOOM}
+              maxZoom={FLOW_CANVAS_MAX_ZOOM}
+              panOnDrag={isMultiSelectMode ? RIGHT_MOUSE_PAN_BUTTON : panOnDrag}
+              // The wheel zooms; arrow keys and Tab never reach the nodes, whose
+              // own keyboard moves were never saved (ADR 0030).
+              zoomOnScroll
+              panOnScroll={false}
+              disableKeyboardA11y
+              nodesFocusable={false}
+              selectionOnDrag={isMultiSelectMode}
+              deleteKeyCode={null}
+              nodesDraggable={canEditDevices}
+              className={cn(isCursorDragging && "canvas-cursor-grabbing")}
+              proOptions={PRO_OPTIONS}
+              ariaLabelConfig={ARIA_LABEL_CONFIG}
+            >
+              <FlowCanvasBackground />
+              <FloorOverlayLayer />
+              <OverlayGizmo />
 
-            <WallInteractionLayer bridge={paneBridge} floorWalls={floorWalls} />
-            <CablePathLabels ends={cablePaths.ends} />
-            <CableDraftLayer />
-          </ReactFlow>
+              <WallInteractionLayer
+                bridge={paneBridge}
+                floorWalls={floorWalls}
+              />
+              <CablePathLabels ends={cablePaths.ends} />
+              <DeviceNameTooltip />
+              <CableDraftLayer />
+            </ReactFlow>
+          </SeenSocketsContext>
         </ContextMenuTrigger>
         {contextTargetId ? (
           <DeviceContextMenu deviceId={contextTargetId} />

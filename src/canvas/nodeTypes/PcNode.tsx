@@ -9,6 +9,7 @@ import type { Node, NodeProps } from "@xyflow/react";
 import type { DeviceStatus } from "@/types/map";
 import type { DeviceNodeData } from "@/devices/reactFlowDeviceAdapter";
 import { StatusDot } from "@/components/StatusDot";
+import { CARD_LABEL, NodeLabel } from "./NodeLabel";
 
 type PcNodeType = Node<DeviceNodeData>;
 
@@ -41,11 +42,13 @@ function PcNode({ data: device, id }: NodeProps<PcNodeType>) {
           </span>
         </div>
 
-        {/* Middle: hostname */}
+        {/* Middle: name */}
         <div className="flex flex-1 items-center justify-center px-0.5">
-          <span className="text-2xs text-center leading-tight font-bold text-foreground uppercase">
-            {device.hostname ?? device.name}
-          </span>
+          <NodeLabel
+            name={device.name}
+            box={CARD_LABEL}
+            className="text-center font-bold text-foreground"
+          />
         </div>
 
         {/* Bottom: last user */}

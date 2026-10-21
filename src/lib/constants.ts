@@ -23,7 +23,8 @@ export const FLOW_CANVAS_FIT_VIEW_PADDING = 0.2;
 export const FLOW_CANVAS_MIN_ZOOM = 0.3;
 export const FLOW_CANVAS_MAX_ZOOM = 2;
 export const FLOW_CANVAS_BACKGROUND_DOT_SIZE = 2;
-export const FLOW_CANVAS_BACKGROUND_COLOR = "#94a3b8";
+// A theme token, so the grid stays quiet in the dark theme too.
+export const FLOW_CANVAS_BACKGROUND_COLOR = "var(--canvas-dot)";
 export const FLOW_CANVAS_HALO_SHADOWS = {
   erase: "inset 0 0 50px 20px rgba(239, 68, 68, 0.32)",
   draw: "inset 0 0 50px 20px rgba(46, 126, 255, 0.3)",

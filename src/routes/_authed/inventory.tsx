@@ -57,7 +57,7 @@ import {
   normalizeIdentityEdit,
 } from "@/devices/identity";
 import { parseMacList } from "@/devices/mac";
-import { DEVICE_STATUS_LABELS } from "@/devices/status";
+import { DEVICE_STATUS_LABELS, hasStatus } from "@/devices/status";
 import { failureMessage } from "@/lib/errors";
 import { useCanEdit } from "@/hooks/use-current-user";
 import { createStandaloneObjectId } from "@/lib/identity";
@@ -167,8 +167,9 @@ const STATUS_FILTERS: Array<{ value: StatusFilter; label: string }> = [
   { value: "unknown", label: DEVICE_STATUS_LABELS.unknown },
 ];
 
-const statusOf = (device: InventoryRow): DeviceStatus =>
-  device.metadata.status ?? "unknown";
+// A passive device has no status (B13), so no status filter or count has it.
+const statusOf = (device: InventoryRow): DeviceStatus | null =>
+  hasStatus(device.type) ? (device.metadata.status ?? "unknown") : null;
 
 const byName = new Intl.Collator("fr", { numeric: true, sensitivity: "base" });
 
@@ -566,17 +567,7 @@ function InventoryItem({
         {getDeviceKindLabel(device.type)}
       </td>
       <td className="px-4 py-2.5 whitespace-nowrap">
-        <span
-          className={cn(
-            "flex items-center gap-2",
-            statusOf(device) === "down"
-              ? "text-down"
-              : statusOf(device) === "unknown" && "text-muted-foreground",
-          )}
-        >
-          <StatusDot status={statusOf(device)} decorative />
-          {DEVICE_STATUS_LABELS[statusOf(device)]}
-        </span>
+        <DeviceStatusCell status={statusOf(device)} />
       </td>
       <td className="px-4 py-2.5 font-mono text-xs">
         {device.macs.length === 0 ? (
@@ -845,5 +836,22 @@ function CreateDeviceForm({
         </Button>
       </DialogFooter>
     </form>
+  );
+}
+
+function DeviceStatusCell({ status }: { status: DeviceStatus | null }) {
+  if (!status) return <span className="text-muted-foreground">—</span>;
+  return (
+    <span
+      className={cn(
+        "flex items-center gap-2",
+        status === "down"
+          ? "text-down"
+          : status === "unknown" && "text-muted-foreground",
+      )}
+    >
+      <StatusDot status={status} decorative />
+      {DEVICE_STATUS_LABELS[status]}
+    </span>
   );
 }

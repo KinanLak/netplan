@@ -62,13 +62,22 @@
   --sidebar-border: var(--border);
   --sidebar-ring: var(--ring);
 
-  /* Business Logic Colors */
-  --up: oklch(0.62 0.21 260);
-  --up-background: oklch(0.95 0.05 260);
-  --down: oklch(0.55 0.22 27);
+  /* Business Logic Colors: statuses (ADR 0029), green, red and grey */
+  --up: oklch(0.6 0.16 150);
+  --up-background: oklch(0.95 0.05 150);
+  --down: oklch(0.57 0.22 27);
   --down-background: oklch(0.95 0.05 27);
   --unknown: oklch(0.55 0 0);
   --unknown-background: oklch(0.95 0 0);
+
+  /* The plan: grid dots and walls, per theme */
+  --canvas-dot: oklch(0.72 0.02 257);
+  --wall-sand-fill: #d8c8b2;
+  --wall-sand-stroke: #b59b7b;
+  --wall-concrete-fill: #c3c8cf;
+  --wall-concrete-stroke: #8f98a3;
+  --wall-slate-fill: #8f969f;
+  --wall-slate-stroke: #5f6772;
 }
 
 .dark {
@@ -124,13 +133,22 @@
   --sidebar-border: var(--border);
   --sidebar-ring: var(--ring);
 
-  /* Business Logic Colors */
-  --up: oklch(0.62 0.21 260);
-  --up-background: oklch(0.25 0.05 260);
-  --down: oklch(0.55 0.22 27);
-  --down-background: oklch(0.25 0.05 27);
-  --unknown: oklch(0.55 0 0);
-  --unknown-background: oklch(0.25 0 0);
+  /* Business Logic Colors: statuses (ADR 0029), green, red and grey */
+  --up: oklch(0.72 0.17 150);
+  --up-background: oklch(0.27 0.06 150);
+  --down: oklch(0.66 0.21 25);
+  --down-background: oklch(0.27 0.07 25);
+  --unknown: oklch(0.62 0 0);
+  --unknown-background: oklch(0.27 0 0);
+
+  /* The plan: quiet dots, and walls that stay darker than the devices */
+  --canvas-dot: oklch(0.38 0.01 257);
+  --wall-sand-fill: oklch(0.42 0.03 75);
+  --wall-sand-stroke: oklch(0.55 0.04 75);
+  --wall-concrete-fill: oklch(0.4 0.01 250);
+  --wall-concrete-stroke: oklch(0.53 0.015 250);
+  --wall-slate-fill: oklch(0.33 0.01 250);
+  --wall-slate-stroke: oklch(0.46 0.015 250);
 }
 
 @theme inline {

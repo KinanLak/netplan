@@ -1,5 +1,6 @@
 import type { DeviceId, DeviceStatus } from "@/types/map";
 import { cn } from "@/lib/utils";
+import { DEVICE_STATUS_CLASSES } from "@/devices/status";
 import {
   useIsDeviceSelected,
   useIsEditMode,
@@ -9,8 +10,8 @@ import {
 export interface NetworkNodeProps {
   /** React Flow node id — used to read selection and cable display state */
   id: string;
-  /** Device status for border and shadow color */
-  status: DeviceStatus;
+  /** The device's status, or `null` for a passive device, which has none */
+  status: DeviceStatus | null;
   /** Node dimensions */
   width: number;
   height: number;
@@ -22,14 +23,30 @@ export interface NetworkNodeProps {
   ref?: React.Ref<HTMLDivElement>;
 }
 
+type Tone = DeviceStatus | "passive";
+
+const borderOf = (tone: Tone) =>
+  tone === "passive" ? "border-border" : DEVICE_STATUS_CLASSES[tone].border;
+
+// Literal classes, so Tailwind sees each one.
+const SELECTED_GLOWS: Record<Tone, string> = {
+  up: "shadow-[0_0_8px_2px_var(--up)]!",
+  down: "shadow-[0_0_8px_2px_var(--down)]!",
+  unknown: "shadow-[0_0_8px_2px_var(--unknown)]!",
+  passive: "shadow-[0_0_8px_2px_var(--ring)]!",
+};
+
+const SHOWN_GLOWS: Record<Tone, string> = {
+  up: "shadow-[0_0_6px_1px_var(--up)]!",
+  down: "shadow-[0_0_6px_1px_var(--down)]!",
+  unknown: "shadow-[0_0_6px_1px_var(--unknown)]!",
+  passive: "shadow-[0_0_6px_1px_var(--ring)]!",
+};
+
 /**
- * Base wrapper component for all network device nodes.
- * Provides unified styling for selection, highlighting, and status indication.
- *
- * Selection behavior:
- * - No ring effect
- * - Shadow color matches the device status
- * - Border keeps the status color
+ * Base wrapper component for all network device nodes: its border says the
+ * device's status, a glow its selection, and a quieter glow that its cables
+ * show. A passive device keeps a neutral border.
  */
 export default function NetworkNode({
   id,
@@ -46,44 +63,20 @@ export default function NetworkNode({
   // A switch or patch panel whose cables show keeps a glow, so the way to
   // hide them is not lost when it is deselected.
   const isHighlighted = useShowsCables(deviceId);
+  const tone: Tone = status ?? "passive";
 
   return (
     <div
       ref={ref}
       className={cn(
-        // Base styles
         "network-node relative rounded-sm border-2 transition-all duration-200",
         isEditMode ? "cursor-grab active:cursor-grabbing" : "cursor-pointer",
-
-        // Status-based border color (always applied)
-        status === "up" && "border-up",
-        status === "down" && "border-down",
-        status === "unknown" && "border-unknown",
-
-        // Selection: shadow glow matching status color
-        isSelected && status === "up" && "shadow-[0_0_8px_2px_var(--up)]!",
-        isSelected && status === "down" && "shadow-[0_0_8px_2px_var(--down)]!",
-        isSelected &&
-          status === "unknown" &&
-          "shadow-[0_0_8px_2px_var(--unknown)]!",
-
-        // Showing its cables (non-selected): subtle shadow
-        isHighlighted &&
-          !isSelected &&
-          status === "up" &&
-          "shadow-[0_0_6px_1px_var(--up)]!",
-        isHighlighted &&
-          !isSelected &&
-          status === "down" &&
-          "shadow-[0_0_6px_1px_var(--down)]!",
-        isHighlighted &&
-          !isSelected &&
-          status === "unknown" &&
-          "shadow-[0_0_6px_1px_var(--unknown)]!",
-
-        // Default shadow otherwise
-        !isSelected && !isHighlighted && "shadow-md",
-
+        borderOf(tone),
+        isSelected
+          ? SELECTED_GLOWS[tone]
+          : isHighlighted
+            ? SHOWN_GLOWS[tone]
+            : "shadow-md",
         className,
       )}
       style={{ width, height }}

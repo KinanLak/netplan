@@ -43,7 +43,11 @@ import { useCanEdit } from "@/hooks/use-current-user";
 import { useCurrentSite } from "@/sites/useCurrentSite";
 import { useShortcutIntentEffect } from "@/hooks/use-shortcuts";
 import { INTEGRATION_LABELS } from "@/sites/integrations";
-import { DEVICE_STATUS_LABELS } from "@/devices/status";
+import {
+  DEVICE_STATUS_CLASSES,
+  DEVICE_STATUS_LABELS,
+  hasStatus,
+} from "@/devices/status";
 import { comparePorts, deviceConnections } from "@/devices/ports";
 
 export default function DeviceDrawer() {
@@ -187,18 +191,18 @@ export default function DeviceDrawer() {
           </div>
         </div>
 
-        <span
-          className={cn(
-            "inline-flex w-fit items-center gap-2 rounded-full border py-1.5 pr-3 pl-2 text-sm font-medium",
-            status === "up" && "border-up bg-up-background text-up",
-            status === "down" && "border-down bg-down-background text-down",
-            status === "unknown" &&
-              "border-unknown bg-unknown-background text-unknown",
-          )}
-        >
-          <StatusDot status={status} className="size-4" />
-          {DEVICE_STATUS_LABELS[status]}
-        </span>
+        {/* A passive device has no status (B13). */}
+        {hasStatus(device.type) ? (
+          <span
+            className={cn(
+              "inline-flex w-fit items-center gap-2 rounded-full border py-1.5 pr-3 pl-2 text-sm font-medium",
+              DEVICE_STATUS_CLASSES[status].badge,
+            )}
+          >
+            <StatusDot status={status} className="size-4" />
+            {DEVICE_STATUS_LABELS[status]}
+          </span>
+        ) : null}
 
         {TRACED_ON_ASK.has(device.type) ? (
           <Button

@@ -145,7 +145,7 @@ export default function Toolbar() {
     <div className="fixed top-4 left-1/2 z-20 max-w-[calc(100vw-22rem)] -translate-x-1/2">
       <div
         className={cn(
-          "flex items-center gap-2 rounded-lg p-1 shadow-lg transition-colors duration-500",
+          "flex items-center gap-2 rounded-lg border border-border p-1 shadow-lg transition-colors duration-500",
           flashType === "undo"
             ? "bg-red-100 dark:bg-red-950"
             : flashType === "redo"
