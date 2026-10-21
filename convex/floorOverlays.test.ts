@@ -345,7 +345,7 @@ describe("calque operations", () => {
     // The calque holds the floor until it is taken off.
     await expect(
       editor.mutation(api.floors.remove, { id: floorId }),
-    ).rejects.toThrow("porte encore un calque");
+    ).rejects.toThrow("porte encore 1 calque");
     await editor.mutation(api.mapOperations.apply, {
       operation: { kind: "overlay.set", meta: meta(2), floorId, overlay: null },
     });

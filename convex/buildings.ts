@@ -11,6 +11,11 @@ import {
   floorRow,
   floorsOf,
 } from "./lib/structure";
+import {
+  EMPTY_CONTENT,
+  addContent,
+  describeContent,
+} from "../src/buildings/content";
 
 const buildingValidator = v.object({
   id: v.string(),
@@ -127,7 +132,7 @@ export const remove = editorMutation({
     if (!building) return null;
     const floors = await floorsOf(ctx, id);
     for (const floor of floors) {
-      const content = await floorContent(ctx, floor.objectId);
+      const content = describeContent(await floorContent(ctx, floor.objectId));
       if (content) {
         throw new ConvexError(
           `Le bâtiment « ${building.name} » n'est pas vide : l'étage « ${floor.name} » porte encore ${content}.`,
@@ -137,5 +142,27 @@ export const remove = editorMutation({
     for (const floor of floors) await deleteEmptyFloor(ctx, floor);
     await ctx.db.delete(building._id);
     return null;
+  },
+});
+
+/** What stands on every floor of a building, for its removal dialog. */
+export const content = readerQuery({
+  args: { id: v.string() },
+  returns: v.union(
+    v.object({
+      devices: v.number(),
+      wallBlocks: v.number(),
+      overlays: v.number(),
+    }),
+    v.null(),
+  ),
+  handler: async (ctx, { id }) => {
+    const building = await buildingRow(ctx, id);
+    if (!building) return null;
+    let total = EMPTY_CONTENT;
+    for (const floor of await floorsOf(ctx, id)) {
+      total = addContent(total, await floorContent(ctx, floor.objectId));
+    }
+    return total;
   },
 });

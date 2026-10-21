@@ -1,4 +1,4 @@
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { useId, useState } from "react";
 import type { FormEvent } from "react";
 import { toast } from "sonner";
@@ -34,6 +34,7 @@ import {
   structureNameError,
 } from "@/buildings/names";
 import type { StructureKind } from "@/buildings/names";
+import { describeContent } from "@/buildings/content";
 import { failureMessage } from "@/lib/errors";
 import { createStandaloneObjectId } from "@/lib/identity";
 import { asBuildingId, asFloorId } from "@/lib/objectIds";
@@ -343,6 +344,18 @@ function RemoveDialog({
   const removeBuilding = useMutation(api.buildings.remove);
   const removeFloor = useMutation(api.floors.remove);
   const building = action.target === "building";
+  const buildingContent = useQuery(
+    api.buildings.content,
+    building ? { id: action.id } : "skip",
+  );
+  const floorContent = useQuery(
+    api.floors.content,
+    building ? "skip" : { id: action.id },
+  );
+  const content = building ? buildingContent : floorContent;
+  // Live, so the button frees itself as soon as the last device leaves.
+  const remaining = content ? describeContent(content) : null;
+  const canRemove = content !== undefined && remaining === null;
 
   const remove = async () => {
     onClose();
@@ -374,15 +387,20 @@ function RemoveDialog({
               : `Supprimer l'étage « ${action.name} » ?`}
           </AlertDialogTitle>
           <AlertDialogDescription>
-            {building
-              ? "Seul un bâtiment dont aucun étage ne porte d'équipement, de mur ou de calque peut être supprimé ; ses étages partent avec lui."
-              : "Seul un étage sans équipement, mur ni calque peut être supprimé."}
+            {remaining
+              ? building
+                ? `Ses étages portent encore ${remaining}. Retirez-les du plan avant de supprimer le bâtiment.`
+                : `Il porte encore ${remaining}. Retirez-les du plan avant de supprimer l'étage.`
+              : building
+                ? "Le bâtiment est vide ; ses étages partent avec lui."
+                : "L'étage est vide."}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Annuler</AlertDialogCancel>
           <AlertDialogAction
             variant="destructive"
+            disabled={!canRemove}
             onClick={() => void remove()}
           >
             Supprimer

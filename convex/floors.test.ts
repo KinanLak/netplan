@@ -158,8 +158,18 @@ describe("floors", () => {
     await expect(
       t.mutation(api.floors.remove, { id: floorId }),
     ).rejects.toThrow(
-      "L'étage « Floor » porte encore des équipements : videz-le avant de le supprimer.",
+      "L'étage « Floor » porte encore 1 équipement : videz-le avant de le supprimer.",
     );
+    expect(await t.query(api.floors.content, { id: floorId })).toEqual({
+      devices: 1,
+      wallBlocks: 0,
+      overlays: 0,
+    });
+    expect(await t.query(api.buildings.content, { id: buildingId })).toEqual({
+      devices: 1,
+      wallBlocks: 0,
+      overlays: 0,
+    });
     await t.mutation(api.floors.remove, { id: emptyId });
 
     const left = await t.query(api.floors.listForBuilding, { buildingId });
@@ -167,6 +177,55 @@ describe("floors", () => {
     await t.run(async (ctx) => {
       expect(await ctx.db.query("presences").collect()).toHaveLength(0);
     });
+  });
+
+  it("moves a floor up or down past its neighbour, and not past the ends", async () => {
+    const t = await signedInTest();
+    const buildingId = await freshBuilding(t);
+    for (const name of ["RDC", "Étage 1", "Étage 2"]) {
+      await t.mutation(api.floors.create, {
+        objectId: `floor:move:${name}`,
+        buildingId,
+        name,
+      });
+    }
+    const names = async () =>
+      (await t.query(api.floors.listForBuilding, { buildingId }))
+        .toSorted((a, b) => a.order - b.order)
+        .map((floor) => floor.name);
+
+    await t.mutation(api.floors.move, {
+      id: "floor:move:RDC",
+      direction: "up",
+    });
+    expect(await names()).toEqual(["Étage 1", "RDC", "Étage 2"]);
+    await t.mutation(api.floors.move, {
+      id: "floor:move:Étage 2",
+      direction: "up",
+    });
+    expect(await names()).toEqual(["Étage 1", "RDC", "Étage 2"]);
+    await t.mutation(api.floors.move, {
+      id: "floor:move:Étage 2",
+      direction: "down",
+    });
+    expect(await names()).toEqual(["Étage 1", "Étage 2", "RDC"]);
+  });
+
+  it("refuses a Lecteur reordering floors", async () => {
+    const editor = await signedInTest();
+    const buildingId = await freshBuilding(editor);
+    await editor.mutation(api.floors.create, {
+      objectId: "floor:reader:a",
+      buildingId,
+      name: "A",
+    });
+    const reader = await signedInTest("reader");
+    await expect(
+      reader.mutation(api.floors.move, {
+        id: "floor:reader:a",
+        direction: "up",
+      }),
+    ).rejects.toThrow();
   });
 
   it("rejects creates for deleted buildings", async () => {

@@ -1,19 +1,21 @@
-import type { ReactFlowInstance } from "@xyflow/react";
+import type { ReactFlowInstance, Viewport } from "@xyflow/react";
 import { useShortcutIntentEffect } from "@/hooks/use-shortcuts";
 import {
   FLOW_CANVAS_CENTER_DURATION_MS,
-  FLOW_CANVAS_FIT_VIEW_PADDING,
   FLOW_CANVAS_RESET_DURATION_MS,
   FLOW_CANVAS_ZOOM_DURATION_MS,
 } from "@/lib/constants";
 
 interface UseCanvasKeyboardShortcutsOptions {
   reactFlow: ReactFlowInstance;
+  /** The view that shows the whole floor, or null when nothing is drawn. */
+  fitViewport: () => Viewport | null;
 }
 
 /** The view's shortcuts; arrow keys never pan the map (ADR 0030). */
 export function useCanvasKeyboardShortcuts({
   reactFlow,
+  fitViewport,
 }: UseCanvasKeyboardShortcutsOptions) {
   const zoomIn = () => {
     void reactFlow.zoomIn({ duration: FLOW_CANVAS_ZOOM_DURATION_MS });
@@ -22,10 +24,12 @@ export function useCanvasKeyboardShortcuts({
     void reactFlow.zoomOut({ duration: FLOW_CANVAS_ZOOM_DURATION_MS });
   };
   const fitFloor = () => {
-    void reactFlow.fitView({
-      padding: FLOW_CANVAS_FIT_VIEW_PADDING,
-      duration: FLOW_CANVAS_CENTER_DURATION_MS,
-    });
+    const viewport = fitViewport();
+    if (viewport) {
+      void reactFlow.setViewport(viewport, {
+        duration: FLOW_CANVAS_CENTER_DURATION_MS,
+      });
+    }
   };
 
   useShortcutIntentEffect("zoom-in", zoomIn);
