@@ -40,16 +40,6 @@ export function MapLabelsLayer() {
 
   const canEdit = isEditMode && isReady;
 
-  // Escape leaves the tool before a text is started; the input handles its own.
-  useEffect(() => {
-    if (!isToolActive || draft) return;
-    const leave = (event: globalThis.KeyboardEvent) => {
-      if (event.key === "Escape") setLabelToolActive(false);
-    };
-    window.addEventListener("keydown", leave);
-    return () => window.removeEventListener("keydown", leave);
-  }, [isToolActive, draft, setLabelToolActive]);
-
   // React Flow has no pane click for a tool of its own; the layer listens.
   const placeDraftRef = useRef((_: MouseEvent) => {});
   useEffect(() => {

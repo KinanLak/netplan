@@ -254,6 +254,8 @@ function MapWorkspace({
       activeDrawTool,
       isOverlayPanelOpen,
       isPlacePanelOpen,
+      isLabelToolActive,
+      setLabelToolActive,
       overlayCalibration,
       setOverlayCalibration,
       setOverlayPanelOpen,
@@ -266,6 +268,7 @@ function MapWorkspace({
     if (isEditing && overlayCalibration) setOverlayCalibration(null);
     else if (isEditing && isOverlayPanelOpen) setOverlayPanelOpen(false);
     else if (isEditing && isPlacePanelOpen) setPlacePanelOpen(false);
+    else if (isLabelToolActive) setLabelToolActive(false);
     else if (shownCablesDeviceId) showCables(null);
     else if (selectedDeviceIds.length > 0) setSelectedDevices([]);
   });
