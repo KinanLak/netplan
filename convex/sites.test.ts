@@ -180,7 +180,6 @@ describe("sites", () => {
     expect(listed).toMatchObject({
       buildingCount: 1,
       floorCount: 1,
-      deviceCount: 1,
       integrations: [{ kind: "librenms", enabled: false }],
     });
     expect(await admin.query(api.sites.structure, { siteId })).toEqual([

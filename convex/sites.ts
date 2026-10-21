@@ -36,7 +36,6 @@ const siteSettings = v.object({
 const siteListing = v.object({
   ...siteSettings.fields,
   floorCount: v.number(),
-  deviceCount: v.number(),
   /** The connected tools, NetBox first, and whether each is collected. */
   integrations: v.array(
     v.object({
@@ -144,7 +143,10 @@ export const list = readerQuery({
   },
 });
 
-/** Every site with what it holds and connects to, for the sites page. */
+/**
+ * Every site with its buildings, floors and tools, for the sites page. No
+ * device count: it would read every device and rerun at each move.
+ */
 export const listSettings = adminQuery({
   args: {},
   returns: v.array(siteListing),
@@ -168,12 +170,6 @@ export const listSettings = adminQuery({
               .collect()
           ).length;
         }
-        const deviceCount = (
-          await ctx.db
-            .query("devices")
-            .withIndex("by_site", (q) => q.eq("siteId", siteId))
-            .collect()
-        ).length;
         const integrations = (
           await ctx.db
             .query("integrations")
@@ -187,7 +183,6 @@ export const listSettings = adminQuery({
         return {
           ...(await toSettings(ctx, site)),
           floorCount,
-          deviceCount,
           integrations,
         };
       }),

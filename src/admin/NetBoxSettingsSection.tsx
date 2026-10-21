@@ -269,10 +269,12 @@ function SettingsForm({
   const savedTypes = new Map<number, RoleChoice>(
     settings.roles.map((role) => [role.id, role.type]),
   );
+  // Against what the form opened on: a site gone from NetBox opens empty.
+  const [openedSiteId] = useState(() => site?.id ?? null);
   useUnsavedSection(
     "correspondances",
     "Import NetBox",
-    (site?.id ?? null) !== (settings.site?.id ?? null) ||
+    (site?.id ?? null) !== openedSiteId ||
       options.roles.some(
         (role) =>
           (types[role.id] ?? IGNORE) !== (savedTypes.get(role.id) ?? IGNORE),

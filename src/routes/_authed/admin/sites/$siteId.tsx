@@ -199,12 +199,20 @@ const sameDraft = (a: Draft, b: Draft) =>
 function SiteSettingsForm({ site }: { site: Site }) {
   const update = useMutation(api.sites.update);
   const [draft, setDraft] = useState(() => toDraft(site));
+  // What the form last read or saved. A draft left untouched follows another
+  // admin's save; a touched one is theirs to keep or drop.
+  const [baseline, setBaseline] = useState(() => toDraft(site));
+  const live = toDraft(site);
+  if (!sameDraft(live, baseline) && sameDraft(draft, baseline)) {
+    setBaseline(live);
+    setDraft(live);
+  }
   const [problem, setProblem] = useState<
     (SiteProblem | { field: null; message: string }) | null
   >(null);
   const [saved, flashSaved] = useFlash();
   const [pending, setPending] = useState(false);
-  const dirty = !sameDraft(draft, toDraft(site));
+  const dirty = !sameDraft(draft, baseline);
   useUnsavedSection("general", "Général", dirty);
 
   const change = (patch: Partial<Draft>) => {
@@ -235,6 +243,14 @@ function SiteSettingsForm({ site }: { site: Site }) {
     setProblem(null);
     try {
       await update({ siteId: site.id, ...settings });
+      // As the server stores it: a trimmed name, intervals as numbers.
+      const stored = toDraft({
+        ...site,
+        ...settings,
+        name: settings.name.trim(),
+      });
+      setBaseline(stored);
+      setDraft(stored);
       flashSaved();
     } catch (failure) {
       const message = failureMessage(failure, "admin");
@@ -280,6 +296,7 @@ function SiteSettingsForm({ site }: { site: Site }) {
           <TimeZoneField
             id="site-timezone"
             value={draft.timezone}
+            error={errorOf("timezone")}
             onChange={(timezone) => change({ timezone })}
           />
         </FieldGroup>
@@ -439,7 +456,8 @@ function DeleteSite({ site }: { site: Site }) {
     try {
       await remove({ siteId: site.id });
       setOpen(false);
-      await navigate({ to: "/admin/sites" });
+      // The page it leaves is gone: nothing unsaved is left to warn about.
+      await navigate({ to: "/admin/sites", ignoreBlocker: true });
       // The list it lands on no longer names it.
       toast.success(`Site « ${site.name} » supprimé.`);
     } catch (failure) {

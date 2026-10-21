@@ -102,7 +102,6 @@ export function SiteSetupSteps({
                   size={18}
                   strokeWidth={1.5}
                   className="shrink-0 text-up"
-                  aria-label="Fait"
                 />
               ) : (
                 <span
@@ -114,6 +113,7 @@ export function SiteSetupSteps({
               )}
               <span className={step.done ? "text-muted-foreground" : undefined}>
                 {step.label}
+                {step.done ? <span className="sr-only"> (fait)</span> : null}
               </span>
               {step.done ? null : where === "plan" ? (
                 <Link

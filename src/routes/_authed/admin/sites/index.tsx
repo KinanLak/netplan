@@ -40,20 +40,10 @@ const count = (n: number, one: string, many: string) =>
   n === 0 ? `Aucun ${one}` : n === 1 ? `1 ${one}` : `${n} ${many}`;
 
 type SiteListing = FunctionReturnType<typeof api.sites.listSettings>[number];
-type Freshness = FunctionReturnType<
-  typeof api.health.overview
->[number]["freshness"];
 
 /** A site at a glance: how fresh its data is, what it holds and reads. */
-function SiteRow({
-  site,
-  freshness,
-  now,
-}: {
-  site: SiteListing;
-  freshness: Freshness | undefined;
-  now: number;
-}) {
+function SiteRow({ site, now }: { site: SiteListing; now: number }) {
+  const freshness = useQuery(api.collection.freshness, { siteId: site.id });
   const status = freshness ? describeFreshness(freshness, now) : null;
   const tools = site.integrations.map(
     ({ kind, enabled }) =>
@@ -88,7 +78,6 @@ function SiteRow({
             {count(site.buildingCount, "bâtiment", "bâtiments")},{" "}
             {count(site.floorCount, "étage", "étages").toLowerCase()}
           </span>
-          <span>{count(site.deviceCount, "équipement", "équipements")}</span>
           <span>
             {tools.length === 0 ? "Aucune intégration" : tools.join(", ")}
           </span>
@@ -110,7 +99,6 @@ function SiteRow({
 
 function SitesPage() {
   const sites = useQuery(api.sites.listSettings);
-  const health = useQuery(api.health.overview);
   const now = useNow(30_000);
   const [creating, setCreating] = useState(false);
 
@@ -137,11 +125,7 @@ function SitesPage() {
         <ul className="divide-y rounded-lg border">
           {sites.map((site) => (
             <li key={site.id}>
-              <SiteRow
-                site={site}
-                freshness={health?.find((row) => row.id === site.id)?.freshness}
-                now={now}
-              />
+              <SiteRow site={site} now={now} />
             </li>
           ))}
         </ul>
