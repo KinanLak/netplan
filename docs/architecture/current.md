@@ -257,7 +257,8 @@ Built by lot 3b (ADR 0025) and redrawn by the UX lot U3 (ADR 0029).
   (`src/canvas/cableDrawing.ts`): a free one draws a cable to another device
   of the floor, and a cabled one offers to unplug it. Both go through
   `useCableCommands`, the port table's mutations and its "Annuler" toast,
-  outside the map's undo. Cables an integration made, and cables to another
+  outside the map's undo; Ctrl+Z right after a cable change shows that
+  toast again rather than undoing an older map edit. Cables an integration made, and cables to another
   floor, stay with the port table.
 - **Text labels.** A floor carries free text labels (`mapLabels`, ADR
   0029), such as room names, with no link to its walls. They are map

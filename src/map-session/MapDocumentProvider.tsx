@@ -17,6 +17,7 @@ import type {
   OverlayPatch,
 } from "@/map-engine/types";
 import { normalizeLabelText } from "@/map-engine/labels";
+import { forgetCableChange, reshowCableChange } from "@/devices/cableUndo";
 import {
   createObjectId,
   createOperationMeta,
@@ -361,6 +362,8 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
   ) => {
     const inverse = buildInverseOperation(snapshotBefore, operation);
     if (inverse) pushUndoOperation(inverse, operation.meta.opId);
+    // Undo now means this edit, not a cable plugged before it (B14).
+    forgetCableChange();
   };
 
   const dispatchOperation = (
@@ -818,6 +821,9 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
 
   const undo = () => {
     if (!isReadyRef.current) return;
+    // A cable changed after the last map edit: undo shows its toast again,
+    // since cables are site facts outside this history (ADR 0022, B14).
+    if (reshowCableChange()) return;
     const entry = undoStackRef.current.at(-1);
     if (!entry) return;
     setHistoryByFloor((current) =>
