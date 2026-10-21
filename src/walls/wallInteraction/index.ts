@@ -16,5 +16,5 @@ export {
   suppressWallContextMenu,
 } from "./state";
 
-export { clickWallPane, moveWallPointer } from "./gestures";
+export { clickWallPane, moveWallPointer, pressWallPane } from "./gestures";
 export { getWallInteractionViewModel } from "./viewModel";

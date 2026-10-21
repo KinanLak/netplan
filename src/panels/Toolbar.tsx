@@ -26,6 +26,7 @@ import { PlaceDeviceDialog } from "@/panels/PlaceDeviceDialog";
 import { drawToolbarActions } from "@/panels/toolbar-actions";
 import type { DrawToolbarAction } from "@/panels/toolbar-actions";
 import type { DrawTool } from "@/types/map";
+import type { MapFlash } from "@/map-session/history";
 
 export default function Toolbar() {
   const currentFloorId = useCurrentFloorId();
@@ -46,14 +47,13 @@ export default function Toolbar() {
     (state) => state.toggleMultiSelectMode,
   );
   const setOverlayPanelOpen = useMapStore((state) => state.setOverlayPanelOpen);
-  const [flashType, setFlashType] = useState<"undo" | "redo" | null>(null);
+  const [flashType, setFlashType] = useState<MapFlash | null>(null);
   const [placing, setPlacing] = useState(false);
 
   useEffect(() => {
     let timeout: ReturnType<typeof setTimeout> | null = null;
     const handler = (event: Event) => {
-      const type = (event as CustomEvent<{ type: "undo" | "redo" }>).detail
-        .type;
+      const type = (event as CustomEvent<{ type: MapFlash }>).detail.type;
       setFlashType(type);
       if (timeout !== null) clearTimeout(timeout);
       timeout = setTimeout(
@@ -146,10 +146,11 @@ export default function Toolbar() {
       <div
         className={cn(
           "flex items-center gap-2 rounded-lg border border-border p-1 shadow-lg transition-colors duration-500",
-          flashType === "undo"
-            ? "bg-red-100 dark:bg-red-950"
-            : flashType === "redo"
-              ? "bg-blue-100 dark:bg-blue-950"
+          // Undo and redo flash neutral; only a refusal is red (A19).
+          flashType === "refused"
+            ? "bg-down-background"
+            : flashType
+              ? "bg-accent"
               : "bg-card",
         )}
       >

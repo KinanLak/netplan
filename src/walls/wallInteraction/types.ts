@@ -41,6 +41,8 @@ export interface WallInteractionState {
   pointerSnapPoint: Position | null;
   lastWallStartPoint: Position | null;
   drawMessage: string | null;
+  /** The anchor came from pressing the pane: its release may end the shape. */
+  anchoredByPress: boolean;
   erasePreviewKeys: Array<string>;
   eraseStrokeLastSample: PointerSample | null;
   isEraseStrokeActive: boolean;

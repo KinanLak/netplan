@@ -1,7 +1,7 @@
 import { describe, expect, it, mock } from "bun:test";
 import type { FloorId, WallCommandResult } from "@/types/map";
 import { snapPositionToWallGrid } from "@/walls/gridGeometry";
-import { clickWallPane, moveWallPointer } from "./gestures";
+import { clickWallPane, moveWallPointer, pressWallPane } from "./gestures";
 import {
   areWallInteractionStatesEqual,
   createWallInteractionState,
@@ -163,5 +163,78 @@ describe("wall gesture state identity", () => {
 
     expect(areWallInteractionStatesEqual(state, copy)).toBe(true);
     expect(stabilizeWallInteractionState(state, copy)).toBe(state);
+  });
+});
+
+describe("press and drag", () => {
+  const applied = (): WallCommandResult => ({
+    changed: true,
+    nextWalls: [],
+    affectedKeys: [],
+    reason: "applied",
+  });
+
+  it("draws a room from where the press starts to where it is released", () => {
+    const context = makeContext({ activeDrawTool: "room" });
+    const adapter = { ...makeAdapter(), addWallRoom: mock(applied) };
+    const pressed = pressWallPane(
+      createWallInteractionState(),
+      context,
+      adapter,
+      sampleAt(40, 40),
+    );
+    expect(pressed.drawAnchor).toEqual(sampleAt(40, 40).snappedPoint);
+
+    const released = clickWallPane(
+      pressed,
+      context,
+      adapter,
+      sampleAt(200, 160),
+    );
+    expect(adapter.addWallRoom).toHaveBeenCalledTimes(1);
+    expect(released.state.drawAnchor).toBe(null);
+    expect(released.state.anchoredByPress).toBe(false);
+  });
+
+  it("keeps the anchor of a press released in place, for a second click", () => {
+    const context = makeContext({ activeDrawTool: "room" });
+    const adapter = { ...makeAdapter(), addWallRoom: mock(applied) };
+    const pressed = pressWallPane(
+      createWallInteractionState(),
+      context,
+      adapter,
+      sampleAt(40, 40),
+    );
+    const clicked = clickWallPane(pressed, context, adapter, sampleAt(41, 41));
+    expect(adapter.addWallRoom).not.toHaveBeenCalled();
+    expect(clicked.state.drawAnchor).toEqual(pressed.drawAnchor);
+
+    const second = clickWallPane(
+      clicked.state,
+      context,
+      adapter,
+      sampleAt(200, 160),
+    );
+    expect(adapter.addWallRoom).toHaveBeenCalledTimes(1);
+    expect(second.state.drawAnchor).toBe(null);
+  });
+
+  it("does nothing for the brush, the eraser, or a shape already started", () => {
+    const adapter = makeAdapter();
+    const idle = createWallInteractionState();
+    for (const tool of ["wall-brush", "wall-erase"] as const) {
+      expect(
+        pressWallPane(
+          idle,
+          makeContext({ activeDrawTool: tool }),
+          adapter,
+          sampleAt(40, 40),
+        ),
+      ).toBe(idle);
+    }
+    const started = { ...idle, drawAnchor: { x: 0, y: 0 } };
+    expect(
+      pressWallPane(started, makeContext(), adapter, sampleAt(40, 40)),
+    ).toBe(started);
   });
 });

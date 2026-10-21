@@ -26,6 +26,7 @@ import {
   createWallInteractionState,
   getWallInteractionViewModel,
   moveWallPointer,
+  pressWallPane,
   releaseWallPointer,
   resetWallInteractionState,
   suppressWallContextMenu,
@@ -55,6 +56,7 @@ export interface WallToolSession {
   cancelTool: () => void;
   handlePaneMouseMove: (event: ReactMouseEvent) => void;
   handlePaneClick: (event: ReactMouseEvent) => boolean;
+  handlePanePointerDown: (event: PointerEvent) => void;
   handleContextMenu: (event: ReactMouseEvent | MouseEvent) => boolean;
 }
 
@@ -158,7 +160,9 @@ export const useWallToolSession = (): WallToolSession => {
     isHistoryGroupOpenRef.current = true;
   };
 
-  const getPointerSample = (event: ReactMouseEvent): PointerSample => {
+  const getPointerSample = (
+    event: Pick<MouseEvent, "clientX" | "clientY">,
+  ): PointerSample => {
     const pointer = reactFlow.screenToFlowPosition(
       { x: event.clientX, y: event.clientY },
       { snapToGrid: false },
@@ -255,6 +259,18 @@ export const useWallToolSession = (): WallToolSession => {
     return result.handled;
   };
 
+  const handlePanePointerDown = (event: PointerEvent) => {
+    if (event.button !== 0) return;
+    commitInteractionState(
+      pressWallPane(
+        stateRef.current,
+        context,
+        adapter,
+        getPointerSample(event),
+      ),
+    );
+  };
+
   const handleContextMenu = (event: ReactMouseEvent | MouseEvent): boolean => {
     const result = suppressWallContextMenu(stateRef.current, context);
 
@@ -274,6 +290,7 @@ export const useWallToolSession = (): WallToolSession => {
     cancelTool,
     handlePaneMouseMove,
     handlePaneClick,
+    handlePanePointerDown,
     handleContextMenu,
   };
 };

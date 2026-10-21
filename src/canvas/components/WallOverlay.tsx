@@ -3,6 +3,7 @@ import { ViewportPortal } from "@xyflow/react";
 import type {
   DrawTool,
   Position,
+  Size,
   WallColor,
   WallDraft,
   WallSegment,
@@ -240,6 +241,10 @@ function useAnimatedRect(target: Rect | null, immediate = false): Rect | null {
 
 interface WallOverlayProps {
   floorWalls: Array<WallSegment>;
+  /** New blocks of the preview that cross a device (A13). */
+  blockedBlocks: ReadonlyArray<WallDraft>;
+  /** The devices they cross. */
+  crossedDevices: ReadonlyArray<{ position: Position; size: Size }>;
   previewSegments: Array<WallDraft>;
   erasePreviewKeys: Array<string>;
   erasePreviewPointer: Position | null;
@@ -254,6 +259,8 @@ interface WallOverlayProps {
 
 export function WallOverlay({
   floorWalls,
+  blockedBlocks,
+  crossedDevices,
   previewSegments,
   erasePreviewKeys,
   erasePreviewPointer,
@@ -551,6 +558,35 @@ export function WallOverlay({
               strokeLinecap="round"
             />
           ) : null}
+
+          {blockedBlocks.length > 0 ? (
+            <path
+              d={
+                computeWallRectUnionPath(
+                  blockedBlocks.map((block) => getWallCollisionRect(block)),
+                ) ?? undefined
+              }
+              fill="rgba(220, 38, 38, 0.35)"
+              stroke="rgba(220, 38, 38, 0.95)"
+              strokeWidth={2}
+              strokeLinejoin="round"
+            />
+          ) : null}
+
+          {crossedDevices.map((device) => (
+            <rect
+              key={`${device.position.x},${device.position.y}`}
+              x={device.position.x - 3}
+              y={device.position.y - 3}
+              width={device.size.width + 6}
+              height={device.size.height + 6}
+              rx={4}
+              fill="none"
+              stroke="rgba(220, 38, 38, 0.95)"
+              strokeWidth={2}
+              strokeDasharray="6 4"
+            />
+          ))}
 
           {drawAnchor && activeDrawTool !== "device" ? (
             <circle

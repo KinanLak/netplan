@@ -19,6 +19,7 @@ import {
   snapPositionToWallGrid,
   WALL_GRID_OFFSET,
   wallCollidesWithDevices,
+  wallConflicts,
 } from "./cells";
 
 const wall = (
@@ -143,6 +144,21 @@ describe("wall grid cell math", () => {
 
     expect(wallCollidesWithDevices(segment, [overlapping])).toBe(true);
     expect(wallCollidesWithDevices(segment, [next])).toBe(false);
+  });
+
+  it("names the blocks of a drawn wall that cross a device, and the device", () => {
+    const blocks = [
+      wall({ x: 10, y: 30 }, { x: 30, y: 30 }),
+      wall({ x: 30, y: 30 }, { x: 50, y: 30 }),
+      wall({ x: 90, y: 30 }, { x: 110, y: 30 }),
+    ];
+    const crossed = device({ x: 30, y: 20 });
+    const clear = device({ x: 30, y: 80 });
+
+    const conflicts = wallConflicts(blocks, [crossed, clear]);
+    expect(conflicts.blocks).toEqual([blocks[1]]);
+    expect(conflicts.devices).toEqual([crossed]);
+    expect(wallConflicts(blocks, [clear])).toEqual({ blocks: [], devices: [] });
   });
 
   it("detects whether a point is inside a wall collision rect", () => {

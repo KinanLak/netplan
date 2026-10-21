@@ -7,6 +7,7 @@ export {
   getWallCollisionRect,
   snapPositionToWallGrid,
   wallCollidesWithDevices,
+  wallConflicts,
   WALL_GRID_OFFSET,
 } from "./cells";
 

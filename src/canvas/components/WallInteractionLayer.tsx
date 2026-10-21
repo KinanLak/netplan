@@ -1,15 +1,21 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { useStore } from "@xyflow/react";
 import type { WallSegment } from "@/types/map";
 import { FLOW_CANVAS_PANE_HOVER_COLORS } from "@/lib/constants";
 import { useShortcutIntentEffect } from "@/hooks/use-shortcuts";
-import { useMapDocumentReady } from "@/map-session/useMapDocument";
+import {
+  useMapDocumentData,
+  useMapDocumentReady,
+} from "@/map-session/useMapDocument";
+import { wallConflicts } from "@/walls/gridGeometry";
+import { createBrushWallDraft } from "@/walls/gridGeometry/drafts";
 import { useMapStore } from "@/store/useMapStore";
 import {
   useActiveDrawTool,
   useCurrentFloorId,
   useIsEditMode,
+  useSelectedWallColor,
 } from "@/store/selectors";
 import { useWallToolSession } from "@/walls/useWallToolSession";
 import { WallOverlay } from "./WallOverlay";
@@ -67,6 +73,8 @@ export function WallInteractionLayer({
   const currentFloorId = useCurrentFloorId();
   const selectDevice = useMapStore((s) => s.selectDevice);
   const canvasDomNode = useStore((store) => store.domNode);
+  const { document } = useMapDocumentData();
+  const selectedWallColor = useSelectedWallColor();
 
   useShortcutIntentEffect("cancel-wall-tool", session.cancelTool);
   useShortcutIntentEffect("toggle-wall-debug", session.toggleDebugPanel);
@@ -108,6 +116,25 @@ export function WallInteractionLayer({
     };
   }, [bridge]);
 
+  // React Flow has no pane press callback, so the layer listens itself.
+  const handlePanePointerDown = (event: PointerEvent) => {
+    if (!isReady || !isEditMode || activeDrawTool === "device") return;
+    if (!(event.target as Element).classList.contains("react-flow__pane")) {
+      return;
+    }
+    session.handlePanePointerDown(event);
+  };
+  const pointerDownRef = useRef(handlePanePointerDown);
+  useEffect(() => {
+    pointerDownRef.current = handlePanePointerDown;
+  });
+  useEffect(() => {
+    if (!canvasDomNode) return;
+    const listener = (event: PointerEvent) => pointerDownRef.current(event);
+    canvasDomNode.addEventListener("pointerdown", listener);
+    return () => canvasDomNode.removeEventListener("pointerdown", listener);
+  }, [canvasDomNode]);
+
   useEffect(() => {
     if (!canvasDomNode) return;
     const cursorClass = session.paneCursorClass;
@@ -125,9 +152,30 @@ export function WallInteractionLayer({
     ? FLOW_CANVAS_PANE_HOVER_COLORS.erase.stroke
     : FLOW_CANVAS_PANE_HOVER_COLORS.draw.stroke;
 
+  // A wall or a room over a device shows where it is blocked before the
+  // click that would be refused (A13).
+  const drawn =
+    activeDrawTool === "wall-brush" && session.hoverSnapPoint && currentFloorId
+      ? [
+          createBrushWallDraft(
+            currentFloorId,
+            session.hoverSnapPoint,
+            selectedWallColor,
+          ),
+        ]
+      : session.previewSegments;
+  const conflicts = isEditMode
+    ? wallConflicts(
+        drawn,
+        document.devices.filter((device) => device.floorId === currentFloorId),
+      )
+    : { blocks: [], devices: [] };
+
   return (
     <>
       <WallOverlay
+        blockedBlocks={conflicts.blocks}
+        crossedDevices={conflicts.devices}
         floorWalls={floorWalls}
         previewSegments={session.previewSegments}
         erasePreviewKeys={session.erasePreviewKeys}
@@ -142,7 +190,8 @@ export function WallInteractionLayer({
       />
 
       <WallToolHelpCard
-        isVisible={isEditMode && isReady && activeDrawTool !== "device"}
+        isVisible={isEditMode && isReady}
+        tool={activeDrawTool}
         drawMessage={session.drawMessage}
       />
 

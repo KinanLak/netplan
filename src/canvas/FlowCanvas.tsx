@@ -33,6 +33,7 @@ import {
 } from "@/canvas/components/CablePathLayer";
 import { edgeTypes } from "@/canvas/edges/CablePathEdge";
 import { SeenSocketsContext, useFloorSeenSockets } from "@/canvas/seenSockets";
+import { BlockedSpots } from "@/canvas/components/BlockedSpots";
 import { CanvasZoomControls } from "@/canvas/components/CanvasZoomControls";
 import { DeviceNameTooltip } from "@/canvas/components/DeviceNameTooltip";
 import { ContextMenu, ContextMenuTrigger } from "@/components/ui/context-menu";
@@ -263,6 +264,7 @@ export default function FlowCanvas() {
 
   const {
     nodes,
+    blockedSpots,
     handleNodesChange,
     handleNodeClick,
     handleNodeMouseEnter,
@@ -314,9 +316,10 @@ export default function FlowCanvas() {
   };
 
   const isWallDeleteTool = activeDrawTool === "wall-erase";
-  const isWallBrushTool = activeDrawTool === "wall-brush";
+  // Every wall tool draws with the left button, so the map pans with the
+  // right one while it is active (A14).
   const panOnDrag =
-    isWallDeleteTool || isWallBrushTool
+    isEditMode && activeDrawTool !== "device"
       ? RIGHT_MOUSE_PAN_BUTTON
       : ALL_MOUSE_PAN_BUTTONS;
 
@@ -411,6 +414,7 @@ export default function FlowCanvas() {
               />
               <CablePathLabels ends={cablePaths.ends} />
               <DeviceNameTooltip />
+              <BlockedSpots spots={blockedSpots} />
               <CableDraftLayer />
             </ReactFlow>
           </SeenSocketsContext>
