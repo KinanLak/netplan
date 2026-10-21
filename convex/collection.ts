@@ -371,7 +371,10 @@ export const siteFreshness = v.object({
       failed: v.boolean(),
     }),
   ),
-  /** The switches LibreNMS read in the last cycle, and those with a note. */
+  /**
+   * How many switches the last cycle read, and how many LibreNMS devices
+   * came with a note.
+   */
   switches: v.union(
     v.null(),
     v.object({ read: v.number(), noted: v.number() }),
@@ -424,13 +427,16 @@ export const freshnessOf = async (
         last?.steps.some((step) => step.source === source && !step.ok),
       ),
     })),
-    switches: polled
-      ? {
-          read: polled.filter((polledSwitch) => polledSwitch.ok).length,
-          noted: polled.filter((polledSwitch) => polledSwitch.notes.length > 0)
-            .length,
-        }
-      : null,
+    switches:
+      last && polled
+        ? {
+            // A switch whose discovery failed may still have been read.
+            read: reads.filter((read) => read.readAt >= last.startedAt).length,
+            noted: polled.filter(
+              (polledSwitch) => polledSwitch.notes.length > 0,
+            ).length,
+          }
+        : null,
   };
 };
 

@@ -358,6 +358,10 @@ export default function AppSidebar() {
                                 }
                                 className={cn(
                                   "cursor-pointer justify-between",
+                                  // Room for the « ⋯ » when it shows: always
+                                  // on a touch screen, on hover otherwise.
+                                  isEditMode &&
+                                    "pr-8 pointer-fine:pr-2 pointer-fine:group-focus-within/menu-sub-item:pr-8 pointer-fine:group-hover/menu-sub-item:pr-8",
                                   isActive &&
                                     "bg-primary font-semibold text-primary-foreground hover:bg-primary hover:text-primary-foreground",
                                 )}
@@ -377,14 +381,7 @@ export default function AppSidebar() {
                                   </span>
                                 </span>
                                 {floorPresences.length > 0 ? (
-                                  <PresenceStack
-                                    users={floorPresences}
-                                    // The actions take the avatars' place.
-                                    className={cn(
-                                      isEditMode &&
-                                        "group-focus-within/menu-sub-item:invisible group-hover/menu-sub-item:invisible",
-                                    )}
-                                  />
+                                  <PresenceStack users={floorPresences} />
                                 ) : null}
                               </SidebarMenuSubButton>
                               {isEditMode ? (
