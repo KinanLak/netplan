@@ -213,7 +213,8 @@ function IntegrationForm({
       onSubmit={(event) => void submit(event)}
       className="space-y-4 rounded-lg border p-4"
     >
-      <FieldSet>
+      {/* The answer belongs to the draft that was sent, so it stays put. */}
+      <FieldSet disabled={pending !== null}>
         <div className="flex items-center justify-between gap-4">
           <FieldLegend>{label}</FieldLegend>
           {integration ? (
@@ -279,6 +280,7 @@ function IntegrationForm({
           <Field orientation="horizontal">
             <Checkbox
               id={id("enabled")}
+              disabled={pending !== null}
               checked={enabled}
               onCheckedChange={(checked) => {
                 setEnabled(checked);
@@ -292,6 +294,7 @@ function IntegrationForm({
           <Field orientation="horizontal">
             <Checkbox
               id={id("insecure")}
+              disabled={pending !== null}
               checked={ignoreCertificateErrors}
               onCheckedChange={(checked) => {
                 setIgnoreCertificateErrors(checked);

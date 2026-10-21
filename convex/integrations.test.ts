@@ -245,6 +245,45 @@ describe("integrations", () => {
     expect(row.lastCheck?.ok).toBe(true);
   });
 
+  it("turns a connection off even without the encryption key", async () => {
+    const admin = await signedInTest("admin");
+    const siteId = await createTestSite(admin);
+    await saveNetBox(admin, siteId);
+    delete process.env.NETPLAN_SECRET_KEY;
+
+    expect(
+      await admin.action(api.sources.saveIntegration, {
+        siteId,
+        kind: "netbox",
+        baseUrl: "https://netbox.test",
+        enabled: false,
+        ignoreCertificateErrors: false,
+      }),
+    ).toBeNull();
+    expect((await stored(admin))[0]?.enabled).toBe(false);
+  });
+
+  it("does not bring back a connection removed while it was tested", async () => {
+    const admin = await signedInTest("admin");
+    const siteId = await createTestSite(admin);
+    await saveNetBox(admin, siteId);
+    const [row] = await stored(admin);
+    await admin.mutation(api.integrations.remove, { siteId, kind: "netbox" });
+
+    expect(
+      await refusal(
+        admin.mutation(internal.integrations.store, {
+          siteId,
+          kind: "netbox",
+          baseUrl: "https://netbox.test",
+          enabled: true,
+          expectedVersion: row.updatedAt,
+        }),
+      ),
+    ).toBe("Cette connexion a été retirée pendant le test.");
+    expect(await stored(admin)).toEqual([]);
+  });
+
   it("forgets the last test when the certificate option changes", async () => {
     const admin = await signedInTest("admin");
     const siteId = await createTestSite(admin);

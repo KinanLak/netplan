@@ -259,6 +259,19 @@ describe("the push to NetBox", () => {
     expect(await admin.query(api.netbox.importedCount, { siteId })).toBe(2);
   });
 
+  it("goes off when the import loses its NetBox site", async () => {
+    const { admin, siteId } = await pushingSite();
+    await turnOn(admin, siteId);
+    await admin.mutation(api.netbox.saveSettings, {
+      siteId,
+      baseUrl: NETBOX,
+      settings: { site: null, roles: [] },
+    });
+    expect((await admin.query(api.netbox.settings, { siteId }))?.push).toBe(
+      undefined,
+    );
+  });
+
   it("writes where each NetBox device was seen, once", async () => {
     const { admin, siteId } = await pushingSite();
     await turnOn(admin, siteId);

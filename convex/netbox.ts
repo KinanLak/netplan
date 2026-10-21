@@ -54,8 +54,10 @@ export const saveSettings = adminMutation({
     const refused = netboxSettingsError(args.settings);
     if (refused) throw new ConvexError(refused);
     const { site, roles } = args.settings;
-    // The push has its own switch, which this form does not show.
-    const push = row.netbox?.push;
+    // The push has its own switch, which this form does not show. Without a
+    // site or a role nothing is imported, so it goes off with them.
+    const push =
+      site === null || roles.length === 0 ? undefined : row.netbox?.push;
     await ctx.db.patch(row._id, {
       netbox: { site, roles, ...(push !== undefined && { push }) },
     });

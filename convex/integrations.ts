@@ -155,7 +155,8 @@ const resolveDraft = async (
   }
   return {
     baseUrl,
-    token: await decryptStored(stored, stored.token),
+    // Read only for a test: switching a source off needs no key.
+    token: null,
     stored,
     unchanged: stored.ignoreCertificateErrors === draft.ignoreCertificateErrors,
   };
@@ -163,10 +164,15 @@ const resolveDraft = async (
 
 const probeDraft = async (
   draft: Draft,
-  resolved: { baseUrl: string; token: string | null },
+  resolved: { baseUrl: string; token: string | null; stored: Stored | null },
   transport: Transport,
-): Promise<ConnectionCheck> =>
-  resolved.token
+): Promise<ConnectionCheck> => {
+  const token =
+    resolved.token ??
+    (resolved.stored
+      ? await decryptStored(resolved.stored, resolved.stored.token)
+      : null);
+  return token
     ? await probeIntegration(
         sourceOf(
           {
@@ -174,11 +180,12 @@ const probeDraft = async (
             baseUrl: resolved.baseUrl,
             ignoreCertificateErrors: draft.ignoreCertificateErrors,
           },
-          resolved.token,
+          token,
           transport,
         ),
       )
     : UNREADABLE_TOKEN;
+};
 
 /**
  * Saves what the form shows. A new address, token or certificate option is
@@ -199,8 +206,14 @@ export const saveConnection = async (
     enabled: args.enabled,
     ignoreCertificateErrors: args.ignoreCertificateErrors,
   };
+  // Saved by someone else since the form read it: the test, or the lack of
+  // one, said nothing about their connection.
+  const expectedVersion = stored ? { expectedVersion: stored.updatedAt } : {};
   if (resolved.unchanged) {
-    await ctx.runMutation(internal.integrations.store, fields);
+    await ctx.runMutation(internal.integrations.store, {
+      ...fields,
+      ...expectedVersion,
+    });
     return null;
   }
   const result = await probeDraft(args, resolved, transport);
@@ -217,9 +230,7 @@ export const saveConnection = async (
     ...fields,
     token,
     lastCheck: { ...result, at: Date.now() },
-    // Saved by someone else since the form read it: the test said nothing
-    // about their connection.
-    ...(stored && { expectedVersion: stored.updatedAt }),
+    ...expectedVersion,
   });
   return result;
 };
@@ -328,6 +339,9 @@ export const store = internalMutation({
     const existing = await find(ctx, siteId, kind);
     const updatedAt = Date.now();
     if (!existing) {
+      if (args.expectedVersion !== undefined) {
+        throw new ConvexError("Cette connexion a été retirée pendant le test.");
+      }
       if (!token) throw new ConvexError("Saisissez le jeton.");
       await ctx.db.insert("integrations", {
         siteId,
@@ -346,7 +360,7 @@ export const store = internalMutation({
       existing.updatedAt !== args.expectedVersion
     ) {
       throw new ConvexError(
-        "Cette connexion a été modifiée pendant le test : réessayez.",
+        "Cette connexion a été modifiée entre-temps : rechargez la page.",
       );
     }
     if (!token && existing.baseUrl !== baseUrl) {
