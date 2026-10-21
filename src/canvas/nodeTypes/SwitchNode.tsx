@@ -1,6 +1,6 @@
 import { memo } from "react";
-import { Handle, Position } from "@xyflow/react";
 import NetworkNode from "./NetworkNode";
+import { CableHandle, useRemeasuredHandles } from "./CableHandle";
 import { areDeviceNodePropsEqual } from "./memo";
 import type { Node, NodeProps } from "@xyflow/react";
 import type { DeviceStatus, DeviceId } from "@/types/map";
@@ -22,6 +22,10 @@ function SwitchNode({ data: device, id }: NodeProps<SwitchNodeType>) {
   const status: DeviceStatus = device.metadata.status ?? "unknown";
   const ports = shownPorts(device.ports);
   const grip = useCableGrip(id as DeviceId);
+  useRemeasuredHandles(
+    id,
+    ports.map((port) => port.id),
+  );
 
   return (
     <NetworkNode
@@ -52,17 +56,16 @@ function SwitchNode({ data: device, id }: NodeProps<SwitchNodeType>) {
             key={port.id}
             {...{ [PORT_ID_ATTRIBUTE]: port.id }}
             className={cn(
-              "aspect-square w-full max-w-3 rounded-xs shadow-sm transition-transform hover:scale-125",
+              "relative aspect-square w-full max-w-3 rounded-xs shadow-sm transition-transform hover:scale-125",
               grip.isGrip && "cursor-crosshair",
               PORT_STATE_CLASSES[portState(port)],
             )}
             title={`${port.name} : ${PORT_STATE_LABELS[portState(port)]}`}
-          />
+          >
+            <CableHandle id={port.id} />
+          </div>
         ))}
       </div>
-
-      <Handle type="target" position={Position.Left} className="opacity-0" />
-      <Handle type="source" position={Position.Right} className="opacity-0" />
     </NetworkNode>
   );
 }

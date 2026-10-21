@@ -2,79 +2,46 @@ import { ViewportPortal, useStore } from "@xyflow/react";
 import type { ReactFlowState } from "@xyflow/react";
 import { useQuery } from "convex/react";
 import {
+  LABEL_GAP,
   TRACED_ON_HOVER,
   cablePathOf,
   endLabels,
   floorCabling,
+  labelPlacement,
   mergedPaths,
+  pathEdges,
 } from "@/canvas/cablePaths";
+import type { PathEnd } from "@/canvas/cablePaths";
+import type { CablePathEdgeType } from "@/canvas/edges/CablePathEdge";
 import { useMapDocumentData } from "@/map-session/useMapDocument";
 import {
   useHoveredDeviceId,
   useSelectedDeviceId,
   useShownCablesDeviceId,
 } from "@/store/selectors";
-import type { DeviceId, Position } from "@/types/map";
 import { api } from "../../../convex/_generated/api";
 
 const NO_ENDS = { seenAt: [], farEnds: [] };
-
-type Box = Position & { width: number; height: number };
-
-/**
- * Where React Flow draws each device, so a path follows a device while it
- * is dragged, before the move reaches the document.
- */
-const useBoxes = (ids: ReadonlyArray<DeviceId>) =>
-  useStore(
-    (state: ReactFlowState) => {
-      const boxes = new Map<DeviceId, Box>();
-      for (const id of ids) {
-        const node = state.nodeLookup.get(id);
-        if (!node) continue;
-        boxes.set(id, {
-          ...node.internals.positionAbsolute,
-          width: node.measured.width ?? node.width ?? 0,
-          height: node.measured.height ?? node.height ?? 0,
-        });
-      }
-      return boxes;
-    },
-    (a, b) =>
-      a.size === b.size &&
-      [...a].every(([id, box]) => {
-        const other = b.get(id);
-        return (
-          other?.x === box.x &&
-          other.y === box.y &&
-          other.width === box.width &&
-          other.height === box.height
-        );
-      }),
-  );
-
-const centreOf = (box: Box): Position => ({
-  x: box.x + box.width / 2,
-  y: box.y + box.height / 2,
-});
+const NO_PATHS = { edges: [], ends: [] };
 
 /**
  * The cable path of the hovered device, or else the selected one, together
  * with the paths of the switch or patch panel whose cables were asked for
- * (ADR 0025): cables through sockets and patch panels to the switch port,
- * drawn over the floor; a dashed segment to the socket where the network
- * last saw a device; and a label where a path ends or leaves the floor.
+ * (ADR 0025), as React Flow edges (ADR 0029): cables through sockets and
+ * patch panels to the switch port, and a dashed segment to the socket where
+ * the network last saw a device.
  */
-export function CablePathLayer() {
+export function useShownCablePaths(): {
+  edges: Array<CablePathEdgeType>;
+  ends: Array<PathEnd>;
+} {
   const { document } = useMapDocumentData();
   const hovered = useHoveredDeviceId();
   const selected = useSelectedDeviceId();
-  const zoom = useStore((s) => s.transform[2]);
+  const shown = useShownCablesDeviceId();
   const ends = useQuery(api.mapDocument.getFloorPathEnds, {
     floorId: document.floorId,
   });
-
-  const shown = useShownCablesDeviceId();
 
   const targetId = hovered ?? selected;
   const target = document.devices.find((device) => device.id === targetId);
@@ -82,95 +49,115 @@ export function CablePathLayer() {
     ...(target && TRACED_ON_HOVER.has(target.type) ? [target.id] : []),
     ...(shown ? [shown] : []),
   ];
-  const floor =
-    traced.length > 0
-      ? floorCabling(
-          document.devices,
-          document.ports,
-          document.cables,
-          ends ?? NO_ENDS,
-        )
-      : null;
-  const path = mergedPaths(
-    floor ? traced.map((deviceId) => cablePathOf(deviceId, floor)) : [],
+  if (traced.length === 0) return NO_PATHS;
+
+  const floor = floorCabling(
+    document.devices,
+    document.ports,
+    document.cables,
+    ends ?? NO_ENDS,
   );
-
-  const ids = [
-    ...path.cables.flatMap(({ from, to }) => [from, to]),
-    ...path.sightings.flatMap(({ deviceId, socketId }) => [deviceId, socketId]),
-    ...path.ends.map(({ at }) => at),
-  ];
-  const boxes = useBoxes(ids);
-  if (ids.length === 0) return null;
-
-  const segment = (from: DeviceId, to: DeviceId) => {
-    const a = boxes.get(from);
-    const b = boxes.get(to);
-    if (!a || !b) return null;
-    return { a: centreOf(a), b: centreOf(b) };
+  const path = mergedPaths(traced.map((id) => cablePathOf(id, floor)));
+  return {
+    edges: pathEdges(path, floor).map(
+      ({ sourceHandle, targetHandle, state, ...edge }) => ({
+        ...edge,
+        type: "cable-path",
+        sourceHandle,
+        targetHandle,
+        data: { state },
+        className: "cable-path",
+        selectable: false,
+        focusable: false,
+        deletable: false,
+        // The path is a picture of the drawer's connections, not content.
+        domAttributes: { "aria-hidden": true },
+      }),
+    ),
+    ends: path.ends,
   };
+}
 
-  // Labels on one device stack downwards from under it.
-  const labelsAt = endLabels(path.ends);
+type Box = { x: number; y: number; width: number; height: number };
+
+const boxesOf = (state: ReactFlowState) =>
+  [...state.nodeLookup.values()].map((node) => ({
+    id: node.id,
+    x: node.internals.positionAbsolute.x,
+    y: node.internals.positionAbsolute.y,
+    width: node.measured.width ?? node.width ?? 0,
+    height: node.measured.height ?? node.height ?? 0,
+  }));
+
+const sameBoxes = (
+  a: ReturnType<typeof boxesOf>,
+  b: ReturnType<typeof boxesOf>,
+) =>
+  a.length === b.length &&
+  a.every((box, index) => {
+    const other = b[index];
+    return (
+      box.id === other.id &&
+      box.x === other.x &&
+      box.y === other.y &&
+      box.width === other.width &&
+      box.height === other.height
+    );
+  });
+
+// One label on screen: text-xs at about 7 px a character, in a box with
+// px-1.5, py-0.5 and a border; the labels stack with gap-0.5.
+const CHAR_WIDTH = 7;
+const LABEL_PADDING = 14;
+const LABEL_HEIGHT = 22;
+const LABEL_GAP_PX = 2;
+
+/**
+ * A label where a path ends or leaves the floor, beside the device it ends
+ * on (ADR 0029), shown only where it covers no other device.
+ */
+export function CablePathLabels({ ends }: { ends: ReadonlyArray<PathEnd> }) {
+  const zoom = useStore((s) => s.transform[2]);
+  const boxes = useStore(boxesOf, sameBoxes);
+  if (ends.length === 0) return null;
+  const boxById = new Map<string, Box>(boxes.map((box) => [box.id, box]));
 
   return (
     <ViewportPortal>
-      <svg
-        aria-hidden
-        className="pointer-events-none absolute top-0 left-0 overflow-visible"
-        width={1}
-        height={1}
-        data-testid="cable-path"
-      >
-        {path.cables.map((cable) => {
-          const line = segment(cable.from, cable.to);
-          if (!line) return null;
-          return (
-            <line
-              key={cable.id}
-              x1={line.a.x}
-              y1={line.a.y}
-              x2={line.b.x}
-              y2={line.b.y}
-              className="stroke-primary"
-              strokeWidth={2.5}
-              strokeLinecap="round"
-              vectorEffect="non-scaling-stroke"
-            />
-          );
-        })}
-        {path.sightings.map((sighting) => {
-          const line = segment(sighting.deviceId, sighting.socketId);
-          if (!line) return null;
-          return (
-            <line
-              key={sighting.deviceId}
-              x1={line.a.x}
-              y1={line.a.y}
-              x2={line.b.x}
-              y2={line.b.y}
-              className="stroke-muted-foreground"
-              strokeWidth={2}
-              strokeDasharray="6 5"
-              strokeLinecap="round"
-              vectorEffect="non-scaling-stroke"
-            />
-          );
-        })}
-      </svg>
-      {[...labelsAt].map(([at, labels]) => {
-        const box = boxes.get(at);
+      {[...endLabels(ends)].map(([at, labels]) => {
+        const box = boxById.get(at);
         if (!box) return null;
+        const size = {
+          width:
+            (Math.max(...labels.map((label) => label.length)) * CHAR_WIDTH +
+              LABEL_PADDING) /
+            zoom,
+          height:
+            (labels.length * LABEL_HEIGHT +
+              (labels.length - 1) * LABEL_GAP_PX) /
+            zoom,
+        };
+        const placement = labelPlacement(
+          box,
+          size,
+          boxes.filter((other) => other.id !== at),
+        );
+        if (!placement) return null;
         return (
           <div
             key={at}
+            data-testid="cable-path-label"
             className="pointer-events-none absolute flex flex-col items-center gap-0.5"
             style={{
               left: box.x + box.width / 2,
-              top: box.y + box.height + 4,
+              top:
+                placement === "below"
+                  ? box.y + box.height + LABEL_GAP
+                  : box.y - LABEL_GAP,
               // The labels keep their size on screen whatever the zoom.
-              transform: `translateX(-50%) scale(${1 / zoom})`,
-              transformOrigin: "top center",
+              transform: `translate(-50%, ${placement === "below" ? 0 : -100}%) scale(${1 / zoom})`,
+              transformOrigin:
+                placement === "below" ? "top center" : "bottom center",
             }}
           >
             {labels.map((label) => (

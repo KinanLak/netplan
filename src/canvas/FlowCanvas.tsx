@@ -1,6 +1,11 @@
 import type { CSSProperties } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ReactFlow, useOnViewportChange, useReactFlow } from "@xyflow/react";
+import {
+  ConnectionMode,
+  ReactFlow,
+  useOnViewportChange,
+  useReactFlow,
+} from "@xyflow/react";
 import type { Viewport } from "@xyflow/react";
 import { nodeTypes } from "./nodeTypes";
 import type { DeviceNode } from "@/devices/reactFlowDeviceAdapter";
@@ -22,7 +27,11 @@ import {
 import { GRID_SIZE } from "@/lib/grid";
 import { cn } from "@/lib/utils";
 import { CableDraftLayer } from "@/canvas/components/CableDraftLayer";
-import { CablePathLayer } from "@/canvas/components/CablePathLayer";
+import {
+  CablePathLabels,
+  useShownCablePaths,
+} from "@/canvas/components/CablePathLayer";
+import { edgeTypes } from "@/canvas/edges/CablePathEdge";
 import { CanvasZoomControls } from "@/canvas/components/CanvasZoomControls";
 import { ContextMenu, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { DeviceContextMenu } from "./DeviceContextMenu";
@@ -49,7 +58,6 @@ import {
 } from "@/lib/constants";
 
 const SNAP_GRID: [number, number] = [GRID_SIZE, GRID_SIZE];
-const EMPTY_EDGES: Array<never> = [];
 const FIT_VIEW_OPTIONS = { padding: FLOW_CANVAS_FIT_VIEW_PADDING };
 const PRO_OPTIONS = { hideAttribution: true };
 const ALL_MOUSE_PAN_BUTTONS = [0, 1, 2];
@@ -280,6 +288,7 @@ export default function FlowCanvas() {
   const [paneBridge] = useState(createWallPaneEventBridge);
 
   useCanvasKeyboardShortcuts({ reactFlow });
+  const cablePaths = useShownCablePaths();
 
   const handleZoomInClick = () => {
     reactFlow.zoomIn({ duration: FLOW_CANVAS_ZOOM_DURATION_MS });
@@ -350,7 +359,13 @@ export default function FlowCanvas() {
         >
           <ReactFlow<DeviceNode>
             nodes={nodes}
-            edges={EMPTY_EDGES}
+            edges={cablePaths.edges}
+            edgeTypes={edgeTypes}
+            // Cables join port handles whatever their type (ADR 0029); the
+            // map draws them itself, so nothing connects through React Flow.
+            connectionMode={ConnectionMode.Loose}
+            nodesConnectable={false}
+            edgesFocusable={false}
             onNodesChange={handleNodesChange}
             onNodeClick={handleNodeClick}
             onNodeMouseEnter={handleNodeMouseEnter}
@@ -389,7 +404,7 @@ export default function FlowCanvas() {
             <OverlayGizmo />
 
             <WallInteractionLayer bridge={paneBridge} floorWalls={floorWalls} />
-            <CablePathLayer />
+            <CablePathLabels ends={cablePaths.ends} />
             <CableDraftLayer />
           </ReactFlow>
         </ContextMenuTrigger>

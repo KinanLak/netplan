@@ -206,8 +206,8 @@ export default function DeviceDrawer() {
             className="w-full gap-1.5"
           >
             {shownCablesDeviceId === device.id
-              ? "Masquer les câbles"
-              : "Afficher les câbles"}
+              ? "Masquer les câbles du plan"
+              : "Voir les câbles sur le plan"}
             <ShortcutHintInline action="toggle-device-cables" />
           </Button>
         ) : null}

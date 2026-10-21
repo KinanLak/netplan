@@ -278,3 +278,71 @@ button:hover {
 .wall-cursor-s .react-flow__pane {
   cursor: s-resize !important;
 }
+
+/* Where a drawn cable meets a node (ADR 0029): a point, never a target. */
+.react-flow__handle.cable-handle {
+  top: 50%;
+  left: 50%;
+  width: 1px;
+  height: 1px;
+  min-width: 0;
+  min-height: 0;
+  border: 0;
+  background: transparent;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  opacity: 0;
+}
+
+/* A drawn cable takes the colour of its link; a live one carries a flow. */
+.react-flow__edge.cable-path {
+  pointer-events: none;
+}
+
+.cable-path-line {
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.cable-path-live {
+  stroke: var(--up);
+}
+
+.cable-path-down {
+  stroke: var(--muted-foreground);
+}
+
+.cable-path-unknown {
+  stroke: var(--muted-foreground);
+  stroke-dasharray: 2 4;
+}
+
+.cable-path-sighting {
+  stroke: var(--muted-foreground);
+  stroke-dasharray: 6 5;
+}
+
+.cable-path-flow {
+  fill: none;
+  stroke: var(--up-background);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 2 14;
+  vector-effect: non-scaling-stroke;
+  animation: cable-path-flow 0.8s linear infinite;
+}
+
+@keyframes cable-path-flow {
+  to {
+    stroke-dashoffset: -16;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cable-path-flow {
+    animation: none;
+    display: none;
+  }
+}

@@ -1,9 +1,12 @@
 import { describe, expect, it } from "bun:test";
 import {
+  cableHandleOf,
   cablePathOf,
   endLabels,
   floorCabling,
+  labelPlacement,
   mergedPaths,
+  pathEdges,
   toggledCableDisplay,
 } from "./cablePaths";
 import type { FarEnd, SeenAt } from "./cablePaths";
@@ -167,7 +170,7 @@ describe("cablePathOf", () => {
     );
     expect(hops(path)).toEqual(["sw>p"]);
     expect(path.ends).toEqual([
-      { kind: "shared", at: id("p"), portName: "rear 1" },
+      { kind: "shared", at: id("p"), portName: "Arrière rear 1" },
     ]);
   });
 
@@ -185,7 +188,7 @@ describe("cablePathOf", () => {
     );
     expect(hops(path)).toEqual(["wall>p", "p>sw"]);
     expect(path.ends).toEqual([
-      { kind: "port", at: id("sw"), portName: "rear 7" },
+      { kind: "port", at: id("sw"), portName: "Arrière rear 7" },
     ]);
   });
 
@@ -260,10 +263,78 @@ describe("endLabels", () => {
     } as const;
     expect(endLabels([portEnd(1), portEnd(2), away]).get(id("sw"))).toEqual([
       "Gi1/0/1, Gi1/0/2",
-      "Cœur · Te1/1/1 (non placé)",
+      "Cœur · Te1/1/1 (hors plan)",
     ]);
     expect(endLabels([1, 2, 3, 4, 5].map(portEnd)).get(id("sw"))).toEqual([
       "5 ports",
     ]);
+  });
+});
+
+describe("cable states", () => {
+  const states = (path: ReturnType<typeof cablePathOf>) =>
+    path.cables.map(({ state }) => state);
+  const observed = (fields: Partial<Port>) => ({ ...sw, ...fields });
+
+  it("colours every cable of a trace by its switch port, from either end", () => {
+    for (const [fields, state] of [
+      [{ seen: true }, "live"],
+      [{ status: "up" }, "live"],
+      [{ status: "down" }, "down"],
+      [{}, "unknown"],
+    ] as const) {
+      const live = floorCabling(
+        devices({ sw: "switch", p: "patch-panel", wall: "wall-port" }),
+        [observed(fields), pFront, pRear, wall],
+        [cable(sw, pFront), cable(pRear, wall)],
+        { seenAt: [], farEnds: [] },
+      );
+      expect(states(cablePathOf(id("wall"), live))).toEqual([state, state]);
+      expect(states(cablePathOf(id("sw"), live))).toEqual([state, state]);
+      // From the panel, both sides show the switch port's state.
+      expect(states(cablePathOf(id("p"), live))).toEqual([state, state]);
+    }
+  });
+});
+
+describe("pathEdges", () => {
+  it("joins a cable at its ports, and a device at its status dot", () => {
+    const f = floor({ seenAt: [seenAtWall] });
+    const edges = pathEdges(cablePathOf(id("pc"), f), f);
+    expect(
+      edges.map(({ source, sourceHandle, target, targetHandle }) => [
+        `${source}/${sourceHandle}`,
+        `${target}/${targetHandle}`,
+      ]),
+    ).toEqual([
+      // A rear port behind one front shows as that front port.
+      ["wall/socket", `p/${pFront.id}`],
+      [`p/${pFront.id}`, `sw/${sw.id}`],
+      ["pc/status", "wall/socket"],
+    ]);
+  });
+
+  it("leaves a rear port several fronts share to the node's first handle", () => {
+    const front2 = port("p", "front", 2, 1);
+    const f = floor({}, { ports: [front2] });
+    expect(cableHandleOf(pRear, f)).toBe(null);
+    expect(cableHandleOf(pFront, f)).toBe(pFront.id);
+  });
+});
+
+describe("labelPlacement", () => {
+  const box = { x: 0, y: 0, width: 40, height: 40 };
+  const labels = { width: 60, height: 20 };
+
+  it("puts labels under a device, else over it, else nowhere", () => {
+    expect(labelPlacement(box, labels, [])).toBe("below");
+    const under = { x: 0, y: 50, width: 40, height: 40 };
+    expect(labelPlacement(box, labels, [under])).toBe("above");
+    const over = { x: 0, y: -40, width: 40, height: 30 };
+    expect(labelPlacement(box, labels, [under, over])).toBe(null);
+    // A device beside the label's reach does not hide it.
+    expect(
+      labelPlacement(box, labels, [{ x: 200, y: 50, width: 40, height: 40 }]),
+    ).toBe("below");
   });
 });

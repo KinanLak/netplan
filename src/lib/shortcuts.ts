@@ -317,7 +317,7 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
   },
   "show-port-cables": {
     keys: ["K"],
-    label: "Câbles",
+    label: "Ports et câbles",
     description: "Voir les câbles de chaque port et où ils mènent",
     scope: "drawer",
   },

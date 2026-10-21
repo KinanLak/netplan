@@ -1,8 +1,9 @@
 import { memo } from "react";
-import { Handle, Position } from "@xyflow/react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ComputerIcon, UserIcon } from "@hugeicons/core-free-icons";
 import NetworkNode from "./NetworkNode";
+import { CableHandle } from "./CableHandle";
+import { STATUS_HANDLE } from "@/canvas/cablePaths";
 import { areDeviceNodePropsEqual } from "./memo";
 import type { Node, NodeProps } from "@xyflow/react";
 import type { DeviceStatus } from "@/types/map";
@@ -34,7 +35,10 @@ function PcNode({ data: device, id }: NodeProps<PcNodeType>) {
               strokeWidth={1.5}
             />
           </span>
-          <StatusDot status={status} />
+          <span className="relative">
+            <StatusDot status={status} />
+            <CableHandle id={STATUS_HANDLE} />
+          </span>
         </div>
 
         {/* Middle: hostname */}
@@ -61,9 +65,6 @@ function PcNode({ data: device, id }: NodeProps<PcNodeType>) {
           <div className="h-2.5" />
         )}
       </div>
-
-      <Handle type="target" position={Position.Top} className="opacity-0" />
-      <Handle type="source" position={Position.Bottom} className="opacity-0" />
     </NetworkNode>
   );
 }

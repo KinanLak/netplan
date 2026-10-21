@@ -1,4 +1,3 @@
-import { Handle, Position } from "@xyflow/react";
 import { memo } from "react";
 import NetworkNode from "./NetworkNode";
 import { areDeviceNodePropsEqual } from "./memo";
@@ -40,9 +39,6 @@ function RackNode({ data: device, id }: NodeProps<RackNodeType>) {
           />
         ))}
       </div>
-
-      <Handle type="target" position={Position.Top} className="opacity-0" />
-      <Handle type="source" position={Position.Bottom} className="opacity-0" />
     </NetworkNode>
   );
 }

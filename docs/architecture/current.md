@@ -197,7 +197,7 @@ Built by lot 4 (ADR 0026).
 
 ## Map
 
-Built by lot 3b (ADR 0025).
+Built by lot 3b (ADR 0025) and redrawn by the UX lot U3 (ADR 0029).
 
 - **Observed facts.** The LibreNMS step records each switch's last good
   read (`siteCycles.switchReads`). A switch's status, its ports' link and
@@ -216,7 +216,10 @@ Built by lot 3b (ADR 0025).
   shows all of its paths only on demand (menu, drawer or H) until it is
   hidden or another device's are shown. A trace stops rather than guess, at
   a loop, a hop limit, or a shared rear port; a hop off the floor ends on a
-  label.
+  label. Paths are React Flow edges (ADR 0029) between the handles nodes
+  carry at their ports, socket icons and status dots, curved and coloured by
+  the link at the switch end; end labels show only where they cover no
+  other device.
 - **Cable editing.** In edit mode a port is a grip
   (`src/canvas/cableDrawing.ts`): a free one draws a cable to another device
   of the floor, and a cabled one offers to unplug it. Both go through

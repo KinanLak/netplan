@@ -48,7 +48,7 @@ export function DrawerPortsSection({
           onClick={onShowCables}
           className="h-6 gap-1 text-xs"
         >
-          Câbles
+          Ports et câbles…
           <ShortcutHintInline action="show-port-cables" />
         </Button>
       </div>
