@@ -106,8 +106,17 @@ function SidebarProvider({
 
   // Helper to toggle the sidebar.
   const toggleSidebar = React.useCallback(() => {
-    return isMobile ? setOpenMobile((open) => !open) : setOpen((open) => !open);
-  }, [isMobile, setOpen, setOpenMobile]);
+    if (isMobile) {
+      setOpenMobile((open) => !open);
+      return;
+    }
+    // Folding turns the sidebar inert: a focus inside it goes to the button
+    // that brings it back, not to the page.
+    if (open && document.activeElement?.closest('[data-slot="sidebar"]')) {
+      document.querySelector<HTMLElement>('[data-sidebar="trigger"]')?.focus();
+    }
+    setOpen((open) => !open);
+  }, [isMobile, open, setOpen, setOpenMobile]);
 
   // Toggle the sidebar with Mod+B
   useShortcutIntentEffect("sidebar-toggle", toggleSidebar);
@@ -229,6 +238,8 @@ function Sidebar({
       />
       <div
         data-slot="sidebar-container"
+        // Off screen when folded: neither Tab nor a screen reader reaches it.
+        inert={state === "collapsed" && collapsible === "offcanvas"}
         className={cn(
           "fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-width) transition-[left,right,width] duration-200 ease-linear md:flex",
           side === "left"

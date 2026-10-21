@@ -27,7 +27,7 @@ const NO_PATHS = { edges: [], ends: [] };
 /**
  * The cable path of the hovered device, or else the selected one, together
  * with the paths of the switch or patch panel whose cables were asked for
- * (ADR 0025), as React Flow edges (ADR 0030): cables through sockets and
+ * (ADR 0025), as React Flow edges (ADR 0029): cables through sockets and
  * patch panels to the switch port, and a dashed segment to the socket where
  * the network last saw a device.
  */
@@ -114,7 +114,7 @@ const LABEL_GAP_PX = 2;
 
 /**
  * A label where a path ends or leaves the floor, beside the device it ends
- * on (ADR 0030), shown only where it covers no other device.
+ * on (ADR 0029), shown only where it covers no other device.
  */
 export function CablePathLabels({ ends }: { ends: ReadonlyArray<PathEnd> }) {
   const zoom = useStore((s) => s.transform[2]);

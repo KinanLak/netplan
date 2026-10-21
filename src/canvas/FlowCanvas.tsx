@@ -346,7 +346,7 @@ export default function FlowCanvas() {
             nodes={nodes}
             edges={cablePaths.edges}
             edgeTypes={edgeTypes}
-            // Cables join port handles whatever their type (ADR 0030); the
+            // Cables join port handles whatever their type (ADR 0029); the
             // map draws them itself, so nothing connects through React Flow.
             connectionMode={ConnectionMode.Loose}
             nodesConnectable={false}

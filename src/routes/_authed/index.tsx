@@ -40,6 +40,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { useSignOut } from "@/panels/SidebarAccount";
 import { isAdmin } from "@/lib/roles";
 import { siteSearch, useCurrentSite } from "@/sites/useCurrentSite";
+import { SiteRefreshShortcut } from "@/sites/CollectionFreshness";
 import { ShortcutsDialog } from "@/components/shortcuts-dialog";
 import { ShortcutHintAbsolute } from "@/components/ui/shortcut-hint";
 import { toggledCableDisplay } from "@/canvas/cablePaths";
@@ -153,6 +154,7 @@ function MapWorkspace({
   const isEditMode = useIsEditMode();
   const canEdit = useCanEdit();
   const isReady = useMapDocumentReady();
+  const { site } = useCurrentSite();
   const { commands, undo, redo, getDocument } = useMapDocumentActions();
 
   const setCurrentFloor = useMapStore((s) => s.setCurrentFloor);
@@ -265,6 +267,7 @@ function MapWorkspace({
           {selectedDeviceId ? <DeviceDrawer /> : null}
           {empty ? <MapEmptyState {...empty} /> : null}
           <MapDocumentStatus floorless={empty !== null} />
+          {site ? <SiteRefreshShortcut siteId={site.id} /> : null}
 
           <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
             <SidebarToggle />
@@ -343,6 +346,7 @@ function SidebarToggle() {
   return (
     <button
       type="button"
+      data-sidebar="trigger"
       onClick={toggleSidebar}
       aria-label={label}
       aria-expanded={shown}

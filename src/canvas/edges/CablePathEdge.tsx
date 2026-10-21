@@ -23,7 +23,7 @@ const facing = (dx: number, dy: number): [Position, Position] =>
       ? [Position.Bottom, Position.Top]
       : [Position.Top, Position.Bottom];
 
-/** One cable, or one sighting, of the shown paths (ADR 0030). */
+/** One cable, or one sighting, of the shown paths (ADR 0029). */
 export function CablePathEdge({
   id,
   sourceX,

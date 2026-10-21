@@ -317,11 +317,13 @@ describe("shortcut intents", () => {
     document.body.innerHTML = `
       <div data-slot="dropdown-menu-content"><button id="item">Clair</button></div>
       <div role="listbox"><div id="option" tabindex="0">Option</div></div>
+      <div data-slot="sheet-content" role="dialog"><a id="floor">Étage 1</a></div>
       <button id="plain">Inventaire</button>`;
     expect(isShortcutWidgetTarget(document.getElementById("item"))).toBe(true);
     expect(isShortcutWidgetTarget(document.getElementById("option"))).toBe(
       true,
     );
+    expect(isShortcutWidgetTarget(document.getElementById("floor"))).toBe(true);
     expect(isShortcutWidgetTarget(document.getElementById("plain"))).toBe(
       false,
     );

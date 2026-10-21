@@ -202,6 +202,8 @@ export const isShortcutInputTarget = (target: EventTarget | null): boolean => {
 const WIDGET_SELECTOR = [
   '[data-slot="dialog-content"]',
   '[data-slot="alert-dialog-content"]',
+  '[data-slot="sheet-content"]',
+  '[role="dialog"]',
   '[data-slot="dropdown-menu-content"]',
   '[data-slot="dropdown-menu-sub-content"]',
   '[data-slot="context-menu-content"]',
