@@ -82,6 +82,8 @@ function UsersPage() {
         </Button>
       </header>
 
+      <EmptyRoleMappingNotice />
+
       {users === undefined ? null : (
         <ul className="divide-y rounded-lg border">
           {users.map((user) => (
@@ -249,10 +251,36 @@ function UserItem({ user, isMe }: { user: UserRow; isMe: boolean }) {
   );
 }
 
+// An empty mapping is easy to miss: every Keycloak account then arrives as
+// a Lecteur, which looks like a fault to them.
+function EmptyRoleMappingNotice() {
+  const settings = useQuery(api.authSettings.keycloak);
+  if (
+    !settings ||
+    settings.issuer === null ||
+    settings.editorRole !== null ||
+    settings.adminRole !== null
+  ) {
+    return null;
+  }
+  return (
+    <p className="rounded-lg border p-3 text-sm">
+      Aucune correspondance de rôles Keycloak : tous les comptes Keycloak sont
+      Lecteurs.{" "}
+      <a
+        href="#keycloak"
+        className="underline underline-offset-2 hover:text-foreground"
+      >
+        Choisir les rôles
+      </a>
+    </p>
+  );
+}
+
 function KeycloakSettings() {
   const settings = useQuery(api.authSettings.keycloak);
   return (
-    <section className="space-y-2 border-t pt-6">
+    <section id="keycloak" className="space-y-2 border-t pt-6">
       <h2 className="font-medium">Keycloak</h2>
       {settings === undefined ? null : settings.issuer === null ? (
         <p className="text-sm text-muted-foreground">
