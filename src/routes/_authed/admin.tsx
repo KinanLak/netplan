@@ -1,7 +1,12 @@
 import { HugeiconsIcon } from "@hugeicons/react";
-import { ArrowLeft01Icon } from "@hugeicons/core-free-icons";
+import {
+  ArrowLeft01Icon,
+  PackageIcon,
+  WorkHistoryIcon,
+} from "@hugeicons/core-free-icons";
 import { Link, Outlet, createFileRoute } from "@tanstack/react-router";
 import { ListSkeleton } from "@/components/loading-skeletons";
+import { UserMenu } from "@/components/app-nav";
 import { NetplanLogo } from "@/components/netplan-logo";
 import { ModeToggle } from "@/components/mode-toggle";
 import { buttonVariants } from "@/components/ui/button";
@@ -14,6 +19,13 @@ export const Route = createFileRoute("/_authed/admin")({
   head: () => ({ meta: [{ title: "Administration" }] }),
   component: AdminShell,
 });
+
+// Admins are Éditeurs too, so history is theirs.
+const APP_LINKS = [
+  { label: "Retour au plan", to: "/", icon: ArrowLeft01Icon },
+  { label: "Inventaire", to: "/inventory", icon: PackageIcon },
+  { label: "Historique", to: "/history", icon: WorkHistoryIcon },
+] as const;
 
 // The server refuses every admin function to anyone else; this only spares
 // them a page of errors.
@@ -36,7 +48,7 @@ function AdminShell() {
         className="flex shrink-0 items-center gap-1 overflow-x-auto border-b bg-sidebar p-2 md:w-56 md:flex-col md:items-stretch md:overflow-x-visible md:border-r md:border-b-0 md:p-3"
       >
         <div className="flex shrink-0 items-center justify-between gap-2 md:mb-3">
-          <Link to="/" aria-label="Retour à la carte">
+          <Link to="/" aria-label="Retour au plan">
             <NetplanLogo size={30} />
           </Link>
           <ModeToggle />
@@ -58,13 +70,19 @@ function AdminShell() {
             {section.label}
           </Link>
         ))}
-        <Link
-          to="/"
-          className="mt-auto hidden items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground md:flex"
-        >
-          <HugeiconsIcon icon={ArrowLeft01Icon} size={16} strokeWidth={1.5} />
-          Retour à la carte
-        </Link>
+        <div className="flex shrink-0 items-center gap-1 md:mt-auto md:flex-col md:items-stretch">
+          {APP_LINKS.map((link) => (
+            <Link
+              key={link.to}
+              to={link.to}
+              className="flex shrink-0 items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            >
+              <HugeiconsIcon icon={link.icon} size={16} strokeWidth={1.5} />
+              {link.label}
+            </Link>
+          ))}
+          <UserMenu inAdmin className="justify-between md:mt-2 md:max-w-none" />
+        </div>
       </nav>
       <main className="min-w-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-4xl p-4 md:p-8">
@@ -86,7 +104,7 @@ function AdminOnly({ sso }: { sso: boolean }) {
           : null}
       </p>
       <Link to="/" className={buttonVariants({ variant: "outline" })}>
-        Retour à la carte
+        Retour au plan
       </Link>
     </main>
   );

@@ -1,13 +1,14 @@
 import { HugeiconsIcon } from "@hugeicons/react";
-import { ArrowLeft01Icon, Search01Icon } from "@hugeicons/core-free-icons";
+import { Search01Icon } from "@hugeicons/core-free-icons";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { usePaginatedQuery, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
 import { ModeToggle } from "@/components/mode-toggle";
 import { ListSkeleton } from "@/components/loading-skeletons";
+import { AppNavLinks, UserMenu } from "@/components/app-nav";
 import { NetplanLogo } from "@/components/netplan-logo";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   EventSummary,
@@ -41,27 +42,21 @@ function HistoryPage() {
   const canEdit = useCanEdit();
   return (
     <div className="flex h-svh flex-col bg-background text-foreground">
-      <header className="flex shrink-0 items-center gap-3 border-b bg-sidebar px-4 py-2">
+      <header className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b bg-sidebar px-4 py-2">
         <Link
           to="/"
           search={site ? { site: site.id } : {}}
-          aria-label="Retour à la carte"
+          aria-label="Retour au plan"
         >
           <NetplanLogo size={30} />
         </Link>
-        <Link
-          to="/"
-          search={site ? { site: site.id } : {}}
-          className={buttonVariants({ variant: "ghost", size: "sm" })}
-        >
-          <HugeiconsIcon icon={ArrowLeft01Icon} strokeWidth={1.5} />
-          Carte
-        </Link>
-        <div className="ml-auto flex items-center gap-2">
-          <div className="w-56">
+        <AppNavLinks site={site?.id} />
+        <div className="ml-auto flex min-w-0 flex-wrap items-center gap-2">
+          <div className="w-40 sm:w-56">
             <SiteSwitcher />
           </div>
           <ModeToggle />
+          <UserMenu />
         </div>
       </header>
       <main className="min-w-0 flex-1 overflow-y-auto">
