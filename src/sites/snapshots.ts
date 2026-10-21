@@ -65,6 +65,23 @@ export const slotAt = (timezone: string, at: number): SnapshotSlot | null => {
   return null;
 };
 
+/**
+ * The instant of slot `time` on the site's `day`, so a reader elsewhere sees
+ * it on their own clock. One correction of the zone's offset is exact: no
+ * daylight-saving change falls near a snapshot time.
+ */
+export const slotInstant = (
+  timezone: string,
+  day: string,
+  time: string,
+): number => {
+  const asUtc = Date.parse(`${day}T${time}:00Z`);
+  const shown = wallClock(timezone, asUtc);
+  const shownAsUtc =
+    Date.parse(`${shown.day}T00:00:00Z`) + shown.minute * MINUTE;
+  return asUtc - (shownAsUtc - asUtc);
+};
+
 /** The site's calendar day at `at`, `YYYY-MM-DD`. */
 export const siteDay = (timezone: string, at: number): string =>
   wallClock(timezone, at).day;

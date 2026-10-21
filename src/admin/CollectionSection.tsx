@@ -1,14 +1,9 @@
 import { useQuery } from "convex/react";
+import { Time } from "@/components/time";
 import { cn } from "@/lib/utils";
 import { CollectionFreshness } from "@/sites/CollectionFreshness";
 import { INTEGRATION_LABELS } from "@/sites/integrations";
 import { api } from "../../convex/_generated/api";
-
-const when = (at: number) =>
-  new Intl.DateTimeFormat("fr-FR", {
-    dateStyle: "short",
-    timeStyle: "short",
-  }).format(at);
 
 const origin = (manual: boolean) => (manual ? "manuelle" : "automatique");
 
@@ -37,14 +32,14 @@ export function CollectionSection({ siteId }: { siteId: string }) {
         {status.running ? (
           <p>
             Collecte {origin(status.running.manual)} en cours depuis{" "}
-            {when(status.running.startedAt)}.
+            <Time at={status.running.startedAt} />.
           </p>
         ) : null}
         {status.last ? (
           <div className="space-y-1">
             <p>
               Dernière collecte {origin(status.last.manual)} :{" "}
-              {when(status.last.startedAt)}.
+              <Time at={status.last.startedAt} />.
             </p>
             <ul className="space-y-1">
               {status.last.steps.map((step) => (

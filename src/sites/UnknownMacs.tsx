@@ -6,6 +6,7 @@ import type { FunctionReturnType } from "convex/server";
 import { useId, useState } from "react";
 import type { FormEvent } from "react";
 import { toast } from "sonner";
+import { Time } from "@/components/time";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -28,12 +29,6 @@ type UnknownMac = FunctionReturnType<
 
 // A busy site sees many; the newest are the ones worth a look.
 const SHOWN = 10;
-
-const when = (at: number) =>
-  new Intl.DateTimeFormat("fr-FR", {
-    dateStyle: "short",
-    timeStyle: "short",
-  }).format(at);
 
 /**
  * MAC addresses the network sees that no device of the site carries, for an
@@ -105,10 +100,11 @@ export function UnknownMacs({ siteId }: { siteId: string }) {
                     [sighting.switchName, sighting.portName]
                       .filter(Boolean)
                       .join(" "),
-                    `vue le ${when(sighting.seenAt)}`,
                   ]
                     .filter(Boolean)
                     .join(" · ")}
+                  {" · vue le "}
+                  <Time at={sighting.seenAt} />
                 </p>
               </div>
               <div className="flex shrink-0 gap-2">
@@ -162,7 +158,8 @@ export function UnknownMacs({ siteId }: { siteId: string }) {
                   <div className="min-w-0 space-y-0.5">
                     <p className="font-mono">{row.mac}</p>
                     <p className="truncate text-muted-foreground">
-                      Ignorée par {row.ignoredByName} le {when(row.ignoredAt)}
+                      Ignorée par {row.ignoredByName} le{" "}
+                      <Time at={row.ignoredAt} />
                     </p>
                   </div>
                   <Button

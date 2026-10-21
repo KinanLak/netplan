@@ -1,5 +1,11 @@
 import { describe, expect, it } from "bun:test";
-import { captureRunning, siteDay, slotAt, slotStillOpen } from "./snapshots";
+import {
+  captureRunning,
+  siteDay,
+  slotAt,
+  slotInstant,
+  slotStillOpen,
+} from "./snapshots";
 
 const PARIS = "Europe/Paris";
 const at = (iso: string) => Date.parse(iso);
@@ -53,5 +59,20 @@ describe("snapshot slots", () => {
     const takenAt = at("2026-06-16T12:00:30Z");
     expect(captureRunning(takenAt, takenAt + 9 * 60_000)).toBe(true);
     expect(captureRunning(takenAt, takenAt + 10 * 60_000)).toBe(false);
+  });
+
+  it("places a slot of the site's day on the timeline, in summer and winter", () => {
+    expect(slotInstant(PARIS, "2026-06-16", "08:00")).toBe(
+      at("2026-06-16T06:00:00Z"),
+    );
+    expect(slotInstant(PARIS, "2026-12-01", "19:00")).toBe(
+      at("2026-12-01T18:00:00Z"),
+    );
+    expect(slotInstant("America/New_York", "2026-10-21", "19:00")).toBe(
+      at("2026-10-21T23:00:00Z"),
+    );
+    expect(slotInstant("Asia/Kolkata", "2026-10-21", "08:00")).toBe(
+      at("2026-10-21T02:30:00Z"),
+    );
   });
 });

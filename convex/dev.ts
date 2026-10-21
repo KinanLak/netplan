@@ -13,7 +13,7 @@ import { createAuth } from "./auth";
 import { DEV_ACCOUNTS, DEV_PASSWORD } from "../src/dev-seed/accounts";
 import { DEMO_BUILDING, buildDemoFloors } from "../src/dev-seed/demoMap";
 import { INTEGRATION_KINDS } from "../src/sites/integrations";
-import { siteDay, slotAt } from "../src/sites/snapshots";
+import { siteDay, slotInstant } from "../src/sites/snapshots";
 import type { BatchSubOperation } from "../src/map-engine/types";
 
 const SEED_CLIENT_ID = "dev-seed";
@@ -178,16 +178,6 @@ export const seed = internalMutation({
 const HOUR = 60 * 60_000;
 const DAY = 24 * HOUR;
 
-/** The instant `time` of `day` shows in `timezone`, a quarter hour at a time. */
-const instantOf = (timezone: string, day: string, time: string) => {
-  const guess = Date.parse(`${day}T${time}:00Z`);
-  for (let quarter = -14 * 4; quarter <= 14 * 4; quarter += 1) {
-    const slot = slotAt(timezone, guess + quarter * 15 * 60_000);
-    if (slot?.day === day && slot.time === time) return slot.at;
-  }
-  return null;
-};
-
 /**
  * A week of history for the demo's workstations and printers, standing in
  * for collection cycles that never ran: each was seen at one socket, went
@@ -283,8 +273,8 @@ export const seedHistory = internalMutation({
       const day = siteDay(site.timezone, now - daysAgo * DAY);
       for (const time of ["08:00", "12:00", "14:00", "16:00"]) {
         if (daysAgo === 1 && time === "16:00") continue;
-        const at = instantOf(site.timezone, day, time);
-        if (at === null || at > now) continue;
+        const at = slotInstant(site.timezone, day, time);
+        if (at > now) continue;
         const slotId = await ctx.db.insert("historySlots", {
           siteId,
           day,
