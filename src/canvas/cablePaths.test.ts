@@ -291,6 +291,8 @@ describe("cable states", () => {
       );
       expect(states(cablePathOf(id("wall"), live))).toEqual([state, state]);
       expect(states(cablePathOf(id("sw"), live))).toEqual([state, state]);
+      // From the panel, both sides show the switch port's state.
+      expect(states(cablePathOf(id("p"), live))).toEqual([state, state]);
     }
   });
 });

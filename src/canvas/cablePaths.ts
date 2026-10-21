@@ -173,12 +173,31 @@ const strongest = (ports: ReadonlyArray<Port>): CableState => {
   return "unknown";
 };
 
+/** The port on the other side of a patch panel's port, if one only. */
+const passedThrough = (port: Port, floor: FloorCabling): Port | undefined => {
+  if (port.kind === "front") {
+    return port.rearPortId === undefined
+      ? undefined
+      : floor.ports.get(port.rearPortId);
+  }
+  if (port.kind !== "rear") return undefined;
+  const fronts = floor.frontsOf.get(port.id) ?? [];
+  return fronts.length === 1 ? fronts[0] : undefined;
+};
+
 const traceInto = (start: Port, floor: FloorCabling, path: CablePath) => {
-  // Each cable of one trace shows the state of the link at its switch end,
-  // which only the trace's last port tells when it starts from a socket.
+  // Each cable of one trace shows the state of the link at its switch end.
+  // A trace that starts on a patch panel's port looks behind the panel too,
+  // where the switch may be, without drawing that side twice.
   const cables: Array<Omit<PathCable, "state">> = [];
   const last = walk(start, floor, path, cables);
-  const state = strongest(last ? [start, last] : [start]);
+  const behind = passedThrough(start, floor);
+  const lastBehind = behind
+    ? walk(behind, floor, { cables: [], sightings: [], ends: [] }, [])
+    : undefined;
+  const state = strongest(
+    [start, last, behind, lastBehind].filter((port) => port !== undefined),
+  );
   path.cables.push(...cables.map((cable) => ({ ...cable, state })));
 };
 

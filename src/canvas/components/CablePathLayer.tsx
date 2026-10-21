@@ -105,10 +105,12 @@ const sameBoxes = (
     );
   });
 
-// The labels' text-xs: about 7 px a character, 20 px a line, on screen.
+// One label on screen: text-xs at about 7 px a character, in a box with
+// px-1.5, py-0.5 and a border; the labels stack with gap-0.5.
 const CHAR_WIDTH = 7;
-const LINE_HEIGHT = 20;
 const LABEL_PADDING = 14;
+const LABEL_HEIGHT = 22;
+const LABEL_GAP_PX = 2;
 
 /**
  * A label where a path ends or leaves the floor, beside the device it ends
@@ -130,7 +132,10 @@ export function CablePathLabels({ ends }: { ends: ReadonlyArray<PathEnd> }) {
             (Math.max(...labels.map((label) => label.length)) * CHAR_WIDTH +
               LABEL_PADDING) /
             zoom,
-          height: (labels.length * LINE_HEIGHT) / zoom,
+          height:
+            (labels.length * LABEL_HEIGHT +
+              (labels.length - 1) * LABEL_GAP_PX) /
+            zoom,
         };
         const placement = labelPlacement(
           box,
