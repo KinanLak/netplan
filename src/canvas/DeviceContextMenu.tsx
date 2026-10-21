@@ -17,6 +17,7 @@ import { ShortcutHintInline } from "@/components/ui/shortcut-hint";
 import { useIsEditMode, useShownCablesDeviceId } from "@/store/selectors";
 import { useMapStore } from "@/store/useMapStore";
 import type { DeviceId } from "@/types/map";
+import { useDeviceRemoval } from "@/devices/DeviceRemovalDialog";
 
 export function DeviceContextMenu({ deviceId }: { deviceId: DeviceId }) {
   const isEditMode = useIsEditMode();
@@ -46,7 +47,9 @@ export function DeviceContextMenu({ deviceId }: { deviceId: DeviceId }) {
   };
 
   const deleteDevice = () => {
-    if (commands.deleteDevice(device.id)) selectDevice(null);
+    useDeviceRemoval
+      .getState()
+      .ask({ kind: "delete", deviceId: device.id, name: device.name });
   };
 
   const unplaceDevice = () => {

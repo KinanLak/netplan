@@ -19,6 +19,7 @@ export const shortcutGroups: Array<ShortcutGroup> = [
       "redo",
       "toggle-edit-mode",
       "escape",
+      "delete",
       "cycle-theme",
       "refresh-site",
       "show-shortcuts",
@@ -31,13 +32,18 @@ export const shortcutGroups: Array<ShortcutGroup> = [
     orderPriority: 80,
     actions: [
       "close-drawer",
-      "delete-device",
       "edit-device-identity",
       "unplace-device",
       "show-port-cables",
       "show-device-history",
       "toggle-device-cables",
     ],
+  },
+  {
+    id: "selection",
+    title: "Sélection",
+    orderPriority: 65,
+    actions: ["select-all", "nudge-selection"],
   },
   {
     id: "navigation",

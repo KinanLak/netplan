@@ -98,6 +98,8 @@ export interface MapDocumentCommands {
   deleteDevice: (deviceId: DeviceId) => boolean;
   /** Takes a device off the map; it stays in the site inventory. */
   unplaceDevice: (deviceId: DeviceId) => void;
+  /** Takes several devices off the map in one change, so one undo. */
+  unplaceDevices: (deviceIds: ReadonlyArray<DeviceId>) => void;
   /** Puts an inventory device on the current floor; false when it cannot. */
   placeDevice: (device: Device) => boolean;
   checkCollision: (
@@ -494,6 +496,26 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
     dispatchOperation({ kind: "device.unplace", meta, deviceId });
   };
 
+  const unplaceDevices = (deviceIds: ReadonlyArray<DeviceId>) => {
+    if (!isReadyRef.current) return;
+    const placed = new Set(documentRef.current.devices.map((d) => d.id));
+    const ids = deviceIds.filter((id) => placed.has(id));
+    if (ids.length <= 1) {
+      if (ids[0]) unplaceDevice(ids[0]);
+      return;
+    }
+    const meta = freshMeta();
+    if (!meta) return;
+    dispatchOperation({
+      kind: "batch",
+      meta,
+      operations: ids.map((deviceId) => ({
+        kind: "device.unplace" as const,
+        deviceId,
+      })),
+    });
+  };
+
   const placeDevice = (device: Device): boolean => {
     if (!isReadyRef.current) return false;
     if (device.floorId !== activeFloorIdRef.current) return false;
@@ -859,6 +881,7 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
       updateDevicePositions,
       deleteDevice,
       unplaceDevice,
+      unplaceDevices,
       placeDevice,
       checkCollision,
       addWallLine,

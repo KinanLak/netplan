@@ -38,6 +38,7 @@ interface UseCanvasDeviceNodesParams {
     updates: Array<{ deviceId: DeviceId; position: Position }>,
   ) => void;
   selectDevice: (deviceId: DeviceId | null) => void;
+  setSelectedDevices: (deviceIds: Array<DeviceId>) => void;
   setHoveredDevice: (deviceId: DeviceId | null) => void;
 }
 
@@ -52,7 +53,7 @@ interface UseCanvasDeviceNodesResult {
   nodes: Array<DeviceNode>;
   blockedSpots: ReadonlyArray<BlockedSpot>;
   handleNodesChange: OnNodesChange<DeviceNode>;
-  handleNodeClick: (_: React.MouseEvent, node: DeviceNode) => void;
+  handleNodeClick: (event: React.MouseEvent, node: DeviceNode) => void;
   handleNodeMouseEnter: (_: React.MouseEvent, node: DeviceNode) => void;
   handleNodeMouseLeave: () => void;
 }
@@ -158,13 +159,15 @@ export function useCanvasDeviceNodes({
   updateDevicePosition,
   updateDevicePositions,
   selectDevice,
+  setSelectedDevices,
   setHoveredDevice,
 }: UseCanvasDeviceNodesParams): UseCanvasDeviceNodesResult {
   const [nodes, setNodes, onNodesChange] = useNodesState<DeviceNode>([]);
   const devicePlacement = useDevicePlacement((...args) =>
     checkCollision(
       ...args,
-      isMultiSelectMode ? selectedDeviceIdSet : undefined,
+      // A group moves together, so its members never block each other.
+      selectedDeviceIdSet.size > 1 ? selectedDeviceIdSet : undefined,
     ),
   );
   const draggingDeviceIdsRef = useRef<Set<DeviceId>>(new Set());
@@ -306,16 +309,38 @@ export function useCanvasDeviceNodes({
   );
 
   const handleNodeClick = useCallback(
-    (_: React.MouseEvent, node: DeviceNode) => {
+    (event: React.MouseEvent, node: DeviceNode) => {
       if (activeDrawTool !== "device") {
+        return;
+      }
+
+      const deviceId = node.id as DeviceId;
+      // Shift (or Ctrl, ⌘) adds the device to the selection or takes it out
+      // (ADR 0030); a selection of several is an editing tool.
+      if (
+        canEditDevices &&
+        (event.shiftKey || event.ctrlKey || event.metaKey)
+      ) {
+        setSelectedDevices(
+          selectedDeviceIdSet.has(deviceId)
+            ? [...selectedDeviceIdSet].filter((id) => id !== deviceId)
+            : [...selectedDeviceIdSet, deviceId],
+        );
         return;
       }
 
       if (isMultiSelectMode) return;
 
-      selectDevice(node.id as DeviceId);
+      selectDevice(deviceId);
     },
-    [activeDrawTool, isMultiSelectMode, selectDevice],
+    [
+      activeDrawTool,
+      canEditDevices,
+      isMultiSelectMode,
+      selectDevice,
+      selectedDeviceIdSet,
+      setSelectedDevices,
+    ],
   );
 
   const handleNodeMouseEnter = useCallback(

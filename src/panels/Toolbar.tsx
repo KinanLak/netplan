@@ -1,10 +1,29 @@
 import { useEffect, useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
+  AlignBottomIcon,
+  AlignHorizontalCenterIcon,
+  AlignLeftIcon,
+  AlignRightIcon,
+  AlignSelectionIcon,
+  AlignTopIcon,
+  AlignVerticalCenterIcon,
   Layers01Icon,
   PackageIcon,
   TextIcon,
+  AlignHorizontalDistributeCenterIcon,
+  AlignVerticalDistributeCenterIcon,
 } from "@hugeicons/core-free-icons";
+import type { IconSvgElement } from "@hugeicons/react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useSelectionMoves } from "@/canvas/hooks/useSelectionCommands";
+import type { Alignment } from "@/canvas/arrangement";
 import { Button } from "@/components/ui/button";
 import { ShortcutHintAbsolute } from "@/components/ui/shortcut-hint";
 import {
@@ -185,6 +204,10 @@ export default function Toolbar() {
           ) : null}
         </Button>
 
+        {selectedDeviceIds.length > 1 ? (
+          <ArrangeMenu count={selectedDeviceIds.length} />
+        ) : null}
+
         <div className="h-6 w-px bg-border" aria-hidden />
         <div className="flex items-center gap-1">
           {drawToolbarActions.map((action) => renderToolbarAction(action))}
@@ -294,5 +317,72 @@ export default function Toolbar() {
         </div>
       </div>
     </div>
+  );
+}
+
+const ALIGNMENTS: Array<{
+  alignment: Alignment;
+  label: string;
+  icon: IconSvgElement;
+}> = [
+  { alignment: "left", label: "Aligner à gauche", icon: AlignLeftIcon },
+  {
+    alignment: "center-x",
+    label: "Centrer horizontalement",
+    icon: AlignHorizontalCenterIcon,
+  },
+  { alignment: "right", label: "Aligner à droite", icon: AlignRightIcon },
+  { alignment: "top", label: "Aligner en haut", icon: AlignTopIcon },
+  {
+    alignment: "center-y",
+    label: "Centrer verticalement",
+    icon: AlignVerticalCenterIcon,
+  },
+  { alignment: "bottom", label: "Aligner en bas", icon: AlignBottomIcon },
+];
+
+/** Aligns or spreads a selection of several devices (C3). */
+function ArrangeMenu({ count }: { count: number }) {
+  const { align, distribute } = useSelectionMoves();
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={<Button type="button" variant="ghost" size="sm" />}
+        className="gap-2"
+        title="Aligner ou répartir la sélection"
+      >
+        <HugeiconsIcon icon={AlignSelectionIcon} strokeWidth={2} />
+        Aligner
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-auto min-w-56">
+        {ALIGNMENTS.map(({ alignment, label, icon }) => (
+          <DropdownMenuItem key={alignment} onClick={() => align(alignment)}>
+            <HugeiconsIcon icon={icon} strokeWidth={1.5} />
+            {label}
+          </DropdownMenuItem>
+        ))}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          disabled={count < 3}
+          onClick={() => distribute("horizontal")}
+        >
+          <HugeiconsIcon
+            icon={AlignHorizontalDistributeCenterIcon}
+            strokeWidth={1.5}
+          />
+          Répartir horizontalement
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          disabled={count < 3}
+          onClick={() => distribute("vertical")}
+        >
+          <HugeiconsIcon
+            icon={AlignVerticalDistributeCenterIcon}
+            strokeWidth={1.5}
+          />
+          Répartir verticalement
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

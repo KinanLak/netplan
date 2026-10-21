@@ -137,10 +137,40 @@ export const coalesceHistoryGroupOperations = (
     };
   }
 
-  const batchOperations = toBatchSubOperations(operations);
+  const batchOperations = mergeDevicePatches(toBatchSubOperations(operations));
   return batchOperations.length === 0
     ? null
     : { kind: "batch", meta: first.meta, operations: batchOperations };
+};
+
+/**
+ * Moves only: one patch per device, where it ended, in the order of its last
+ * move, so a held arrow key sends one small batch, not one per repeat, and
+ * the server moves the leading devices first (ADR 0030).
+ */
+type DevicePatchOperation = Extract<
+  BatchSubOperation,
+  { kind: "device.patch" }
+>;
+
+const isDevicePatch = (
+  operation: BatchSubOperation,
+): operation is DevicePatchOperation => operation.kind === "device.patch";
+
+const mergeDevicePatches = (
+  operations: Array<BatchSubOperation>,
+): Array<BatchSubOperation> => {
+  if (!operations.every(isDevicePatch)) return operations;
+  const byDevice = new Map<string, DevicePatchOperation>();
+  for (const operation of operations) {
+    const previous = byDevice.get(operation.deviceId);
+    byDevice.delete(operation.deviceId);
+    byDevice.set(operation.deviceId, {
+      ...operation,
+      patch: { ...previous?.patch, ...operation.patch },
+    });
+  }
+  return [...byDevice.values()];
 };
 
 /**

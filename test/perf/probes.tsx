@@ -98,6 +98,7 @@ function CanvasShellProbe({
   const activeDrawTool = useActiveDrawTool();
   const selectDevice = useMapStore((s) => s.selectDevice);
   const setHoveredDevice = useMapStore((s) => s.setHoveredDevice);
+  const setSelectedDevices = useMapStore((s) => s.setSelectedDevices);
 
   const { document, pendingOperations } = useMapDocumentData();
   const isReady = useMapDocumentReady();
@@ -120,6 +121,7 @@ function CanvasShellProbe({
     updateDevicePosition: commands.updateDevicePosition,
     updateDevicePositions: commands.updateDevicePositions,
     selectDevice,
+    setSelectedDevices,
     setHoveredDevice,
   });
 

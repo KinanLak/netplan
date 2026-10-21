@@ -37,6 +37,7 @@ describe("useCanvasDeviceNodes", () => {
           updateDevicePosition,
           updateDevicePositions: () => {},
           selectDevice: () => {},
+          setSelectedDevices: () => {},
           setHoveredDevice: () => {},
         }),
       { initialProps: { devices: [device] } },
@@ -66,8 +67,12 @@ describe("useCanvasDeviceNodes", () => {
     expect(updateDevicePosition.mock.calls.length).toBe(0);
   });
 
-  it("ignores selected devices for collisions only during multi-select", async () => {
-    const selectedDeviceIds = new Set(["device-b" as DeviceId]);
+  it("ignores selected devices for collisions only when several move together", async () => {
+    const single = new Set(["device-b" as DeviceId]);
+    const selectedDeviceIds = new Set([
+      "device-b",
+      "device-c",
+    ] as Array<DeviceId>);
     const checkCollision = mock(
       (
         _floorId: FloorId,
@@ -78,23 +83,24 @@ describe("useCanvasDeviceNodes", () => {
       ) => false,
     );
     const { result, rerender } = renderHook(
-      ({ isMultiSelectMode }: { isMultiSelectMode: boolean }) =>
+      ({ selection }: { selection: ReadonlySet<DeviceId> }) =>
         useCanvasDeviceNodes({
           devices: [device],
           ports: [],
           currentFloorId: floorId,
           selectedDeviceId: null,
-          selectedDeviceIdSet: selectedDeviceIds,
-          isMultiSelectMode,
+          selectedDeviceIdSet: selection,
+          isMultiSelectMode: false,
           activeDrawTool: "device",
           canEditDevices: true,
           checkCollision,
           updateDevicePosition: () => {},
           updateDevicePositions: () => {},
           selectDevice: () => {},
+          setSelectedDevices: () => {},
           setHoveredDevice: () => {},
         }),
-      { initialProps: { isMultiSelectMode: false } },
+      { initialProps: { selection: single } },
     );
     await waitFor(() => expect(result.current.nodes).toHaveLength(1));
 
@@ -110,7 +116,7 @@ describe("useCanvasDeviceNodes", () => {
     });
     expect(checkCollision.mock.calls.at(-1)?.[4]).toBeUndefined();
 
-    rerender({ isMultiSelectMode: true });
+    rerender({ selection: selectedDeviceIds });
     act(() => {
       result.current.handleNodesChange([
         {

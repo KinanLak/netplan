@@ -47,6 +47,11 @@ import { SiteRefreshShortcut } from "@/sites/CollectionFreshness";
 import { ShortcutsDialog } from "@/components/shortcuts-dialog";
 import { MapFind } from "@/search/MapFind";
 import { useDeviceSearchFocus } from "@/search/DeviceSearch";
+import { useSelectionShortcuts } from "@/canvas/hooks/useSelectionCommands";
+import {
+  DeviceRemovalDialog,
+  useUnplaceDevices,
+} from "@/devices/DeviceRemovalDialog";
 import { ShortcutHintAbsolute } from "@/components/ui/shortcut-hint";
 import { toggledCableDisplay } from "@/canvas/cablePaths";
 import { asBuildingId, asDeviceId, asFloorId } from "@/lib/objectIds";
@@ -211,10 +216,8 @@ function MapWorkspace({
     showCables(null);
   };
 
-  const deleteSelectedDevice = () => {
-    if (!selectedDeviceId || !isReady || !isEditMode) return;
-    if (commands.deleteDevice(selectedDeviceId)) selectDevice(null);
-  };
+  const unplaceDevices = useUnplaceDevices();
+  useSelectionShortcuts();
 
   // Reads hover state lazily so the workspace does not re-render on every
   // pointer hover; it is only needed when the shortcut fires.
@@ -244,7 +247,12 @@ function MapWorkspace({
   useShortcutIntentEffect("close-drawer", () => {
     if (!abandonCable()) closeDrawer();
   });
-  useShortcutIntentEffect("delete-device", deleteSelectedDevice);
+  // Delete takes the selection off the plan; deleting from the site is a
+  // menu action that always asks (ADR 0030).
+  useShortcutIntentEffect("delete", () => {
+    if (!isReady || !isEditMode) return;
+    unplaceDevices(useMapStore.getState().selectedDeviceIds);
+  });
   useShortcutIntentEffect("unplace-device", () => {
     if (!selectedDeviceId || !isReady || !isEditMode) return;
     commands.unplaceDevice(selectedDeviceId);
@@ -375,6 +383,7 @@ function MapWorkspace({
           <MapDocumentStatus floorless={empty !== null} />
           {site ? <SiteRefreshShortcut siteId={site.id} /> : null}
           <MapFind hasRightDrawerOpen={Boolean(selectedDeviceId)} />
+          <DeviceRemovalDialog />
         </ReactFlowProvider>
 
         <ShortcutsDialog hasRightDrawerOpen={Boolean(selectedDeviceId)} />

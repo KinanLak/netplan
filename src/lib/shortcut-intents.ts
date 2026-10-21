@@ -19,6 +19,10 @@ export type ShortcutIntentRuntime = {
   /** The key comes from a dialog or an open menu, which owns its keys. */
   isWidgetFocused: boolean;
   selectedDeviceId: string | null;
+  /** How many devices are selected, one or several. */
+  selectionCount: number;
+  /** The key comes from the map or the page itself, not from a control. */
+  isMapFocused: boolean;
 };
 
 export type ShortcutIntentRegistration = {
@@ -42,7 +46,6 @@ type ShortcutModifiers = {
 
 const shortcutRoutingPriority: Array<ShortcutAction> = [
   "close-drawer",
-  "delete-device",
   "edit-device-identity",
   "unplace-device",
   "show-port-cables",
@@ -51,6 +54,8 @@ const shortcutRoutingPriority: Array<ShortcutAction> = [
   "toggle-device-cables",
   "escape",
   "delete",
+  "nudge-selection",
+  "select-all",
   "undo",
   "redo",
   "show-shortcuts",
@@ -219,6 +224,18 @@ const WIDGET_SELECTOR = [
   '[role="listbox"]',
 ].join(", ");
 
+/** The page itself or the map, as opposed to a sidebar or toolbar control. */
+export const isShortcutMapTarget = (target: EventTarget | null): boolean => {
+  if (typeof HTMLElement === "undefined" || !(target instanceof HTMLElement)) {
+    return true;
+  }
+  return (
+    target === document.body ||
+    target === document.documentElement ||
+    target.closest(".react-flow") !== null
+  );
+};
+
 export const isShortcutWidgetTarget = (target: EventTarget | null): boolean => {
   if (typeof HTMLElement === "undefined" || !(target instanceof HTMLElement)) {
     return false;
@@ -252,7 +269,6 @@ const isActionAllowedByContext = (
   switch (action) {
     case "cancel-wall-tool":
       return runtime.isEditMode && runtime.activeDrawTool !== "device";
-    case "delete-device":
     case "edit-device-identity":
     case "unplace-device":
       return runtime.isEditMode;
@@ -268,6 +284,22 @@ const isActionAllowedByContext = (
     case "undo":
     case "redo":
       return runtime.isEditMode;
+    case "delete":
+      return runtime.isEditMode && runtime.selectionCount > 0;
+    case "nudge-selection":
+      // From a sidebar button, an arrow key belongs to the browser.
+      return (
+        runtime.isEditMode &&
+        runtime.activeDrawTool === "device" &&
+        runtime.selectionCount > 0 &&
+        runtime.isMapFocused
+      );
+    case "select-all":
+      return (
+        runtime.isEditMode &&
+        runtime.activeDrawTool === "device" &&
+        runtime.currentFloorId !== null
+      );
     case "place-device":
     case "toggle-overlay-panel":
     case "toggle-overlay-lock":

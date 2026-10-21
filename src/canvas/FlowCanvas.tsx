@@ -289,8 +289,11 @@ export default function FlowCanvas() {
     updateDevicePosition,
     updateDevicePositions,
     selectDevice,
+    setSelectedDevices,
     setHoveredDevice,
   });
+  // A Shift+drag draws a selection box whatever the tool (ADR 0030).
+  const boxSelectingRef = useRef(false);
 
   const {
     isCursorDragging,
@@ -408,8 +411,14 @@ export default function FlowCanvas() {
               onNodeDragStart={handleNodeDragStart}
               onNodeDragStop={handleNodeDragStop}
               onNodeContextMenu={handleNodeContextMenu}
+              onSelectionStart={() => {
+                boxSelectingRef.current = true;
+              }}
+              onSelectionEnd={() => {
+                boxSelectingRef.current = false;
+              }}
               onSelectionChange={({ nodes: selectedNodes }) => {
-                if (!isMultiSelectMode) return;
+                if (!isMultiSelectMode && !boxSelectingRef.current) return;
                 setSelectedDevices(
                   selectedNodes.map((node) => node.id as DeviceId),
                 );
@@ -432,6 +441,8 @@ export default function FlowCanvas() {
               disableKeyboardA11y
               nodesFocusable={false}
               selectionOnDrag={isMultiSelectMode}
+              selectionKeyCode={canEditDevices ? "Shift" : null}
+              multiSelectionKeyCode={null}
               deleteKeyCode={null}
               nodesDraggable={canEditDevices}
               className={cn(isCursorDragging && "canvas-cursor-grabbing")}
