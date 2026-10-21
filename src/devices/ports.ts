@@ -173,22 +173,47 @@ export const portsByDevice = (
 export const cableTouches = (cable: Cable, deviceId: DeviceId): boolean =>
   cable.a.deviceId === deviceId || cable.b.deviceId === deviceId;
 
-/** The devices cabled directly to `deviceId`, each once, in cable order. */
-export const cabledDeviceIds = (
+/** One of a device's cables, seen from that device. */
+export interface DeviceConnection {
+  cableId: Cable["id"];
+  /** The device's own port. */
+  port: Port;
+  far: Cable["a"];
+  /** The far end's port, when the ports at hand include it. */
+  farPort?: Port;
+}
+
+/**
+ * A device's cables in the order of its own ports, each with its far end.
+ * A cable whose own port is not at hand is left out.
+ */
+export const deviceConnections = (
   cables: ReadonlyArray<Cable>,
+  ports: ReadonlyArray<Port>,
   deviceId: DeviceId,
-): Array<DeviceId> => {
-  const seen = new Set<DeviceId>();
+): Array<DeviceConnection> => {
+  const portById = new Map(ports.map((port) => [port.id, port]));
+  const connections: Array<DeviceConnection> = [];
   for (const cable of cables) {
-    const other =
+    const ends =
       cable.a.deviceId === deviceId
-        ? cable.b.deviceId
+        ? ([cable.a, cable.b] as const)
         : cable.b.deviceId === deviceId
-          ? cable.a.deviceId
+          ? ([cable.b, cable.a] as const)
           : null;
-    if (other && other !== deviceId) seen.add(other);
+    if (!ends) continue;
+    const [own, far] = ends;
+    const port = portById.get(own.portId);
+    if (!port) continue;
+    const farPort = portById.get(far.portId);
+    connections.push({
+      cableId: cable.id,
+      port,
+      far,
+      ...(farPort && { farPort }),
+    });
   }
-  return [...seen];
+  return connections.sort((a, b) => comparePorts(a.port, b.port));
 };
 
 type CableEnd = CableShape["a"];

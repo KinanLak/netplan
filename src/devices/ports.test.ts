@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
-import { traceFrom } from "./ports";
+import { deviceConnections, numberedPorts, traceFrom } from "./ports";
 import type { TracePort } from "./ports";
+import type { Cable, CableId, DeviceId, Port } from "../types/map";
 
 /** A site as plain maps: each cable both ways, and the socket devices. */
 const site = (
@@ -133,5 +134,57 @@ describe("traceFrom", () => {
       "p:rear1",
       "p:rear2",
     ]);
+  });
+});
+
+describe("deviceConnections", () => {
+  const patchPanel = "device:patchPanel" as DeviceId;
+  const wallSocket = (n: number) => `device:socket-${n}` as DeviceId;
+  const ports: Array<Port> = [
+    ...numberedPorts(patchPanel, "front", 3),
+    ...[1, 2, 3].flatMap((n) => numberedPorts(wallSocket(n), "front", 1)),
+  ];
+  const front = (n: number) =>
+    ports.find(
+      (port) =>
+        port.deviceId === patchPanel &&
+        port.kind === "front" &&
+        port.order === n,
+    )!;
+  const cable = (n: number, flipped = false): Cable => {
+    const own = { deviceId: patchPanel, portId: front(n).id };
+    const far = {
+      deviceId: wallSocket(n),
+      portId: numberedPorts(wallSocket(n), "front", 1)[0].id,
+    };
+    return {
+      id: `cable:${n}` as CableId,
+      a: flipped ? far : own,
+      b: flipped ? own : far,
+    };
+  };
+
+  it("lists a device's cables in the order of its own ports, whichever end it is", () => {
+    const connections = deviceConnections(
+      [cable(3), cable(1, true), cable(2)],
+      ports,
+      patchPanel,
+    );
+    expect(connections.map((connection) => connection.port.order)).toEqual([
+      1, 2, 3,
+    ]);
+    expect(connections[0]?.far.deviceId).toBe(wallSocket(1));
+    expect(connections[0]?.farPort?.deviceId).toBe(wallSocket(1));
+  });
+
+  it("leaves out cables of other devices and keeps a far end without its port", () => {
+    const connections = deviceConnections(
+      [cable(1)],
+      ports.filter((port) => port.deviceId === patchPanel),
+      patchPanel,
+    );
+    expect(connections).toHaveLength(1);
+    expect(connections[0]?.farPort).toBeUndefined();
+    expect(deviceConnections([cable(1)], ports, wallSocket(2))).toEqual([]);
   });
 });

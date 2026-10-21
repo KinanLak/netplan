@@ -21,6 +21,7 @@ import {
   useShownCablesDeviceId,
 } from "@/store/selectors";
 import { Badge } from "@/components/ui/badge";
+import { CopyValue } from "@/components/copy-value";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -30,7 +31,6 @@ import { getDeviceKindLabel } from "@/devices/deviceKindRegistry";
 import { TRACED_ON_ASK, toggledCableDisplay } from "@/canvas/cablePaths";
 import { cn } from "@/lib/utils";
 import { DrawerConnectionsSection } from "@/panels/drawer/DrawerConnectionsSection";
-import type { ConnectedDeviceSummary } from "@/panels/drawer/DrawerConnectionsSection";
 import { DrawerPortsSection } from "@/panels/drawer/DrawerPortsSection";
 import { DeviceIdentityDialog } from "@/panels/drawer/DeviceIdentityDialog";
 import { PortTableDialog } from "@/panels/drawer/PortTableDialog";
@@ -43,7 +43,7 @@ import { useCurrentSite } from "@/sites/useCurrentSite";
 import { useShortcutIntentEffect } from "@/hooks/use-shortcuts";
 import { INTEGRATION_LABELS } from "@/sites/integrations";
 import { DEVICE_STATUS_LABELS } from "@/devices/status";
-import { cabledDeviceIds, comparePorts } from "@/devices/ports";
+import { comparePorts, deviceConnections } from "@/devices/ports";
 
 export default function DeviceDrawer() {
   const selectedDeviceId = useSelectedDeviceId();
@@ -83,22 +83,7 @@ export default function DeviceDrawer() {
     ? deviceById.get(selectedDeviceId)
     : undefined;
 
-  // Only the cabled devices on this floor; the drawer cannot jump to another.
-  const connectedDevices: Array<ConnectedDeviceSummary> = device
-    ? cabledDeviceIds(cables, device.id).flatMap((otherId) => {
-        const other = deviceById.get(otherId);
-        return other
-          ? [
-              {
-                id: other.id,
-                name: other.name,
-                type: other.type,
-                status: other.metadata.status ?? "unknown",
-              },
-            ]
-          : [];
-      })
-    : [];
+  const connections = device ? deviceConnections(cables, ports, device.id) : [];
   const devicePorts = device
     ? ports.filter((port) => port.deviceId === device.id).sort(comparePorts)
     : [];
@@ -138,7 +123,10 @@ export default function DeviceDrawer() {
       <header className="space-y-3 bg-linear-to-t from-muted to-card px-4 py-4">
         <div className="flex items-start justify-between">
           <div className="min-w-0 flex-1">
-            <h2 className="truncate text-lg font-semibold text-foreground">
+            <h2
+              className="truncate text-lg font-semibold text-foreground"
+              title={device.name}
+            >
               {device.name}
             </h2>
             <p className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -232,7 +220,7 @@ export default function DeviceDrawer() {
         ) : null}
       </header>
 
-      <ScrollArea className="flex-1">
+      <ScrollArea className="min-h-0 flex-1">
         <div className="space-y-4 px-4 py-4">
           {device.hostname || device.ip || device.macs.length > 0 ? (
             <section>
@@ -241,25 +229,36 @@ export default function DeviceDrawer() {
               </h3>
               <div className="space-y-2">
                 {device.hostname ? (
-                  <div className="flex justify-between text-sm">
+                  <div className="flex items-center justify-between gap-3 text-sm">
                     <span className="text-muted-foreground">Hostname</span>
-                    <span className="font-mono text-foreground">
-                      {device.hostname}
-                    </span>
+                    <CopyValue
+                      value={device.hostname}
+                      label="le hostname"
+                      className="text-foreground"
+                    />
                   </div>
                 ) : null}
                 {device.ip ? (
-                  <div className="flex justify-between text-sm">
+                  <div className="flex items-center justify-between gap-3 text-sm">
                     <span className="text-muted-foreground">IP</span>
-                    <span className="font-mono text-foreground">
-                      {device.ip}
-                    </span>
+                    <CopyValue
+                      value={device.ip}
+                      label="l'adresse IP"
+                      className="text-foreground"
+                    />
                   </div>
                 ) : null}
                 {device.macs.map((mac) => (
-                  <div key={mac} className="flex justify-between text-sm">
+                  <div
+                    key={mac}
+                    className="flex items-center justify-between gap-3 text-sm"
+                  >
                     <span className="text-muted-foreground">MAC</span>
-                    <span className="font-mono text-foreground">{mac}</span>
+                    <CopyValue
+                      value={mac}
+                      label="l'adresse MAC"
+                      className="text-foreground"
+                    />
                   </div>
                 ))}
               </div>
@@ -304,11 +303,13 @@ export default function DeviceDrawer() {
                   </div>
                 ) : null}
                 {device.serial ? (
-                  <div className="flex justify-between text-sm">
+                  <div className="flex items-center justify-between gap-3 text-sm">
                     <span className="text-muted-foreground">N° de série</span>
-                    <span className="font-mono text-foreground">
-                      {device.serial}
-                    </span>
+                    <CopyValue
+                      value={device.serial}
+                      label="le numéro de série"
+                      className="text-foreground"
+                    />
                   </div>
                 ) : null}
               </div>
@@ -327,7 +328,10 @@ export default function DeviceDrawer() {
           ) : null}
 
           <DrawerConnectionsSection
-            connectedDevices={connectedDevices}
+            // Folded again on another device.
+            key={device.id}
+            connections={connections}
+            deviceById={deviceById}
             onSelectConnected={handleSelectConnected}
           />
 
@@ -335,35 +339,15 @@ export default function DeviceDrawer() {
             ports={devicePorts}
             onShowCables={() => setCablesDeviceId(device.id)}
           />
-
-          <section>
-            <h3 className="mb-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-              Position
-            </h3>
-            <div className="flex gap-4 text-sm">
-              <div>
-                <span className="text-muted-foreground">X:</span>{" "}
-                <span className="font-mono text-foreground">
-                  {device.position.x}
-                </span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Y:</span>{" "}
-                <span className="font-mono text-foreground">
-                  {device.position.y}
-                </span>
-              </div>
-            </div>
-          </section>
         </div>
       </ScrollArea>
 
       {isEditMode ? (
-        <footer className="space-y-2 border-t border-border bg-muted p-4">
+        <footer className="flex items-center gap-2 border-t border-border bg-muted px-4 py-3">
           <Button
             variant="outline"
             onClick={() => setIdentityDeviceId(device.id)}
-            className="w-full gap-2"
+            className="flex-1 gap-2"
           >
             <HugeiconsIcon
               icon={Edit02Icon}
@@ -376,11 +360,13 @@ export default function DeviceDrawer() {
           </Button>
           <Button
             variant="outline"
+            size="icon"
             onClick={() => {
               unplaceDevice(device.id);
               selectDevice(null);
             }}
-            className="w-full gap-2"
+            aria-label="Retirer du plan"
+            title="Retirer du plan (U)"
           >
             <HugeiconsIcon
               icon={LocationRemove01Icon}
@@ -388,15 +374,15 @@ export default function DeviceDrawer() {
               color="currentColor"
               strokeWidth={1.5}
             />
-            Retirer du plan
-            <ShortcutHintInline action="unplace-device" />
           </Button>
           {/* A sourced device comes back at each sync, so it is never deleted. */}
           {device.source ? null : (
             <Button
               variant="destructive"
+              size="icon"
               onClick={handleDeleteDevice}
-              className="w-full gap-2"
+              aria-label="Supprimer"
+              title="Supprimer (Suppr)"
             >
               <HugeiconsIcon
                 icon={WasteIcon}
@@ -404,8 +390,6 @@ export default function DeviceDrawer() {
                 color="currentColor"
                 strokeWidth={1.5}
               />
-              Supprimer
-              <ShortcutHintInline action="delete-device" />
             </Button>
           )}
         </footer>
