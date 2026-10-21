@@ -134,7 +134,7 @@
 }
 
 @theme inline {
-  --font-sans: "Plus Jakarta Sans Variable", serif;
+  --font-sans: "Plus Jakarta Sans Variable", sans-serif;
   --font-size-2xs: 0.625rem;
   --font-size-2xs--line-height: 0.875rem;
   --color-sidebar-ring: var(--sidebar-ring);

@@ -27,6 +27,21 @@ const ThemeProviderContext =
 const isBrowser = typeof window !== "undefined";
 const colorSchemeQuery = "(prefers-color-scheme: dark)";
 const themeStorageEvent = "netplan-theme-storage-change";
+export const THEME_STORAGE_KEY = "netplan-ui-theme";
+
+/**
+ * Runs in `<head>` before the first paint, so a dark page never shows light
+ * while the app loads. The provider takes over once hydrated.
+ */
+export const themeScript = `(() => {
+  try {
+    const stored = localStorage.getItem(${JSON.stringify(THEME_STORAGE_KEY)});
+    const dark = stored === "dark" || (stored !== "light" && matchMedia(${JSON.stringify(colorSchemeQuery)}).matches);
+    const root = document.documentElement;
+    root.classList.add(dark ? "dark" : "light");
+    root.style.colorScheme = dark ? "dark" : "light";
+  } catch {}
+})();`;
 
 const isTheme = (value: string | null): value is Theme => {
   return value === "light" || value === "dark" || value === "system";
@@ -37,8 +52,13 @@ const getStoredTheme = (storageKey: string, fallback: Theme): Theme => {
     return fallback;
   }
 
-  const stored = window.localStorage.getItem(storageKey);
-  return isTheme(stored) ? stored : fallback;
+  // A browser may deny storage; the theme then follows the system.
+  try {
+    const stored = window.localStorage.getItem(storageKey);
+    return isTheme(stored) ? stored : fallback;
+  } catch {
+    return fallback;
+  }
 };
 
 const resolveTheme = (theme: Theme, prefersDark: boolean): ResolvedTheme => {
@@ -66,6 +86,8 @@ const subscribeToColorScheme = (onStoreChange: () => void) => {
   };
 };
 
+const subscribeToNothing = () => () => {};
+
 const subscribeToTheme = (storageKey: string, onStoreChange: () => void) => {
   if (!isBrowser) {
     return () => {};
@@ -89,7 +111,7 @@ const subscribeToTheme = (storageKey: string, onStoreChange: () => void) => {
 export function ThemeProvider({
   children,
   defaultTheme = "system",
-  storageKey = "netplan-ui-theme",
+  storageKey = THEME_STORAGE_KEY,
   ...props
 }: ThemeProviderProps) {
   const theme = React.useSyncExternalStore(
@@ -103,25 +125,36 @@ export function ThemeProvider({
     () => false,
   );
   const resolvedTheme = resolveTheme(theme, prefersDark);
+  // The hydration render reads the server's snapshots, which do not know the
+  // stored theme: applying them would undo the head script for a frame.
+  const hydrated = React.useSyncExternalStore(
+    subscribeToNothing,
+    () => true,
+    () => false,
+  );
 
   React.useEffect(() => {
-    if (!isBrowser) {
+    if (!hydrated) {
       return;
     }
 
     const root = window.document.documentElement;
     root.classList.remove("light", "dark");
     root.classList.add(resolvedTheme);
-  }, [resolvedTheme]);
+    root.style.colorScheme = resolvedTheme;
+  }, [hydrated, resolvedTheme]);
 
   const value = {
     theme,
     resolvedTheme,
     setTheme: (newTheme: Theme) => {
-      if (isBrowser) {
+      if (!isBrowser) return;
+      try {
         window.localStorage.setItem(storageKey, newTheme);
-        window.dispatchEvent(new Event(themeStorageEvent));
+      } catch {
+        return;
       }
+      window.dispatchEvent(new Event(themeStorageEvent));
     },
   };
 

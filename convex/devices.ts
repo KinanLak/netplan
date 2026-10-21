@@ -243,7 +243,7 @@ export const remove = editorMutation({
     if (!device) return null;
     if (device.source) {
       throw new ConvexError(
-        `Cet équipement vient de ${INTEGRATION_LABELS[device.source.integration]} : il ne se supprime pas dans Netplan.`,
+        `Cet équipement vient de ${INTEGRATION_LABELS[device.source.integration]} : il ne se supprime pas dans NetPlan.`,
       );
     }
     if (device.placement) {
@@ -302,7 +302,7 @@ export const updateIdentity = editorMutation({
       if (JSON.stringify(device[field]) === JSON.stringify(next)) continue;
       if (device.source && isSourceOwned(device.source, field)) {
         throw new ConvexError(
-          `Le champ « ${IDENTITY_FIELD_NAMES[field]} » vient de ${INTEGRATION_LABELS[device.source.integration]} et ne se modifie pas dans Netplan.`,
+          `Le champ « ${IDENTITY_FIELD_NAMES[field]} » vient de ${INTEGRATION_LABELS[device.source.integration]} et ne se modifie pas dans NetPlan.`,
         );
       }
       Object.assign(patch, { [field]: next });

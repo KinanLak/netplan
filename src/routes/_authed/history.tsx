@@ -31,7 +31,7 @@ import { api } from "../../../convex/_generated/api";
 export const Route = createFileRoute("/_authed/history")({
   ssr: false,
   validateSearch: siteSearch,
-  head: () => ({ meta: [{ title: "Historique · Netplan" }] }),
+  head: () => ({ meta: [{ title: "Historique" }] }),
   component: HistoryPage,
 });
 

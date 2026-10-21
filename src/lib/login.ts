@@ -65,7 +65,7 @@ export function loginErrorMessage(error: {
  */
 export function keycloakErrorMessage(code: string): string {
   if (code === "account_not_linked") {
-    return "Un compte Netplan utilise déjà l'adresse e-mail de ce compte Keycloak. Connectez-vous avec son identifiant et son mot de passe.";
+    return "Un compte NetPlan utilise déjà l'adresse e-mail de ce compte Keycloak. Connectez-vous avec son identifiant et son mot de passe.";
   }
   if (code === "BANNED_USER") {
     return loginErrorMessage({ code });

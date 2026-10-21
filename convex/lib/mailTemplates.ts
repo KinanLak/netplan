@@ -13,11 +13,11 @@ export function resetPasswordMail({
   url: string;
 }): Mail {
   return {
-    subject: "Netplan : réinitialisation de votre mot de passe",
+    subject: "NetPlan : réinitialisation de votre mot de passe",
     text: [
       `Bonjour ${name},`,
       "",
-      "Une réinitialisation de votre mot de passe Netplan a été demandée.",
+      "Une réinitialisation de votre mot de passe NetPlan a été demandée.",
       "Choisissez-en un nouveau avec ce lien, valable une heure :",
       "",
       url,
@@ -38,11 +38,11 @@ export function invitationMail({
   url: string;
 }): Mail {
   return {
-    subject: "Netplan : votre invitation",
+    subject: "NetPlan : votre invitation",
     text: [
       `Bonjour ${name},`,
       "",
-      `${invitedBy} vous a créé un compte sur Netplan, le plan du réseau.`,
+      `${invitedBy} vous a créé un compte sur NetPlan, le plan du réseau.`,
       "Choisissez votre mot de passe avec ce lien, valable sept jours :",
       "",
       url,
@@ -55,11 +55,11 @@ export function invitationMail({
 
 export function testMail({ name }: { name: string }): Mail {
   return {
-    subject: "Netplan : e-mail de test",
+    subject: "NetPlan : e-mail de test",
     text: [
       `Bonjour ${name},`,
       "",
-      "Cet e-mail confirme que Netplan peut envoyer les invitations et les",
+      "Cet e-mail confirme que NetPlan peut envoyer les invitations et les",
       "liens de réinitialisation de mot de passe.",
     ].join("\n"),
   };

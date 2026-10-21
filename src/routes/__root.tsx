@@ -11,6 +11,9 @@ import { ConvexBetterAuthProvider } from "@convex-dev/better-auth/react";
 import { createServerFn } from "@tanstack/react-start";
 import { useEffect } from "react";
 import type { ReactNode } from "react";
+import { ErrorScreen, isNetworkError } from "@/components/error-screen";
+import { ThemeProvider, themeScript } from "@/components/theme-provider";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 import appCss from "@/styles.css?url";
 import logoCss from "@/netplan-logo.css?url";
 import { providerAuthClient } from "@/lib/auth-client";
@@ -25,13 +28,32 @@ const getAuthToken = createServerFn({ method: "GET" }).handler(
   async () => (await getToken()) ?? null,
 );
 
+// The token the browser last read. Every page change asks again, and without
+// a network that request fails: the session has not changed for it, so the
+// page opens and says it is offline instead of failing. Signing in and out
+// reload the page, and the signed-in layout notices a session lost meanwhile.
+// Any other failure still fails: the server may have something to say.
+let lastClientToken: string | null | undefined;
+
+const readAuthToken = async () => {
+  if (typeof window === "undefined") return await getAuthToken();
+  try {
+    lastClientToken = await getAuthToken();
+  } catch (error) {
+    const offline = isNetworkError(error) || !navigator.onLine;
+    if (!offline || lastClientToken === undefined) throw error;
+  }
+  return lastClientToken;
+};
+
 export const Route = createRootRoute({
-  beforeLoad: async () => ({ token: await getAuthToken() }),
+  beforeLoad: async () => ({ token: await readAuthToken() }),
   head: () => ({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Netplan" },
+      { name: "color-scheme", content: "light dark" },
+      { title: "NetPlan" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
@@ -45,11 +67,14 @@ export const Route = createRootRoute({
   }),
   loader: () => getRuntimeConfig(),
   staleTime: Infinity,
+  shellComponent: RootDocument,
   component: RootComponent,
+  errorComponent: ErrorScreen,
   notFoundComponent: NotFoundComponent,
 });
 
 function NotFoundComponent() {
+  useDocumentTitle("Page introuvable");
   return (
     <main className="flex min-h-svh flex-col items-center justify-center gap-3">
       <h1 className="text-2xl font-semibold">Page introuvable</h1>
@@ -57,7 +82,7 @@ function NotFoundComponent() {
         L'adresse demandée n'existe pas ou n'est plus disponible.
       </p>
       <Link to="/" className="text-primary underline underline-offset-4">
-        Retour à la carte
+        Retour au plan
       </Link>
     </main>
   );
@@ -66,15 +91,18 @@ function NotFoundComponent() {
 function RootComponent() {
   const { convexUrl } = Route.useLoaderData();
   const { token } = Route.useRouteContext();
+  // A full load hydrates the server's context without running `beforeLoad`
+  // in the browser, so the first page change offline starts from it.
+  useEffect(() => {
+    lastClientToken ??= token;
+  }, [token]);
   return (
     <ConvexBetterAuthProvider
       client={getConvexClient(convexUrl, { signedIn: Boolean(token) })}
       authClient={providerAuthClient}
       initialToken={token}
     >
-      <RootDocument>
-        <Outlet />
-      </RootDocument>
+      <Outlet />
     </ConvexBetterAuthProvider>
   );
 }
@@ -96,12 +124,14 @@ function RootDocument({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <html lang="fr">
+    // The head script sets the theme class before React hydrates.
+    <html lang="fr" suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         <HeadContent />
       </head>
       <body>
-        {children}
+        <ThemeProvider>{children}</ThemeProvider>
         <TanStackDevtools
           config={{
             position: "middle-left",

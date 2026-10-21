@@ -10,7 +10,7 @@ import { isAdmin } from "@/lib/roles";
 
 export const Route = createFileRoute("/_authed/admin")({
   ssr: false,
-  head: () => ({ meta: [{ title: "Administration · Netplan" }] }),
+  head: () => ({ meta: [{ title: "Administration" }] }),
   component: AdminShell,
 });
 

@@ -105,7 +105,7 @@ const inventorySearch = (
 export const Route = createFileRoute("/_authed/inventory")({
   ssr: false,
   validateSearch: inventorySearch,
-  head: () => ({ meta: [{ title: "Inventaire · Netplan" }] }),
+  head: () => ({ meta: [{ title: "Inventaire" }] }),
   component: InventoryPage,
 });
 

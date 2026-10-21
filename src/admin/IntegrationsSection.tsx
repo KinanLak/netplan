@@ -306,7 +306,7 @@ function RemoveIntegration({
           <AlertDialogHeader>
             <AlertDialogTitle>Retirer {label} de ce site ?</AlertDialogTitle>
             <AlertDialogDescription>
-              Netplan oublie l'adresse et le jeton ; la collecte ne l'interroge
+              NetPlan oublie l'adresse et le jeton ; la collecte ne l'interroge
               plus.
             </AlertDialogDescription>
           </AlertDialogHeader>

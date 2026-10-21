@@ -15,7 +15,7 @@ import { authClient } from "@/lib/auth-client";
 import { forgotPasswordErrorMessage, requestFailure } from "@/lib/login";
 
 export const Route = createFileRoute("/forgot-password")({
-  head: () => ({ meta: [{ title: "Mot de passe oublié · Netplan" }] }),
+  head: () => ({ meta: [{ title: "Mot de passe oublié" }] }),
   component: ForgotPasswordPage,
 });
 
@@ -49,7 +49,7 @@ function ForgotPasswordPage() {
         <FieldGroup>
           {/* The same answer whether or not the address has an account. */}
           <FieldDescription className="text-center">
-            Si un compte Netplan avec mot de passe utilise l'adresse {email}, un
+            Si un compte NetPlan avec mot de passe utilise l'adresse {email}, un
             lien pour en choisir un nouveau vient de lui être envoyé. Il est
             valable une heure.
           </FieldDescription>

@@ -50,7 +50,7 @@ import { invitationError } from "../../../../convex/lib/userAccounts";
 
 export const Route = createFileRoute("/_authed/admin/users")({
   head: () => ({
-    meta: [{ title: "Utilisateurs · Administration · Netplan" }],
+    meta: [{ title: "Utilisateurs · Administration" }],
   }),
   component: UsersPage,
 });
@@ -73,7 +73,7 @@ function UsersPage() {
         <div>
           <h1 className="text-xl font-semibold">Utilisateurs</h1>
           <p className="text-sm text-muted-foreground">
-            Qui peut ouvrir Netplan, et avec quel rôle.
+            Qui peut ouvrir NetPlan, et avec quel rôle.
           </p>
         </div>
         <Button onClick={() => setInviting(true)}>
