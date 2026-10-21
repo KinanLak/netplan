@@ -246,9 +246,6 @@ const isActionAllowedByContext = (
   runtime: ShortcutIntentRuntime,
 ): boolean => {
   switch (action) {
-    case "toggle-edit-mode":
-    case "show-device-history":
-      return runtime.canEdit;
     case "cancel-wall-tool":
       return runtime.isEditMode && runtime.activeDrawTool !== "device";
     case "delete-device":
@@ -320,6 +317,7 @@ export const resolveShortcutIntent = ({
       const config = shortcuts[action];
 
       return (
+        (!config.requiresEdit || runtime.canEdit) &&
         isScopeActive(config.scope, runtime) &&
         isActionAllowedByContext(action, runtime) &&
         hasEnabledRegistration(action, registrations) !== null

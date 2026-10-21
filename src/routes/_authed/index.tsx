@@ -273,14 +273,9 @@ function MapWorkspace({
 
       <SidebarInset className="relative">
         <ReactFlowProvider>
-          <FlowCanvas />
-          <Toolbar />
-          {selectedDeviceId ? <DeviceDrawer /> : null}
-          {empty ? <MapEmptyState {...empty} /> : null}
-          <MapDocumentStatus floorless={empty !== null} />
-          {site ? <SiteRefreshShortcut siteId={site.id} /> : null}
-
-          <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
+          {/* The mode button and the toolbar come before the plan, so Tab
+              reaches them first (ADR 0030). */}
+          <div className="absolute top-4 left-4 z-20 flex items-center gap-2">
             <SidebarToggle />
             {canEdit ? (
               <button
@@ -342,6 +337,12 @@ function MapWorkspace({
               </div>
             )}
           </div>
+          <Toolbar />
+          <FlowCanvas />
+          {selectedDeviceId ? <DeviceDrawer /> : null}
+          {empty ? <MapEmptyState {...empty} /> : null}
+          <MapDocumentStatus floorless={empty !== null} />
+          {site ? <SiteRefreshShortcut siteId={site.id} /> : null}
         </ReactFlowProvider>
 
         <ShortcutsDialog hasRightDrawerOpen={Boolean(selectedDeviceId)} />

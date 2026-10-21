@@ -142,7 +142,7 @@ export default function Toolbar() {
   };
 
   return (
-    <div className="fixed top-4 left-1/2 z-10 max-w-[calc(100vw-22rem)] -translate-x-1/2">
+    <div className="fixed top-4 left-1/2 z-20 max-w-[calc(100vw-22rem)] -translate-x-1/2">
       <div
         className={cn(
           "flex items-center gap-2 rounded-lg p-1 shadow-lg transition-colors duration-500",

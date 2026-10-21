@@ -1,3 +1,4 @@
+import { shortcuts } from "@/lib/shortcuts";
 import type { ShortcutAction } from "@/lib/shortcuts";
 import { SHORTCUT_GROUP_HEADER_WEIGHT } from "@/lib/constants";
 
@@ -18,7 +19,6 @@ export const shortcutGroups: Array<ShortcutGroup> = [
       "redo",
       "toggle-edit-mode",
       "escape",
-      "delete",
       "cycle-theme",
       "refresh-site",
       "show-shortcuts",
@@ -77,6 +77,20 @@ export const shortcutGroups: Array<ShortcutGroup> = [
     actions: ["floor-up", "floor-down"],
   },
 ];
+
+/**
+ * The groups as a role sees them: a Lecteur gets no editing shortcut, and a
+ * group left empty disappears (ADR 0029).
+ */
+export const shortcutGroupsFor = (canEdit: boolean): Array<ShortcutGroup> =>
+  shortcutGroups
+    .map((group) => ({
+      ...group,
+      actions: group.actions.filter(
+        (action) => canEdit || !shortcuts[action].requiresEdit,
+      ),
+    }))
+    .filter((group) => group.actions.length > 0);
 
 const compareGroups = (a: ShortcutGroup, b: ShortcutGroup): number => {
   const priorityDiff = (b.orderPriority ?? 0) - (a.orderPriority ?? 0);
