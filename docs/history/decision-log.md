@@ -2329,6 +2329,8 @@ Questions of 2026-10-21 and 22, from the UX review's map items (ADR 0029).
 
 ### U2 — Map viewport, keyboard, selection
 
+Questions of 2026-10-21 and 2026-10-22, in the order they came up (ADR 0030, #91, #95, #100, #104, #112, #116).
+
 #### Where does the shortcut listener live?
 
 - Context: Shift+T was announced on every page but only the map listened (A27); B4 and the theme are global.
