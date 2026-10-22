@@ -35,7 +35,8 @@ export const useMapStore = create<MapStore>()((set, get) => ({
   selectedDeviceIds: [],
   selectedDeviceIdSet: new Set(),
   hoveredDeviceId: null,
-  isEditMode: true,
+  // Everyone opens the map to read it; editing is a choice (B5).
+  isEditMode: false,
   isMultiSelectMode: false,
   shownCablesDeviceId: null,
   cableDraft: null,

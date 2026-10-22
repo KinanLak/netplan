@@ -28,6 +28,8 @@ import {
   useCurrentBuildingId,
   useCurrentFloorId,
   useIsEditMode,
+  useIsOverlayPanelOpen,
+  useIsPlacePanelOpen,
   useSelectedDeviceId,
 } from "@/store/selectors";
 import type { Floor } from "@/types/map";
@@ -42,6 +44,7 @@ import { useDocumentTitle } from "@/hooks/use-document-title";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { useSignOut } from "@/panels/SidebarAccount";
 import { isAdmin } from "@/lib/roles";
+import { cn } from "@/lib/utils";
 import {
   mapSearch,
   useCanEditSite,
@@ -177,8 +180,9 @@ function MapWorkspace({
   const currentFloorId = useCurrentFloorId();
   const selectedDeviceId = useSelectedDeviceId();
   const isEditMode = useIsEditMode();
+  const isOverlayPanelOpen = useIsOverlayPanelOpen();
+  const isPlacingPanelOpen = useIsPlacePanelOpen();
   const canEdit = useCanEditSite();
-  const me = useCurrentUser();
   const isReady = useMapDocumentReady();
   const { site } = useCurrentSite();
   const { commands, undo, redo, getDocument } = useMapDocumentActions();
@@ -269,7 +273,6 @@ function MapWorkspace({
     if (abandonCable()) return;
     const {
       activeDrawTool,
-      isOverlayPanelOpen,
       isPlacePanelOpen,
       isLabelToolActive,
       setLabelToolActive,
@@ -311,76 +314,41 @@ function MapWorkspace({
 
       <SidebarInset className="relative">
         <ReactFlowProvider>
-          {/* The mode button and the toolbar come before the plan, so Tab
-              reaches them first (ADR 0030). */}
-          {/* Above the toolbar, which can reach it on a narrow screen. */}
-          <div className="absolute top-4 left-4 z-30 flex items-center gap-2">
-            <SidebarToggle />
-            {canEdit ? (
-              <button
-                onClick={toggleEditModeIfLive}
-                // Without a floor, edit mode still holds the building's own
-                // actions in the sidebar.
-                disabled={isMapFrozen || (currentFloorId !== null && !isReady)}
-                className={`relative flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium shadow-lg transition-all disabled:cursor-not-allowed disabled:opacity-60 ${
-                  isEditMode
-                    ? "border-accent bg-accent text-accent-foreground"
-                    : "border-primary bg-primary text-primary-foreground"
-                } `}
-                title={
-                  isMapFrozen
-                    ? "Hors connexion : le plan est en lecture seule"
-                    : isEditMode
-                      ? "Terminer les modifications"
-                      : "Modifier le plan"
-                }
-              >
-                {isEditMode ? (
-                  <>
-                    <HugeiconsIcon
-                      icon={Tick01Icon}
-                      size={20}
-                      color="currentColor"
-                      strokeWidth={1.5}
-                    />
-                    Terminer
-                  </>
-                ) : (
-                  <>
-                    <HugeiconsIcon
-                      icon={Edit01Icon}
-                      size={20}
-                      color="currentColor"
-                      strokeWidth={1.5}
-                    />
-                    Modifier
-                  </>
-                )}
-                <ShortcutHintAbsolute
-                  action="toggle-edit-mode"
-                  position="bottom-right"
-                />
-              </button>
-            ) : (
-              <div
-                className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-muted-foreground shadow-lg"
-                title={
-                  me?.sso
-                    ? "Votre rôle permet de consulter le plan, pas de le modifier. Il vient de Keycloak : demandez à un administrateur de vous en donner un autre."
-                    : "Votre rôle permet de consulter le plan, pas de le modifier"
-                }
-              >
-                <HugeiconsIcon
-                  icon={ViewIcon}
-                  size={20}
-                  color="currentColor"
-                  strokeWidth={1.5}
-                />
-                Lecture seule
-              </div>
+          {/* One bar: the mode button, then the tools centred in what the
+              drawer, the calque or the placing panel leaves, so nothing
+              overlaps (A56).
+              It comes before the plan, so Tab reaches it first (ADR 0030). */}
+          <div
+            className={cn(
+              "pointer-events-none absolute top-4 left-4 z-30 flex items-start gap-2 transition-[right] @container",
+              selectedDeviceId
+                ? "right-84"
+                : isOverlayPanelOpen || isPlacingPanelOpen
+                  ? "right-80"
+                  : "right-4",
             )}
+          >
+            <div className="pointer-events-auto flex shrink-0 items-center gap-2">
+              <SidebarToggle />
+              {canEdit ? (
+                <ModeButton
+                  isEditMode={isEditMode}
+                  onToggle={toggleEditModeIfLive}
+                  frozen={isMapFrozen}
+                  // Without a floor, edit mode still holds the building's
+                  // own actions in the sidebar.
+                  disabled={
+                    isMapFrozen || (currentFloorId !== null && !isReady)
+                  }
+                />
+              ) : (
+                <ReadOnlyBadge />
+              )}
+            </div>
+            <div className="flex min-w-0 flex-1 justify-center">
+              <Toolbar />
+            </div>
           </div>
-          <Toolbar />
           <FlowCanvas />
           {selectedDeviceId ? <DeviceDrawer /> : null}
           {empty ? <MapEmptyState {...empty} /> : null}
@@ -470,6 +438,72 @@ function applyUrl(
   if (useMapStore.getState().selectedDeviceId !== null) {
     store.selectDevice(null);
   }
+}
+
+/**
+ * "Modifier" and "Terminer", both solid: the way out of edit mode must not
+ * look disabled (B5).
+ */
+function ModeButton({
+  isEditMode,
+  onToggle,
+  frozen,
+  disabled,
+}: {
+  isEditMode: boolean;
+  onToggle: () => void;
+  /** Offline past the grace period: the map is read-only (ADR 0031). */
+  frozen: boolean;
+  disabled: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={disabled}
+      className="relative flex items-center gap-2 rounded-lg border border-primary bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-lg focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-hidden disabled:cursor-not-allowed disabled:opacity-60"
+      title={
+        frozen
+          ? "Hors connexion : le plan est en lecture seule"
+          : isEditMode
+            ? "Terminer les modifications"
+            : "Modifier le plan"
+      }
+    >
+      <HugeiconsIcon
+        icon={isEditMode ? Tick01Icon : Edit01Icon}
+        size={20}
+        color="currentColor"
+        strokeWidth={1.5}
+      />
+      <span className="@max-[36rem]:sr-only">
+        {isEditMode ? "Terminer" : "Modifier"}
+      </span>
+      <ShortcutHintAbsolute action="toggle-edit-mode" position="bottom-right" />
+    </button>
+  );
+}
+
+function ReadOnlyBadge() {
+  const me = useCurrentUser();
+  return (
+    <div
+      className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-muted-foreground shadow-lg"
+      title={
+        me?.sso
+          ? "Votre rôle permet de consulter le plan, pas de le modifier. Il vient de Keycloak : demandez à un administrateur de vous en donner un autre."
+          : "Votre rôle permet de consulter le plan, pas de le modifier"
+      }
+    >
+      <HugeiconsIcon
+        icon={ViewIcon}
+        size={20}
+        color="currentColor"
+        strokeWidth={1.5}
+      />
+      Lecture seule
+    </div>
+  );
 }
 
 /** Folds the sidebar away and back, as Ctrl+B does; the choice is kept. */
