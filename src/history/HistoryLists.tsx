@@ -1,4 +1,5 @@
 import { HugeiconsIcon } from "@hugeicons/react";
+import { SocketName } from "@/devices/SocketName";
 import {
   Location01Icon,
   WifiConnected01Icon,
@@ -36,9 +37,11 @@ export function PlaceLabel({ place }: { place: Place }) {
   return (
     <span className="flex min-w-0 flex-col">
       <span className="truncate">
-        {place.socketName === undefined
-          ? "Sans prise"
-          : `Prise « ${place.socketName} »`}
+        {place.socketName === undefined ? (
+          "Sans prise"
+        ) : (
+          <SocketName name={place.socketName} />
+        )}
         {floor ? (
           <span className="text-muted-foreground"> — {floor}</span>
         ) : null}

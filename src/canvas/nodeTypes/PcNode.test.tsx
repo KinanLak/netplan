@@ -46,13 +46,10 @@ afterEach(() => {
 });
 
 describe("PcNode", () => {
-  it("displays the hostname when defined and falls back to name otherwise", () => {
-    renderPcNode({ hostname: "alpha-01" });
-    expect(screen.getByText("alpha-01")).toBeTruthy();
-    cleanup();
-
-    renderPcNode({ hostname: undefined, name: "Backup PC" });
-    expect(screen.getByText("Backup PC")).toBeTruthy();
+  it("shows the device's name in capitals, as the rest of the app names it", () => {
+    renderPcNode({ hostname: "alpha-01", name: "Backup PC" });
+    expect(screen.getByText("BACKUP PC")).toBeTruthy();
+    expect(screen.queryByText("alpha-01")).toBe(null);
   });
 
   it("shows the last user when present in metadata", () => {

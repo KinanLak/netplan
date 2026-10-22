@@ -47,7 +47,7 @@ describe("device node smoke renders", () => {
       metadata: { status: "up" },
     });
     renderWithFlow(<RackNode {...nodeProps(device)} />);
-    expect(screen.getByText("Rack-A")).toBeTruthy();
+    expect(screen.getByText("RACK-A")).toBeTruthy();
   });
 
   it("SwitchNode shows every port NetBox gave it, rear ones too, with what was observed", () => {
@@ -74,7 +74,7 @@ describe("device node smoke renders", () => {
     const { container } = renderWithFlow(
       <SwitchNode {...nodeProps(device, ports)} />,
     );
-    expect(screen.getByText("sw-a")).toBeTruthy();
+    expect(screen.getByText("SWITCH-A")).toBeTruthy();
 
     expect(container.querySelectorAll('[title^="Gi1/0/"]').length).toBe(48);
     for (const title of [

@@ -9,18 +9,18 @@ export interface WallColorTone {
 export const WALL_COLOR_TONES: Record<WallColor, WallColorTone> = {
   sand: {
     label: "Sable",
-    fill: "#d8c8b2",
-    stroke: "#b59b7b",
+    fill: "var(--wall-sand-fill)",
+    stroke: "var(--wall-sand-stroke)",
   },
   concrete: {
-    label: "Beton",
-    fill: "#c3c8cf",
-    stroke: "#8f98a3",
+    label: "Béton",
+    fill: "var(--wall-concrete-fill)",
+    stroke: "var(--wall-concrete-stroke)",
   },
   slate: {
     label: "Ardoise",
-    fill: "#8f969f",
-    stroke: "#5f6772",
+    fill: "var(--wall-slate-fill)",
+    stroke: "var(--wall-slate-stroke)",
   },
 };
 

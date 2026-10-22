@@ -7,7 +7,7 @@ import {
   toCable,
   toPort,
 } from "./lib/ports";
-import { PRESENT_TYPES } from "./lib/statuses";
+import { PRESENT_TYPES, freshSwitchesOf } from "./lib/statuses";
 import {
   cable,
   floorOverlay,
@@ -260,5 +260,42 @@ export const getFloorPathEnds = readerQuery({
       });
     }
     return { seenAt, farEnds };
+  },
+});
+
+/**
+ * The sockets of a floor behind which a switch, in a read that still vouches
+ * for it, saw a MAC address (B13): whoever owns that address, placed or not.
+ */
+export const getFloorSeenSockets = readerQuery({
+  args: { floorId: v.string() },
+  returns: v.array(v.string()),
+  handler: async (ctx, { floorId }) => {
+    const sockets = (
+      await ctx.db
+        .query("devices")
+        .withIndex("by_floor", (q) => q.eq("placement.floorId", floorId))
+        .collect()
+    ).filter((row) => row.type === "wall-port");
+    const siteId = sockets.at(0)?.siteId;
+    if (!siteId) return [];
+    const fresh = await freshSwitchesOf(ctx, siteId);
+    const seen: Array<string> = [];
+    for (const socket of sockets) {
+      const sightings = await ctx.db
+        .query("macSightings")
+        .withIndex("by_site_socket", (q) =>
+          q.eq("siteId", socket.siteId).eq("socketId", socket.objectId),
+        )
+        .collect();
+      if (
+        sightings.some(
+          (sighting) => sighting.misses === 0 && fresh.has(sighting.switchId),
+        )
+      ) {
+        seen.push(socket.objectId);
+      }
+    }
+    return seen;
   },
 });

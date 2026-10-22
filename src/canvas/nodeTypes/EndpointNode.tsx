@@ -9,6 +9,7 @@ import type { Node, NodeProps } from "@xyflow/react";
 import type { DeviceStatus } from "@/types/map";
 import type { DeviceNodeData } from "@/devices/reactFlowDeviceAdapter";
 import { StatusDot } from "@/components/StatusDot";
+import { CARD_LABEL, NodeLabel } from "./NodeLabel";
 
 type EndpointNodeType = Node<DeviceNodeData>;
 
@@ -41,9 +42,11 @@ function EndpointNode({ data: device, id }: NodeProps<EndpointNodeType>) {
           </span>
         </div>
         <div className="flex flex-1 items-center justify-center px-0.5">
-          <span className="text-2xs text-center leading-tight font-bold break-all text-foreground uppercase">
-            {device.hostname ?? device.name}
-          </span>
+          <NodeLabel
+            name={device.name}
+            box={CARD_LABEL}
+            className="text-center font-bold text-foreground"
+          />
         </div>
       </div>
     </NetworkNode>

@@ -38,7 +38,7 @@ export const statusFrom = (
 };
 
 /** The switches whose read still vouches for what rests on it. */
-const freshSwitchesOf = async (ctx: QueryCtx, siteId: string) => {
+export const freshSwitchesOf = async (ctx: QueryCtx, siteId: string) => {
   const cycle = await cycleOf(ctx, siteId);
   const site = await ctx.db
     .query("sites")

@@ -1,4 +1,5 @@
 import { HugeiconsIcon } from "@hugeicons/react";
+import { SocketName } from "@/devices/SocketName";
 import { ArrowDown01Icon, ArrowRight01Icon } from "@hugeicons/core-free-icons";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
@@ -94,10 +95,13 @@ export function UnknownMacs({ siteId }: { siteId: string }) {
               <div className="min-w-0 space-y-0.5 text-sm">
                 <p className="font-mono">{sighting.mac}</p>
                 <p className="truncate text-muted-foreground">
+                  {sighting.socket ? (
+                    <SocketName name={sighting.socket.name} />
+                  ) : (
+                    "Sans prise"
+                  )}
+                  {" · "}
                   {[
-                    sighting.socket
-                      ? `Prise « ${sighting.socket.name} »`
-                      : "Sans prise",
                     [sighting.switchName, sighting.portName]
                       .filter(Boolean)
                       .join(" "),

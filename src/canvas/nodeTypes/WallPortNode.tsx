@@ -6,7 +6,10 @@ import { CableHandle } from "./CableHandle";
 import { SOCKET_HANDLE } from "@/canvas/cablePaths";
 import { areDeviceNodePropsEqual } from "./memo";
 import type { Node, NodeProps } from "@xyflow/react";
-import type { DeviceId, DeviceStatus } from "@/types/map";
+import type { DeviceId } from "@/types/map";
+import { socketLabel } from "@/canvas/nodeLabel";
+import { useIsSocketSeen } from "@/canvas/seenSockets";
+import { NodeLabel, SOCKET_LABEL } from "./NodeLabel";
 import type { DeviceNodeData } from "@/devices/reactFlowDeviceAdapter";
 import { cn } from "@/lib/utils";
 import { PORT_ID_ATTRIBUTE, useCableGrip } from "@/canvas/hooks/useCableGrip";
@@ -14,7 +17,9 @@ import { PORT_ID_ATTRIBUTE, useCableGrip } from "@/canvas/hooks/useCableGrip";
 type WallPortNodeType = Node<DeviceNodeData>;
 
 function WallPortNode({ data: device, id }: NodeProps<WallPortNodeType>) {
-  const status: DeviceStatus = device.metadata.status ?? "unknown";
+  // A socket is passive (B13): its icon says only that the network saw a
+  // device behind it.
+  const isSeen = useIsSocketSeen(id);
   const grip = useCableGrip(id as DeviceId);
   // A socket has one front port: its icon is where a cable is drawn from.
   const socket = device.ports.at(0);
@@ -22,7 +27,7 @@ function WallPortNode({ data: device, id }: NodeProps<WallPortNodeType>) {
   return (
     <NetworkNode
       id={id}
-      status={status}
+      status={null}
       width={device.size.width}
       height={device.size.height}
       className="bg-card"
@@ -36,9 +41,7 @@ function WallPortNode({ data: device, id }: NodeProps<WallPortNodeType>) {
             grip.isGrip &&
               socket &&
               "nodrag cursor-crosshair hover:ring-2 hover:ring-primary",
-            status === "up" && "text-up",
-            status === "down" && "text-down",
-            status === "unknown" && "text-unknown",
+            isSeen ? "text-up" : "text-muted-foreground",
           )}
         >
           <HugeiconsIcon
@@ -49,10 +52,11 @@ function WallPortNode({ data: device, id }: NodeProps<WallPortNodeType>) {
           />
           <CableHandle id={SOCKET_HANDLE} />
         </div>
-        {/* Label inside */}
-        <span className="text-3xs max-w-max truncate px-0.5 leading-tight font-medium text-muted-foreground">
-          {device.name}
-        </span>
+        <NodeLabel
+          name={socketLabel(device.name)}
+          box={SOCKET_LABEL}
+          className="text-center font-medium text-foreground"
+        />
       </div>
     </NetworkNode>
   );

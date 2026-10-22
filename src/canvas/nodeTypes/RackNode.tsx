@@ -1,20 +1,17 @@
 import { memo } from "react";
 import NetworkNode from "./NetworkNode";
 import { areDeviceNodePropsEqual } from "./memo";
-import type { DeviceStatus } from "@/types/map";
 import type { DeviceNodeData } from "@/devices/reactFlowDeviceAdapter";
 import type { Node, NodeProps } from "@xyflow/react";
-import { StatusDot } from "@/components/StatusDot";
+import { NodeLabel, RACK_LABEL } from "./NodeLabel";
 
 type RackNodeType = Node<DeviceNodeData>;
 
 function RackNode({ data: device, id }: NodeProps<RackNodeType>) {
-  const status: DeviceStatus = device.metadata.status ?? "unknown";
-
   return (
     <NetworkNode
       id={id}
-      status={status}
+      status={null}
       width={device.size.width}
       height={device.size.height}
       className="bg-linear-to-b from-secondary to-secondary/80"
@@ -22,12 +19,13 @@ function RackNode({ data: device, id }: NodeProps<RackNodeType>) {
       {/* Rack frame details */}
       <div className="absolute inset-1 rounded border border-border opacity-50" />
 
-      {/* Header with label and status */}
+      {/* Header with label: a rack is passive, so it has no status */}
       <div className="absolute top-1 right-1 left-1 flex items-center justify-between px-1">
-        <span className="truncate text-[8px] font-medium text-foreground">
-          {device.name}
-        </span>
-        <StatusDot status={status} />
+        <NodeLabel
+          name={device.name}
+          box={RACK_LABEL}
+          className="font-medium text-foreground"
+        />
       </div>
 
       {/* Rack slots visualization */}

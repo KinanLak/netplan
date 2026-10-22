@@ -1,5 +1,5 @@
 import type { DeviceStatus } from "@/types/map";
-import { DEVICE_STATUS_LABELS } from "@/devices/status";
+import { DEVICE_STATUS_CLASSES, DEVICE_STATUS_LABELS } from "@/devices/status";
 import { cn } from "@/lib/utils";
 
 interface StatusDotProps {
@@ -22,9 +22,7 @@ export function StatusDot({
       }
       className={cn(
         "h-2 w-2 rounded-full",
-        status === "up" && "bg-up",
-        status === "down" && "bg-down",
-        status === "unknown" && "bg-unknown",
+        DEVICE_STATUS_CLASSES[status].dot,
         className,
       )}
     />
