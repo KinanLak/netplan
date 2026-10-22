@@ -2,8 +2,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { Add01Icon, Search01Icon } from "@hugeicons/core-free-icons";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
-import { useEffect, useId, useRef, useState } from "react";
-import type { RefObject } from "react";
+import { useEffect, useId, useState } from "react";
 import { ModeToggle } from "@/components/mode-toggle";
 import { ListSkeleton } from "@/components/loading-skeletons";
 import { AppNavLinks, UserMenu } from "@/components/app-nav";
@@ -149,8 +148,7 @@ function SiteInventory({ site }: { site: SiteSummary }) {
   const sort = sortOf(search);
   const [creating, setCreating] = useState(false);
   const [hidden, setHidden] = useState(readHiddenColumns);
-  const searchRef = useRef<HTMLInputElement>(null);
-  useSlashToSearch(searchRef);
+  useSlashToSearch();
   useRestoredScroll("inventory-page", devices !== undefined);
   useRestoredScroll("inventory-table", devices !== undefined);
 
@@ -306,7 +304,6 @@ function SiteInventory({ site }: { site: SiteSummary }) {
                     className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-muted-foreground"
                   />
                   <Input
-                    ref={searchRef}
                     type="search"
                     value={filters.query}
                     onChange={(event) => typeQuery(event.target.value)}
@@ -445,7 +442,7 @@ function SiteInventory({ site }: { site: SiteSummary }) {
 }
 
 /** « / » puts the cursor in the search, from anywhere but a field. */
-function useSlashToSearch(input: RefObject<HTMLInputElement | null>) {
+function useSlashToSearch() {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "/" || event.ctrlKey || event.metaKey || event.altKey) {
@@ -459,12 +456,17 @@ function useSlashToSearch(input: RefObject<HTMLInputElement | null>) {
       ) {
         return;
       }
+      // The tab shown has one search: the devices' or the MACs'.
+      const search = document.querySelector<HTMLInputElement>(
+        "main input[type='search']",
+      );
+      if (!search) return;
       event.preventDefault();
-      input.current?.focus();
+      search.focus();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [input]);
+  }, []);
 }
 
 /**
