@@ -75,6 +75,52 @@ describe("history", () => {
     expect(site.page.map(({ deviceId }) => deviceId)).toEqual(["device:other"]);
   });
 
+  it("searches a site's history by name, place or MAC, within dates, before paging", async () => {
+    const t = testBackend();
+    const now = Date.now();
+    await addEvents(t, [
+      { deviceId: "device:printer", at: now - 3 * DAY },
+      { deviceId: "device:pc", at: now - 2 * DAY },
+      { deviceId: "device:pc", at: now - DAY },
+      { deviceId: "device:other", at: now - 1_000 },
+    ]);
+    await t.run(async (ctx) => {
+      await ctx.db.insert("deviceMacs", {
+        siteId: "site:a",
+        mac: "02:6e:70:00:01:05",
+        deviceId: "device:pc",
+      });
+    });
+    const editor = t.withIdentity(
+      (await createSignedInUser(t, "editor")).identity,
+    );
+    const ids = async (args: { search?: string; from?: number; to?: number }) =>
+      (
+        await editor.query(api.history.forSite, {
+          siteId: "site:a",
+          ...args,
+          paginationOpts: { numItems: 10, cursor: null },
+        })
+      ).page.map(({ deviceId, at }) => [
+        deviceId,
+        Math.round((now - at) / DAY),
+      ]);
+
+    expect(await ids({ search: "PRINTER" })).toEqual([["device:printer", 3]]);
+    // A MAC in another notation finds the device that carries it.
+    expect(await ids({ search: "026e.7000.0105" })).toEqual([
+      ["device:pc", 1],
+      ["device:pc", 2],
+    ]);
+    expect(await ids({ from: now - 2.5 * DAY, to: now - 0.5 * DAY })).toEqual([
+      ["device:pc", 1],
+      ["device:pc", 2],
+    ]);
+    expect(await ids({ search: "pc", from: now - 1.5 * DAY })).toEqual([
+      ["device:pc", 1],
+    ]);
+  });
+
   it("forgets what is older than 30 days, a batch at a time", async () => {
     const t = testBackend();
     const now = Date.now();

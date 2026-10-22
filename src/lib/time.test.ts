@@ -1,6 +1,11 @@
 import { describe, expect, it } from "bun:test";
 import {
   ageHint,
+  dayOf,
+  formatDay,
+  isCalendarDay,
+  nextDay,
+  startOfDay,
   formatAge,
   formatDateTime,
   formatTime,
@@ -61,5 +66,56 @@ describe("timeZoneHint", () => {
     expect(ageHint(AT, AT, "Europe/Paris")).toMatch(
       /^mer\. 21 oct\.,? 14:05 · Europe\/Paris • UTC\+2$/,
     );
+  });
+});
+
+describe("days", () => {
+  it("names a day as the reader's calendar does", () => {
+    expect(dayOf(Date.parse("2026-10-21T22:30:00Z"), "Europe/Paris")).toBe(
+      "2026-10-22",
+    );
+    expect(formatDay(AT, AT, "Europe/Paris")).toBe("Aujourd'hui");
+    expect(formatDay(AT - 24 * 60 * MINUTE, AT, "Europe/Paris")).toBe("Hier");
+    expect(formatDay(AT - 2 * 24 * 60 * MINUTE, AT, "Europe/Paris")).toBe(
+      "Lundi 19 octobre",
+    );
+  });
+
+  it("starts a day at the reader's midnight, across a change of offset", () => {
+    expect(startOfDay("2026-10-21", "Europe/Paris")).toBe(
+      Date.parse("2026-10-20T22:00:00Z"),
+    );
+    // Paris leaves summer time at 03:00 on 25 October.
+    expect(startOfDay("2026-10-26", "Europe/Paris")).toBe(
+      Date.parse("2026-10-25T23:00:00Z"),
+    );
+    expect(startOfDay("2026-10-21", "America/Sao_Paulo")).toBe(
+      Date.parse("2026-10-21T03:00:00Z"),
+    );
+    // Santiago skips from 23:59 to 01:00 on 6 September 2026.
+    expect(startOfDay("2026-09-06", "America/Santiago")).toBe(
+      Date.parse("2026-09-06T04:00:00Z"),
+    );
+    expect(startOfDay(nextDay("2026-09-05"), "America/Santiago")).toBe(
+      Date.parse("2026-09-06T04:00:00Z"),
+    );
+  });
+
+  it("says « Hier » by the calendar, even after a short night", () => {
+    // 00:30 on 30 March in Paris, the night after the clocks went forward.
+    const now = Date.parse("2026-03-29T22:30:00Z");
+    expect(
+      formatDay(Date.parse("2026-03-29T10:00:00Z"), now, "Europe/Paris"),
+    ).toBe("Hier");
+    expect(
+      formatDay(Date.parse("2026-03-28T22:00:00Z"), now, "Europe/Paris"),
+    ).not.toBe("Hier");
+  });
+
+  it("accepts only real calendar days", () => {
+    expect(isCalendarDay("2026-10-21")).toBe(true);
+    expect(isCalendarDay("2026-13-01")).toBe(false);
+    expect(isCalendarDay("2026-02-30")).toBe(false);
+    expect(isCalendarDay("21/10/2026")).toBe(false);
   });
 });

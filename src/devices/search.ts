@@ -1,4 +1,6 @@
-import type { Device } from "@/types/map";
+// Searching what a list shows: every word of the query, in any order, without
+// accents, MACs in any notation. Imported by `convex/`, so relative imports.
+import type { Device } from "../types/map";
 
 type Searchable = Pick<
   Device,
@@ -12,30 +14,44 @@ const fold = (text: string) =>
     .replaceAll(/\p{Diacritic}/gu, "")
     .toLowerCase();
 
+/** Whether every word of `query` is in one of `fields` or one of `macs`. */
+export function matchesSearch(
+  fields: ReadonlyArray<string | null | undefined>,
+  macs: ReadonlyArray<string>,
+  query: string,
+) {
+  const words = fold(query).split(/\s+/).filter(Boolean);
+  if (words.length === 0) return true;
+  const text = fold(fields.filter(Boolean).join("\n"));
+  const hexes = macs.map((mac) => mac.replaceAll(":", "").toLowerCase());
+  return words.every((word) => {
+    if (text.includes(word)) return true;
+    const hex = word.replaceAll(/[:.-]/g, "");
+    return hex !== "" && hexes.some((mac) => mac.includes(hex));
+  });
+}
+
 /**
- * Whether a device answers a search: every word of it, in any order, MACs
- * matched in any notation. `also` holds what a list shows of it besides its
- * identity: its type, its place.
+ * Whether a device answers a search. `also` holds what a list shows of it
+ * besides its identity: its type, its place.
  */
 export function matchesDeviceSearch(
   device: Searchable,
   query: string,
   also: ReadonlyArray<string | undefined> = [],
 ) {
-  const words = fold(query).split(/\s+/).filter(Boolean);
-  if (words.length === 0) return true;
-  const text = fold(
-    [device.name, device.hostname, device.ip, device.serial, device.model]
-      .concat(also)
-      .filter(Boolean)
-      .join("\n"),
+  return matchesSearch(
+    [
+      device.name,
+      device.hostname,
+      device.ip,
+      device.serial,
+      device.model,
+      ...also,
+    ],
+    device.macs,
+    query,
   );
-  const macs = device.macs.map((mac) => mac.replaceAll(":", ""));
-  return words.every((word) => {
-    if (text.includes(word)) return true;
-    const hex = word.replaceAll(/[:.-]/g, "");
-    return hex !== "" && macs.some((mac) => mac.includes(hex));
-  });
 }
 
 /** Whether a device's name or hostname holds the query, for the map's find. */
