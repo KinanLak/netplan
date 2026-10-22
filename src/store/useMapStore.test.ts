@@ -24,6 +24,8 @@ describe("calque panel state", () => {
   });
 
   it("closes when another mode takes the canvas", () => {
+    // The panel is an editing tool; the map itself opens for reading.
+    useMapStore.setState({ isEditMode: true });
     const leave: Array<() => void> = [
       () => useMapStore.getState().setActiveDrawTool("wall"),
       () => useMapStore.getState().toggleMultiSelectMode(),
