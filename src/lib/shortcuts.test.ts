@@ -1,3 +1,4 @@
+import { shortcutGroups, shortcutGroupsFor } from "@/lib/shortcut-groups";
 import { describe, expect, it } from "bun:test";
 import type { ShortcutAction } from "@/lib/shortcuts";
 import { formatHotkey, getShortcutDisplay, shortcuts } from "@/lib/shortcuts";
@@ -23,8 +24,9 @@ describe("shortcut formatting", () => {
 
   it("renders arrow and special keys symbolically", () => {
     expect(formatHotkey("ArrowUp")).toEqual(["↑"]);
-    expect(formatHotkey("Escape")).toEqual(["esc"]);
-    expect(formatHotkey("Delete")).toEqual(["⌫"]);
+    expect(formatHotkey("Escape")).toEqual(["Échap"]);
+    expect(formatHotkey("Delete")).toEqual(["Suppr"]);
+    expect(formatHotkey("Backspace")).toEqual(["⌫"]);
     expect(formatHotkey("Space")).toEqual(["␣"]);
   });
 });
@@ -75,5 +77,30 @@ describe("shortcut registry coverage", () => {
     }
 
     expect(collisions).toEqual([]);
+  });
+});
+
+describe("shortcuts by role", () => {
+  it("shows a Lecteur no editing shortcut, and an Éditeur all of them", () => {
+    const readerActions = shortcutGroupsFor(false).flatMap((g) => g.actions);
+    expect(readerActions).not.toContain("toggle-edit-mode");
+    expect(readerActions).not.toContain("undo");
+    expect(readerActions).not.toContain("place-device");
+    expect(readerActions).not.toContain("refresh-site");
+    expect(readerActions).toContain("zoom-in");
+    expect(readerActions).toContain("toggle-device-cables");
+    expect(shortcutGroupsFor(false).some((g) => g.id === "build-tools")).toBe(
+      false,
+    );
+
+    const editorActions = shortcutGroupsFor(true).flatMap((g) => g.actions);
+    expect(editorActions).toEqual(shortcutGroups.flatMap((g) => g.actions));
+  });
+
+  it("shows each binding of an action once, without wrapping alternates", () => {
+    expect(getShortcutDisplay("zoom-in")).toEqual([["Ctrl", "+"]]);
+    expect(getShortcutDisplay("wall-eraser-size-increase")).toEqual([
+      ["Shift", "+"],
+    ]);
   });
 });

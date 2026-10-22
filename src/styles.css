@@ -346,3 +346,17 @@ button:hover {
     display: none;
   }
 }
+
+/* A scroll container's shadows at either end show only while more content
+   lies there: the covers scroll with the content, the shadows stay. */
+@utility scroll-shadow-y {
+  background:
+    linear-gradient(var(--background) 30%, transparent) top / 100% 2.5rem
+      no-repeat local,
+    linear-gradient(transparent, var(--background) 70%) bottom / 100% 2.5rem
+      no-repeat local,
+    radial-gradient(farthest-side at 50% 0, rgb(0 0 0 / 0.14), transparent)
+      top / 100% 0.75rem no-repeat scroll,
+    radial-gradient(farthest-side at 50% 100%, rgb(0 0 0 / 0.14), transparent)
+      bottom / 100% 0.75rem no-repeat scroll;
+}

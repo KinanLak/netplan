@@ -64,6 +64,11 @@ export type ShortcutConfig = {
   description?: string;
   /** Logical scope (used for enabled conditions) */
   scope: ShortcutScope;
+  /**
+   * Only for a role that may edit the map: a Lecteur neither triggers it nor
+   * sees it in the shortcuts dialog (ADR 0030).
+   */
+  requiresEdit?: boolean;
 };
 
 export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
@@ -73,11 +78,12 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
     label: "Mode édition",
     description: "Basculer dans le mode édition",
     scope: "global",
+    requiresEdit: true,
   },
   escape: {
     keys: ["Escape"],
-    label: "Annuler",
-    description: "Annuler l'action en cours",
+    label: "Fermer",
+    description: "Fermer, abandonner ou désélectionner",
     scope: "global",
   },
   delete: {
@@ -85,18 +91,21 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
     label: "Supprimer",
     description: "Supprimer l'élément sélectionné",
     scope: "global",
+    requiresEdit: true,
   },
   undo: {
     keys: ["Mod+Z"],
     label: "Annuler",
     description: "Annuler la dernière action",
     scope: "global",
+    requiresEdit: true,
   },
   redo: {
     keys: ["Mod+Shift+Z", "Mod+Y"],
     label: "Rétablir",
     description: "Rétablir l'action annulée",
     scope: "global",
+    requiresEdit: true,
   },
   "show-shortcuts": {
     keys: [{ key: "?", shift: true }],
@@ -115,6 +124,7 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
     label: "Actualiser les données",
     description: "Lancer une collecte du site maintenant",
     scope: "global",
+    requiresEdit: true,
   },
   "sidebar-toggle": {
     keys: ["Mod+B"],
@@ -127,33 +137,37 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
     label: "Debug murs",
     description: "Afficher/masquer le debug des murs",
     scope: "canvas",
+    requiresEdit: true,
   },
 
   // Navigation
   "zoom-in": {
     keys: [
       "Mod+=",
-      { key: "=", mod: true, shift: true },
-      { key: "+", code: "NumpadAdd", display: "Num +" },
+      { key: "=", mod: true, shift: true, hiddenFromDisplay: true },
+      { key: "+", code: "NumpadAdd", hiddenFromDisplay: true },
     ],
     label: "Zoom +",
     description: "Zoomer",
     scope: "global",
   },
   "zoom-out": {
-    keys: ["Mod+-", { key: "-", code: "NumpadSubtract", display: "Num -" }],
+    keys: [
+      "Mod+-",
+      { key: "-", code: "NumpadSubtract", hiddenFromDisplay: true },
+    ],
     label: "Zoom -",
     description: "Dézoomer",
     scope: "global",
   },
   "zoom-reset": {
-    keys: ["Mod+0", { key: "0", code: "Numpad0", display: "Num 0" }],
+    keys: ["Mod+0", { key: "0", code: "Numpad0", hiddenFromDisplay: true }],
     label: "Zoom 100 %",
     description: "Remettre le zoom à 100 % autour du centre",
     scope: "global",
   },
   "fit-view": {
-    keys: [{ key: "1", code: "Digit1", shift: true, display: "Shift 1" }],
+    keys: [{ key: "1", code: "Digit1", shift: true }],
     label: "Centrer la vue",
     description: "Cadrer tout l'étage",
     scope: "global",
@@ -175,6 +189,7 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
     label: "Annuler outil",
     description: "Annuler l'outil de dessin en cours",
     scope: "canvas",
+    requiresEdit: true,
   },
 
   // Tools - Walls & Rooms (numbers + letter aliases)
@@ -183,55 +198,56 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
     label: "Mur",
     description: "Outil de dessin de mur",
     scope: "canvas",
+    requiresEdit: true,
   },
   "tool-room": {
     keys: ["2", "L"],
     label: "Salle",
     description: "Outil de dessin de salle",
     scope: "canvas",
+    requiresEdit: true,
   },
   "tool-wall-brush": {
     keys: ["3", "B"],
     label: "Pinceau murs",
     description: "Peindre des blocs de mur",
     scope: "canvas",
+    requiresEdit: true,
   },
   "tool-wall-erase": {
     keys: ["4", "X"],
     label: "Suppression murs",
     description: "Effacer des blocs de mur",
     scope: "canvas",
+    requiresEdit: true,
   },
   "wall-eraser-size-increase": {
     keys: [
-      { key: "+", shift: true, display: "Shift +" },
+      { key: "+", shift: true },
       { key: "=", code: "Equal", shift: true, hiddenFromDisplay: true },
-      {
-        key: "+",
-        code: "NumpadAdd",
-        shift: true,
-        display: "Shift Num +",
-      },
+      { key: "+", code: "NumpadAdd", shift: true, hiddenFromDisplay: true },
     ],
     label: "Gomme +",
     description: "Agrandir la zone de gomme",
     scope: "canvas",
+    requiresEdit: true,
   },
   "wall-eraser-size-decrease": {
     keys: [
-      { key: "-", shift: true, display: "Shift -" },
+      { key: "-", shift: true },
       { key: "_", shift: true, hiddenFromDisplay: true },
       { key: "_", code: "Minus", shift: true, hiddenFromDisplay: true },
       {
         key: "-",
         code: "NumpadSubtract",
         shift: true,
-        display: "Shift Num -",
+        hiddenFromDisplay: true,
       },
     ],
     label: "Gomme -",
     description: "Réduire la zone de gomme",
     scope: "canvas",
+    requiresEdit: true,
   },
 
   "place-device": {
@@ -239,6 +255,7 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
     label: "Placer un équipement",
     description: "Placer sur l'étage un équipement de l'inventaire",
     scope: "canvas",
+    requiresEdit: true,
   },
 
   // Calque
@@ -247,6 +264,7 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
     label: "Calque",
     description: "Ouvrir/fermer le panneau du calque",
     scope: "canvas",
+    requiresEdit: true,
   },
   "toggle-overlay-visibility": {
     keys: ["Shift+C"],
@@ -259,6 +277,7 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
     label: "Verrouiller le calque",
     description: "Verrouiller/déverrouiller le calque (panneau ouvert)",
     scope: "canvas",
+    requiresEdit: true,
   },
   "calibrate-overlay": {
     keys: ["Shift+E"],
@@ -266,6 +285,7 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
     description:
       "Mettre le calque à l'échelle par deux points (panneau ouvert)",
     scope: "canvas",
+    requiresEdit: true,
   },
 
   // Device drawer
@@ -280,12 +300,14 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
     label: "Supprimer",
     description: "Supprimer l'appareil sélectionné",
     scope: "drawer",
+    requiresEdit: true,
   },
   "edit-device-identity": {
     keys: ["I"],
     label: "Identité",
     description: "Modifier le nom, les adresses et les notes de l'appareil",
     scope: "drawer",
+    requiresEdit: true,
   },
   "unplace-device": {
     keys: ["U"],
@@ -293,6 +315,7 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
     description:
       "Retirer l'appareil du plan ; il reste dans l'inventaire du site",
     scope: "drawer",
+    requiresEdit: true,
   },
   "show-port-cables": {
     keys: ["K"],
@@ -306,6 +329,7 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
     description:
       "Voir où le réseau a vu l'appareil et quand il était en ligne, sur 30 jours",
     scope: "drawer",
+    requiresEdit: true,
   },
   "toggle-device-cables": {
     keys: ["H"],
@@ -340,8 +364,9 @@ function formatHotkeyPart(part: string): string {
     case "Shift":
       return isMac ? "⇧" : "Shift";
     case "Escape":
-      return "esc";
+      return "Échap";
     case "Delete":
+      return "Suppr";
     case "Backspace":
       return "⌫";
     case "Enter":

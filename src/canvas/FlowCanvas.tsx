@@ -58,6 +58,13 @@ import {
 const SNAP_GRID: [number, number] = [GRID_SIZE, GRID_SIZE];
 const FIT_VIEW_OPTIONS = { padding: FLOW_CANVAS_FIT_VIEW_PADDING };
 const PRO_OPTIONS = { hideAttribution: true };
+// Devices are not reached by keyboard (ADR 0030); say so in French.
+const ARIA_LABEL_CONFIG = {
+  "node.a11yDescription.default":
+    "Cliquez sur un équipement pour ouvrir sa fiche.",
+  "node.a11yDescription.keyboardDisabled":
+    "Cliquez sur un équipement pour ouvrir sa fiche.",
+};
 const ALL_MOUSE_PAN_BUTTONS = [0, 1, 2];
 const RIGHT_MOUSE_PAN_BUTTON = [2];
 const BACKGROUND_GRID_STEPS = [4, 2, 1] as const;
@@ -388,6 +395,7 @@ export default function FlowCanvas() {
             nodesDraggable={canEditDevices}
             className={cn(isCursorDragging && "canvas-cursor-grabbing")}
             proOptions={PRO_OPTIONS}
+            ariaLabelConfig={ARIA_LABEL_CONFIG}
           >
             <FlowCanvasBackground />
             <FloorOverlayLayer />
