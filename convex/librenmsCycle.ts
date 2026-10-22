@@ -20,7 +20,14 @@ import {
 } from "./history";
 import { macSighting } from "./historyValidators";
 import { ignoredMacsOf } from "./lib/ignoredMacs";
-import { PRESENT_TYPES, staleAfterOf, statusFrom } from "./lib/statuses";
+import {
+  carries,
+  PRESENT_TYPES,
+  staleAfterOf,
+  statusFrom,
+  withObservation,
+} from "./lib/statuses";
+import type { Observation } from "./lib/statuses";
 import { toPublicDevice } from "./mapDocument";
 import { applyMapOperation, getWallCollisionRect } from "./mapOperations";
 import type { OperationInput } from "./mapOperations";
@@ -233,16 +240,19 @@ export const switchPorts = internalQuery({
 const setStatus = async (
   ctx: MutationCtx,
   device: Doc<"devices">,
-  status: "up" | "down" | undefined,
+  observation: Observation,
 ) => {
-  if (device.metadata.status === status) return;
-  const { status: _previous, ...metadata } = device.metadata;
+  if (carries(device.metadata, observation)) return;
   await ctx.db.patch(device._id, {
-    metadata: status === undefined ? metadata : { ...metadata, status },
+    metadata: withObservation(device.metadata, observation),
     updatedAt: Date.now(),
     updatedBy: SIGHTED_BY,
   });
 };
+
+/** What LibreNMS says of a switch it read; none when it said nothing. */
+const switchObservation = (status: "up" | "down" | undefined): Observation =>
+  status ? { status } : undefined;
 
 /**
  * Sets what a switch's read observed on each of its ports (ADR 0025), only
@@ -286,10 +296,27 @@ export const expireStaleReads = async (
   await ctx.db.patch(cycle._id, { switchReads: next });
   const fresh = freshSwitches(next, now, staleAfter);
 
-  for (const switchId of stale) {
-    const device = await deviceOf(ctx, switchId);
-    if (device) await setStatus(ctx, device, undefined);
-    await setPortFacts(ctx, switchId, () => ({}));
+  for (const read of reads) {
+    if (!stale.has(read.switchId)) continue;
+    const device = await deviceOf(ctx, read.switchId);
+    // A switch LibreNMS gave a status to has had no news since this read.
+    const status = device?.metadata.status;
+    if (device) {
+      await setStatus(
+        ctx,
+        device,
+        status === "up" || status === "down" || status === "stale"
+          ? {
+              status: "stale",
+              lastSeenAt:
+                status === "stale"
+                  ? (device.metadata.lastSeenAt ?? read.readAt)
+                  : read.readAt,
+            }
+          : undefined,
+      );
+    }
+    await setPortFacts(ctx, read.switchId, () => ({}));
   }
   const rows = await sightingRowsOf(ctx, site.objectId);
   const rowOf = new Map(rows.map((row) => [row.mac, row]));
@@ -568,7 +595,9 @@ export const recordSightings = internalMutation({
     const fresh = freshSwitches(reads, now, staleAfterOf(site));
     for (const { switchId, status } of readSwitches) {
       const device = await deviceOf(ctx, switchId);
-      if (device?.type === "switch") await setStatus(ctx, device, status);
+      if (device?.type === "switch") {
+        await setStatus(ctx, device, switchObservation(status));
+      }
     }
 
     const rows = await sightingRowsOf(ctx, siteId);
@@ -588,9 +617,12 @@ export const recordSightings = internalMutation({
       const missed = misses.get(mac);
       const switchId =
         sightingOf.get(mac)?.switchId ?? rowOf.get(mac)?.switchId;
-      return missed === undefined || switchId === undefined
+      const seenAt = sightingOf.has(mac) ? now : rowOf.get(mac)?.seenAt;
+      return missed === undefined ||
+        switchId === undefined ||
+        seenAt === undefined
         ? undefined
-        : { misses: missed, switchId };
+        : { misses: missed, switchId, seenAt };
     };
 
     const owners = new Map<string, Doc<"devices">>();
@@ -697,9 +729,10 @@ export const recordSightings = internalMutation({
       if (!PRESENT_TYPES.has(device.type)) continue;
       // A device left with no MAC a fresh read saw has no status from the
       // network any more.
-      const status = statusFrom(device.macs, seenOn, fresh);
-      if (device.metadata.status === status) continue;
-      await setStatus(ctx, device, status);
+      const observation = statusFrom(device.macs, seenOn, fresh);
+      if (carries(device.metadata, observation)) continue;
+      await setStatus(ctx, device, observation);
+      const status = observation?.status;
       if (status === "up") {
         online += 1;
         await recordPresence(ctx, device, "online", now);

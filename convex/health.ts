@@ -113,7 +113,9 @@ export const overview = adminQuery({
         const switches = { up: 0, down: 0, unknown: 0 };
         for (const device of devices) {
           if (device.type !== "switch") continue;
-          switches[device.metadata.status ?? "unknown"] += 1;
+          // A switch with no news counts with those whose state is unknown.
+          const status = device.metadata.status ?? "unknown";
+          switches[status === "stale" ? "unknown" : status] += 1;
         }
         return {
           id: siteId,

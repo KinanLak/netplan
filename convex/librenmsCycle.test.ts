@@ -241,6 +241,17 @@ const tick = async (admin: TestClient) => {
   await admin.finishAllScheduledFunctions(() => {});
 };
 
+const metadataOf = async (admin: TestClient, deviceId: string) =>
+  await admin.run(
+    async (ctx) =>
+      (
+        await ctx.db
+          .query("devices")
+          .withIndex("by_object_id", (q) => q.eq("objectId", deviceId))
+          .unique()
+      )?.metadata,
+  );
+
 const statusOf = async (admin: TestClient, deviceId: string) =>
   await admin.run(
     async (ctx) =>
@@ -746,7 +757,7 @@ describe("the LibreNMS step", () => {
     expect(names).toHaveLength(24);
   });
 
-  it("forgets the statuses a switch read long ago set, until it is read again", async () => {
+  it("says when a switch and the devices on it were last heard from, once its read is old, until it is read again", async () => {
     setSystemTime(new Date("2026-10-16T08:00:00Z"));
     const { admin, siteId, signIn } = await siteWithLibreNMS();
     librenms.state.fdb = [{ port_id: 101, mac_address: PC }];
@@ -780,8 +791,32 @@ describe("the LibreNMS step", () => {
     expect(await statusOf(admin, "device:pc")).toBe("up");
     setSystemTime(new Date("2026-10-16T10:16:00Z"));
     await tick(admin);
-    expect(await statusOf(admin, "device:pc")).toBeNull();
-    expect(await statusOf(admin, "device:sw")).toBeNull();
+    // Seen at the first cycle's read, at 08:00: no news since.
+    const eight = Date.parse("2026-10-16T08:00:00Z");
+    expect(await metadataOf(admin, "device:pc")).toMatchObject({
+      status: "stale",
+      lastSeenAt: eight,
+    });
+    expect(await metadataOf(admin, "device:sw")).toMatchObject({
+      status: "stale",
+      lastSeenAt: eight,
+    });
+    // Deleted and brought back, the switch keeps its last news: its expired
+    // read is never revisited.
+    const restorer = await signIn();
+    const removed = await restorer.mutation(api.devices.remove, {
+      deviceId: "device:sw",
+    });
+    if (!removed) throw new Error("expected the switch to be removed");
+    await restorer.mutation(api.devices.create, {
+      siteId,
+      deviceId: "device:sw",
+      ...removed,
+    });
+    expect(await metadataOf(admin, "device:sw")).toMatchObject({
+      status: "stale",
+      lastSeenAt: eight,
+    });
     expect((await portFacts(admin))[0]).toEqual({
       status: undefined,
       seen: undefined,
@@ -791,7 +826,7 @@ describe("the LibreNMS step", () => {
     // does.
     const later = await signIn();
     await cycle(later, siteId);
-    expect(await statusOf(later, "device:pc")).toBeNull();
+    expect(await statusOf(later, "device:pc")).toBe("stale");
     await later.mutation(api.librenms.saveSettings, {
       siteId,
       baseUrl: LIBRENMS,
@@ -804,6 +839,24 @@ describe("the LibreNMS step", () => {
     await cycle(later, siteId);
     expect(await statusOf(later, "device:pc")).toBe("up");
     expect(await statusOf(later, "device:sw")).toBe("up");
+    // A switch removed while stale does not come back stale once LibreNMS
+    // is forgotten: its reads went with it.
+    const last = await signIn();
+    const again = await last.mutation(api.devices.remove, {
+      deviceId: "device:sw",
+    });
+    if (!again) throw new Error("expected the switch to be removed");
+    await last.mutation(api.integrations.remove, {
+      siteId,
+      kind: "librenms",
+    });
+    await last.mutation(api.devices.create, {
+      siteId,
+      deviceId: "device:sw",
+      ...again,
+      metadata: { status: "stale", lastSeenAt: eight },
+    });
+    expect((await metadataOf(admin, "device:sw"))?.status).toBeUndefined();
   });
 
   it("starts the history of a device made from a MAC seen before its read expired", async () => {
@@ -830,7 +883,7 @@ describe("the LibreNMS step", () => {
         })
       ).page.toReversed();
     // No read vouches for a status, but the network did see it there.
-    expect(await statusOf(later, "device:stranger")).toBeNull();
+    expect(await statusOf(later, "device:stranger")).toBe("stale");
     expect(await history()).toEqual([
       expect.objectContaining({
         kind: "located",
@@ -848,7 +901,7 @@ describe("the LibreNMS step", () => {
     ]);
   });
 
-  it("forgets the statuses a failing LibreNMS can no longer vouch for", async () => {
+  it("keeps only when a failing LibreNMS last vouched for a status", async () => {
     setSystemTime(new Date("2026-10-16T08:00:00Z"));
     const { admin, siteId, signIn } = await siteWithLibreNMS();
     librenms.state.fdb = [{ port_id: 101, mac_address: PC }];
@@ -859,8 +912,8 @@ describe("the LibreNMS step", () => {
     expect(await statusOf(admin, "device:pc")).toBe("up");
     setSystemTime(new Date("2026-10-16T10:16:00Z"));
     await tick(admin);
-    expect(await statusOf(admin, "device:pc")).toBeNull();
-    expect(await statusOf(admin, "device:sw")).toBeNull();
+    expect(await statusOf(admin, "device:pc")).toBe("stale");
+    expect(await statusOf(admin, "device:sw")).toBe("stale");
   });
 
   it("brings a device back with the status its read still vouches for", async () => {
@@ -920,7 +973,7 @@ describe("the LibreNMS step", () => {
       deviceId: "device:printer",
       ...late,
     });
-    expect(await statusOf(later, "device:printer")).toBeNull();
+    expect(await statusOf(later, "device:printer")).toBe("stale");
     const buildingId = await later.mutation(api.buildings.create, {
       siteId,
       objectId: "building:back",
@@ -953,14 +1006,14 @@ describe("the LibreNMS step", () => {
       },
     });
     expect(restored.status).toBe("applied");
-    expect(await statusOf(later, "device:pc")).toBeNull();
+    expect(await statusOf(later, "device:pc")).toBe("stale");
     await later.mutation(api.unknownMacs.createDevice, {
       siteId,
       mac: STRANGER,
       deviceId: "device:stranger",
       name: "Inconnu",
     });
-    expect(await statusOf(later, "device:stranger")).toBeNull();
+    expect(await statusOf(later, "device:stranger")).toBe("stale");
     // Nor does a status nothing saw.
     await later.mutation(api.devices.create, {
       siteId,
@@ -972,7 +1025,7 @@ describe("the LibreNMS step", () => {
     expect(await statusOf(later, "device:ghost")).toBeNull();
   });
 
-  it("forgets the status of a device made from a sighted MAC, once its read expires", async () => {
+  it("says when a device made from a sighted MAC was last seen, once its read expires", async () => {
     setSystemTime(new Date("2026-10-16T08:00:00Z"));
     const { admin, siteId, signIn } = await siteWithLibreNMS();
     librenms.state.fdb = [{ port_id: 101, mac_address: STRANGER }];
@@ -998,7 +1051,7 @@ describe("the LibreNMS step", () => {
     setSystemTime(new Date("2026-10-16T10:16:00Z"));
     const later = await signIn();
     await tick(later);
-    expect(await statusOf(later, "device:stranger")).toBeNull();
+    expect(await statusOf(later, "device:stranger")).toBe("stale");
   });
 
   it("forgets the sightings with the site", async () => {

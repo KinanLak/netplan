@@ -37,7 +37,11 @@ export type DeviceType =
   | "wall-port";
 export type DrawTool = "device" | "wall" | "wall-brush" | "wall-erase" | "room";
 export type WallColor = "sand" | "concrete" | "slate";
-export type DeviceStatus = "up" | "down" | "unknown";
+/**
+ * `stale`: the network once saw the device, and no read vouches for it any
+ * more (« Plus de nouvelles depuis … »).
+ */
+export type DeviceStatus = "up" | "down" | "unknown" | "stale";
 
 export interface Position {
   x: number;
@@ -53,6 +57,8 @@ export interface Size {
 export interface DeviceMetadata {
   status?: DeviceStatus;
   lastUser?: string;
+  /** With a `stale` status: when the network last saw the device. */
+  lastSeenAt?: number;
 }
 
 /** The integration that owns a device's identity (ADR 0022). */

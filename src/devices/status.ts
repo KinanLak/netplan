@@ -4,6 +4,7 @@ export const DEVICE_STATUS_LABELS: Record<DeviceStatus, string> = {
   up: "En ligne",
   down: "Hors ligne",
   unknown: "Inconnu",
+  stale: "Plus de nouvelles",
 };
 
 /**
@@ -28,6 +29,13 @@ export const DEVICE_STATUS_CLASSES: Record<
   },
   unknown: {
     dot: "bg-unknown",
+    border: "border-unknown",
+    text: "text-unknown",
+    badge: "border-unknown bg-unknown-background text-unknown",
+  },
+  // No news (ADR 0032): the unknown's tokens, the dot hollow.
+  stale: {
+    dot: "border-[1.5px] border-unknown",
     border: "border-unknown",
     text: "text-unknown",
     badge: "border-unknown bg-unknown-background text-unknown",

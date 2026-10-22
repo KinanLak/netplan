@@ -26,6 +26,7 @@ import type { IntegrationKind } from "@/sites/integrations";
 import { endLabel, portLabel, shortPortName } from "@/devices/portState";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { formatSeenAt } from "@/devices/seenAt";
 import type { DeviceType } from "@/types/map";
 import { useCableCommands } from "@/devices/useCableCommands";
 import { api } from "../../../convex/_generated/api";
@@ -123,14 +124,6 @@ const FILTER_LABELS: Record<PortFilter, string> = {
 
 // Past this many ports, a search and a filter earn their place.
 const SEARCHABLE_FROM = 12;
-
-const timeOf = (at: number) =>
-  new Intl.DateTimeFormat("fr-FR", {
-    hourCycle: "h23",
-    ...(new Date(at).toDateString() === new Date().toDateString()
-      ? { hour: "2-digit", minute: "2-digit" }
-      : { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }),
-  }).format(at);
 
 function PortTableBody({
   device,
@@ -267,7 +260,8 @@ function LastSeen({
       <span className="font-mono" title={place.portName}>
         {shortPortName(place.portName)}
       </span>
-      {place.socketName ? <> · {place.socketName}</> : null} · {timeOf(at)}
+      {place.socketName ? <> · {place.socketName}</> : null} ·{" "}
+      {formatSeenAt(at)}
     </>
   );
 }
@@ -340,9 +334,9 @@ function PortTableLine({
                 "truncate",
                 seen.current ? "text-foreground" : "text-muted-foreground",
               )}
-              title={`Vu ${seen.current ? "à la dernière lecture" : "pour la dernière fois"} à ${timeOf(seen.at)}`}
+              title={`Vu ${seen.current ? "à la dernière lecture" : "pour la dernière fois"} à ${formatSeenAt(seen.at)}`}
             >
-              {seen.name} · {timeOf(seen.at)}
+              {seen.name} · {formatSeenAt(seen.at)}
             </div>
           ))}
         </div>
