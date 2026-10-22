@@ -26,7 +26,8 @@ import type { IntegrationKind } from "@/sites/integrations";
 import { endLabel, portLabel, shortPortName } from "@/devices/portState";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { formatSeenAt } from "@/devices/seenAt";
+import { formatDateTime, timeZoneHint } from "@/lib/time";
+import { Time } from "@/components/time";
 import type { DeviceType } from "@/types/map";
 import { useCableCommands } from "@/devices/useCableCommands";
 import { api } from "../../../convex/_generated/api";
@@ -260,8 +261,7 @@ function LastSeen({
       <span className="font-mono" title={place.portName}>
         {shortPortName(place.portName)}
       </span>
-      {place.socketName ? <> · {place.socketName}</> : null} ·{" "}
-      {formatSeenAt(at)}
+      {place.socketName ? <> · {place.socketName}</> : null} · <Time at={at} />
     </>
   );
 }
@@ -334,9 +334,9 @@ function PortTableLine({
                 "truncate",
                 seen.current ? "text-foreground" : "text-muted-foreground",
               )}
-              title={`Vu ${seen.current ? "à la dernière lecture" : "pour la dernière fois"} à ${formatSeenAt(seen.at)}`}
+              title={`Vu ${seen.current ? "à la dernière lecture" : "pour la dernière fois"} le ${formatDateTime(seen.at)} · ${timeZoneHint(seen.at)}`}
             >
-              {seen.name} · {formatSeenAt(seen.at)}
+              {seen.name} · <Time at={seen.at} />
             </div>
           ))}
         </div>

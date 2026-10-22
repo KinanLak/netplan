@@ -8,7 +8,8 @@ import { getDeviceKindLabel } from "@/devices/deviceKindRegistry";
 import { DEVICE_STATUS_CLASSES, DEVICE_STATUS_LABELS } from "@/devices/status";
 import { useQuery } from "convex/react";
 import { cn } from "@/lib/utils";
-import { formatSeenAt } from "@/devices/seenAt";
+import { Time } from "@/components/time";
+import { useNow } from "@/hooks/use-now";
 import { shortPortName } from "@/devices/portState";
 import { api } from "../../../convex/_generated/api";
 import { INTEGRATION_LABELS } from "@/sites/integrations";
@@ -71,6 +72,7 @@ export function StatusChip({
   /** With `stale`: when the network last saw the device. */
   lastSeenAt?: number;
 }) {
+  const now = useNow(60_000);
   return (
     <span
       className={cn(
@@ -80,9 +82,12 @@ export function StatusChip({
     >
       <StatusDot status={status} className="size-4" />
       {DEVICE_STATUS_LABELS[status]}
-      {status === "stale" && lastSeenAt !== undefined
-        ? ` depuis ${formatSeenAt(lastSeenAt)}`
-        : null}
+      {status === "stale" && lastSeenAt !== undefined ? (
+        <>
+          {" depuis "}
+          <Time at={lastSeenAt} format="when" now={now} />
+        </>
+      ) : null}
     </span>
   );
 }
@@ -93,6 +98,7 @@ export function StatusChip({
  */
 export function LastSeenSection({ deviceId }: { deviceId: string }) {
   const lastSeen = useQuery(api.devices.lastSeen, { deviceId });
+  const now = useNow(60_000);
   if (!lastSeen) return null;
   const { place, at } = lastSeen;
   const where = [place.buildingName, place.floorName].filter(Boolean);
@@ -117,7 +123,9 @@ export function LastSeenSection({ deviceId }: { deviceId: string }) {
           </div>
         ) : null}
         {/* The time only: the status says whether a read still vouches. */}
-        <div className="text-xs text-muted-foreground">{formatSeenAt(at)}</div>
+        <div className="text-xs text-muted-foreground">
+          <Time at={at} format="when" now={now} />
+        </div>
       </div>
     </section>
   );
