@@ -4,6 +4,7 @@
 // imports only.
 import { MAX_MACS_PER_DEVICE } from "../devices/identity";
 import { normalizeMac } from "../devices/mac";
+import { meaningful } from "../devices/placeholders";
 import { MAX_PORTS_PER_DEVICE, PORT_NAME_MAX_LENGTH } from "../devices/ports";
 import type { PortKind } from "../types/map";
 import type {
@@ -78,8 +79,9 @@ export function readNetBoxDevices(
     const roleId = idOf(item.role) ?? idOf(item.device_role);
     const type = roleId === undefined ? undefined : typeOfRole.get(roleId);
     if (id === undefined || !type) return [];
+    // NetBox device types named "undefined" stand for no model at all.
     const model = isObject(item.device_type)
-      ? text(item.device_type.model)
+      ? meaningful(text(item.device_type.model))
       : undefined;
     const address = isObject(item.primary_ip)
       ? text(item.primary_ip.address)
@@ -91,7 +93,7 @@ export function readNetBoxDevices(
         type,
         // NetBox lets a device go unnamed.
         name: text(item.name) ?? `${model ?? "Équipement"} #${id}`,
-        serial: text(item.serial),
+        serial: meaningful(text(item.serial)),
         macs: [...(macsOf.get(id) ?? [])].sort(),
         model,
         // NetBox writes the prefix length after the address.
@@ -128,29 +130,8 @@ export type ImportPlan = {
   macs: Map<string, Array<string>>;
 };
 
-// Serials vendors ship when the real one was never written.
-const PLACEHOLDER_SERIALS = new Set([
-  "0",
-  "00000000",
-  "0123456789",
-  "123456789",
-  "1234567890",
-  "chassis serial number",
-  "default string",
-  "n/a",
-  "na",
-  "none",
-  "not applicable",
-  "not specified",
-  "system serial number",
-  "to be filled by o.e.m.",
-  "unknown",
-]);
-
-const serialKey = (serial: string | undefined): string | undefined => {
-  const key = serial?.trim().toLowerCase();
-  return key && !PLACEHOLDER_SERIALS.has(key) ? key : undefined;
-};
+const serialKey = (serial: string | undefined): string | undefined =>
+  meaningful(serial)?.trim().toLowerCase();
 
 /** A name or hostname without its domain, to compare one with the other. */
 const hostKey = (name: string | undefined): string | undefined =>

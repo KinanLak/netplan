@@ -1,28 +1,16 @@
 import { HugeiconsIcon } from "@hugeicons/react";
-import {
-  Add01Icon,
-  MoreHorizontalIcon,
-  Search01Icon,
-} from "@hugeicons/core-free-icons";
-import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMutation, useQuery } from "convex/react";
-import type { FunctionReturnType } from "convex/server";
-import { useId, useState } from "react";
-import { toast } from "sonner";
+import { Add01Icon, Search01Icon } from "@hugeicons/core-free-icons";
+import { Link, createFileRoute } from "@tanstack/react-router";
+import { useQuery } from "convex/react";
+import { useEffect, useId, useRef, useState } from "react";
+import type { RefObject } from "react";
 import { ModeToggle } from "@/components/mode-toggle";
 import { ListSkeleton } from "@/components/loading-skeletons";
 import { AppNavLinks, UserMenu } from "@/components/app-nav";
 import { NetplanLogo } from "@/components/netplan-logo";
-import { StatusDot } from "@/components/StatusDot";
-import { Badge } from "@/components/ui/badge";
-import { Button, buttonVariants } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Kbd } from "@/components/ui/kbd";
 import {
   Select,
   SelectContent,
@@ -34,31 +22,29 @@ import { CollectionFreshness } from "@/sites/CollectionFreshness";
 import { coverageByType } from "@/devices/coverage";
 import type { TypeCoverage } from "@/devices/coverage";
 import { getDeviceKindLabel } from "@/devices/deviceKindRegistry";
-import { DEVICE_STATUS_LABELS, hasStatus } from "@/devices/status";
-import { failureMessage } from "@/lib/errors";
+import { DEVICE_STATUS_LABELS } from "@/devices/status";
 import { useCanEdit } from "@/hooks/use-current-user";
-import { asBuildingId, asDeviceId, asFloorId } from "@/lib/objectIds";
 import { cn } from "@/lib/utils";
-import { DeviceIdentityDialog } from "@/panels/drawer/DeviceIdentityDialog";
-import { PortTableDialog } from "@/panels/drawer/PortTableDialog";
-import { DeviceSheet } from "@/panels/DeviceSheet";
-import {
-  DeviceHistoryDialog,
-  HAS_HISTORY,
-} from "@/history/DeviceHistoryDialog";
 import { matchesDeviceSearch } from "@/devices/search";
+import {
+  DEFAULT_SORT,
+  locationLabel,
+  readHiddenColumns,
+  sortRows,
+  statusOf,
+  writeHiddenColumns,
+} from "@/inventory/columns";
+import type { Sort } from "@/inventory/columns";
+import { ColumnPicker, InventoryTable } from "@/inventory/InventoryTable";
 import { ImportReviews } from "@/sites/ImportReviews";
-import { INTEGRATION_LABELS } from "@/sites/integrations";
 import { SiteSwitcher } from "@/sites/SiteSwitcher";
 import { UnknownMacs } from "@/sites/UnknownMacs";
 import { CreateDeviceDialog } from "@/devices/CreateDeviceDialog";
 import { siteSearch, useCurrentSite } from "@/sites/useCurrentSite";
 import type { SiteSummary } from "@/sites/useCurrentSite";
-import { useMapStore } from "@/store/useMapStore";
 import type { DeviceStatus, DeviceType } from "@/types/map";
 import { api } from "../../../convex/_generated/api";
 
-type InventoryRow = FunctionReturnType<typeof api.devices.listForSite>[number];
 type Placement = "all" | "placed" | "unplaced";
 type StatusFilter = "all" | DeviceStatus;
 type TypeFilter = "all" | DeviceType;
@@ -140,12 +126,6 @@ const STATUS_FILTERS: Array<{ value: StatusFilter; label: string }> = [
   { value: "unknown", label: DEVICE_STATUS_LABELS.unknown },
 ];
 
-// A passive device has no status (B13), so no status filter or count has it.
-const statusOf = (device: InventoryRow): DeviceStatus | null =>
-  hasStatus(device.type) ? (device.metadata.status ?? "unknown") : null;
-
-const byName = new Intl.Collator("fr", { numeric: true, sensitivity: "base" });
-
 function SiteInventory({ site }: { site: SiteSummary }) {
   const devices = useQuery(api.devices.listForSite, { siteId: site.id });
   const canEdit = useCanEdit();
@@ -157,10 +137,12 @@ function SiteInventory({ site }: { site: SiteSummary }) {
   const [status, setStatus] = useState<StatusFilter>(search.status ?? "all");
   const [chosenType, setType] = useState<TypeFilter>("all");
   const [creating, setCreating] = useState(false);
+  const [sort, setSort] = useState<Sort>(DEFAULT_SORT);
+  const [hidden, setHidden] = useState(readHiddenColumns);
+  const searchRef = useRef<HTMLInputElement>(null);
+  useSlashToSearch(searchRef);
 
-  const sorted = devices
-    ? [...devices].sort((a, b) => byName.compare(a.name, b.name))
-    : [];
+  const sorted = devices ? sortRows(devices, sort) : [];
   const counts: Record<Placement, number> = {
     all: sorted.length,
     placed: sorted.filter((device) => device.location).length,
@@ -191,7 +173,10 @@ function SiteInventory({ site }: { site: SiteSummary }) {
         (placement === "placed") === Boolean(device.location)) &&
       (status === "all" || statusOf(device) === status) &&
       (type === "all" || device.type === type) &&
-      matchesDeviceSearch(device, query),
+      matchesDeviceSearch(device, query, [
+        getDeviceKindLabel(device.type),
+        locationLabel(device),
+      ]),
   );
 
   // A coverage count shows what is left to draw, so no other filter may hide it.
@@ -252,13 +237,20 @@ function SiteInventory({ site }: { site: SiteSummary }) {
                 className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-muted-foreground"
               />
               <Input
+                ref={searchRef}
                 type="search"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Nom, hostname, MAC, IP, n° de série…"
+                placeholder="Nom, hostname, MAC, IP, emplacement…"
                 aria-label="Rechercher un équipement"
-                className="pl-8"
+                aria-keyshortcuts="/"
+                className="pr-9 pl-8"
               />
+              {query ? null : (
+                <Kbd className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2">
+                  /
+                </Kbd>
+              )}
             </div>
             <div
               role="group"
@@ -318,6 +310,13 @@ function SiteInventory({ site }: { site: SiteSummary }) {
                 ))}
               </SelectContent>
             </Select>
+            <ColumnPicker
+              hidden={hidden}
+              onChange={(next) => {
+                setHidden(next);
+                writeHiddenColumns(next);
+              }}
+            />
           </div>
 
           {shown.length === 0 ? (
@@ -325,33 +324,14 @@ function SiteInventory({ site }: { site: SiteSummary }) {
               Aucun équipement ne correspond.
             </p>
           ) : (
-            <div className="overflow-x-auto rounded-lg border">
-              <table className="w-full text-sm">
-                <thead className="border-b bg-muted text-left text-xs text-muted-foreground">
-                  <tr>
-                    <th className="px-4 py-2 font-medium">Nom</th>
-                    <th className="px-4 py-2 font-medium">Type</th>
-                    <th className="px-4 py-2 font-medium">État</th>
-                    <th className="px-4 py-2 font-medium">Adresses MAC</th>
-                    <th className="px-4 py-2 font-medium">Adresse IP</th>
-                    <th className="px-4 py-2 font-medium">Emplacement</th>
-                    <th className="w-10 px-2 py-2">
-                      <span className="sr-only">Actions</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {shown.map((device) => (
-                    <InventoryItem
-                      key={device.id}
-                      device={device}
-                      site={site}
-                      canEdit={canEdit}
-                    />
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <InventoryTable
+              rows={shown}
+              site={site}
+              canEdit={canEdit}
+              hidden={hidden}
+              sort={sort}
+              onSort={setSort}
+            />
           )}
         </>
       )}
@@ -365,6 +345,29 @@ function SiteInventory({ site }: { site: SiteSummary }) {
       ) : null}
     </div>
   );
+}
+
+/** « / » puts the cursor in the search, from anywhere but a field. */
+function useSlashToSearch(input: RefObject<HTMLInputElement | null>) {
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "/" || event.ctrlKey || event.metaKey || event.altKey) {
+        return;
+      }
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable ||
+          target.closest("input, textarea, select, [role='dialog']"))
+      ) {
+        return;
+      }
+      event.preventDefault();
+      input.current?.focus();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [input]);
 }
 
 /**
@@ -406,7 +409,7 @@ function PlanCoverage({
               aria-pressed={active === type}
               onClick={() => onSelect(type)}
               className={cn(
-                "flex flex-col gap-2 rounded-lg border p-3 text-left text-sm outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 enabled:hover:bg-muted",
+                "flex flex-col gap-2 rounded-lg border p-3 text-left text-sm outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring enabled:hover:bg-muted",
                 active === type && "border-primary bg-muted",
               )}
             >
@@ -462,215 +465,5 @@ function InventoryEmpty({
         </Button>
       ) : null}
     </div>
-  );
-}
-
-function InventoryItem({
-  device,
-  site,
-  canEdit,
-}: {
-  device: InventoryRow;
-  site: SiteSummary;
-  canEdit: boolean;
-}) {
-  const navigate = useNavigate();
-  const createDevice = useMutation(api.devices.create);
-  const removeDevice = useMutation(api.devices.remove);
-  const [editing, setEditing] = useState(false);
-  const [showingCables, setShowingCables] = useState(false);
-  const [showingHistory, setShowingHistory] = useState(false);
-  const [showingSheet, setShowingSheet] = useState(false);
-  const hasHistory = canEdit && HAS_HISTORY.has(device.type);
-  const { location, source } = device;
-  const removable = canEdit && !location && !source;
-
-  const showOnMap = () => {
-    if (!location) return;
-    useMapStore.getState().locateDevice(
-      {
-        deviceId: asDeviceId(device.id),
-        buildingId: asBuildingId(location.buildingId),
-        floorId: asFloorId(location.floorId),
-      },
-      { select: true },
-    );
-    void navigate({ to: "/", search: { site: site.id } });
-  };
-
-  const remove = async () => {
-    try {
-      const removed = await removeDevice({ deviceId: device.id });
-      if (!removed) return;
-      // The same id and what the server removed bring it back as it was.
-      const restore = async () => {
-        try {
-          await createDevice({
-            siteId: site.id,
-            deviceId: device.id,
-            ...removed,
-          });
-        } catch (error) {
-          toast.error(failureMessage(error, "editor"));
-        }
-      };
-      toast(`« ${device.name} » supprimé`, {
-        action: { label: "Annuler", onClick: () => void restore() },
-        // Long enough to notice the wrong row went.
-        duration: 10_000,
-      });
-    } catch (error) {
-      toast.error(failureMessage(error, "editor"));
-    }
-  };
-
-  return (
-    <tr
-      className="cursor-pointer align-top"
-      // The whole row opens the device's sheet (A96); its own buttons and
-      // links keep their action, and so do the dialogs it portals, whose
-      // clicks reach the row through React.
-      onClick={(event) => {
-        const target = event.target;
-        if (
-          !(target instanceof Element) ||
-          !event.currentTarget.contains(target) ||
-          target.closest("button, a")
-        ) {
-          return;
-        }
-        setShowingSheet(true);
-      }}
-    >
-      <td className="px-4 py-2.5">
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            className="rounded-sm text-left font-medium outline-hidden hover:underline focus-visible:ring-2 focus-visible:ring-ring"
-            onClick={() => setShowingSheet(true)}
-          >
-            {device.name}
-          </button>
-          {source ? (
-            <Badge variant="outline">
-              {INTEGRATION_LABELS[source.integration]}
-            </Badge>
-          ) : null}
-        </div>
-        {device.hostname ? (
-          <div className="font-mono text-xs text-muted-foreground">
-            {device.hostname}
-          </div>
-        ) : null}
-      </td>
-      <td className="px-4 py-2.5 whitespace-nowrap text-muted-foreground">
-        {getDeviceKindLabel(device.type)}
-      </td>
-      <td className="px-4 py-2.5 whitespace-nowrap">
-        <DeviceStatusCell status={statusOf(device)} />
-      </td>
-      <td className="px-4 py-2.5 font-mono text-xs">
-        {device.macs.length === 0 ? (
-          <span className="text-muted-foreground">—</span>
-        ) : (
-          device.macs.map((mac) => <div key={mac}>{mac}</div>)
-        )}
-      </td>
-      <td className="px-4 py-2.5 font-mono text-xs">
-        {device.ip ?? <span className="text-muted-foreground">—</span>}
-      </td>
-      <td className="px-4 py-2.5 whitespace-nowrap">
-        {location ? (
-          `${location.buildingName} · ${location.floorName}`
-        ) : (
-          <span className="text-muted-foreground">Hors plan</span>
-        )}
-      </td>
-      <td className="px-2 py-1.5">
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            aria-label={`Actions pour ${device.name}`}
-            className={cn(
-              buttonVariants({ variant: "ghost", size: "icon-sm" }),
-            )}
-          >
-            <HugeiconsIcon icon={MoreHorizontalIcon} strokeWidth={2} />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            {location ? (
-              <DropdownMenuItem onClick={showOnMap}>
-                Voir sur le plan
-              </DropdownMenuItem>
-            ) : null}
-            <DropdownMenuItem onClick={() => setShowingCables(true)}>
-              Câbles
-            </DropdownMenuItem>
-            {hasHistory ? (
-              <DropdownMenuItem onClick={() => setShowingHistory(true)}>
-                Historique
-              </DropdownMenuItem>
-            ) : null}
-            {canEdit ? (
-              <DropdownMenuItem onClick={() => setEditing(true)}>
-                Modifier l'identité
-              </DropdownMenuItem>
-            ) : null}
-            {removable ? (
-              <DropdownMenuItem
-                variant="destructive"
-                onClick={() => void remove()}
-              >
-                Supprimer
-              </DropdownMenuItem>
-            ) : null}
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <DeviceSheet
-          device={showingSheet ? device : null}
-          onOpenChange={setShowingSheet}
-          onShowCables={() => setShowingCables(true)}
-          onShowHistory={hasHistory ? () => setShowingHistory(true) : undefined}
-          onShowOnMap={location ? showOnMap : undefined}
-        />
-        <PortTableDialog
-          device={device}
-          editable={canEdit}
-          open={showingCables}
-          onOpenChange={setShowingCables}
-        />
-        {hasHistory ? (
-          <DeviceHistoryDialog
-            device={device}
-            open={showingHistory}
-            onOpenChange={setShowingHistory}
-          />
-        ) : null}
-        {canEdit ? (
-          <DeviceIdentityDialog
-            device={{ ...device, id: asDeviceId(device.id) }}
-            open={editing}
-            onOpenChange={setEditing}
-          />
-        ) : null}
-      </td>
-    </tr>
-  );
-}
-
-function DeviceStatusCell({ status }: { status: DeviceStatus | null }) {
-  if (!status) return <span className="text-muted-foreground">—</span>;
-  return (
-    <span
-      className={cn(
-        "flex items-center gap-2",
-        status === "down"
-          ? "text-down"
-          : (status === "unknown" || status === "stale") &&
-              "text-muted-foreground",
-      )}
-    >
-      <StatusDot status={status} decorative />
-      {DEVICE_STATUS_LABELS[status]}
-    </span>
   );
 }

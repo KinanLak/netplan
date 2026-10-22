@@ -9,6 +9,7 @@ import { DEVICE_STATUS_CLASSES, DEVICE_STATUS_LABELS } from "@/devices/status";
 import { useQuery } from "convex/react";
 import { cn } from "@/lib/utils";
 import { Time } from "@/components/time";
+import { meaningful } from "@/devices/placeholders";
 import { useNow } from "@/hooks/use-now";
 import { shortPortName } from "@/devices/portState";
 import { api } from "../../../convex/_generated/api";
@@ -133,6 +134,10 @@ export function LastSeenSection({ deviceId }: { deviceId: string }) {
 
 /** Network, user, hardware and notes, each only when there is something. */
 export function DeviceIdentitySections({ device }: { device: DetailedDevice }) {
+  // NetBox's « undefined » models and « System Serial Number » serials, or
+  // the same typed by hand, say nothing (A97).
+  const model = meaningful(device.model);
+  const serial = meaningful(device.serial);
   return (
     <>
       {device.hostname || device.ip || device.macs.length > 0 ? (
@@ -204,22 +209,22 @@ export function DeviceIdentitySections({ device }: { device: DetailedDevice }) {
         </section>
       ) : null}
 
-      {device.model || device.serial ? (
+      {model || serial ? (
         <section>
           <h3 className="mb-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
             Matériel
           </h3>
           <div className="space-y-2">
-            {device.model ? (
+            {model ? (
               <div className="text-sm">
-                <span className="text-foreground">{device.model}</span>
+                <span className="text-foreground">{model}</span>
               </div>
             ) : null}
-            {device.serial ? (
+            {serial ? (
               <div className="flex items-center justify-between gap-3 text-sm">
                 <span className="text-muted-foreground">N° de série</span>
                 <CopyValue
-                  value={device.serial}
+                  value={serial}
                   label="le numéro de série"
                   className="text-foreground"
                 />

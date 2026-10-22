@@ -74,6 +74,27 @@ describe("readNetBoxDevices", () => {
       },
     ]);
   });
+
+  it("reads a placeholder model or serial as none", () => {
+    const [device] = readNetBoxDevices(
+      [
+        {
+          id: 20,
+          name: null,
+          role: { id: 4 },
+          serial: "System Serial Number",
+          device_type: { model: "undefined" },
+        },
+      ],
+      [],
+      roles,
+    );
+    expect(device).toMatchObject({
+      name: "Équipement #20",
+      serial: undefined,
+      model: undefined,
+    });
+  });
 });
 
 const netbox = (
