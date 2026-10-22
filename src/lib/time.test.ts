@@ -3,6 +3,8 @@ import {
   ageHint,
   dayOf,
   formatDay,
+  isCalendarDay,
+  nextDay,
   startOfDay,
   formatAge,
   formatDateTime,
@@ -90,5 +92,30 @@ describe("days", () => {
     expect(startOfDay("2026-10-21", "America/Sao_Paulo")).toBe(
       Date.parse("2026-10-21T03:00:00Z"),
     );
+    // Santiago skips from 23:59 to 01:00 on 6 September 2026.
+    expect(startOfDay("2026-09-06", "America/Santiago")).toBe(
+      Date.parse("2026-09-06T04:00:00Z"),
+    );
+    expect(startOfDay(nextDay("2026-09-05"), "America/Santiago")).toBe(
+      Date.parse("2026-09-06T04:00:00Z"),
+    );
+  });
+
+  it("says « Hier » by the calendar, even after a short night", () => {
+    // 00:30 on 30 March in Paris, the night after the clocks went forward.
+    const now = Date.parse("2026-03-29T22:30:00Z");
+    expect(
+      formatDay(Date.parse("2026-03-29T10:00:00Z"), now, "Europe/Paris"),
+    ).toBe("Hier");
+    expect(
+      formatDay(Date.parse("2026-03-28T22:00:00Z"), now, "Europe/Paris"),
+    ).not.toBe("Hier");
+  });
+
+  it("accepts only real calendar days", () => {
+    expect(isCalendarDay("2026-10-21")).toBe(true);
+    expect(isCalendarDay("2026-13-01")).toBe(false);
+    expect(isCalendarDay("2026-02-30")).toBe(false);
+    expect(isCalendarDay("21/10/2026")).toBe(false);
   });
 });

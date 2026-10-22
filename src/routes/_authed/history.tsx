@@ -23,6 +23,8 @@ import {
   dayOf,
   formatDay,
   formatTime,
+  isCalendarDay,
+  nextDay,
   startOfDay,
   timeZoneHint,
 } from "@/lib/time";
@@ -41,9 +43,6 @@ import { api } from "../../../convex/_generated/api";
 
 type KindFilter = "all" | "located" | "online" | "offline";
 
-const isDay = (value: unknown): value is string =>
-  typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
-
 /** The view and its filters, in the URL so a reload or Back keeps them (A62). */
 type HistorySearch = {
   site?: string;
@@ -54,15 +53,22 @@ type HistorySearch = {
   to?: string;
 };
 
+/**
+ * Every key is written, `undefined` when invalid: the router merges the raw
+ * query of the root route under this one, so a key left out would leak in.
+ */
 const historySearch = (search: Record<string, unknown>): HistorySearch => ({
   ...siteSearch(search),
-  ...(search.view === "snapshots" && { view: "snapshots" as const }),
-  ...(typeof search.q === "string" && search.q !== "" && { q: search.q }),
-  ...((search.kind === "located" ||
+  view: search.view === "snapshots" ? "snapshots" : undefined,
+  q: typeof search.q === "string" && search.q !== "" ? search.q : undefined,
+  kind:
+    search.kind === "located" ||
     search.kind === "online" ||
-    search.kind === "offline") && { kind: search.kind }),
-  ...(isDay(search.from) && { from: search.from }),
-  ...(isDay(search.to) && { to: search.to }),
+    search.kind === "offline"
+      ? search.kind
+      : undefined,
+  from: isCalendarDay(search.from) ? search.from : undefined,
+  to: isCalendarDay(search.to) ? search.to : undefined,
 });
 
 export const Route = createFileRoute("/_authed/history")({
@@ -409,9 +415,6 @@ function SiteEvents({ site }: { site: SiteSummary }) {
     </section>
   );
 }
-
-const nextDay = (day: string) =>
-  new Date(Date.parse(`${day}T12:00:00Z`) + DAY_MS).toISOString().slice(0, 10);
 
 type Slot = FunctionReturnType<typeof api.history.slotsForDay>[number];
 

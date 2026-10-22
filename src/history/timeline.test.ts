@@ -40,6 +40,28 @@ describe("timeline", () => {
     ]);
   });
 
+  it("merges an arrival whose two events other devices' events separate", () => {
+    const [day] = timeline(
+      [
+        event("online", "2026-10-21T10:00:00Z", "device:a"),
+        event("online", "2026-10-21T10:00:00Z", "device:b"),
+        event("located", "2026-10-21T10:00:00Z", "device:a"),
+        event("located", "2026-10-21T10:00:00Z", "device:b"),
+      ],
+      "Europe/Paris",
+    );
+    expect(
+      day.rows.map(({ event: { deviceId, kind }, cameOnline }) => [
+        deviceId,
+        kind,
+        cameOnline,
+      ]),
+    ).toEqual([
+      ["device:a", "located", true],
+      ["device:b", "located", true],
+    ]);
+  });
+
   it("keeps apart what only looks alike: another device, another second", () => {
     const [day] = timeline(
       [
