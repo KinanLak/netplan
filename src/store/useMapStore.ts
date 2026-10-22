@@ -160,6 +160,7 @@ export const useMapStore = create<MapStore>()((set) => ({
         ? {
             isOverlayPanelOpen: true,
             isPlacePanelOpen: false,
+            isLabelToolActive: false,
             isMultiSelectMode: false,
             activeDrawTool: "device",
             selectedDeviceId: null,
@@ -177,6 +178,7 @@ export const useMapStore = create<MapStore>()((set) => ({
         ? {
             isPlacePanelOpen: true,
             isOverlayPanelOpen: false,
+            isLabelToolActive: false,
             isMultiSelectMode: false,
             activeDrawTool: "device",
             selectedDeviceId: null,
