@@ -251,6 +251,9 @@ describe("mapOperations.apply", () => {
       t.mutation(api.floors.rename, { id: floorId, name: "Autre" }),
     ).rejects.toThrow("archivé");
     await expect(
+      t.mutation(api.floors.move, { id: floorId, direction: "up" }),
+    ).rejects.toThrow("archivé");
+    await expect(
       t.mutation(api.buildings.create, {
         siteId,
         objectId: "building:late",

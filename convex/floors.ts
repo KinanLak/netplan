@@ -146,6 +146,7 @@ export const move = editorMutation({
   handler: async (ctx, { id, direction }) => {
     const floor = await floorRow(ctx, id);
     if (!floor) throw new ConvexError("Cet étage n'existe plus.");
+    await requireOpenBuilding(ctx, floor.buildingId);
     const siblings = (await floorsOf(ctx, floor.buildingId)).toSorted(
       (a, b) => a.order - b.order,
     );
