@@ -30,7 +30,7 @@ import {
   HAS_HISTORY,
 } from "@/history/DeviceHistoryDialog";
 import { OPTIONAL_COLUMNS, locationLabel, statusOf } from "@/inventory/columns";
-import { showOnMap } from "@/inventory/showOnMap";
+import { openPlacement, showOnMap } from "@/inventory/showOnMap";
 import type {
   ColumnId,
   InventoryRow,
@@ -109,6 +109,7 @@ export function InventoryTable({
   hidden,
   sort,
   onSort,
+  highlightId,
 }: {
   rows: ReadonlyArray<InventoryRow>;
   site: SiteSummary;
@@ -116,6 +117,8 @@ export function InventoryTable({
   hidden: ReadonlyArray<ColumnId>;
   sort: Sort;
   onSort: (sort: Sort) => void;
+  /** A device just created: scrolled to and lit for a moment (A60). */
+  highlightId?: string | null;
 }) {
   const columns = OPTIONAL_COLUMNS.filter(
     (column) => !hidden.includes(column.id),
@@ -176,6 +179,7 @@ export function InventoryTable({
               site={site}
               canEdit={canEdit}
               shows={shows}
+              highlighted={device.id === highlightId}
             />
           ))}
         </tbody>
@@ -233,11 +237,13 @@ function InventoryItem({
   site,
   canEdit,
   shows,
+  highlighted,
 }: {
   device: InventoryRow;
   site: SiteSummary;
   canEdit: boolean;
   shows: (id: ColumnId) => boolean;
+  highlighted: boolean;
 }) {
   const navigate = useNavigate();
   const createDevice = useMutation(api.devices.create);
@@ -257,6 +263,7 @@ function InventoryItem({
   const openOnMap = () => {
     if (location) showOnMap(navigate, site.id, device.id, location);
   };
+  const placeOnMap = () => openPlacement(navigate, site.id, device.id);
 
   const remove = async () => {
     try {
@@ -286,7 +293,13 @@ function InventoryItem({
 
   return (
     <tr
-      className="cursor-pointer align-baseline transition-colors hover:bg-muted"
+      ref={(row) => {
+        if (row && highlighted) row.scrollIntoView({ block: "center" });
+      }}
+      className={cn(
+        "cursor-pointer align-baseline transition-colors duration-700 hover:bg-muted",
+        highlighted && "bg-accent",
+      )}
       // The whole row opens the device's sheet (A96); its own buttons and
       // links keep their action, and so do the dialogs it portals, whose
       // clicks reach the row through React.
@@ -402,6 +415,11 @@ function InventoryItem({
             {canEdit ? (
               <DropdownMenuItem onClick={() => setEditing(true)}>
                 Modifier l'identité
+              </DropdownMenuItem>
+            ) : null}
+            {canEdit && !location ? (
+              <DropdownMenuItem onClick={placeOnMap}>
+                Placer sur le plan…
               </DropdownMenuItem>
             ) : null}
             {removable ? (
