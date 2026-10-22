@@ -102,6 +102,8 @@ describe("the admin health overview", () => {
       last,
       netbox: { importedAt: 1_500 },
       switches: { up: 2, down: 1, unknown: 1 },
+      // No switch is mapped to a LibreNMS device in this site's settings.
+      switchReads: { read: 1, failed: 1, notPolled: 4, oldestReadAt: null },
     });
     expect(second).toMatchObject({
       id: quiet,
@@ -109,6 +111,7 @@ describe("the admin health overview", () => {
       last: null,
       netbox: null,
       switches: { up: 0, down: 0, unknown: 0 },
+      switchReads: null,
     });
   });
 

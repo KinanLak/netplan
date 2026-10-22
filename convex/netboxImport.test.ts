@@ -143,8 +143,7 @@ describe("NetBox import", () => {
       {
         source: "netbox",
         ok: true,
-        message:
-          "Connexion réussie : NetBox 4.6.10. Import : 2 équipements (1 nouveau, 1 rattaché).",
+        message: "Import : 2 équipements (1 nouveau, 1 rattaché).",
       },
     ]);
     const [merged, created] = await inventory(editor, siteId);

@@ -45,7 +45,7 @@ export function CollectionSection({ siteId }: { siteId: string }) {
               {status.last.steps.map((step) => (
                 <li
                   key={step.source}
-                  className="flex items-center gap-2 text-muted-foreground"
+                  className="flex items-baseline gap-2 text-muted-foreground"
                 >
                   <span
                     aria-hidden
@@ -56,6 +56,14 @@ export function CollectionSection({ siteId }: { siteId: string }) {
                   />
                   <span>
                     {INTEGRATION_LABELS[step.source]} : {step.message}
+                    {/* The step counts; each switch in trouble says why. */}
+                    {(step.switches ?? [])
+                      .filter((entry) => !entry.ok || entry.notes.length > 0)
+                      .map((entry) => (
+                        <span key={entry.name} className="block ps-4">
+                          {entry.name} : {entry.notes.join(" ")}
+                        </span>
+                      ))}
                   </span>
                 </li>
               ))}

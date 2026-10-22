@@ -14,6 +14,7 @@ import {
   testBackend,
 } from "./_test/auth.setup";
 import { stubFetch } from "./_test/fetch";
+import { MISSING_NOTE } from "./librenmsCycle";
 import type { TestClient } from "./_test/auth.setup";
 
 const TOKEN = "a-token-for-tests"; // gitleaks:allow
@@ -359,9 +360,8 @@ describe("the LibreNMS step", () => {
     librenms.state.fdbStatus = 403;
     const failed = await cycle(admin, siteId);
     expect(failed.ok).toBe(false);
-    expect(failed.message).toContain(
-      "« pile » : LibreNMS refuse ce jeton (403).",
-    );
+    // The step counts; each switch says its own trouble.
+    expect(failed.message).toBe("0 switch lu sur 1, 0 MAC vue.");
     expect(failed.switches).toEqual([
       { name: "pile", ok: false, notes: ["LibreNMS refuse ce jeton (403)."] },
     ]);
@@ -1098,6 +1098,15 @@ describe("the LibreNMS step", () => {
     expect(await sightings(admin)).toEqual([]);
   });
 
+  it("says a device LibreNMS no longer has needs its mapping reviewed", async () => {
+    const { admin, siteId } = await siteWithLibreNMS();
+    librenms.state.fdbStatus = 404;
+    const step = await cycle(admin, siteId);
+    expect(step.switches).toEqual([
+      { name: "pile", ok: false, notes: [MISSING_NOTE], missing: true },
+    ]);
+  });
+
   it("asks once for a discovery and reports when it could not", async () => {
     const { admin, siteId } = await siteWithLibreNMS();
     librenms.state.fdb = [{ port_id: 101, mac_address: PC }];
@@ -1107,8 +1116,8 @@ describe("the LibreNMS step", () => {
       fetchStub.calls.filter(([url]) => String(url).endsWith("/discover")),
     ).toHaveLength(1);
     expect(uncertain.ok).toBe(false);
-    expect(uncertain.message).toContain(
-      "« pile » : sa découverte n'a pas pu être lancée. LibreNMS a répondu 503.",
+    expect(uncertain.switches?.[0]?.notes).toContain(
+      "sa découverte n'a pas pu être lancée. LibreNMS a répondu 503.",
     );
     // It ran anyway, so the tables are read, and the freshness card counts
     // the switch as read, with a note.
@@ -1124,8 +1133,8 @@ describe("the LibreNMS step", () => {
     });
     librenms.state.discoverStatus = 403;
     const refused = await cycle(admin, siteId);
-    expect(refused.message).toContain(
-      "« pile » : sa découverte n'a pas pu être lancée. LibreNMS refuse ce jeton (403).",
+    expect(refused.switches?.[0]?.notes).toContain(
+      "sa découverte n'a pas pu être lancée. LibreNMS refuse ce jeton (403).",
     );
     expect(librenms.state.discoveries).toBe(1);
   });
@@ -1141,8 +1150,8 @@ describe("the LibreNMS step", () => {
         if (row) await ctx.db.patch(row._id, { librenmsDiscoveryAt: 0 });
       });
     // A first read compares with the table as it was before its discovery.
-    expect((await cycle(admin, siteId)).message).toContain(
-      "« pile » : sa dernière découverte n'a rafraîchi aucune entrée.",
+    expect((await cycle(admin, siteId)).switches?.[0]?.notes).toContain(
+      "LibreNMS ne rafraîchit plus sa table d'adresses : vérifiez sa découverte dans LibreNMS.",
     );
     expect(await statusOf(admin, "device:pc")).toBeNull();
 
@@ -1154,8 +1163,8 @@ describe("the LibreNMS step", () => {
     expect(await statusOf(admin, "device:pc")).toBe("up");
 
     await discoverAgain();
-    expect((await cycle(admin, siteId)).message).toContain(
-      "« pile » : sa dernière découverte n'a rafraîchi aucune entrée.",
+    expect((await cycle(admin, siteId)).switches?.[0]?.notes).toContain(
+      "LibreNMS ne rafraîchit plus sa table d'adresses : vérifiez sa découverte dans LibreNMS.",
     );
     expect(await statusOf(admin, "device:pc")).toBe("up");
     // The next cycle, too soon to rediscover, still trusts none of them.

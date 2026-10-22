@@ -82,11 +82,25 @@ export const overview = adminQuery({
           ),
         }),
       ),
+      /** The statuses the site's switches carry, from their last read. */
       switches: v.object({
         up: v.number(),
         down: v.number(),
         unknown: v.number(),
       }),
+      /**
+       * How the last LibreNMS step read the site's switches, and when the
+       * oldest status still shown was read; `null` without LibreNMS.
+       */
+      switchReads: v.union(
+        v.null(),
+        v.object({
+          read: v.number(),
+          failed: v.number(),
+          notPolled: v.number(),
+          oldestReadAt: v.union(v.null(), v.number()),
+        }),
+      ),
       /** The integrations that ignore certificate errors (ADR 0028). */
       ignoringCertificates: v.array(integrationKind),
     }),
@@ -110,13 +124,28 @@ export const overview = adminQuery({
             .collect(),
         ]);
         const netbox = integrations.find((row) => row.kind === "netbox");
+        const librenms = integrations.find((row) => row.kind === "librenms");
         const switches = { up: 0, down: 0, unknown: 0 };
+        const switchIds: Array<string> = [];
         for (const device of devices) {
           if (device.type !== "switch") continue;
           // A switch with no news counts with those whose state is unknown.
           const status = device.metadata.status ?? "unknown";
           switches[status === "stale" ? "unknown" : status] += 1;
+          switchIds.push(device.objectId);
         }
+        const polled = new Set(
+          (librenms?.librenms?.switches ?? [])
+            .filter(({ device }) => device !== null)
+            .map(({ switchId }) => switchId),
+        );
+        const results =
+          withoutRemovedSources(cycle?.last, integrations)?.steps.find(
+            (step) => step.source === "librenms",
+          )?.switches ?? [];
+        const reads = (cycle?.switchReads ?? []).filter(
+          (entry) => !entry.expired,
+        );
         return {
           id: siteId,
           name: site.name,
@@ -134,6 +163,17 @@ export const overview = adminQuery({
               }
             : null,
           switches,
+          switchReads: librenms
+            ? {
+                read: results.filter((entry) => entry.ok).length,
+                failed: results.filter((entry) => !entry.ok).length,
+                notPolled: switchIds.filter((id) => !polled.has(id)).length,
+                oldestReadAt:
+                  reads.length > 0
+                    ? Math.min(...reads.map((entry) => entry.readAt))
+                    : null,
+              }
+            : null,
           ignoringCertificates: integrations
             .filter((row) => row.ignoreCertificateErrors)
             .map((row) => row.kind),

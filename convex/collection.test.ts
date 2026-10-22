@@ -90,8 +90,7 @@ describe("collection cycles", () => {
       {
         source: "netbox",
         ok: true,
-        message:
-          "Connexion réussie : NetBox 4.6.10. Aucun site NetBox choisi : rien n'est importé.",
+        message: "Aucun site NetBox choisi : rien n'est importé.",
       },
     ]);
     expect(fetchStub.calls.slice(before).map(([url]) => url)).toEqual([

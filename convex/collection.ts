@@ -215,10 +215,11 @@ const collectFrom = async (
       source === "netbox"
         ? await importFromNetBox(ctx, siteId, cycleId, connection)
         : await collectFromLibreNMS(ctx, siteId, cycleId, connection);
+    // « Connexion réussie » says nothing once the step reports what it read.
     return {
       ...collected,
       source,
-      message: [answer.message, collected.message].filter(Boolean).join(" "),
+      message: collected.message || answer.message,
     };
   } catch (error) {
     // The token is never part of an error the source code builds.
@@ -377,6 +378,7 @@ export const siteFreshness = v.object({
       startedAt: v.number(),
       finishedAt: v.number(),
       failed: v.array(integrationKind),
+      succeeded: v.array(integrationKind),
     }),
   ),
   lastSuccessAt: v.union(v.null(), v.number()),
@@ -432,6 +434,9 @@ export const freshnessOf = async (
           finishedAt: last.finishedAt,
           failed: last.steps
             .filter((step) => !step.ok)
+            .map((step) => step.source),
+          succeeded: last.steps
+            .filter((step) => step.ok)
             .map((step) => step.source),
         }
       : null,

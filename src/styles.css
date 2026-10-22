@@ -67,6 +67,9 @@
   --up-background: oklch(0.95 0.05 150);
   --down: oklch(0.57 0.22 27);
   --down-background: oklch(0.95 0.05 27);
+  /* A note to read, not a failure: a partial collection, a TLS opt-out. */
+  --warning: oklch(0.72 0.16 70);
+  --warning-background: oklch(0.96 0.05 85);
   --unknown: oklch(0.55 0 0);
   --unknown-background: oklch(0.95 0 0);
 
@@ -138,6 +141,8 @@
   --up-background: oklch(0.27 0.06 150);
   --down: oklch(0.66 0.21 25);
   --down-background: oklch(0.27 0.07 25);
+  --warning: oklch(0.75 0.15 75);
+  --warning-background: oklch(0.27 0.05 75);
   --unknown: oklch(0.62 0 0);
   --unknown-background: oklch(0.27 0 0);
 
@@ -190,6 +195,8 @@
   --color-up-background: var(--up-background);
   --color-down: var(--down);
   --color-down-background: var(--down-background);
+  --color-warning: var(--warning);
+  --color-warning-background: var(--warning-background);
   --color-unknown: var(--unknown);
   --color-unknown-background: var(--unknown-background);
 

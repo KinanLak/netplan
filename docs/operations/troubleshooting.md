@@ -7,25 +7,27 @@ description: What each line of the Santé page means, why it says so, and what t
 
 **Administration › Santé** shows, for each site, its last collection cycle:
 how fresh the data is, each source's step, each LibreNMS switch, and the
-push to NetBox when it is on. Start there; the Convex backend's log
+push to NetBox when it is on. Sites in trouble come first, and each card
+links to the part of the site's page that fixes it. Start there; the Convex backend's log
 (`docker compose logs convex-backend`) has the detail of an unexpected
 error, under `collection <site> <source>` or `netbox push <site>`.
 
 A site whose connection has "Ignorer les erreurs de certificat TLS" ticked
-carries a warning, "… est interrogé sans vérifier son certificat TLS", until
-it is unticked: its token goes to whoever answers at that address.
+carries an amber warning, "… est interrogé sans vérifier son certificat TLS",
+with a link to the connection, until it is unticked: its token goes to whoever answers at that address.
 
 ## Freshness
 
 The headline is measured from the **start** of the last cycle in which
 every source answered.
 
-| Headline                     | Meaning                                                                                      |
-| ---------------------------- | -------------------------------------------------------------------------------------------- |
-| "Plan dessiné à la main"     | No integration is enabled: nothing is collected.                                             |
-| "Aucune donnée collectée"    | No cycle has succeeded yet. Read the step lines.                                             |
-| "Données collectées il y a…" | Fine.                                                                                        |
-| "Données en retard : …"      | Two failures in a row, or the second scheduled run after the last success is 2 minutes late. |
+| Headline                     | Meaning                                                                                                  |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------- |
+| "Plan dessiné à la main"     | No integration is enabled: nothing is collected.                                                         |
+| "Aucune donnée collectée"    | No cycle has succeeded yet, and none read any source. Read the step lines.                               |
+| "Collecte partielle …"       | No cycle has fully succeeded, but the last one read some sources; the failing ones are named. Amber dot. |
+| "Données collectées il y a…" | Fine.                                                                                                    |
+| "Données en retard : …"      | Two failures in a row, or the second scheduled run after the last success is 2 minutes late.             |
 
 "Late" never applies to a paused server, a site without sources, or a site
 whose automatic collection is off. With the default cadence a site is late
@@ -57,9 +59,11 @@ import at most every 15 minutes, so an age up to that is normal.
 
 ## Step lines
 
-Each source's line reads `NetBox · …` or `LibreNMS · …`. Once the source
-answered, the line starts with "Connexion réussie : <source> <version>."
-and the rest is that step's report.
+Each source's line reads `NetBox · …` or `LibreNMS · …`: the step's report,
+or "Connexion réussie : <source> <version>." when it had nothing else to
+say. The LibreNMS line only counts ("2 switchs lus sur 3, …"); each switch's
+trouble is in the list under it, and "Revoir la correspondance des switchs"
+appears when LibreNMS answered 404 for one ("n'existe plus dans LibreNMS").
 
 **Before the source is reached:**
 
@@ -133,19 +137,26 @@ or its read failed:
   ports or its forwarding table. A failed read leaves its statuses as they
   were until they expire. An error from the discovery step alone does not:
   the read that follows it still updates them.
+- **"n'existe plus dans LibreNMS (404) : revoyez la correspondance des
+  switchs."**: the device was deleted or renumbered in LibreNMS; pick its
+  new device in the site's LibreNMS mapping.
 - **"Sa découverte n'a pas pu être lancée."**: the token may not ask for a
   discovery; a 4xx means it surely did not start. The switch is still read
   and its statuses updated, from a table that may be as old as its last
   discovery.
-- **"Sa découverte n'a pas fini à temps."** (not red): `last_discovered` did
+- **"Sa découverte n'a pas fini à temps."** (amber): `last_discovered` did
   not change within 2 minutes. A slow poller, or a LibreNMS that does not
   report it ([Integrations](integrations.md)).
-- **"Sa dernière découverte n'a rafraîchi aucune entrée."** (not red):
+- **"LibreNMS ne rafraîchit plus sa table d'adresses : vérifiez sa
+  découverte dans LibreNMS."** (amber):
   discoveries do not rewrite the forwarding table on this LibreNMS, and its
   devices go offline after two cycles. Run `scripts/check-librenms.ts
   --discover`.
 
-**Switch counts.** "en ligne" and "hors ligne" are LibreNMS's own status:
+**Switch counts.** The first line says how the last cycle read them: "lus",
+"en échec", and "non interrogé" for a switch with no LibreNMS device in the
+mapping; "Statut le plus ancien" is the age of the oldest read still
+vouching for a status. Under it, "en ligne" and "hors ligne" are LibreNMS's own status:
 "hors ligne" means LibreNMS cannot poll the switch, not that Netplan failed
 to read it. "inconnu" means not mapped, no status from LibreNMS, or no
 successful read for 2 × the longest cadence interval + 15 minutes (2 h 15
