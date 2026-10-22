@@ -2154,3 +2154,84 @@ Questions of 2026-10-19, in the order they came up, ending with the deployed sta
 - Decision: created, tagged `netplan-test`: tag 405, site 40 `netplan-test-L6-1`, device 1183 `netplan-test-L6-2`, interface 453 `eth0`, MAC 375 (moved once to a MAC active on the test socket's port when the first went quiet). Deleted in reverse order after checking each still carried the tag, then the tag once it had no item. A sweep over 13 object types found nothing, and no device carries a `netplan_*` value.
 - Why: test objects must not outlive the lot.
 - Who: agent (obvious)
+
+### U1 — Shell, login, errors, offline
+
+Questions of 2026-10-21, in the order they came up (ADR 0031, #93, #99, #105, #106).
+
+#### How long may a user keep editing after the connection drops (C1, option c)?
+
+- Context: the owner chose « édition permise pendant N secondes, puis gel », with the banner in every case, and left N to the lot.
+- Decision: N = 30 s (ADR 0031, #105). Under 2 s nothing shows (a socket reconnect); from 2 s the banner says the edits will be sent; at 30 s the map freezes: `useIsEditMode()` and the shortcut runtime read false through a small `useConnectionStore`, « Modifier » is disabled with a hint, and the user's own edit-mode choice is kept so editing resumes on reconnection. The first connection that does not come within 5 s reads « Serveur injoignable · Nouvelle tentative en cours… ».
+- Why: 30 s covers a Wi-Fi handover or a VPN reconnecting (the audit's recommendation); longer lets queued edits drift unseen from what others see; freezing through the same selector as a Lecteur hits every edit control at once.
+- Who: agent (judgement call within the owner's option)
+
+#### What does the banner count as « modifications en attente »?
+
+- Context: Convex's `inflightMutations` also counts presence heartbeats, so the first version showed « 9 modifications en attente » with no edit.
+- Decision: only the map session's queued operations (`pendingCount`, every floor).
+- Why: the user's own changes; inventory edits are single mutations that Convex replays on reconnection anyway.
+- Who: agent (obvious)
+
+#### How should sign-in attempts be limited when no client address reaches Convex (A2)?
+
+- Context: better-auth keys its limit on the client IP. The browser reaches the app, which proxies `/api/auth` to the Convex site through the edge again (compose) or directly (dev): Convex sees no trusted address, so every user shared one bucket of 3 attempts per 10 s. Forwarding an address would need a header the edge cannot overwrite and that a visitor calling the public Convex site cannot forge.
+- Decision: count per identifier typed, 5 per minute, in a `signInAttempts` table through a better-auth `before` hook (#99); the address-keyed rules become a shared ceiling of 60 sign-ins and 10 reset requests per minute. Messages give the real wait.
+- Why: a stranger can then slow one account for a minute but no longer lock everyone out; no proxy configuration to get right per deployment.
+- Who: agent (judgement call)
+
+#### Do sessions slide with use (B2), and what bounds a Keycloak role removal then?
+
+- Context: ADR 0004/0021 fixed 24 h from login so a Keycloak role removal lands within 24 h; the owner accepted the audit's default, sliding sessions.
+- Decision: 24 h after the last use, refreshed at most once an hour, capped at 7 days after login by a `session.update.before` hook (#99). The hook fails open (no cap) if it cannot read the login time, because refusing the update signs the user out.
+- Why: an active user is no longer signed out mid-task; a role removal still lands within a week, or at once when an admin disables the account.
+- Who: agent (judgement call); ADR 0031 amends 0004 and 0021
+
+#### How does the sign-in page know why a session ended (A3)?
+
+- Context: the audit asked for `?reason=expired|disabled`; the client cannot tell the two apart.
+- Decision: the server's `unauthenticated` refusal carries `reason`, `disabled` when the token's user is banned, else `expired`; the signed-in layout forwards it to `/login?reason=`. The identifier is not prefilled after a forced sign-out: `users.me` does not carry the username, and the message is enough.
+- Why: the server knows; no extra request.
+- Who: agent (obvious)
+
+#### Where does the reset page get the username for password managers (A4)?
+
+- Decision: the invitation and forgot-password links carry `login=<address>` in their landing URL; the page puts it in a hidden `username` field and passes it to « Se connecter » afterwards.
+- Who: agent (obvious)
+
+#### Tab titles: with or without the brand (A108)?
+
+- Context: the owner commented « Pas besoin du netplan dans le titre d'onglet ».
+- Decision: no brand in any tab title (« Rez-de-chaussée · Bâtiment A », « Inventaire », « Connexion », « Page introuvable »); a page without its own title reads « NetPlan ».
+- Why: one rule everywhere; the favicon carries the brand.
+- Who: owner (comment on A108), extended to every page by agent
+
+#### Brand and the `/logo` page (B30)
+
+- Context: the owner overrode the default: « NetPlan » everywhere, the light logo only in the light theme and the dark one only in the dark theme.
+- Decision: « NetPlan » in every string a user reads (UI, mails, server messages, NetBox field labels; the custom-field script only creates missing fields, so nothing on the real NetBox changes); code identifiers and English docs keep "Netplan". `/logo` showed both variants side by side, against the rule: removed. The variants now follow the theme on every page because the theme class is always on `<html>` (A46/A47).
+- Who: owner (comment on B30)
+
+#### Why did test logins keep « logging out » in the preview browser?
+
+- Context: random redirects to `/login` while testing on `http://127.0.0.1:3515`.
+- Decision: cookies are per host, not per port: the other lots' instances on 127.0.0.1 overwrite the better-auth cookie in the shared preview profile. Not a Netplan bug. Tested in separate profiles; `<name>.localhost` is not a trusted origin on this branch's dev:agent, so sign-out there answers 403.
+- Who: agent (obvious)
+
+#### Which self-review findings were fixed, and which kept?
+
+- Context: a review pass over the stack found no P0, one P1 and several P2.
+- Decision: fixed — the offline fallback token is seeded from the hydrated context (a full load never ran `beforeLoad` in the browser, so the first offline page change failed); the fallback applies to network failures only; structure actions of the empty map pause while frozen; the purge of sign-in windows reschedules itself while batches are full; the reset link's `login` is built by the server from the account, not from the request. Kept — once a session reaches its 7-day cap, each `get-session` in its last day rewrites the same expiry (one small write per page load or focus, harmless); an account's username and email count apart (10 attempts a minute instead of 5, documented in the ADR).
+- Who: agent (judgement call)
+
+#### Why read the login form from the DOM rather than React state?
+
+- Context: in the browser check, a login typed right after the page loaded failed with « Identifiant ou mot de passe incorrect » while the same credentials worked through the API: the typing landed before hydration, the DOM held it, React state stayed empty. A password manager filling the form does the same, which is A1's scenario.
+- Decision: login, reset and forgot forms read their values from `FormData` on submit (#99).
+- Who: agent (obvious)
+
+#### Which ADR number?
+
+- Context: U3 and U2 merged ADRs 0029 and 0030 first.
+- Decision: the lot's ADR is 0031.
+- Who: agent (obvious)

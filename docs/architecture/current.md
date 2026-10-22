@@ -197,6 +197,28 @@ Built by lot 4 (ADR 0026).
   `health.overview`: every site's freshness, last cycle, NetBox import age,
   switch counts by status and per-switch LibreNMS results.
 
+## Shell
+
+Built by the UX lot U1 (ADR 0031).
+
+- **Theme and errors.** A script in `<head>` sets the theme class before the
+  first paint and `ThemeProvider` lives at the root, so every page, the
+  sign-in ones included, follows it. The root's `shellComponent` keeps the
+  document around `ErrorScreen`, the French screen every route falls back
+  to. On the client, the root `beforeLoad` keeps the last session token when
+  a page change fails for lack of network.
+- **Sign-in.** A better-auth `before` hook counts attempts per identifier in
+  `signInAttempts`; the address-keyed rules are only a shared ceiling. A
+  session slides 24 hours from its last use, capped at 7 days from login by
+  a session update hook. A function refusing a lost session says whether
+  the account was disabled, and the sign-in page says so.
+- **Offline.** `ConnectionBanner`, mounted once in the signed-in layout,
+  turns Convex's connection state into a phase (`src/lib/connection.ts`):
+  after 2 s a banner, after 30 s a frozen map. Frozen is a flag in
+  `useConnectionStore` that `useIsEditMode()` and the shortcut runtime read,
+  so edit controls leave as for a Lecteur; open tools and the structure
+  dialog close, and the queued operations go out on reconnection.
+
 ## Map
 
 Built by lot 3b (ADR 0025) and redrawn by the UX lot U3 (ADR 0029).
