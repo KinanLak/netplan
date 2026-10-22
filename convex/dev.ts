@@ -305,6 +305,72 @@ export const seedHistory = internalMutation({
 });
 
 /**
+ * MAC addresses the demo's switches see that no device carries: phones and
+ * visitors' laptops at the sockets, two on uncabled ports, standing in for
+ * the cycles that never ran. Skipped once the demo site has any sighting.
+ */
+export const seedUnknownMacs = internalMutation({
+  args: {},
+  returns: v.number(),
+  handler: async (ctx) => {
+    assertSeedable();
+    const siteId = DEMO_SITE.objectId;
+    const existing = await ctx.db
+      .query("macSightings")
+      .withIndex("by_site_mac", (q) => q.eq("siteId", siteId))
+      .first();
+    if (existing) return 0;
+    const switches = (
+      await ctx.db
+        .query("devices")
+        .withIndex("by_site", (q) => q.eq("siteId", siteId))
+        .collect()
+    ).filter(({ type }) => type === "switch");
+    const now = Date.now();
+    let written = 0;
+    for (const switchRow of switches) {
+      const ports = (
+        await ctx.db
+          .query("ports")
+          .withIndex("by_device", (q) => q.eq("deviceId", switchRow.objectId))
+          .collect()
+      ).toSorted((a, b) => a.order - b.order);
+      for (const port of ports.slice(0, 6)) {
+        const cable =
+          (await ctx.db
+            .query("cables")
+            .withIndex("by_a_port", (q) => q.eq("aPortId", port.objectId))
+            .first()) ??
+          (await ctx.db
+            .query("cables")
+            .withIndex("by_b_port", (q) => q.eq("bPortId", port.objectId))
+            .first());
+        const far =
+          cable &&
+          (cable.aPortId === port.objectId ? cable.bDeviceId : cable.aDeviceId);
+        const socket = far
+          ? await ctx.db
+              .query("devices")
+              .withIndex("by_object_id", (q) => q.eq("objectId", far))
+              .unique()
+          : null;
+        written += 1;
+        await ctx.db.insert("macSightings", {
+          siteId,
+          mac: `02:de:ad:00:${String(written).padStart(2, "0")}:01`,
+          switchId: switchRow.objectId,
+          portId: port.objectId,
+          ...(socket?.type === "wall-port" && { socketId: socket.objectId }),
+          seenAt: now - written * 7 * 60_000,
+          misses: 0,
+        });
+      }
+    }
+    return written;
+  },
+});
+
+/**
  * Creates one account per role with the shared dev password. An existing
  * account is left as it is, whatever was changed on it since.
  */
