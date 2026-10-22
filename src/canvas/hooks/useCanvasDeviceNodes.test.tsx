@@ -67,10 +67,11 @@ describe("useCanvasDeviceNodes", () => {
     expect(updateDevicePosition.mock.calls.length).toBe(0);
   });
 
-  it("ignores selected devices for collisions only when several move together", async () => {
+  it("ignores selected devices for collisions only when the dragged one moves with them", async () => {
     const single = new Set(["device-b" as DeviceId]);
+    const othersOnly = new Set(["device-b", "device-c"] as Array<DeviceId>);
     const selectedDeviceIds = new Set([
-      "device-b",
+      "device-a",
       "device-c",
     ] as Array<DeviceId>);
     const checkCollision = mock(
@@ -110,6 +111,20 @@ describe("useCanvasDeviceNodes", () => {
           id: deviceId,
           type: "position",
           position: { x: 40, y: 0 },
+          dragging: true,
+        },
+      ]);
+    });
+    expect(checkCollision.mock.calls.at(-1)?.[4]).toBeUndefined();
+
+    // Dragging a device outside the selected group: the group still blocks.
+    rerender({ selection: othersOnly });
+    act(() => {
+      result.current.handleNodesChange([
+        {
+          id: deviceId,
+          type: "position",
+          position: { x: 60, y: 0 },
           dragging: true,
         },
       ]);

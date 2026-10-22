@@ -4,6 +4,7 @@ import {
   arrangedDevicesOverlap,
   distributeDevices,
   nudgeDevices,
+  orderMoves,
 } from "@/canvas/arrangement";
 import type { ArrangedDevice } from "@/canvas/arrangement";
 import type { DeviceId } from "@/types/map";
@@ -59,6 +60,23 @@ describe("arranging a selection", () => {
     );
     expect(arrangedDevicesOverlap(devices, alignDevices(devices, "top"))).toBe(
       false,
+    );
+  });
+
+  it("orders moves so each lands where another has already left", () => {
+    // In document order: 0, 100, 700, 800, 1000 → 0, 260, 500, 760, 1000.
+    const devices = [
+      device("a", 0, 0),
+      device("b", 100, 0),
+      device("c", 700, 0),
+      device("d", 800, 0),
+      device("e", 1000, 0),
+    ];
+    const updates = distributeDevices(devices, "horizontal");
+    const ordered = orderMoves(devices, updates).map((u) => u.deviceId);
+    // d (800 → 760) must wait for c (700 → 500) to leave.
+    expect(ordered.indexOf("c" as DeviceId)).toBeLessThan(
+      ordered.indexOf("d" as DeviceId),
     );
   });
 });

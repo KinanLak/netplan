@@ -98,6 +98,52 @@ export function nudgeDevices(
   }));
 }
 
+/**
+ * The moves in an order the server can apply one by one: each device moves
+ * once the devices standing where it goes have left. Moves in opposite
+ * directions (spreading, centring) need it; a cycle keeps the rest as given.
+ */
+export function orderMoves(
+  devices: ReadonlyArray<ArrangedDevice>,
+  updates: ReadonlyArray<PositionUpdate>,
+): Array<PositionUpdate> {
+  const sizes = new Map(devices.map((device) => [device.id, device.size]));
+  const current = new Map(
+    devices.map((device) => [device.id, device.position]),
+  );
+  const rect = (id: ArrangedDevice["id"], position: Position) => ({
+    ...position,
+    ...(sizes.get(id) ?? { width: 0, height: 0 }),
+  });
+  const pending = [...updates];
+  const ordered: Array<PositionUpdate> = [];
+  while (pending.length > 0) {
+    const index = pending.findIndex((update) => {
+      const target = rect(update.deviceId, update.position);
+      return pending.every(
+        (other) =>
+          other === update ||
+          !overlaps(
+            target,
+            rect(other.deviceId, current.get(other.deviceId) ?? other.position),
+          ),
+      );
+    });
+    const [next] = pending.splice(index === -1 ? 0 : index, 1);
+    current.set(next.deviceId, next.position);
+    ordered.push(next);
+  }
+  return ordered;
+}
+
+type Rect = Position & Size;
+
+const overlaps = (a: Rect, b: Rect) =>
+  a.x < b.x + b.width &&
+  b.x < a.x + a.width &&
+  a.y < b.y + b.height &&
+  b.y < a.y + a.height;
+
 /** Whether two of the devices, once moved, would stand on each other. */
 export function arrangedDevicesOverlap(
   devices: ReadonlyArray<ArrangedDevice>,
@@ -108,17 +154,7 @@ export function arrangedDevicesOverlap(
     ...(moved.get(device.id) ?? device.position),
     ...device.size,
   }));
-  return rects.some((a, i) =>
-    rects
-      .slice(i + 1)
-      .some(
-        (b) =>
-          a.x < b.x + b.width &&
-          b.x < a.x + a.width &&
-          a.y < b.y + b.height &&
-          b.y < a.y + a.height,
-      ),
-  );
+  return rects.some((a, i) => rects.slice(i + 1).some((b) => overlaps(a, b)));
 }
 
 function changedOnly(

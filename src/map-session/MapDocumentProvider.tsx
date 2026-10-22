@@ -93,7 +93,14 @@ export interface MapDocumentCommands {
   addDevice: (draft: DeviceDraft) => DeviceId | null;
   addDevices: (drafts: Array<DeviceDraft>) => Array<DeviceId>;
   updateDevicePosition: (deviceId: DeviceId, position: Position) => void;
-  updateDevicePositions: (updates: Array<DevicePositionUpdate>) => void;
+  /**
+   * Moves several devices in one change. They are sorted for a move in one
+   * direction unless `ordered` says the caller already ordered them.
+   */
+  updateDevicePositions: (
+    updates: Array<DevicePositionUpdate>,
+    options?: { ordered?: boolean },
+  ) => void;
   /** False when the device cannot be deleted yet, or at all. */
   deleteDevice: (deviceId: DeviceId) => boolean;
   /** Takes a device off the map; it stays in the site inventory. */
@@ -440,20 +447,24 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
     });
   };
 
-  const updateDevicePositions = (updates: Array<DevicePositionUpdate>) => {
+  const updateDevicePositions = (
+    updates: Array<DevicePositionUpdate>,
+    options: { ordered?: boolean } = {},
+  ) => {
     if (!isReadyRef.current || updates.length === 0) return;
     const devices = documentRef.current.devices;
     const deviceById = new Map(devices.map((device) => [device.id, device]));
-    const changedUpdates = sortGroupPositionUpdates(devices, updates).filter(
-      (update) => {
-        const device = deviceById.get(update.deviceId);
-        return (
-          device &&
-          (device.position.x !== update.position.x ||
-            device.position.y !== update.position.y)
-        );
-      },
-    );
+    const sorted = options.ordered
+      ? updates
+      : sortGroupPositionUpdates(devices, updates);
+    const changedUpdates = sorted.filter((update) => {
+      const device = deviceById.get(update.deviceId);
+      return (
+        device &&
+        (device.position.x !== update.position.x ||
+          device.position.y !== update.position.y)
+      );
+    });
     if (changedUpdates.length === 0) return;
     const meta = freshMeta();
     if (!meta) return;

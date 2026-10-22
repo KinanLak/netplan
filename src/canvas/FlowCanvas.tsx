@@ -292,7 +292,8 @@ export default function FlowCanvas() {
     setSelectedDevices,
     setHoveredDevice,
   });
-  // A Shift+drag draws a selection box whatever the tool (ADR 0030).
+  // Shift+drag draws a selection box without the « Sélection » mode (ADR
+  // 0030); with a wall tool, the drag belongs to the tool.
   const boxSelectingRef = useRef(false);
 
   const {

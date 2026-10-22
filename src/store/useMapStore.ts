@@ -79,7 +79,10 @@ export const useMapStore = create<MapStore>()((set, get) => ({
   },
   selectDevice: (deviceId) => {
     set((state) =>
-      state.selectedDeviceId === deviceId
+      // Also a no-op only when it changes nothing: null clears a selection
+      // of several, whose `selectedDeviceId` is already null.
+      state.selectedDeviceId === deviceId &&
+      state.selectedDeviceIds.length === (deviceId ? 1 : 0)
         ? state
         : {
             selectedDeviceId: deviceId,

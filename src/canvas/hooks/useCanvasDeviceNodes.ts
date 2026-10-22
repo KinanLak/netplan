@@ -163,12 +163,19 @@ export function useCanvasDeviceNodes({
   setHoveredDevice,
 }: UseCanvasDeviceNodesParams): UseCanvasDeviceNodesResult {
   const [nodes, setNodes, onNodesChange] = useNodesState<DeviceNode>([]);
-  const devicePlacement = useDevicePlacement((...args) =>
-    checkCollision(
-      ...args,
-      // A group moves together, so its members never block each other.
-      selectedDeviceIdSet.size > 1 ? selectedDeviceIdSet : undefined,
-    ),
+  const devicePlacement = useDevicePlacement(
+    (floorId, deviceId, position, size) =>
+      checkCollision(
+        floorId,
+        deviceId,
+        position,
+        size,
+        // A group moves together, so its members never block each other;
+        // a device dragged on its own is blocked by all of them.
+        selectedDeviceIdSet.size > 1 && selectedDeviceIdSet.has(deviceId)
+          ? selectedDeviceIdSet
+          : undefined,
+      ),
   );
   const draggingDeviceIdsRef = useRef<Set<DeviceId>>(new Set());
   const [blockedSpots, setBlockedSpots] = useState<ReadonlyArray<BlockedSpot>>(

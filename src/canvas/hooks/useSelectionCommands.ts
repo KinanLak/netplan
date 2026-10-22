@@ -5,6 +5,7 @@ import {
   arrangedDevicesOverlap,
   distributeDevices,
   nudgeDevices,
+  orderMoves,
 } from "@/canvas/arrangement";
 import type {
   Alignment,
@@ -73,7 +74,11 @@ export function useSelectionMoves() {
         );
       });
     if (blocked) return false;
-    commands.updateDevicePositions(updates);
+    // Spreading and centring move devices in opposite directions, which the
+    // provider's one-direction sort cannot order.
+    commands.updateDevicePositions(orderMoves(devices, updates), {
+      ordered: true,
+    });
     return true;
   };
 
