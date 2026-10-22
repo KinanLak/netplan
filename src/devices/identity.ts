@@ -88,6 +88,24 @@ const OPTIONAL_TEXT_FIELDS = [
   "notes",
 ] as const;
 
+/**
+ * A device with a hostname is named after it, so the plan, the lists and the
+ * network all say the same thing (B10, ADR 0029). A source that owns the
+ * name keeps it.
+ */
+export function namedAfterHostname(
+  edit: IdentityEdit,
+  current: {
+    hostname?: string | null;
+    source?: { integration: IntegrationKind };
+  },
+): IdentityEdit {
+  if (isSourceOwned(current.source, "name")) return edit;
+  const hostname =
+    edit.hostname !== undefined ? edit.hostname : (current.hostname ?? null);
+  return hostname ? { ...edit, name: hostname } : edit;
+}
+
 /** Trims text; an emptied optional field is removed (`null`). */
 export function normalizeIdentityEdit(edit: IdentityEdit): IdentityEdit {
   const normalized: IdentityEdit = { ...edit };

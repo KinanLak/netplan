@@ -24,6 +24,7 @@ import {
   IDENTITY_TEXT_LIMITS,
   identityEditError,
   isSourceOwned,
+  namedAfterHostname,
   normalizeIdentityEdit,
 } from "@/devices/identity";
 import type { IdentityEdit, IdentityField } from "@/devices/identity";
@@ -120,6 +121,9 @@ function IdentityForm({
     ? INTEGRATION_LABELS[device.source.integration]
     : null;
 
+  // A device with a hostname is named after it (B10, ADR 0029).
+  const followsHostname = !owned("name") && text.hostname.trim() !== "";
+
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     const edit: IdentityEdit = {};
@@ -143,7 +147,7 @@ function IdentityForm({
       return;
     }
 
-    const normalized = normalizeIdentityEdit(edit);
+    const normalized = namedAfterHostname(normalizeIdentityEdit(edit), device);
     const invalid = identityEditError(normalized);
     if (invalid) {
       setError(invalid);
@@ -170,7 +174,12 @@ function IdentityForm({
             <FieldLabel htmlFor={`${id}-${field}`}>{label}</FieldLabel>
             <Input
               id={`${id}-${field}`}
-              value={text[field]}
+              value={
+                field === "name" && followsHostname
+                  ? text.hostname.trim()
+                  : text[field]
+              }
+              readOnly={field === "name" && followsHostname}
               disabled={owned(field)}
               maxLength={IDENTITY_TEXT_LIMITS[field]}
               required={field === "name"}
@@ -185,6 +194,8 @@ function IdentityForm({
             />
             {owned(field) ? (
               <FieldDescription>Géré par {sourceLabel}.</FieldDescription>
+            ) : field === "name" && followsHostname ? (
+              <FieldDescription>Le nom suit le hostname.</FieldDescription>
             ) : null}
           </Field>
         ))}

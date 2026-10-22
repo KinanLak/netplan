@@ -254,7 +254,8 @@ const deviceFields = (id: string, device: Omit<DeviceInput, "id">) => ({
   id,
   floorId: device.floorId,
   type: device.type,
-  name: device.name,
+  // A device drawn with a hostname is named after it (B10).
+  name: device.hostname?.trim() || device.name,
   hostname: device.hostname,
   serial: device.serial,
   macs: device.macs,

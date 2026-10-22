@@ -25,12 +25,14 @@ test("an editor signs in and the seeded demo map opens on both floors", async ({
   const floors = page.locator('[data-sidebar="menu-sub"]');
   await floors.getByText("Rez-de-chaussée", { exact: true }).click();
   // The plan names devices in capitals, and a socket without « Prise ».
-  await expect(page.getByText("CŒUR DE RÉSEAU", { exact: true })).toBeVisible();
+  await expect(page.getByText("SW-DEMO-COEUR", { exact: true })).toBeVisible();
   await expect(page.getByText("B-01", { exact: true })).toBeVisible();
 
   await floors.getByText("Étage 1", { exact: true }).click();
-  await expect(page.getByText("ACCÈS ÉTAGE 1", { exact: true })).toBeVisible();
-  await expect(page.getByText("CŒUR DE RÉSEAU", { exact: true })).toBeHidden();
+  await expect(
+    page.getByText("SW-DEMO-ACCES-E1", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("SW-DEMO-COEUR", { exact: true })).toBeHidden();
 
   expect(errors).toEqual([]);
 });
