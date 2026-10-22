@@ -280,7 +280,8 @@ function SiteSettingsForm({ site }: { site: Site }) {
       onSubmit={(event) => void submit(event)}
       className="space-y-8"
     >
-      <FieldSet>
+      {/* Locked while saving: the answer resets the form to what it sent. */}
+      <FieldSet disabled={pending}>
         <FieldLegend>Général</FieldLegend>
         <FieldGroup>
           <Field data-invalid={errorOf("name") !== null}>
@@ -302,7 +303,7 @@ function SiteSettingsForm({ site }: { site: Site }) {
         </FieldGroup>
       </FieldSet>
 
-      <FieldSet>
+      <FieldSet disabled={pending}>
         <FieldLegend>Collecte</FieldLegend>
         <FieldDescription>
           NetPlan interroge les intégrations du site à ce rythme, à l'heure du
@@ -312,6 +313,7 @@ function SiteSettingsForm({ site }: { site: Site }) {
           <Field orientation="horizontal">
             <Checkbox
               id="site-automatic"
+              disabled={pending}
               checked={draft.automaticRefresh}
               onCheckedChange={(checked) =>
                 change({ automaticRefresh: checked })
@@ -324,6 +326,7 @@ function SiteSettingsForm({ site }: { site: Site }) {
           <Field orientation="horizontal">
             <Checkbox
               id="site-manual"
+              disabled={pending}
               checked={draft.manualRefresh}
               onCheckedChange={(checked) => change({ manualRefresh: checked })}
             />
