@@ -20,7 +20,7 @@ import {
 import { useOptionHeld } from "@/hooks/use-shortcuts";
 import { cn } from "@/lib/utils";
 import { getShortcutDisplay } from "@/lib/shortcuts";
-import { asBuildingId, asFloorId } from "@/lib/objectIds";
+import { asBuildingId } from "@/lib/objectIds";
 import { useTemporalStore, useUndoRedo } from "@/hooks/use-undo-redo";
 import { Kbd, KbdGroup } from "@/components/ui/kbd";
 import { NetplanLogo } from "@/components/netplan-logo";
@@ -203,7 +203,6 @@ export default function AppSidebar() {
   );
 
   const setCurrentBuilding = useMapStore((s) => s.setCurrentBuilding);
-  const setCurrentFloor = useMapStore((s) => s.setCurrentFloor);
   const floorsForCurrent = useQuery(
     api.floors.listForBuilding,
     currentBuildingId ? { buildingId: currentBuildingId } : "skip",
@@ -366,9 +365,6 @@ export default function AppSidebar() {
                                   />
                                 }
                                 aria-current={isActive ? "page" : undefined}
-                                onClick={() =>
-                                  setCurrentFloor(asFloorId(floor.id))
-                                }
                                 className={cn(
                                   "cursor-pointer justify-between",
                                   // Room for the « ⋯ » when it shows: always

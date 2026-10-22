@@ -385,29 +385,16 @@ function useMapUrlSync() {
   const selectedDeviceId = useSelectedDeviceId();
   const appliedRef = useRef<string | null>(null);
 
+  // One effect, so the write-back also runs when the floors arrive after
+  // the map was opened from elsewhere (the inventory, a search).
   useEffect(() => {
     if (!allFloors) return;
     const key = `${floor ?? ""}|${device ?? ""}`;
-    if (appliedRef.current === key) return;
-    appliedRef.current = key;
-    const target = allFloors.find((candidate) => candidate.id === floor);
-    if (!target) return;
-    const store = useMapStore.getState();
-    if (store.currentBuildingId !== target.buildingId) {
-      store.setCurrentBuilding(asBuildingId(target.buildingId));
+    if (appliedRef.current !== key) {
+      appliedRef.current = key;
+      applyUrl(allFloors, floor, device);
     }
-    if (useMapStore.getState().currentFloorId !== target.id) {
-      store.setCurrentFloor(asFloorId(target.id));
-    }
-    if (device && useMapStore.getState().selectedDeviceId !== device) {
-      store.selectDevice(asDeviceId(device));
-    }
-  }, [allFloors, floor, device]);
-
-  useEffect(() => {
-    // Until the URL is applied, the map's state is not yet the user's.
-    if (appliedRef.current === null) return;
-    // Read now: the effect above may have just changed the map.
+    // Read now: applying the URL may have just changed the map.
     const state = useMapStore.getState();
     const nextFloor = state.currentFloorId ?? undefined;
     const nextDevice = state.selectedDeviceId ?? undefined;
@@ -421,7 +408,31 @@ function useMapUrlSync() {
       }),
       replace: true,
     });
-  }, [currentFloorId, selectedDeviceId, floor, device, navigate]);
+  }, [allFloors, floor, device, currentFloorId, selectedDeviceId, navigate]);
+}
+
+/**
+ * Opens the floor and device a URL names, if the floor exists; a URL that
+ * names a floor but no device leaves nothing selected.
+ */
+function applyUrl(
+  allFloors: ReadonlyArray<{ id: string; buildingId: string }>,
+  floor: string | undefined,
+  device: string | undefined,
+) {
+  const target = allFloors.find((candidate) => candidate.id === floor);
+  if (!target) return;
+  const store = useMapStore.getState();
+  if (store.currentBuildingId !== target.buildingId) {
+    store.setCurrentBuilding(asBuildingId(target.buildingId));
+  }
+  if (useMapStore.getState().currentFloorId !== target.id) {
+    store.setCurrentFloor(asFloorId(target.id));
+  }
+  const selected = useMapStore.getState().selectedDeviceId;
+  if ((device ?? null) !== selected) {
+    store.selectDevice(device ? asDeviceId(device) : null);
+  }
 }
 
 /** Folds the sidebar away and back, as Ctrl+B does; the choice is kept. */
