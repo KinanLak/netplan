@@ -801,6 +801,22 @@ describe("the LibreNMS step", () => {
       status: "stale",
       lastSeenAt: eight,
     });
+    // Deleted and brought back, the switch keeps its last news: its expired
+    // read is never revisited.
+    const restorer = await signIn();
+    const removed = await restorer.mutation(api.devices.remove, {
+      deviceId: "device:sw",
+    });
+    if (!removed) throw new Error("expected the switch to be removed");
+    await restorer.mutation(api.devices.create, {
+      siteId,
+      deviceId: "device:sw",
+      ...removed,
+    });
+    expect(await metadataOf(admin, "device:sw")).toMatchObject({
+      status: "stale",
+      lastSeenAt: eight,
+    });
     expect((await portFacts(admin))[0]).toEqual({
       status: undefined,
       seen: undefined,
