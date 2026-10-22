@@ -6,17 +6,19 @@ import {
   ComboboxItem,
   ComboboxList,
 } from "@/components/ui/combobox";
-import { Field, FieldLabel } from "@/components/ui/field";
+import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 
 const TIME_ZONES: ReadonlyArray<string> = Intl.supportedValuesOf("timeZone");
 
 export function TimeZoneField({
   id,
   value,
+  error = null,
   onChange,
 }: {
   id: string;
   value: string;
+  error?: string | null;
   onChange: (timezone: string) => void;
 }) {
   // A zone saved under an alias this browser does not list stays choosable.
@@ -24,7 +26,7 @@ export function TimeZoneField({
     ? TIME_ZONES
     : [value, ...TIME_ZONES];
   return (
-    <Field>
+    <Field data-invalid={error !== null}>
       <FieldLabel htmlFor={id}>Fuseau horaire</FieldLabel>
       <Combobox
         items={zones}
@@ -33,7 +35,12 @@ export function TimeZoneField({
           if (next) onChange(next);
         }}
       >
-        <ComboboxInput id={id} placeholder="Europe/Paris" />
+        <ComboboxInput
+          id={id}
+          placeholder="Europe/Paris"
+          aria-invalid={error !== null}
+          aria-describedby={error ? `${id}-error` : undefined}
+        />
         <ComboboxContent>
           <ComboboxEmpty>Aucun fuseau ne correspond.</ComboboxEmpty>
           <ComboboxList>
@@ -45,6 +52,7 @@ export function TimeZoneField({
           </ComboboxList>
         </ComboboxContent>
       </Combobox>
+      {error ? <FieldError id={`${id}-error`}>{error}</FieldError> : null}
     </Field>
   );
 }

@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { useFlash } from "@/hooks/use-flash";
+import { useUnsavedSection } from "@/admin/unsaved";
 import { failureMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import {
@@ -115,7 +116,11 @@ function IntegrationForm({
     !("url" in normalized) ||
     normalized.url !== integration.baseUrl ||
     ignoreCertificateErrors !== integration.ignoreCertificateErrors;
-  const dirty = connectionChanged || enabled !== integration.enabled;
+  const dirty =
+    integration === null
+      ? baseUrl.trim() !== "" || token !== ""
+      : connectionChanged || enabled !== integration.enabled;
+  useUnsavedSection("integrations", label, dirty);
 
   const changed = () => {
     setError(null);

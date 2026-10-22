@@ -9,8 +9,12 @@ import { deletePushes } from "./netboxPush";
 import { adminMutation, adminQuery, readerQuery } from "./lib/functions";
 import type { Doc } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
-import { siteCadence } from "./siteValidators";
-import { DEFAULT_CADENCE, siteSettingsError } from "../src/sites/settings";
+import { integrationKind, siteCadence } from "./siteValidators";
+import {
+  DEFAULT_CADENCE,
+  SITE_NAME_TAKEN,
+  siteSettingsError,
+} from "../src/sites/settings";
 import type { SiteSettings } from "../src/sites/settings";
 
 const siteSummary = v.object({
@@ -27,6 +31,18 @@ const siteSettings = v.object({
   automaticRefresh: v.boolean(),
   manualRefresh: v.boolean(),
   buildingCount: v.number(),
+});
+
+const siteListing = v.object({
+  ...siteSettings.fields,
+  floorCount: v.number(),
+  /** The connected tools, NetBox first, and whether each is collected. */
+  integrations: v.array(
+    v.object({
+      kind: integrationKind,
+      enabled: v.boolean(),
+    }),
+  ),
 });
 
 const toSummary = (site: Doc<"sites">) => ({
@@ -81,7 +97,7 @@ const assertNameFree = async (
         site.name.toLocaleLowerCase("fr") === key,
     )
   ) {
-    throw new ConvexError("Un site porte déjà ce nom.");
+    throw new ConvexError(SITE_NAME_TAKEN);
   }
 };
 
@@ -127,15 +143,51 @@ export const list = readerQuery({
   },
 });
 
+/**
+ * Every site with its buildings, floors and tools, for the sites page. No
+ * device count: it would read every device and rerun at each move.
+ */
 export const listSettings = adminQuery({
   args: {},
-  returns: v.array(siteSettings),
+  returns: v.array(siteListing),
   handler: async (ctx) => {
     const sites = await ctx.db.query("sites").collect();
-    const settings = await Promise.all(
-      sites.map((site) => toSettings(ctx, site)),
+    const listed = await Promise.all(
+      sites.map(async (site) => {
+        const siteId = site.objectId;
+        const buildings = await ctx.db
+          .query("buildings")
+          .withIndex("by_site", (q) => q.eq("siteId", siteId))
+          .collect();
+        let floorCount = 0;
+        for (const building of buildings) {
+          floorCount += (
+            await ctx.db
+              .query("floors")
+              .withIndex("by_building", (q) =>
+                q.eq("buildingId", building.objectId),
+              )
+              .collect()
+          ).length;
+        }
+        const integrations = (
+          await ctx.db
+            .query("integrations")
+            .withIndex("by_site_kind", (q) => q.eq("siteId", siteId))
+            .collect()
+        )
+          .map((row) => ({ kind: row.kind, enabled: row.enabled }))
+          .sort((a, b) =>
+            a.kind === "netbox" ? -1 : b.kind === "netbox" ? 1 : 0,
+          );
+        return {
+          ...(await toSettings(ctx, site)),
+          floorCount,
+          integrations,
+        };
+      }),
     );
-    return settings.sort(byName);
+    return listed.sort(byName);
   },
 });
 
@@ -145,6 +197,59 @@ export const getSettings = adminQuery({
   handler: async (ctx, { siteId }) => {
     const site = await getByObjectId(ctx, siteId);
     return site ? await toSettings(ctx, site) : null;
+  },
+});
+
+/**
+ * A site's buildings and floors with how many devices each floor shows, for
+ * the admin, who removes them on the plan.
+ */
+export const structure = adminQuery({
+  args: { siteId: v.string() },
+  returns: v.array(
+    v.object({
+      id: v.string(),
+      name: v.string(),
+      floors: v.array(
+        v.object({ id: v.string(), name: v.string(), devices: v.number() }),
+      ),
+    }),
+  ),
+  handler: async (ctx, { siteId }) => {
+    const buildings = await ctx.db
+      .query("buildings")
+      .withIndex("by_site", (q) => q.eq("siteId", siteId))
+      .collect();
+    const placed = new Map<string, number>();
+    const devices = ctx.db
+      .query("devices")
+      .withIndex("by_site", (q) => q.eq("siteId", siteId));
+    for await (const device of devices) {
+      const floorId = device.placement?.floorId;
+      if (floorId) placed.set(floorId, (placed.get(floorId) ?? 0) + 1);
+    }
+    return await Promise.all(
+      buildings
+        .toSorted((a, b) => a.order - b.order)
+        .map(async (building) => ({
+          id: building.objectId,
+          name: building.name,
+          floors: (
+            await ctx.db
+              .query("floors")
+              .withIndex("by_building", (q) =>
+                q.eq("buildingId", building.objectId),
+              )
+              .collect()
+          )
+            .toSorted((a, b) => a.order - b.order)
+            .map((floor) => ({
+              id: floor.objectId,
+              name: floor.name,
+              devices: placed.get(floor.objectId) ?? 0,
+            })),
+        })),
+    );
   },
 });
 

@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/combobox";
 import { FieldError } from "@/components/ui/field";
 import { failureMessage } from "@/lib/errors";
+import { useUnsavedSection } from "@/admin/unsaved";
 import { polledSwitches, suggestDevice } from "@/sites/librenms";
 import type { LibreNMSDevice } from "@/sites/librenms";
 import { api } from "../../convex/_generated/api";
@@ -148,20 +149,42 @@ function SettingsForm({
   const savedOf = new Map(
     saved.settings.switches.map(({ switchId, device }) => [switchId, device]),
   );
-  // A switch never configured starts on the device named like it, if one
-  // is; one an admin chose not to poll stays so.
-  const [chosen, setChosen] = useState<Record<string, number | null>>(() =>
-    Object.fromEntries(
-      saved.switches.map((device) => [
-        device.id,
-        savedOf.has(device.id)
-          ? (savedOf.get(device.id)?.id ?? null)
-          : (suggestDevice(device, options.devices)?.id ?? null),
-      ]),
-    ),
+  // Each switch starts on what was saved. A switch never configured gets the
+  // device named like it as a suggestion, which the admin applies: a guess
+  // must not read as a saved choice.
+  const initial = Object.fromEntries(
+    saved.switches.map((device) => [
+      device.id,
+      savedOf.get(device.id)?.id ?? null,
+    ]),
+  );
+  const [chosen, setChosen] = useState<Record<string, number | null>>(initial);
+  const suggestions = new Map(
+    saved.switches.flatMap((device) => {
+      if (savedOf.has(device.id)) return [];
+      const suggested = suggestDevice(device, options.devices);
+      return suggested ? [[device.id, suggested] as const] : [];
+    }),
+  );
+  const pendingSuggestions = [...suggestions].filter(
+    ([switchId, device]) => chosen[switchId] !== device.id,
   );
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  useUnsavedSection(
+    "correspondances",
+    "Switchs LibreNMS",
+    saved.switches.some(
+      (device) => (chosen[device.id] ?? null) !== (initial[device.id] ?? null),
+    ),
+  );
+  // Switches sharing a device: normal for a stack, worth a word otherwise.
+  const sharing = (switchId: string, deviceId: number | null) =>
+    deviceId === null
+      ? []
+      : saved.switches.filter(
+          (other) => other.id !== switchId && chosen[other.id] === deviceId,
+        );
 
   const submit = async () => {
     setPending(true);
@@ -194,18 +217,52 @@ function SettingsForm({
         void submit();
       }}
     >
-      <fieldset className="space-y-2">
+      <fieldset className="space-y-3">
         <legend className="mb-2 text-sm font-medium">Switchs du site</legend>
+        <div className="flex justify-end">
+          {pendingSuggestions.length > 0 ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                setChosen((all) => ({
+                  ...all,
+                  ...Object.fromEntries(
+                    pendingSuggestions.map(([switchId, device]) => [
+                      switchId,
+                      device.id,
+                    ]),
+                  ),
+                }))
+              }
+            >
+              {pendingSuggestions.length === 1
+                ? "Appliquer la suggestion"
+                : `Appliquer les ${pendingSuggestions.length} suggestions`}
+            </Button>
+          ) : null}
+        </div>
         {saved.switches.map((device) => {
           const id = chosen[device.id] ?? null;
           const picked = id === null ? undefined : listed.get(id);
           const gone = savedOf.get(device.id);
+          const suggestion = suggestions.get(device.id);
+          const others = sharing(device.id, id);
+          const where = [device.hostname, device.floor]
+            .filter(Boolean)
+            .join(" · ");
           return (
             <div
               key={device.id}
-              className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+              className="flex flex-col gap-1 text-sm sm:flex-row sm:items-start sm:justify-between sm:gap-4"
             >
-              <span>{device.name}</span>
+              <div className="min-w-0 sm:pt-2">
+                <p>{device.name}</p>
+                {where ? (
+                  <p className="text-xs text-muted-foreground">{where}</p>
+                ) : null}
+              </div>
               <div className="space-y-1 sm:w-80">
                 <Combobox
                   items={items}
@@ -238,6 +295,30 @@ function SettingsForm({
                     </ComboboxList>
                   </ComboboxContent>
                 </Combobox>
+                {suggestion && id !== suggestion.id ? (
+                  <p className="text-xs text-muted-foreground">
+                    Suggéré : {suggestion.name}{" "}
+                    <button
+                      type="button"
+                      className="text-primary underline-offset-4 hover:underline"
+                      onClick={() =>
+                        setChosen((all) => ({
+                          ...all,
+                          [device.id]: suggestion.id,
+                        }))
+                      }
+                    >
+                      Utiliser
+                    </button>
+                  </p>
+                ) : null}
+                {others.length > 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    Aussi choisi pour{" "}
+                    {others.map((other) => other.name).join(", ")} : normal pour
+                    une pile.
+                  </p>
+                ) : null}
                 {gone && !listed.has(gone.id) && id === gone.id ? (
                   <p className="text-destructive">
                     « {gone.name} » n'est plus dans LibreNMS.

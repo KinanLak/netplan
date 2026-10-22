@@ -1,7 +1,8 @@
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Add01Icon } from "@hugeicons/core-free-icons";
+import { Add01Icon, ArrowRight01Icon } from "@hugeicons/core-free-icons";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
+import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,11 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { failureMessage } from "@/lib/errors";
+import { cn } from "@/lib/utils";
+import { useNow } from "@/hooks/use-now";
+import { FRESHNESS_DOT } from "@/sites/CollectionFreshness";
+import { describeFreshness } from "@/sites/freshness";
+import { INTEGRATION_LABELS } from "@/sites/integrations";
 import { TimeZoneField } from "@/admin/TimeZoneField";
 import { DEFAULT_TIMEZONE, siteNameError } from "@/sites/settings";
 import { api } from "../../../../../convex/_generated/api";
@@ -30,8 +36,70 @@ export const Route = createFileRoute("/_authed/admin/sites/")({
   component: SitesPage,
 });
 
+const count = (n: number, one: string, many: string) =>
+  n === 0 ? `Aucun ${one}` : n === 1 ? `1 ${one}` : `${n} ${many}`;
+
+type SiteListing = FunctionReturnType<typeof api.sites.listSettings>[number];
+
+/** A site at a glance: how fresh its data is, what it holds and reads. */
+function SiteRow({ site, now }: { site: SiteListing; now: number }) {
+  const freshness = useQuery(api.collection.freshness, { siteId: site.id });
+  const status = freshness ? describeFreshness(freshness, now) : null;
+  const tools = site.integrations.map(
+    ({ kind, enabled }) =>
+      `${INTEGRATION_LABELS[kind]}${enabled ? "" : " (suspendu)"}`,
+  );
+  return (
+    <Link
+      to="/admin/sites/$siteId"
+      params={{ siteId: site.id }}
+      className="flex items-center gap-4 rounded-lg px-4 py-3 outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
+    >
+      <div className="min-w-0 flex-1 space-y-1">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+          <span className="font-medium">{site.name}</span>
+          {status ? (
+            <span className="flex items-center gap-2 text-sm">
+              <span
+                aria-hidden
+                className={cn(
+                  "size-2 shrink-0 rounded-full",
+                  FRESHNESS_DOT[status.tone],
+                )}
+              />
+              <span className={cn(status.tone === "late" && "text-down")}>
+                {status.headline}
+              </span>
+            </span>
+          ) : null}
+        </div>
+        <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+          <span>
+            {count(site.buildingCount, "bâtiment", "bâtiments")},{" "}
+            {count(site.floorCount, "étage", "étages").toLowerCase()}
+          </span>
+          <span>
+            {tools.length === 0 ? "Aucune intégration" : tools.join(", ")}
+          </span>
+          {tools.length > 0 && !site.automaticRefresh ? (
+            <span>Collecte manuelle</span>
+          ) : null}
+          <span>{site.timezone}</span>
+        </p>
+      </div>
+      <HugeiconsIcon
+        icon={ArrowRight01Icon}
+        size={16}
+        strokeWidth={1.5}
+        className="shrink-0 text-muted-foreground"
+      />
+    </Link>
+  );
+}
+
 function SitesPage() {
   const sites = useQuery(api.sites.listSettings);
+  const now = useNow(30_000);
   const [creating, setCreating] = useState(false);
 
   return (
@@ -57,28 +125,7 @@ function SitesPage() {
         <ul className="divide-y rounded-lg border">
           {sites.map((site) => (
             <li key={site.id}>
-              <Link
-                to="/admin/sites/$siteId"
-                params={{ siteId: site.id }}
-                className="flex flex-col gap-1 px-4 py-3 hover:bg-muted sm:flex-row sm:items-center sm:justify-between sm:gap-4"
-              >
-                <span className="font-medium">{site.name}</span>
-                <span className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                  <span>{site.timezone}</span>
-                  <span>
-                    {site.buildingCount === 0
-                      ? "Aucun bâtiment"
-                      : site.buildingCount === 1
-                        ? "1 bâtiment"
-                        : `${site.buildingCount} bâtiments`}
-                  </span>
-                  <span>
-                    {site.automaticRefresh
-                      ? "Collecte automatique"
-                      : "Collecte manuelle"}
-                  </span>
-                </span>
-              </Link>
+              <SiteRow site={site} now={now} />
             </li>
           ))}
         </ul>
