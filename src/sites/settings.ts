@@ -161,6 +161,20 @@ export function formatMinuteOfDay(minute: number): string {
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
 }
 
+/**
+ * What an admin typed for a time of day, tidied: "7" → "07:00", "730" →
+ * "07:30", "7:5" stays as typed so the form can refuse it. Anything that is
+ * not a time comes back unchanged.
+ */
+export function tidyTimeOfDay(value: string): string {
+  const text = value.trim().replace(/[h.]/i, ":");
+  const match = /^(\d{1,2})(?::(\d{2})|(\d{2}))?$/.exec(text);
+  if (!match) return value.trim();
+  const hours = match[1].padStart(2, "0");
+  const minutes = match.at(2) ?? match.at(3) ?? "00";
+  return `${hours}:${minutes}`;
+}
+
 /** 450 for "07:30"; null for anything else. */
 export function parseMinuteOfDay(value: string): number | null {
   const match = /^(\d{1,2}):(\d{2})$/.exec(value.trim());

@@ -7,8 +7,27 @@ import {
   ComboboxList,
 } from "@/components/ui/combobox";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
+import { browserTimeZone } from "@/lib/time";
 
 const TIME_ZONES: ReadonlyArray<string> = Intl.supportedValuesOf("timeZone");
+
+const offsets = new Map<string, string>();
+
+/** `UTC+2`: a zone's offset now, computed once per zone and page. */
+const offsetOf = (zone: string): string => {
+  let offset = offsets.get(zone);
+  if (offset === undefined) {
+    offset =
+      new Intl.DateTimeFormat("fr-FR", {
+        timeZone: zone,
+        timeZoneName: "shortOffset",
+      })
+        .formatToParts(Date.now())
+        .find((part) => part.type === "timeZoneName")?.value ?? "";
+    offsets.set(zone, offset);
+  }
+  return offset;
+};
 
 export function TimeZoneField({
   id,
@@ -21,10 +40,17 @@ export function TimeZoneField({
   error?: string | null;
   onChange: (timezone: string) => void;
 }) {
-  // A zone saved under an alias this browser does not list stays choosable.
-  const zones = TIME_ZONES.includes(value)
-    ? TIME_ZONES
-    : [value, ...TIME_ZONES];
+  // Alphabetical, as the owner asked (A91), with the browser's own zone
+  // first; a zone saved under an alias this browser does not list stays
+  // choosable.
+  const own = browserTimeZone();
+  const zones = [
+    ...new Set([
+      ...(TIME_ZONES.includes(value) ? [] : [value]),
+      own,
+      ...TIME_ZONES,
+    ]),
+  ];
   return (
     <Field data-invalid={error !== null}>
       <FieldLabel htmlFor={id}>Fuseau horaire</FieldLabel>
@@ -46,7 +72,18 @@ export function TimeZoneField({
           <ComboboxList>
             {(zone: string) => (
               <ComboboxItem key={zone} value={zone}>
-                {zone}
+                <span className="min-w-0 flex-1 truncate">
+                  {zone}
+                  {zone === own ? (
+                    <span className="text-muted-foreground">
+                      {" "}
+                      · ce navigateur
+                    </span>
+                  ) : null}
+                </span>
+                <span className="text-xs text-muted-foreground tabular-nums">
+                  {offsetOf(zone)}
+                </span>
               </ComboboxItem>
             )}
           </ComboboxList>

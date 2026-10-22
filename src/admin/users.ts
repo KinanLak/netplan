@@ -45,16 +45,6 @@ const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 
-/** How long ago, in words that need no time zone. */
-export function describeSince(at: number, now: number): string {
-  const elapsed = Math.max(0, now - at);
-  if (elapsed < MINUTE) return "à l'instant";
-  if (elapsed < HOUR) return `il y a ${Math.floor(elapsed / MINUTE)} min`;
-  if (elapsed < DAY) return `il y a ${Math.floor(elapsed / HOUR)} h`;
-  const days = Math.floor(elapsed / DAY);
-  return days < 31 ? `il y a ${days} j` : "il y a plus d'un mois";
-}
-
 /** How long a link stays valid: a fresh seven-day link reads « 7 j ». */
 export function describeUntil(at: number, now: number): string {
   const left = Math.max(0, at - now);

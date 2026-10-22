@@ -46,14 +46,11 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import {
-  NO_FILTER,
-  describeSince,
-  describeUntil,
-  matchesFilter,
-} from "@/admin/users";
+import { NO_FILTER, describeUntil, matchesFilter } from "@/admin/users";
 import type { UserFilter, UserStatus } from "@/admin/users";
+import { Time } from "@/components/time";
 import { failureMessage } from "@/lib/errors";
+import { ageHint } from "@/lib/time";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { useFlash } from "@/hooks/use-flash";
 import { useNow } from "@/hooks/use-now";
@@ -247,12 +244,20 @@ function Activity({
       <span>Aucun lien valable : renvoyez l'invitation.</span>
     ) : (
       <span>
-        Lien valable encore {describeUntil(user.invitationExpiresAt, now)}
+        Lien valable encore{" "}
+        <time
+          dateTime={new Date(user.invitationExpiresAt).toISOString()}
+          title={ageHint(user.invitationExpiresAt, now)}
+        >
+          {describeUntil(user.invitationExpiresAt, now)}
+        </time>
       </span>
     );
   }
   return user.lastSignInAt === null ? null : (
-    <span>Dernière connexion {describeSince(user.lastSignInAt, now)}</span>
+    <span>
+      Dernière connexion <Time at={user.lastSignInAt} now={now} format="age" />
+    </span>
   );
 }
 
