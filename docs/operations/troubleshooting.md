@@ -147,15 +147,16 @@ or its read failed:
 - **"Sa découverte n'a pas fini à temps."** (amber): `last_discovered` did
   not change within 2 minutes. A slow poller, or a LibreNMS that does not
   report it ([Integrations](integrations.md)).
-- **"LibreNMS ne rafraîchit plus sa table d'adresses : vérifiez sa
-  découverte dans LibreNMS."** (amber):
+- **"LibreNMS ne rafraîchit plus la table d'adresses de ce switch :
+  vérifiez sa découverte dans LibreNMS."** (amber):
   discoveries do not rewrite the forwarding table on this LibreNMS, and its
   devices go offline after two cycles. Run `scripts/check-librenms.ts
   --discover`.
 
-**Switch counts.** The first line says how the last cycle read them: "lus",
-"en échec", and "non interrogé" for a switch with no LibreNMS device in the
-mapping; "Statut le plus ancien" is the age of the oldest read still
+**Switch counts.** The first line counts the site's switches by how the
+last cycle read them: "lus", "en échec" for a mapped switch it could not
+read, and "non interrogé" for a switch with no LibreNMS device in the
+mapping; a stack sharing one device counts each of its switches; "Statut le plus ancien" is the age of the oldest read still
 vouching for a status. Under it, "en ligne" and "hors ligne" are LibreNMS's own status:
 "hors ligne" means LibreNMS cannot poll the switch, not that Netplan failed
 to read it. "inconnu" means not mapped, no status from LibreNMS, or no

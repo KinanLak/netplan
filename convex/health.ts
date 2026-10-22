@@ -134,17 +134,28 @@ export const overview = adminQuery({
           switches[status === "stale" ? "unknown" : status] += 1;
           switchIds.push(device.objectId);
         }
-        const polled = new Set(
+        // Counted per Netplan switch: a stack shares one LibreNMS device.
+        const onSite = new Set(switchIds);
+        const mapped = new Set(
           (librenms?.librenms?.switches ?? [])
-            .filter(({ device }) => device !== null)
+            .filter(
+              ({ device, switchId }) => device !== null && onSite.has(switchId),
+            )
             .map(({ switchId }) => switchId),
         );
-        const results =
-          withoutRemovedSources(cycle?.last, integrations)?.steps.find(
-            (step) => step.source === "librenms",
-          )?.switches ?? [];
+        const lastRun = withoutRemovedSources(cycle?.last, integrations);
+        const librenmsStep = lastRun?.steps.find(
+          (step) => step.source === "librenms",
+        );
         const reads = (cycle?.switchReads ?? []).filter(
-          (entry) => !entry.expired,
+          (entry) => !entry.expired && onSite.has(entry.switchId),
+        );
+        const readNow = new Set(
+          lastRun
+            ? reads
+                .filter((entry) => entry.readAt >= lastRun.startedAt)
+                .map((entry) => entry.switchId)
+            : [],
         );
         return {
           id: siteId,
@@ -163,11 +174,14 @@ export const overview = adminQuery({
               }
             : null,
           switches,
-          switchReads: librenms
+          switchReads: librenms?.enabled
             ? {
-                read: results.filter((entry) => entry.ok).length,
-                failed: results.filter((entry) => !entry.ok).length,
-                notPolled: switchIds.filter((id) => !polled.has(id)).length,
+                read: [...mapped].filter((id) => readNow.has(id)).length,
+                // Mapped and asked in the last cycle, yet not read.
+                failed: librenmsStep
+                  ? [...mapped].filter((id) => !readNow.has(id)).length
+                  : 0,
+                notPolled: switchIds.filter((id) => !mapped.has(id)).length,
                 oldestReadAt:
                   reads.length > 0
                     ? Math.min(...reads.map((entry) => entry.readAt))

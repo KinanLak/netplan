@@ -59,8 +59,11 @@ export function CollectionSection({ siteId }: { siteId: string }) {
                     {/* The step counts; each switch in trouble says why. */}
                     {(step.switches ?? [])
                       .filter((entry) => !entry.ok || entry.notes.length > 0)
-                      .map((entry) => (
-                        <span key={entry.name} className="block ps-4">
+                      .map((entry, index) => (
+                        <span
+                          key={`${entry.name}-${index}`}
+                          className="block ps-4"
+                        >
                           {entry.name} : {entry.notes.join(" ")}
                         </span>
                       ))}

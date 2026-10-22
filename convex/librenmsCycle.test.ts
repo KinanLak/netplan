@@ -1151,7 +1151,7 @@ describe("the LibreNMS step", () => {
       });
     // A first read compares with the table as it was before its discovery.
     expect((await cycle(admin, siteId)).switches?.[0]?.notes).toContain(
-      "LibreNMS ne rafraîchit plus sa table d'adresses : vérifiez sa découverte dans LibreNMS.",
+      "LibreNMS ne rafraîchit plus la table d'adresses de ce switch : vérifiez sa découverte dans LibreNMS.",
     );
     expect(await statusOf(admin, "device:pc")).toBeNull();
 
@@ -1164,7 +1164,7 @@ describe("the LibreNMS step", () => {
 
     await discoverAgain();
     expect((await cycle(admin, siteId)).switches?.[0]?.notes).toContain(
-      "LibreNMS ne rafraîchit plus sa table d'adresses : vérifiez sa découverte dans LibreNMS.",
+      "LibreNMS ne rafraîchit plus la table d'adresses de ce switch : vérifiez sa découverte dans LibreNMS.",
     );
     expect(await statusOf(admin, "device:pc")).toBe("up");
     // The next cycle, too soon to rediscover, still trusts none of them.

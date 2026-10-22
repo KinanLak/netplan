@@ -1012,7 +1012,7 @@ export const collectFromLibreNMS = async (
     if (entries.length > 0 && fresh.length === 0) {
       note(
         device.id,
-        "LibreNMS ne rafraîchit plus sa table d'adresses : vérifiez sa découverte dans LibreNMS.",
+        "LibreNMS ne rafraîchit plus la table d'adresses de ce switch : vérifiez sa découverte dans LibreNMS.",
       );
     }
     fdb.push(...fresh);

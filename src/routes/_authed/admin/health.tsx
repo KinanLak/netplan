@@ -238,7 +238,7 @@ function SiteCard({ site, now }: { site: SiteHealth; now: number }) {
         </ul>
       ) : null}
 
-      {failedSteps.length > 0 && !polled?.some((entry) => !entry.ok) ? (
+      {failedSteps.length > 0 ? (
         <p className="text-sm">
           <SiteLink siteId={site.id} part="integrations">
             Ouvrir les intégrations du site
@@ -299,9 +299,12 @@ function PolledSwitches({
     // A failing switch keeps the list open; a healthy site folds it away.
     <details open={failed > 0} className="text-sm">
       <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
-        {failed > 0
-          ? `${counted(polled.length - failed, "switch lu", "switchs lus")} sur ${polled.length} dans LibreNMS`
-          : `${counted(polled.length, "switch lu", "switchs lus")} dans LibreNMS`}
+        {counted(
+          polled.length,
+          "équipement LibreNMS interrogé",
+          "équipements LibreNMS interrogés",
+        )}
+        {failed > 0 ? `, ${failed} en échec` : ""}
       </summary>
       <ul className="mt-2 divide-y rounded-lg border">
         {ordered.map((entry, index) => (
