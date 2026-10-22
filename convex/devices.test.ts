@@ -254,7 +254,7 @@ describe("devices.updateIdentity", () => {
     });
   });
 
-  it("refuses an empty name, overlong text and malformed MACs", async () => {
+  it("refuses an empty name, overlong text, a malformed IP and malformed MACs", async () => {
     const t = await signedInTest();
     const floorId = await freshFloor(t);
     const id = await createDevice(t, floorId, "device:id:bad", "PC", 0);
@@ -264,6 +264,7 @@ describe("devices.updateIdentity", () => {
         { notes: "x".repeat(2001) },
         "Trop long : notes (2000 caractères au plus).",
       ],
+      [{ ip: "999.1.1" }, "« 999.1.1 » n'est pas une adresse IP."],
       [{ macs: ["02:AB:CD:00:00:0A"] }, "Une adresse MAC n'est pas valide."],
       [{ macs: [MAC_A, MAC_A] }, "Une adresse MAC est en double."],
     ];

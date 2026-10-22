@@ -380,11 +380,35 @@ const rearOf = (item: Raw): string | undefined => {
   return portExternalId("rear-port", idOf(item.rear_port));
 };
 
+// Interfaces no cable plugs into: a VLAN or a loopback, a Linux bridge, an
+// aggregate of other ports.
+const NOT_A_PORT = new Set(["virtual", "bridge", "lag"]);
+
+// The names systems give their virtual interfaces, for the NetBox that types
+// them as copper ports: a hypervisor's bridges (vmbr0, vmbr0v12), bonds,
+// tunnels, containers' pairs, aggregates and sub-interfaces (Gi1/0/1.100).
+const VIRTUAL_NAMES: ReadonlyArray<RegExp> = [
+  /^(vmbr|virbr|bond|team|veth|tap|tun|docker|vlan|vxlan|wg)\d/i,
+  /^br-?\d/i,
+  /^(port-channel|po)\s*\d/i,
+  /^lo\d*$/i,
+  /\.\d+$/,
+];
+
+/** Whether a NetBox interface is something a cable plugs into. */
+export const isPhysicalInterface = (item: Raw): boolean => {
+  const type = isObject(item.type) ? text(item.type.value) : undefined;
+  if (type !== undefined && NOT_A_PORT.has(type)) return false;
+  const name = text(item.name) ?? "";
+  return !VIRTUAL_NAMES.some((pattern) => pattern.test(name));
+};
+
 /**
  * The ports of the imported devices, interfaces first, and the cables that
  * join two of them end to end. A cable with several terminations at one end
  * (a breakout) has no place in Netplan's one-cable-per-port model and is left
- * out, as is a second cable on a port.
+ * out, as is a second cable on a port. Virtual, bridge and aggregate
+ * interfaces are no ports: their MAC addresses still identify the device.
  */
 export function readNetBoxCabling(
   devices: ReadonlyArray<ImportedDevice>,
@@ -424,7 +448,7 @@ export function readNetBoxCabling(
       });
     }
   };
-  read(lists.interfaces, "interface", "interface");
+  read(lists.interfaces.filter(isPhysicalInterface), "interface", "interface");
   read(lists.rearPorts, "rear-port", "rear");
   read(lists.frontPorts, "front-port", "front", rearOf);
 
