@@ -119,9 +119,13 @@ export const observedMetadata = async (
   } else if (
     device.type === "switch" &&
     claimed === "stale" &&
-    metadata.lastSeenAt !== undefined
+    metadata.lastSeenAt !== undefined &&
+    (await cycleOf(ctx, device.siteId))?.switchReads?.some(
+      (read) => read.switchId === device.objectId,
+    )
   ) {
-    // An expired read is never revisited: the switch keeps its last news.
+    // An expired read is never revisited: the switch keeps its last news,
+    // unless LibreNMS was forgotten since, taking its reads along.
     observation = { status: "stale", lastSeenAt: metadata.lastSeenAt };
   }
   return withObservation(metadata, observation);

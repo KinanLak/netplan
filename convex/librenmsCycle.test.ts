@@ -839,6 +839,24 @@ describe("the LibreNMS step", () => {
     await cycle(later, siteId);
     expect(await statusOf(later, "device:pc")).toBe("up");
     expect(await statusOf(later, "device:sw")).toBe("up");
+    // A switch removed while stale does not come back stale once LibreNMS
+    // is forgotten: its reads went with it.
+    const last = await signIn();
+    const again = await last.mutation(api.devices.remove, {
+      deviceId: "device:sw",
+    });
+    if (!again) throw new Error("expected the switch to be removed");
+    await last.mutation(api.integrations.remove, {
+      siteId,
+      kind: "librenms",
+    });
+    await last.mutation(api.devices.create, {
+      siteId,
+      deviceId: "device:sw",
+      ...again,
+      metadata: { status: "stale", lastSeenAt: eight },
+    });
+    expect((await metadataOf(admin, "device:sw"))?.status).toBeUndefined();
   });
 
   it("starts the history of a device made from a MAC seen before its read expired", async () => {
