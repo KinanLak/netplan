@@ -8,6 +8,7 @@ import {
   parseMinuteOfDay,
   siteSettingsError,
   siteSettingsProblem,
+  tidyTimeOfDay,
 } from "./settings";
 
 const settings = {
@@ -70,6 +71,15 @@ describe("site settings", () => {
       /jours/,
     );
     expect(cadenceError({ ...DEFAULT_CADENCE, businessDays: [] })).toBeNull();
+  });
+
+  it("tidies a time of day typed loosely", () => {
+    expect(tidyTimeOfDay("7")).toBe("07:00");
+    expect(tidyTimeOfDay("730")).toBe("07:30");
+    expect(tidyTimeOfDay("19h30")).toBe("19:30");
+    expect(tidyTimeOfDay(" 20:00 ")).toBe("20:00");
+    expect(tidyTimeOfDay("7:5")).toBe("7:5");
+    expect(tidyTimeOfDay("midi")).toBe("midi");
   });
 
   it("reads and writes times of day", () => {

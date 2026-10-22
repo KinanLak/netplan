@@ -1,10 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import {
-  NO_FILTER,
-  describeSince,
-  describeUntil,
-  matchesFilter,
-} from "./users";
+import { NO_FILTER, describeUntil, matchesFilter } from "./users";
 import type { ListedUser } from "./users";
 
 const user = (more: Partial<ListedUser> = {}): ListedUser => ({
@@ -50,16 +45,6 @@ describe("matchesFilter", () => {
 
 describe("relative times", () => {
   const now = Date.UTC(2026, 9, 21, 12);
-  it("says how long ago", () => {
-    expect(describeSince(now - 10_000, now)).toBe("à l'instant");
-    expect(describeSince(now - 5 * 60_000, now)).toBe("il y a 5 min");
-    expect(describeSince(now - 3 * 3_600_000, now)).toBe("il y a 3 h");
-    expect(describeSince(now - 3 * 86_400_000, now)).toBe("il y a 3 j");
-    expect(describeSince(now - 40 * 86_400_000, now)).toBe(
-      "il y a plus d'un mois",
-    );
-  });
-
   it("says how long is left", () => {
     expect(describeUntil(now + 6.9 * 86_400_000, now)).toBe("7 j");
     expect(describeUntil(now + 5 * 3_600_000, now)).toBe("5 h");

@@ -43,7 +43,7 @@ import { SiteSetupSteps } from "@/admin/SiteSetupSteps";
 import { UnsavedChanges, useUnsavedSection } from "@/admin/unsaved";
 import { useFlash } from "@/hooks/use-flash";
 import { useNow } from "@/hooks/use-now";
-import { describeSince } from "@/admin/users";
+import { Time } from "@/components/time";
 import {
   MAX_INTERVAL_MINUTES,
   MIN_INTERVAL_MINUTES,
@@ -53,6 +53,7 @@ import {
   SITE_NAME_TAKEN,
   parseMinuteOfDay,
   siteSettingsProblem,
+  tidyTimeOfDay,
 } from "@/sites/settings";
 import type { SiteField, SiteProblem, SiteSettings } from "@/sites/settings";
 import { api } from "../../../../../convex/_generated/api";
@@ -245,6 +246,15 @@ function SiteSettingsForm({ site }: { site: Site }) {
     setProblem(null);
   };
 
+  // Tidies a time on leaving its field without clearing an error: focus
+  // moves to the refused field, which blurs this one, as a save is refused.
+  const tidy = (key: "businessStart" | "businessEnd", value: string) => {
+    const tidied = tidyTimeOfDay(value);
+    if (tidied !== value) {
+      setDraft((current) => ({ ...current, [key]: tidied }));
+    }
+  };
+
   const toggleDay = (day: number) =>
     change({
       businessDays: draft.businessDays.includes(day)
@@ -378,12 +388,19 @@ function SiteSettingsForm({ site }: { site: Site }) {
                 </FieldLabel>
                 <Input
                   id="site-business-start"
-                  type="time"
+                  // Typed on a 24-hour clock whatever the browser's locale:
+                  // a native time field shows AM/PM in English (A90).
+                  inputMode="numeric"
+                  autoComplete="off"
+                  placeholder="HH:MM"
+                  maxLength={5}
+                  className="tabular-nums"
                   value={draft.businessStart}
                   {...invalid("businessHours", "site-business-hours")}
                   onChange={(event) =>
                     change({ businessStart: event.target.value })
                   }
+                  onBlur={(event) => tidy("businessStart", event.target.value)}
                 />
               </Field>
               <Field data-invalid={errorOf("businessHours") !== null}>
@@ -392,12 +409,19 @@ function SiteSettingsForm({ site }: { site: Site }) {
                 </FieldLabel>
                 <Input
                   id="site-business-end"
-                  type="time"
+                  // Typed on a 24-hour clock whatever the browser's locale:
+                  // a native time field shows AM/PM in English (A90).
+                  inputMode="numeric"
+                  autoComplete="off"
+                  placeholder="HH:MM"
+                  maxLength={5}
+                  className="tabular-nums"
                   value={draft.businessEnd}
                   {...invalid("businessHours", "site-business-hours")}
                   onChange={(event) =>
                     change({ businessEnd: event.target.value })
                   }
+                  onBlur={(event) => tidy("businessEnd", event.target.value)}
                 />
               </Field>
             </div>
@@ -489,7 +513,9 @@ function ArchivedNotice({ site }: { site: Site }) {
     <p className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-warning bg-warning-background p-3 text-sm">
       <span>
         Site archivé{" "}
-        {site.archivedAt === null ? null : describeSince(site.archivedAt, now)}{" "}
+        {site.archivedAt === null ? null : (
+          <Time at={site.archivedAt} now={now} format="age" />
+        )}{" "}
         : absent du sélecteur, en lecture seule et sans collecte.
       </span>
       <SetArchivedButton site={site} archived={false} />
