@@ -88,7 +88,8 @@ export function MapFind({
     <div
       role="search"
       className={cn(
-        "absolute top-4 z-30 flex items-center gap-1 rounded-lg border border-border bg-card py-1 pr-1 pl-2 shadow-lg transition-[right]",
+        // Under the map's top bar, which may span the whole width.
+        "absolute top-18 z-30 flex items-center gap-1 rounded-lg border border-border bg-card py-1 pr-1 pl-2 shadow-lg transition-[right]",
         // On a phone the drawer fills the width: the bar goes over it.
         hasRightDrawerOpen ? "right-4 md:right-84" : "right-4",
       )}
