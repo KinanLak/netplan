@@ -151,7 +151,7 @@ export default function Toolbar() {
         onClick={() => handleDrawToolClick(action.tool)}
         disabled={!currentFloorId || !isReady}
         className={cn(
-          "flex h-auto flex-col items-center px-2 py-1.5",
+          "flex h-auto flex-col items-center px-2 py-1.5 @max-[52rem]:px-1",
           isActive && !isEraseAction && "ring-2 ring-ring",
           isEraseAction && isActive && "text-destructive",
           isEraseAction && !isActive && "hover:text-destructive",
@@ -174,10 +174,11 @@ export default function Toolbar() {
   };
 
   return (
-    <div className="fixed top-4 left-1/2 z-20 max-w-[calc(100vw-22rem)] -translate-x-1/2">
+    // Labels give way to icons alone when the bar runs short (A56).
+    <div className="pointer-events-auto max-w-full">
       <div
         className={cn(
-          "flex items-center gap-2 rounded-lg border border-border p-1 shadow-lg transition-colors duration-500",
+          "flex flex-wrap items-center justify-center gap-1 rounded-lg border border-border p-1 shadow-lg transition-colors duration-500 @min-[52rem]:gap-2",
           // Undo and redo flash neutral; only a refusal is red (A19).
           flashType === "refused"
             ? "bg-down-background"
@@ -196,7 +197,7 @@ export default function Toolbar() {
           title="Sélectionner et déplacer plusieurs équipements"
         >
           <span className="size-4 rounded border border-dashed border-current" />
-          Sélection
+          <span className="@max-[52rem]:sr-only">Sélection</span>
           {selectedDeviceIds.length > 1 ? (
             <span className="rounded-full bg-primary px-1.5 text-[10px] text-primary-foreground">
               {selectedDeviceIds.length}
@@ -208,7 +209,7 @@ export default function Toolbar() {
           <ArrangeMenu count={selectedDeviceIds.length} />
         ) : null}
 
-        <div className="h-6 w-px bg-border" aria-hidden />
+        <div className="h-6 w-px bg-border @max-[52rem]:hidden" aria-hidden />
         <div className="flex items-center gap-1">
           {drawToolbarActions.map((action) => renderToolbarAction(action))}
           <div className="relative">
@@ -247,7 +248,10 @@ export default function Toolbar() {
             )}
             aria-hidden={!TOOLBAR_WALL_COLOR_SELECTION_ENABLED}
           >
-            <div className="h-6 w-px bg-border" aria-hidden />
+            <div
+              className="h-6 w-px bg-border @max-[52rem]:hidden"
+              aria-hidden
+            />
             {WALL_COLOR_ORDER.map((color) => {
               const tone = WALL_COLOR_TONES[color];
               const isActive = selectedWallColor === color;
@@ -276,7 +280,7 @@ export default function Toolbar() {
           </div>
         ) : null}
 
-        <div className="h-6 w-px bg-border" aria-hidden />
+        <div className="h-6 w-px bg-border @max-[52rem]:hidden" aria-hidden />
         <div className="relative">
           <Button
             type="button"
@@ -289,7 +293,7 @@ export default function Toolbar() {
             title="Placer sur l'étage un équipement de l'inventaire"
           >
             <HugeiconsIcon icon={PackageIcon} strokeWidth={2} />
-            Placer
+            <span className="@max-[52rem]:sr-only">Placer</span>
           </Button>
           <ShortcutHintAbsolute
             action="place-device"
@@ -308,7 +312,7 @@ export default function Toolbar() {
             title="Importer et régler le plan affiché sous l'étage"
           >
             <HugeiconsIcon icon={Layers01Icon} strokeWidth={2} />
-            Calque
+            <span className="@max-[52rem]:sr-only">Calque</span>
           </Button>
           <ShortcutHintAbsolute
             action="toggle-overlay-panel"
@@ -352,7 +356,7 @@ function ArrangeMenu({ count }: { count: number }) {
         title="Aligner ou répartir la sélection"
       >
         <HugeiconsIcon icon={AlignSelectionIcon} strokeWidth={2} />
-        Aligner
+        <span className="@max-[52rem]:sr-only">Aligner</span>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-auto min-w-56">
         {ALIGNMENTS.map(({ alignment, label, icon }) => (

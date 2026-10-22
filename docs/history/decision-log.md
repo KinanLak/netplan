@@ -2326,4 +2326,138 @@ Questions of 2026-10-21 and 22, from the UX review's map items (ADR 0029).
 - Context: after `dev:agent --reseed`, sign-in from `ux-u3.localhost` returned 403 while `127.0.0.1` worked.
 - Decision: verified on `127.0.0.1` for that check.
 - Why: the fresh backend's trusted origins no longer included the `.localhost` alias; not U3's code.
+
+### U2 — Map viewport, keyboard, selection
+
+Questions of 2026-10-21 and 2026-10-22, in the order they came up (ADR 0030, #91, #95, #100, #104, #112, #116).
+
+#### Where does the shortcut listener live?
+
+- Context: Shift+T was announced on every page but only the map listened (A27); B4 and the theme are global.
+- Decision: one `ShortcutIntentProvider` in the authenticated layout; each page registers the actions it handles. Keys from dialogs, menus, popovers, lists and sheets belong to the widget.
+- Why: one routing table, and Escape in a menu then only closes the menu (A6).
+- Who: agent (obvious)
+
+#### What does Escape do now?
+
+- Context: Escape left edit mode, even from a menu (A6).
+- Decision: Escape abandons a cable, closes the calibration, the calque panel, the cables shown, then deselects; it never leaves edit mode ("Terminer" and E do).
+- Why: the owner's correction; Escape is pressed all the time to cancel.
+- Who: owner (A6)
+
+#### Arrow keys and React Flow's own keyboard handling
+
+- Context: arrows panned the map from anywhere (A50) and moved a focused node without saving it (A10); Tab walked every device (A53).
+- Decision: arrows never pan; `disableKeyboardA11y` and `nodesFocusable={false}`; in edit mode, with a selection and the focus on the map, arrows nudge the selection (Shift ×4).
+- Why: owner's standing preference "arrow keys never pan" and A53's choice "Tab only through the sidebar, help and floating controls".
+- Who: owner (A10, A50, A53)
+
+#### How is a held arrow key recorded?
+
+- Context: key repeat sends a move per repeat; one undo per repeat is useless and a batch per repeat floods the server.
+- Decision: a held key opens a history group; its moves merge to one patch per device, ordered by the last move, sent once on key release.
+- Why: one undo step per gesture, like a drag; ordering by the last batch keeps the server's sequential collision check happy.
+- Who: agent (judgement call)
+
+#### Ctrl+0 and "Centrer la vue"
+
+- Context: Ctrl+0 went to the plan origin (A18); "Centrer la vue" fitted devices only, at zoom 2 (A5).
+- Decision: Ctrl+0 = 100 % around the view centre; Shift+1 = fit the floor; the fit covers devices, walls and the calque, never closer than 100 %.
+- Why: the proposed corrections; 100 % as the cap matches "plafonner à 1 environ".
+- Who: agent (obvious)
+
+#### Shortcut badges delay
+
+- Context: badges flashed on every Ctrl+wheel (A20).
+- Decision: 350 ms of Ctrl held alone; any other key, click or wheel cancels.
+- Why: the owner asked 350 ms instead of 500.
+- Who: owner (A20)
+
+#### Sidebar folding (B4)
+
+- Context: Ctrl+B was announced but the sidebar could not fold.
+- Decision: offcanvas sidebar, state in the existing cookie, a small toggle at the top left of the map; folded, it is `inert` and a focus inside moves to the toggle.
+- Why: recommended default; zipzoup asked for the inert/focus handling.
+- Who: owner (B4 default)
+
+#### Which ADR number?
+
+- Context: U3 merged ADR 0029 first; U1 also had a 0029 in flight.
+- Decision: U2's keyboard/viewport/selection ADR is 0030.
+- Why: first free number when #91 merged.
+- Who: agent (obvious)
+
+#### Where is the view kept, and what does a link carry?
+
+- Context: reload lost the floor and the view (A7); floors shared the previous floor's view (A8).
+- Decision: `?floor=` and `?device=` in the URL; per-floor viewport in `sessionStorage` (per tab); first visit fits the floor. The URL is applied only when it changes and the map writes back only differences.
+- Why: the proposed correction; sessionStorage keeps the view personal and per tab, never durable (CLAUDE.md: Zustand/Convex split).
+- Who: agent (obvious)
+
+#### Floor order and reordering (B8)
+
+- Context: the list started at the ground floor, so Ctrl+↓ climbed.
+- Decision: top floor first; Ctrl+↑ climbs; "Monter"/"Descendre" in the floor menu via an Éditeur mutation `floors.move` that swaps orders. Not a map operation, so no undo, like rename.
+- Why: recommended default.
+- Who: owner (B8 default)
+
+#### Removing a non-empty floor (B9)
+
+- Decision: reader queries `floors.content`/`buildings.content` count devices, wall blocks and calques; the dialog says what remains and disables "Supprimer"; the server refusal uses the same words.
+- Who: owner (B9 default)
+
+#### Camera to a device (A9)
+
+- Decision: `locateDevice` in the store opens the floor, selects if asked, and leaves a request the canvas answers once the floor is shown: centre in the part the drawer leaves visible, zoom ≥ 0.8, 350 ms ease-out, two quick rings on the node.
+- Why: owner: "smooth but quick".
+- Who: owner (A9)
+
+#### Search (B6) and Ctrl+F
+
+- Context: owner accepted the sidebar field and asked for a Ctrl+F that only moves the view, by name or hostname.
+- Decision: sidebar field (Ctrl+K) searching name, hostname, IP, MAC; placed result → floor + drawer, unplaced → inventory. Ctrl+F: small find bar at the top right of the map, name/hostname only, moves the view without opening anything, Enter cycles.
+- Why: both asked; the find bar is closed by default, so no clutter.
+- Who: owner (B6)
+
+#### What does Delete do? (B3, A11)
+
+- Decision: Delete/Backspace = "Retirer du plan" for the whole selection, one batch, one undo; more than one asks first. Deleting from the site is a drawer/context-menu action that always asks.
+- Why: B3 default + owner's A11 comment ("plus d'un élément → popup de confirmation").
+- Who: owner (B3, A11)
+
+#### Selection gestures (A23, C3)
+
+- Decision: Shift/Ctrl/⌘+click toggles a device (edit mode); Shift+drag draws a box with any tool; Ctrl+A selects the floor; an "Aligner" menu appears with ≥2 selected (six alignments; distribute with ≥3). Results snap to the grid; a result that overlaps a wall or device is refused whole with a toast. No copy/paste/duplicate.
+- Why: C3 option (a) and the owner's comment on identity.
+- Who: owner (C3)
+
+#### Batches above 100 devices
+
+- Context: the server caps a change at 100 operations.
+- Decision: moving/aligning more than 100 selected devices is refused client-side with a toast; not raised server-side.
+- Why: no real floor needs it yet; most reversible.
+- Who: agent (judgement call)
+
+#### Toolbar layout (A56) and default mode (B5)
+
+- Decision: mode button and tools in one bar, tools centred in the space the drawer or calque panel leaves; container query collapses labels to icons below 52 rem and the mode label below 36 rem, wrapping only as a last resort. The map opens in view mode for every role; "Modifier" and "Terminer" are both solid; the bar sits above the halo.
+- Why: proposed correction and B5 default with the owner's halo comment.
+- Who: owner (A56, B5)
+
+#### Does Shift+drag draw a selection box with a wall tool?
+
+- Context: zipzoup read ADR 0030's "without changing tool" as every tool, wall tools included.
+- Decision: no. Shift+drag lassos with the device tool, without the « Sélection » mode; with a wall, room, brush or eraser tool the drag belongs to the tool.
+- Why: A23 asks for a lasso « sans changer de mode »; the room tool draws by dragging, and a selection box there would fight it.
+- Who: agent (judgement call)
+
+#### Screenshots in pull requests
+
+- Decision: uploaded to a gist (`KinanLak/5379e3c24ab1debd47d1eacd688cc53d`), as earlier lots did; never committed.
+- Who: agent (obvious)
+
+#### Testing environment
+
+- Context: sessions dropped on full reloads at `127.0.0.1`.
+- Decision: open dev:agent as `u2.localhost:<port>` (shared preview cookies clash across worktrees).
 - Who: agent (obvious)
