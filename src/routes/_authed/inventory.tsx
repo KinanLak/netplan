@@ -39,7 +39,11 @@ import {
   toSearch,
 } from "@/inventory/filters";
 import type { Sort } from "@/inventory/columns";
-import type { InventoryFilters, Placement } from "@/inventory/filters";
+import type {
+  InventoryFilters,
+  InventorySearch,
+  Placement,
+} from "@/inventory/filters";
 import { ColumnPicker, InventoryTable } from "@/inventory/InventoryTable";
 import { useRestoredScroll } from "@/inventory/useRestoredScroll";
 import { ImportReviews } from "@/sites/ImportReviews";
@@ -60,10 +64,12 @@ type StatusFilter = "all" | DeviceStatus;
 type TypeFilter = "all" | DeviceType;
 
 /** Filters and order live in the URL (A62); the map's links open it filtered. */
-const inventorySearch = (search: Record<string, unknown>) => ({
+const inventorySearch = (
+  search: Record<string, unknown>,
+): InventorySearch & { site?: string; view?: "unknown" } => ({
   ...siteSearch(search),
   ...parseInventorySearch(search),
-  ...(search.view === "unknown" && { view: "unknown" as const }),
+  view: search.view === "unknown" ? ("unknown" as const) : undefined,
 });
 
 export const Route = createFileRoute("/_authed/inventory")({
