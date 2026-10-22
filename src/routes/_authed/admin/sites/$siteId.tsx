@@ -246,6 +246,15 @@ function SiteSettingsForm({ site }: { site: Site }) {
     setProblem(null);
   };
 
+  // Tidies a time on leaving its field without clearing an error: focus
+  // moves to the refused field, which blurs this one, as a save is refused.
+  const tidy = (key: "businessStart" | "businessEnd", value: string) => {
+    const tidied = tidyTimeOfDay(value);
+    if (tidied !== value) {
+      setDraft((current) => ({ ...current, [key]: tidied }));
+    }
+  };
+
   const toggleDay = (day: number) =>
     change({
       businessDays: draft.businessDays.includes(day)
@@ -391,9 +400,7 @@ function SiteSettingsForm({ site }: { site: Site }) {
                   onChange={(event) =>
                     change({ businessStart: event.target.value })
                   }
-                  onBlur={(event) =>
-                    change({ businessStart: tidyTimeOfDay(event.target.value) })
-                  }
+                  onBlur={(event) => tidy("businessStart", event.target.value)}
                 />
               </Field>
               <Field data-invalid={errorOf("businessHours") !== null}>
@@ -414,9 +421,7 @@ function SiteSettingsForm({ site }: { site: Site }) {
                   onChange={(event) =>
                     change({ businessEnd: event.target.value })
                   }
-                  onBlur={(event) =>
-                    change({ businessEnd: tidyTimeOfDay(event.target.value) })
-                  }
+                  onBlur={(event) => tidy("businessEnd", event.target.value)}
                 />
               </Field>
             </div>
