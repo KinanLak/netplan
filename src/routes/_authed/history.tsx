@@ -5,6 +5,7 @@ import { usePaginatedQuery, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
 import { ModeToggle } from "@/components/mode-toggle";
+import { ListSkeleton } from "@/components/loading-skeletons";
 import { NetplanLogo } from "@/components/netplan-logo";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -69,7 +70,9 @@ function HistoryPage() {
             <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
               L'historique est réservé aux éditeurs et aux administrateurs.
             </p>
-          ) : site === undefined ? null : site === null ? (
+          ) : site === undefined ? (
+            <ListSkeleton />
+          ) : site === null ? (
             <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
               Aucun site n'est encore configuré.
             </p>

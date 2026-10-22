@@ -122,6 +122,8 @@ export interface MapDocumentData {
 /** Save/connection status — flickers with the outbox lifecycle. */
 export interface MapDocumentSyncStatus {
   isSaving: boolean;
+  /** Operations not yet acknowledged, on every floor. */
+  pendingCount: number;
   isRetrying: boolean;
   hasBackgroundPendingOperations: boolean;
   hasRejectedOperations: boolean;
@@ -1150,6 +1152,7 @@ export function MapDocumentProvider({
   const syncStatus = useMemo<MapDocumentSyncStatus>(
     () => ({
       isSaving,
+      pendingCount: pendingEntries.length,
       isRetrying: outboxState.isRetrying,
       hasBackgroundPendingOperations,
       hasRejectedOperations: rejectedMessage !== null,
@@ -1158,6 +1161,7 @@ export function MapDocumentProvider({
     }),
     [
       isSaving,
+      pendingEntries.length,
       outboxState.isRetrying,
       hasBackgroundPendingOperations,
       rejectedMessage,

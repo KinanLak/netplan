@@ -1,6 +1,7 @@
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ArrowLeft01Icon } from "@hugeicons/core-free-icons";
 import { Link, Outlet, createFileRoute } from "@tanstack/react-router";
+import { ListSkeleton } from "@/components/loading-skeletons";
 import { NetplanLogo } from "@/components/netplan-logo";
 import { ModeToggle } from "@/components/mode-toggle";
 import { buttonVariants } from "@/components/ui/button";
@@ -18,7 +19,13 @@ export const Route = createFileRoute("/_authed/admin")({
 // them a page of errors.
 function AdminShell() {
   const me = useCurrentUser();
-  if (me === undefined) return <div className="h-svh bg-background" />;
+  if (me === undefined) {
+    return (
+      <div className="mx-auto h-svh max-w-4xl bg-background p-4 md:p-8">
+        <ListSkeleton />
+      </div>
+    );
+  }
   if (!isAdmin(me.role)) return <AdminOnly sso={me.sso} />;
 
   return (

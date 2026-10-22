@@ -3,6 +3,7 @@ import { Add01Icon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
 import { useStructureDialog } from "@/buildings/useStructureDialog";
 import { useCanEdit } from "@/hooks/use-current-user";
+import { useConnectionStore } from "@/store/useConnectionStore";
 
 /**
  * What the map says when there is no floor to draw on: Éditeurs get the way
@@ -16,6 +17,8 @@ export function MapEmptyState({
   building: { id: string; name: string } | null;
 }) {
   const canEdit = useCanEdit();
+  // Structure edits pause with the map's while the connection is lost.
+  const isMapFrozen = useConnectionStore((state) => state.isMapFrozen);
   const open = useStructureDialog((state) => state.open);
 
   const [title, detail, action] = building
@@ -51,7 +54,7 @@ export function MapEmptyState({
         <h2 className="text-base font-semibold">{title}</h2>
         <p className="text-sm text-muted-foreground">{detail}</p>
         {canEdit ? (
-          <Button onClick={action.run}>
+          <Button onClick={action.run} disabled={isMapFrozen}>
             <HugeiconsIcon icon={Add01Icon} size={16} strokeWidth={1.5} />
             {action.label}
           </Button>
