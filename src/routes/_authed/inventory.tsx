@@ -41,6 +41,7 @@ import { asBuildingId, asDeviceId, asFloorId } from "@/lib/objectIds";
 import { cn } from "@/lib/utils";
 import { DeviceIdentityDialog } from "@/panels/drawer/DeviceIdentityDialog";
 import { PortTableDialog } from "@/panels/drawer/PortTableDialog";
+import { DeviceSheet } from "@/panels/DeviceSheet";
 import {
   DeviceHistoryDialog,
   HAS_HISTORY,
@@ -479,6 +480,7 @@ function InventoryItem({
   const [editing, setEditing] = useState(false);
   const [showingCables, setShowingCables] = useState(false);
   const [showingHistory, setShowingHistory] = useState(false);
+  const [showingSheet, setShowingSheet] = useState(false);
   const hasHistory = canEdit && HAS_HISTORY.has(device.type);
   const { location, source } = device;
   const removable = canEdit && !location && !source;
@@ -523,10 +525,32 @@ function InventoryItem({
   };
 
   return (
-    <tr className="align-top">
+    <tr
+      className="cursor-pointer align-top"
+      // The whole row opens the device's sheet (A96); its own buttons and
+      // links keep their action, and so do the dialogs it portals, whose
+      // clicks reach the row through React.
+      onClick={(event) => {
+        const target = event.target;
+        if (
+          !(target instanceof Element) ||
+          !event.currentTarget.contains(target) ||
+          target.closest("button, a")
+        ) {
+          return;
+        }
+        setShowingSheet(true);
+      }}
+    >
       <td className="px-4 py-2.5">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-medium">{device.name}</span>
+          <button
+            type="button"
+            className="rounded-sm text-left font-medium outline-hidden hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={() => setShowingSheet(true)}
+          >
+            {device.name}
+          </button>
           {source ? (
             <Badge variant="outline">
               {INTEGRATION_LABELS[source.integration]}
@@ -601,6 +625,13 @@ function InventoryItem({
             ) : null}
           </DropdownMenuContent>
         </DropdownMenu>
+        <DeviceSheet
+          device={showingSheet ? device : null}
+          onOpenChange={setShowingSheet}
+          onShowCables={() => setShowingCables(true)}
+          onShowHistory={hasHistory ? () => setShowingHistory(true) : undefined}
+          onShowOnMap={location ? showOnMap : undefined}
+        />
         <PortTableDialog
           device={device}
           editable={canEdit}
