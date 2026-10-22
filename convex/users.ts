@@ -4,6 +4,8 @@ import { generateRandomString } from "better-auth/crypto";
 import { components, internal } from "./_generated/api";
 import type { ActionCtx, MutationCtx, QueryCtx } from "./_generated/server";
 import { createAuth } from "./auth";
+import { internalMutation } from "./_generated/server";
+import { noteSignIn } from "./lib/signIns";
 import {
   adminAction,
   adminMutation,
@@ -12,6 +14,7 @@ import {
 } from "./lib/functions";
 import { invitationMail, testMail } from "./lib/mailTemplates";
 import { ROLES, roleOf } from "./lib/roles";
+import { ROLE_LABELS } from "../src/lib/roles";
 import type { Role } from "./lib/roles";
 import {
   accountKind,
@@ -48,7 +51,7 @@ type AuthDoc = { _id: string } & Record<string, unknown>;
 
 async function findAll(
   ctx: QueryCtx | MutationCtx | ActionCtx,
-  model: "user" | "account",
+  model: "user" | "account" | "verification",
 ): Promise<Array<AuthDoc>> {
   const docs: Array<AuthDoc> = [];
   let cursor: string | null = null;
@@ -95,9 +98,18 @@ const userRow = v.object({
   role,
   disabled: v.boolean(),
   kind: v.union(v.literal("local"), v.literal("sso"), v.literal("invited")),
+  lastSignInAt: v.union(v.number(), v.null()),
+  /** Invited only: when its latest link stops working; `null` without one. */
+  invitationExpiresAt: v.union(v.number(), v.null()),
 });
 
-/** Every account, for the users page. */
+/** The identifier of a password link, which invitations reuse. */
+const RESET_LINK = "reset-password:";
+
+/**
+ * Every account, for the users page. Who is online comes from
+ * `presences.list` instead: it changes at every heartbeat.
+ */
 export const list = adminQuery({
   args: {},
   returns: v.array(userRow),
@@ -110,22 +122,49 @@ export const list = adminQuery({
         String(account.providerId),
       ]);
     }
-    return (await findAll(ctx, "user"))
-      .map((user) => ({
-        id: user._id,
-        name: String(user.name),
-        email: String(user.email),
-        username:
-          typeof user.displayUsername === "string"
-            ? user.displayUsername
-            : typeof user.username === "string"
-              ? user.username
-              : null,
-        role: roleOf(user.role),
-        disabled: user.banned === true,
-        kind: accountKind(providers.get(user._id) ?? []),
-      }))
-      .sort((a, b) => a.name.localeCompare(b.name, "fr"));
+    const now = Date.now();
+    const links = new Map<string, number>();
+    for (const row of await findAll(ctx, "verification")) {
+      const expiresAt = Number(row.expiresAt);
+      if (!String(row.identifier).startsWith(RESET_LINK) || expiresAt <= now) {
+        continue;
+      }
+      const userId = String(row.value);
+      links.set(userId, Math.max(links.get(userId) ?? 0, expiresAt));
+    }
+    const signIns = new Map(
+      (await ctx.db.query("signIns").collect()).map((row) => [
+        row.userId,
+        row.at,
+      ]),
+    );
+    return (
+      (await findAll(ctx, "user"))
+        .map((user) => ({
+          id: user._id,
+          name: String(user.name),
+          email: String(user.email),
+          username:
+            typeof user.displayUsername === "string"
+              ? user.displayUsername
+              : typeof user.username === "string"
+                ? user.username
+                : null,
+          role: roleOf(user.role),
+          disabled: user.banned === true,
+          kind: accountKind(providers.get(user._id) ?? []),
+          lastSignInAt: signIns.get(user._id) ?? null,
+          invitationExpiresAt: links.get(user._id) ?? null,
+        }))
+        // A forgotten-password link is not an invitation, and a disabled
+        // invitation has nothing pending.
+        .map((user) =>
+          user.kind === "invited" && !user.disabled
+            ? user
+            : { ...user, invitationExpiresAt: null },
+        )
+        .sort((a, b) => a.name.localeCompare(b.name, "fr"))
+    );
   },
 });
 
@@ -219,25 +258,44 @@ export const setDisabled = adminMutation({
  */
 async function sendInvitation(
   ctx: ActionCtx,
-  user: { id: string; name: string; email: string },
+  user: { id: string; name: string; email: string; role: Role },
   invitedBy: string,
+  login: string,
 ) {
   const context = await createAuth(ctx).$context;
   const token = generateRandomString(32, "a-z", "A-Z", "0-9");
+  const identifier = `${RESET_LINK}${token}`;
   await context.internalAdapter.createVerificationValue({
-    identifier: `reset-password:${token}`,
+    identifier,
     value: user.id,
     expiresAt: new Date(Date.now() + INVITATION_SECONDS * 1000),
   });
-  // `login` lets the page tell a password manager whose password it is.
-  const landing = `/reset-password?${new URLSearchParams({ login: user.email }).toString()}`;
+  // `login` lets the page tell a password manager whose password it is, and
+  // `invitation` lets it say « Bienvenue » rather than « mot de passe changé ».
+  const landing = `/reset-password?${new URLSearchParams({ login: user.email, invitation: "1" }).toString()}`;
   const url = `${context.baseURL}/reset-password/${token}?callbackURL=${encodeURIComponent(landing)}`;
   try {
     await ctx.runAction(internal.mail.send, {
       to: user.email,
-      ...invitationMail({ name: user.name, invitedBy, url }),
+      ...invitationMail({
+        name: user.name,
+        invitedBy,
+        url,
+        role: ROLE_LABELS[user.role],
+        login,
+        // better-auth's base URL is the app's, plus its own mount point.
+        appUrl: context.baseURL.replace(/\/api\/auth\/?$/, ""),
+      }),
     });
   } catch (error) {
+    // A link that never left would count as a pending invitation.
+    await ctx.runMutation(components.betterAuth.adapter.deleteMany, {
+      input: {
+        model: "verification",
+        where: [{ field: "identifier", value: identifier }],
+      },
+      paginationOpts: { numItems: 10, cursor: null },
+    });
     throw new ConvexError(
       `Le compte existe, mais l'invitation n'est pas partie : ${mailFailure(error)} Renvoyez-la une fois la messagerie réparée.`,
     );
@@ -281,7 +339,12 @@ export const invite = adminAction({
           : {},
       },
     });
-    await sendInvitation(ctx, user, ctx.user.name);
+    await sendInvitation(
+      ctx,
+      { id: user.id, name, email, role: args.role },
+      ctx.user.name,
+      username ?? email,
+    );
     return user.id;
   },
 });
@@ -300,11 +363,59 @@ export const resendInvitation = adminAction({
         "Réactivez ce compte avant de renvoyer l'invitation.",
       );
     }
+    const login =
+      typeof user.displayUsername === "string"
+        ? user.displayUsername
+        : String(user.email);
     await sendInvitation(
       ctx,
-      { id: user._id, name: String(user.name), email: String(user.email) },
+      {
+        id: user._id,
+        name: String(user.name),
+        email: String(user.email),
+        role: roleOf(user.role),
+      },
       ctx.user.name,
+      login,
     );
+    return null;
+  },
+});
+
+/**
+ * Deletes an account invited by mistake (C5). Only one that never chose a
+ * password: it has signed in nowhere and done nothing anyone could miss. A
+ * used account is disabled instead, so its name stays in the history.
+ */
+export const cancelInvitation = adminMutation({
+  args: { userId: v.string() },
+  returns: v.null(),
+  handler: async (ctx, { userId }) => {
+    await existingUser(ctx, userId);
+    if ((await kindOf(ctx, userId)) !== "invited") {
+      throw new ConvexError("Ce compte a déjà servi : désactivez-le plutôt.");
+    }
+    for (const row of await findAll(ctx, "verification")) {
+      if (String(row.value) !== userId) continue;
+      await ctx.runMutation(components.betterAuth.adapter.deleteOne, {
+        input: {
+          model: "verification",
+          where: [{ field: "_id", value: row._id }],
+        },
+      });
+    }
+    await ctx.runMutation(components.betterAuth.adapter.deleteOne, {
+      input: { model: "user", where: [{ field: "_id", value: userId }] },
+    });
+    return null;
+  },
+});
+
+export const recordSignIn = internalMutation({
+  args: { userId: v.string() },
+  returns: v.null(),
+  handler: async (ctx, { userId }) => {
+    await noteSignIn(ctx, userId);
     return null;
   },
 });

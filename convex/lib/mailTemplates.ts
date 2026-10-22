@@ -32,20 +32,33 @@ export function invitationMail({
   name,
   invitedBy,
   url,
+  role,
+  login,
+  appUrl,
 }: {
   name: string;
   invitedBy: string;
   url: string;
+  /** The role's French name. */
+  role: string;
+  /** What the person types to sign in: their username, else their address. */
+  login: string;
+  appUrl: string;
 }): Mail {
   return {
-    subject: "NetPlan : votre invitation",
+    subject: "Bienvenue sur NetPlan",
     text: [
       `Bonjour ${name},`,
       "",
-      `${invitedBy} vous a créé un compte sur NetPlan, le plan du réseau.`,
+      `${invitedBy} vous a créé un compte sur NetPlan, le plan du réseau,`,
+      `avec le rôle ${role}.`,
+      "",
       "Choisissez votre mot de passe avec ce lien, valable sept jours :",
       "",
       url,
+      "",
+      `Ensuite, connectez-vous sur ${appUrl}`,
+      `avec l'identifiant ${login}.`,
       "",
       "Passé ce délai, demandez à un administrateur de vous renvoyer",
       "l'invitation.",

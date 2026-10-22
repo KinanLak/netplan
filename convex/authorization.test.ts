@@ -80,6 +80,7 @@ const POLICY: Record<string, Role> = {
   "unknownMacs:listForSite": "editor",
   "unknownMacs:listIgnored": "editor",
   "unknownMacs:restore": "editor",
+  "users:cancelInvitation": "admin",
   "users:invite": "admin",
   "users:list": "admin",
   "users:me": "reader",

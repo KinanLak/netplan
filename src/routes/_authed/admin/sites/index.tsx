@@ -135,7 +135,7 @@ function CreateSiteDialog({
   return (
     <Dialog open={open} onOpenChange={close}>
       <DialogContent>
-        <form onSubmit={(event) => void submit(event)}>
+        <form noValidate onSubmit={(event) => void submit(event)}>
           <DialogHeader>
             <DialogTitle>Nouveau site</DialogTitle>
             <DialogDescription>

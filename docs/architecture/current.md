@@ -59,8 +59,11 @@ sign-in attempts are limited per identifier typed (ADR 0031).
   invites a user from **Administration › Utilisateurs**: the account is
   created without a password and the mail carries a seven-day password-reset
   link. Forgotten password reuses that page with a one-hour link, which never
-  goes to a Keycloak account. Disabling is a better-auth ban. The first admin
-  comes from `BOOTSTRAP_ADMIN_*` at deploy time.
+  goes to a Keycloak account. Disabling is a better-auth ban. Only an
+  invitation never accepted can be deleted (C5): a used account is disabled,
+  so its name stays in the history. A session hook records each sign-in in
+  `signIns` for the users page. The first admin comes from
+  `BOOTSTRAP_ADMIN_*` at deploy time.
 - **Keycloak.** Generic OAuth with PKCE, on when `KEYCLOAK_ISSUER`,
   `_CLIENT_ID` and `_CLIENT_SECRET` are set; the login page asks
   `/api/auth/sign-in-options` whether to offer it. At each Keycloak login a

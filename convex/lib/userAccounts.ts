@@ -20,7 +20,10 @@ export function normalizeUsername(username: string): string {
   return username.toLowerCase();
 }
 
-export function invitationError({
+export type InvitationField = "name" | "email" | "username";
+
+/** The first invitation field to fix, with why, or `null`. */
+export function invitationProblem({
   name,
   email,
   username,
@@ -28,15 +31,35 @@ export function invitationError({
   name: string;
   email: string;
   username?: string;
-}): string | null {
-  if (!name) return "Indiquez le nom de la personne invitée.";
+}): { field: InvitationField; message: string } | null {
+  if (!name) {
+    return {
+      field: "name",
+      message: "Indiquez le nom de la personne invitée.",
+    };
+  }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return "Cette adresse e-mail n'est pas valide.";
+    return {
+      field: "email",
+      message: "Cette adresse e-mail n'est pas valide.",
+    };
   }
   if (username !== undefined && !USERNAME.test(username)) {
-    return "L'identifiant compte 3 à 30 caractères : lettres, chiffres, point ou tiret bas.";
+    return {
+      field: "username",
+      message:
+        "L'identifiant compte 3 à 30 caractères : lettres, chiffres, point ou tiret bas.",
+    };
   }
   return null;
+}
+
+export function invitationError(fields: {
+  name: string;
+  email: string;
+  username?: string;
+}): string | null {
+  return invitationProblem(fields)?.message ?? null;
 }
 
 /** The relay's reason, without the frame Convex adds to an action's error. */

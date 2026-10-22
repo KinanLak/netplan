@@ -166,6 +166,15 @@ describe("users.invite", () => {
     const [mail] = await outbox(t);
     expect(mail.to).toBe("camille@example.test");
     expect(mail.text).toContain(name);
+    expect(mail.text).toContain("avec le rôle Éditeur");
+    expect(mail.text).toContain("avec l'identifiant Camille.M");
+    const invited = (await as.query(api.users.list, {})).find(
+      (row) => row.id === userId,
+    );
+    expect(invited?.invitationExpiresAt).toBeGreaterThan(
+      Date.now() + 6 * 24 * 3600_000,
+    );
+    expect(invited?.lastSignInAt).toBeNull();
     expect(
       (await as.query(api.users.list, {})).find((row) => row.id === userId),
     ).toMatchObject({ kind: "invited", role: "editor", username: "Camille.M" });
@@ -193,10 +202,12 @@ describe("users.invite", () => {
         })
       ).status,
     ).toBe(200);
-    expect(
-      (await as.query(api.users.list, {})).find((row) => row.id === userId)
-        ?.kind,
-    ).toBe("local");
+    const signedIn = (await as.query(api.users.list, {})).find(
+      (row) => row.id === userId,
+    );
+    expect(signedIn?.kind).toBe("local");
+    expect(signedIn?.lastSignInAt).toEqual(expect.any(Number));
+    expect(signedIn?.invitationExpiresAt).toBeNull();
   });
 
   it("refuses a taken email or username and invalid input", async () => {
@@ -244,11 +255,46 @@ describe("users.invite", () => {
     } finally {
       process.env.SMTP_HOST = host;
     }
+    const eden = (await as.query(api.users.list, {})).find(
+      (row) => row.email === "eden@example.test",
+    );
+    expect(eden?.kind).toBe("invited");
+    // The link never left, so nothing says an invitation is pending.
+    expect(eden?.invitationExpiresAt).toBeNull();
+  });
+});
+
+describe("users.cancelInvitation", () => {
+  it("deletes an invited account with its link", async () => {
+    const t = withMail();
+    const { as } = await asAdmin(t);
+    const userId = await as.action(api.users.invite, {
+      name: "Typo",
+      email: "tpyo@example.test",
+      role: "reader",
+    });
+    const [mail] = await outbox(t);
+    const { token } = await tokenFromLink(t, mail);
+
+    await as.mutation(api.users.cancelInvitation, { userId });
+
     expect(
-      (await as.query(api.users.list, {})).some(
-        (row) => row.email === "eden@example.test",
-      ),
-    ).toBe(true);
+      (await as.query(api.users.list, {})).some((row) => row.id === userId),
+    ).toBe(false);
+    expect(
+      (await post(t, "/reset-password", { token, newPassword: PASSWORD }))
+        .status,
+    ).not.toBe(200);
+  });
+
+  it("refuses an account that has chosen a password", async () => {
+    const t = withMail();
+    const { as } = await asAdmin(t);
+    const local = await createSignedInUser(t, "reader");
+    await addAccount(t, local.userId, "credential");
+    await expect(
+      as.mutation(api.users.cancelInvitation, { userId: local.userId }),
+    ).rejects.toThrow("désactivez-le");
   });
 });
 
