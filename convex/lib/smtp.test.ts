@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { readSmtpSettings } from "./smtp";
 
-const relay = { SMTP_HOST: "smtp.example.org", SMTP_FROM: "Netplan <n@x>" };
+const relay = { SMTP_HOST: "smtp.example.org", SMTP_FROM: "NetPlan <n@x>" };
 
 describe("readSmtpSettings", () => {
   it("names what is missing instead of sending from nowhere", () => {
@@ -21,7 +21,7 @@ describe("readSmtpSettings", () => {
   it("submits on 587 with STARTTLS and no login by default", () => {
     const smtp = readSmtpSettings(relay);
     if (!smtp.ok) throw new Error("expected settings");
-    expect(smtp.settings.from).toBe("Netplan <n@x>");
+    expect(smtp.settings.from).toBe("NetPlan <n@x>");
     expect(smtp.settings.transport).toMatchObject({
       host: "smtp.example.org",
       port: 587,

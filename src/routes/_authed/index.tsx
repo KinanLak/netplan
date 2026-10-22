@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/sidebar";
 import { useShortcutIntentEffect } from "@/hooks/use-shortcuts";
 import { useCanEdit, useCurrentUser } from "@/hooks/use-current-user";
+import { useDocumentTitle } from "@/hooks/use-document-title";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { useSignOut } from "@/panels/SidebarAccount";
 import { isAdmin } from "@/lib/roles";
@@ -115,15 +116,24 @@ function HomePage() {
     setCurrentFloor(sortedFloors[0]?.id ?? null);
   }, [floors, sortedFloors, currentFloorId, setCurrentFloor]);
 
+  // Only once loaded, so the map never flashes empty while it opens a floor.
+  const currentBuilding =
+    buildings?.find((building) => building.id === currentBuildingId) ?? null;
+  const currentFloor = sortedFloors.find(
+    (floor) => floor.id === currentFloorId,
+  );
+  useDocumentTitle(
+    currentFloor && currentBuilding
+      ? `${currentFloor.name} · ${currentBuilding.name}`
+      : (currentBuilding?.name ?? site?.name ?? null),
+  );
+
   if (site === null) return <NoSite />;
 
   const isBootstrappingMap =
     buildings === undefined ||
     (currentBuildingId !== null && floors === undefined);
 
-  // Only once loaded, so the map never flashes empty while it opens a floor.
-  const currentBuilding =
-    buildings?.find((building) => building.id === currentBuildingId) ?? null;
   const empty =
     site && buildings?.length === 0
       ? { siteId: site.id, building: null }

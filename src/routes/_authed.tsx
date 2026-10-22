@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import { AuthBoundary } from "@convex-dev/better-auth/react";
 import { Outlet, createFileRoute, redirect } from "@tanstack/react-router";
 import { ThemeShortcut } from "@/components/mode-toggle";
-import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { CurrentUserProvider } from "@/hooks/use-current-user";
 import { ShortcutIntentProvider } from "@/hooks/use-shortcuts";
@@ -41,23 +40,21 @@ function AuthedLayout() {
       isAuthError={isSessionLost}
       onUnauth={backToLogin}
     >
-      <ThemeProvider defaultTheme="system" storageKey="netplan-ui-theme">
-        <CurrentUserProvider>
-          {/* One shortcut listener for every page; each page registers the
-              actions it handles (ADR 0030). */}
-          <ShortcutIntentProvider>
-            <ThemeShortcut />
-            <MapSession>
-              <Outlet />
-            </MapSession>
-          </ShortcutIntentProvider>
-          <RefreshOutcomes />
-        </CurrentUserProvider>
-        {/* The only toaster, so a toast survives a change of page. Bottom
-            centre: every corner of the map is taken, and React Scan's toolbar
-            snaps to one in development. */}
-        <Toaster position="bottom-center" />
-      </ThemeProvider>
+      <CurrentUserProvider>
+        {/* One shortcut listener for every page; each page registers the
+            actions it handles (ADR 0030). */}
+        <ShortcutIntentProvider>
+          <ThemeShortcut />
+          <MapSession>
+            <Outlet />
+          </MapSession>
+        </ShortcutIntentProvider>
+        <RefreshOutcomes />
+      </CurrentUserProvider>
+      {/* The only toaster, so a toast survives a change of page. Bottom
+          centre: every corner of the map is taken, and React Scan's toolbar
+          snaps to one in development. */}
+      <Toaster position="bottom-center" />
     </AuthBoundary>
   );
 }

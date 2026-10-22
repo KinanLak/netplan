@@ -42,7 +42,7 @@ import type { SiteSettings } from "@/sites/settings";
 import { api } from "../../../../../convex/_generated/api";
 
 export const Route = createFileRoute("/_authed/admin/sites/$siteId")({
-  head: () => ({ meta: [{ title: "Site · Administration · Netplan" }] }),
+  head: () => ({ meta: [{ title: "Site · Administration" }] }),
   component: SitePage,
 });
 
@@ -211,7 +211,7 @@ function SiteSettingsForm({ site }: { site: Site }) {
       <FieldSet>
         <FieldLegend>Collecte</FieldLegend>
         <FieldDescription>
-          Netplan interroge les intégrations du site à ce rythme, à l'heure du
+          NetPlan interroge les intégrations du site à ce rythme, à l'heure du
           site.
         </FieldDescription>
         <FieldGroup>

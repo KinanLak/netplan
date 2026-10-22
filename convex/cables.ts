@@ -312,7 +312,7 @@ export const disconnect = editorMutation({
     if (!row) return null;
     if (row.source) {
       throw new ConvexError(
-        `Ce câble vient de ${INTEGRATION_LABELS[row.source.integration]} : il ne se débranche pas dans Netplan.`,
+        `Ce câble vient de ${INTEGRATION_LABELS[row.source.integration]} : il ne se débranche pas dans NetPlan.`,
       );
     }
     await ctx.db.delete(row._id);

@@ -17,7 +17,7 @@ import type { IntegrationKind } from "@/sites/integrations";
 import { api } from "../../../../convex/_generated/api";
 
 export const Route = createFileRoute("/_authed/admin/health")({
-  head: () => ({ meta: [{ title: "Santé · Administration · Netplan" }] }),
+  head: () => ({ meta: [{ title: "Santé · Administration" }] }),
   component: HealthPage,
 });
 

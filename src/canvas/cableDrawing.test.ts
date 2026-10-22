@@ -74,7 +74,7 @@ describe("cableStart", () => {
     ).toEqual({
       kind: "refused",
       reason:
-        "Le câble de « Accès » 1 vient de NetBox : il ne se débranche pas dans Netplan.",
+        "Le câble de « Accès » 1 vient de NetBox : il ne se débranche pas dans NetPlan.",
     });
 
     // The socket's device is on another floor: not in this floor's document.

@@ -41,3 +41,4 @@ record's Source section points to its questions in the
 - **[0028 — Every request to a source runs in Node, and an integration may ignore certificate errors when its admin says so](0028-real-librenms-and-certificate-opt-in.md)**
 - **[0029 — Cables are React Flow edges between port handles, coloured by their link; device labels are names in capitals with the full name on hover; free text labels annotate the plan](0029-map-rendering-and-labels.md)**
 - **[0030 — The map's keys act on the selection, never pan the view, and each floor keeps its own view in the URL and the session](0030-map-keyboard-viewport-selection.md)**
+- **[0031 — The theme and errors live at the root, sessions slide with activity, sign-in attempts count per identifier, and the map freezes 30 seconds after the connection drops](0031-shell-sessions-and-offline-grace.md)**

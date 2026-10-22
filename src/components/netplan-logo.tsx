@@ -17,7 +17,7 @@ export function NetplanLogo({ size = 26, className }: NetplanLogoProps) {
     <span
       className={cn("netplan-logo", className)}
       style={logoStyle}
-      aria-label="Netplan"
+      aria-label="NetPlan"
     >
       <span className="netplan-logo__wordmark" aria-hidden="true">
         {LOGO_LETTERS.map((letter, index) => {

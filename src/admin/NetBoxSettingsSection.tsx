@@ -71,7 +71,7 @@ export function NetBoxSettingsSection({ siteId }: { siteId: string }) {
       <div className="space-y-1">
         <h2 className="font-medium">Import NetBox</h2>
         <p className="text-sm text-muted-foreground">
-          Netplan importe les équipements du site NetBox choisi dont le rôle a
+          NetPlan importe les équipements du site NetBox choisi dont le rôle a
           un type ; les autres rôles sont ignorés.
         </p>
       </div>
@@ -137,7 +137,7 @@ function PushSetting({ siteId, push }: { siteId: string; push: boolean }) {
         </FieldLabel>
       </Field>
       <FieldDescription>
-        Après chaque collecte, Netplan écrit la prise, l'étage, le port de
+        Après chaque collecte, NetPlan écrit la prise, l'étage, le port de
         switch et la dernière observation des équipements importés de NetBox
         dans leurs champs personnalisés{" "}
         {PUSH_FIELDS.map((field, index) => (
@@ -147,7 +147,7 @@ function PushSetting({ siteId, push }: { siteId: string; push: boolean }) {
           </span>
         ))}
         . Ces champs doivent exister et le jeton doit pouvoir modifier les
-        équipements. Netplan n'écrit rien d'autre et n'efface jamais ce qu'il a
+        équipements. NetPlan n'écrit rien d'autre et n'efface jamais ce qu'il a
         écrit.
       </FieldDescription>
       {error ? <FieldError>{error}</FieldError> : null}

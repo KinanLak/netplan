@@ -28,7 +28,7 @@ const env = {
   SITE_URL: SITE,
   BETTER_AUTH_SECRET: "test-secret-for-better-auth-only-0123456789", // gitleaks:allow
   SMTP_HOST: "relay.test",
-  SMTP_FROM: "Netplan <netplan@example.test>",
+  SMTP_FROM: "NetPlan <netplan@example.test>",
 };
 
 /**

@@ -39,7 +39,7 @@ export const Route = createFileRoute("/login")({
     if (context.token) throw redirect({ href: search.redirect ?? "/" });
   },
   loader: () => signInOptions(),
-  head: () => ({ meta: [{ title: "Connexion · Netplan" }] }),
+  head: () => ({ meta: [{ title: "Connexion" }] }),
   component: LoginPage,
 });
 
@@ -92,7 +92,7 @@ function LoginPage() {
 
   return (
     <AuthCard
-      title="Connexion à Netplan"
+      title="Connexion à NetPlan"
       description="Utilisez le compte que votre administrateur vous a créé."
     >
       <form onSubmit={(event) => void submit(event)}>

@@ -56,7 +56,7 @@ export function LibreNMSSettingsSection({ siteId }: { siteId: string }) {
       <div className="space-y-1">
         <h2 className="font-medium">Switchs LibreNMS</h2>
         <p className="text-sm text-muted-foreground">
-          Netplan interroge dans LibreNMS l'équipement choisi pour chaque switch
+          NetPlan interroge dans LibreNMS l'équipement choisi pour chaque switch
           ; plusieurs switchs d'une pile partagent le même. Un switch sans
           équipement n'est pas interrogé.
         </p>

@@ -26,7 +26,7 @@ import { DEFAULT_TIMEZONE, siteNameError } from "@/sites/settings";
 import { api } from "../../../../../convex/_generated/api";
 
 export const Route = createFileRoute("/_authed/admin/sites/")({
-  head: () => ({ meta: [{ title: "Sites · Administration · Netplan" }] }),
+  head: () => ({ meta: [{ title: "Sites · Administration" }] }),
   component: SitesPage,
 });
 

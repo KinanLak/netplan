@@ -79,7 +79,7 @@ export const cableStart = (
   if (cable.source) {
     return {
       kind: "refused",
-      reason: `Le câble de ${near} vient de ${INTEGRATION_LABELS[cable.source.integration]} : il ne se débranche pas dans Netplan.`,
+      reason: `Le câble de ${near} vient de ${INTEGRATION_LABELS[cable.source.integration]} : il ne se débranche pas dans NetPlan.`,
     };
   }
   const far = cable.a.portId === port.id ? cable.b : cable.a;

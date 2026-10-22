@@ -39,31 +39,31 @@ export const PUSH_FIELDS = [
   {
     name: "netplan_site",
     type: "text",
-    label: "Site (Netplan)",
-    description: "Le site Netplan où le réseau a vu l'équipement.",
+    label: "Site (NetPlan)",
+    description: "Le site NetPlan où le réseau a vu l'équipement.",
   },
   {
     name: "netplan_floor",
     type: "text",
-    label: "Étage (Netplan)",
+    label: "Étage (NetPlan)",
     description: "Le bâtiment et l'étage de la prise où il a été vu.",
   },
   {
     name: "netplan_socket",
     type: "text",
-    label: "Prise (Netplan)",
+    label: "Prise (NetPlan)",
     description: "La prise murale où il a été vu.",
   },
   {
     name: "netplan_switch_port",
     type: "text",
-    label: "Port de switch (Netplan)",
+    label: "Port de switch (NetPlan)",
     description: "Le switch et le port où il a été vu.",
   },
   {
     name: "netplan_last_seen",
     type: "datetime",
-    label: "Vu le (Netplan)",
+    label: "Vu le (NetPlan)",
     description: "La dernière fois que le réseau l'a vu.",
   },
 ] as const;
