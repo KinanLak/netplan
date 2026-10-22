@@ -175,14 +175,14 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
   },
   "floor-up": {
     keys: ["Mod+ArrowUp"],
-    label: "Étage précédent",
-    description: "Aller à l'étage précédent",
+    label: "Étage au-dessus",
+    description: "Monter d'un étage",
     scope: "global",
   },
   "floor-down": {
     keys: ["Mod+ArrowDown"],
-    label: "Étage suivant",
-    description: "Aller à l'étage suivant",
+    label: "Étage en dessous",
+    description: "Descendre d'un étage",
     scope: "global",
   },
   "cancel-wall-tool": {

@@ -47,6 +47,7 @@ import {
 import { useCanvasDeviceNodes } from "@/canvas/hooks/useCanvasDeviceNodes";
 import { useCanvasDragState } from "@/canvas/hooks/useCanvasDragState";
 import { useCanvasKeyboardShortcuts } from "@/canvas/hooks/useCanvasKeyboardShortcuts";
+import { useFloorViewport } from "@/canvas/hooks/useFloorViewport";
 import { FloorOverlayLayer } from "@/overlay/FloorOverlayLayer";
 import { OverlayGizmo } from "@/overlay/OverlayGizmo";
 import { OverlayPanel } from "@/overlay/OverlayPanel";
@@ -60,14 +61,12 @@ import { OverlayVisibilityButton } from "@/overlay/OverlayVisibilityButton";
 import {
   FLOW_CANVAS_BACKGROUND_COLOR,
   FLOW_CANVAS_BACKGROUND_DOT_SIZE,
-  FLOW_CANVAS_FIT_VIEW_PADDING,
   FLOW_CANVAS_HALO_SHADOWS,
   FLOW_CANVAS_MAX_ZOOM,
   FLOW_CANVAS_MIN_ZOOM,
 } from "@/lib/constants";
 
 const SNAP_GRID: [number, number] = [GRID_SIZE, GRID_SIZE];
-const FIT_VIEW_OPTIONS = { padding: FLOW_CANVAS_FIT_VIEW_PADDING };
 const PRO_OPTIONS = { hideAttribution: true };
 // Devices are not reached by keyboard (ADR 0030); say so in French.
 const ARIA_LABEL_CONFIG = {
@@ -304,8 +303,10 @@ export default function FlowCanvas() {
   // only hands ReactFlow these identity-stable bridge callbacks.
   const [paneBridge] = useState(createWallPaneEventBridge);
 
+  const { fitViewport } = useFloorViewport(reactFlow);
   const { zoomIn, zoomOut, fitFloor } = useCanvasKeyboardShortcuts({
     reactFlow,
+    fitViewport,
   });
   const cablePaths = useShownCablePaths();
   const { placeAtPointer } = usePlaceFromInventory();
@@ -421,8 +422,6 @@ export default function FlowCanvas() {
               nodeTypes={nodeTypes}
               snapToGrid={true}
               snapGrid={SNAP_GRID}
-              fitView
-              fitViewOptions={FIT_VIEW_OPTIONS}
               minZoom={FLOW_CANVAS_MIN_ZOOM}
               maxZoom={FLOW_CANVAS_MAX_ZOOM}
               panOnDrag={isMultiSelectMode ? RIGHT_MOUSE_PAN_BUTTON : panOnDrag}

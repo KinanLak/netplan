@@ -148,7 +148,7 @@ export default function DeviceDrawer() {
               onClick={handleCloseDrawer}
               className="flex h-8 items-center gap-1.5 px-2"
             >
-              <Kbd>esc</Kbd>
+              <Kbd>Échap</Kbd>
               <HugeiconsIcon
                 icon={Cancel01Icon}
                 size={18}

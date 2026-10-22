@@ -221,7 +221,7 @@ describe("buildings", () => {
     await expect(
       t.mutation(api.buildings.remove, { id: buildingId }),
     ).rejects.toThrow(
-      "Le bâtiment « Plein » n'est pas vide : l'étage « RDC » porte encore des équipements et des murs.",
+      "Le bâtiment « Plein » n'est pas vide : l'étage « RDC » porte encore 1 équipement et 1 bloc de mur.",
     );
     await t.run(async (ctx) => {
       expect(await ctx.db.query("buildings").collect()).toHaveLength(1);

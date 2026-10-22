@@ -5,6 +5,15 @@ import { api } from "../../convex/_generated/api";
 
 export type SiteSummary = FunctionReturnType<typeof api.sites.list>[number];
 
+/** The map's search: the site, and the floor and device it opens on. */
+export const mapSearch = (
+  search: Record<string, unknown>,
+): { site?: string; floor?: string; device?: string } => ({
+  ...siteSearch(search),
+  ...(typeof search.floor === "string" ? { floor: search.floor } : {}),
+  ...(typeof search.device === "string" ? { device: search.device } : {}),
+});
+
 /** The `site` search parameter of the map and the inventory, read loosely. */
 export const siteSearch = (
   search: Record<string, unknown>,

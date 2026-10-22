@@ -20,7 +20,7 @@ import {
 import { useOptionHeld } from "@/hooks/use-shortcuts";
 import { cn } from "@/lib/utils";
 import { getShortcutDisplay } from "@/lib/shortcuts";
-import { asBuildingId, asFloorId } from "@/lib/objectIds";
+import { asBuildingId } from "@/lib/objectIds";
 import { useTemporalStore, useUndoRedo } from "@/hooks/use-undo-redo";
 import { Kbd, KbdGroup } from "@/components/ui/kbd";
 import { NetplanLogo } from "@/components/netplan-logo";
@@ -203,14 +203,14 @@ export default function AppSidebar() {
   );
 
   const setCurrentBuilding = useMapStore((s) => s.setCurrentBuilding);
-  const setCurrentFloor = useMapStore((s) => s.setCurrentFloor);
   const floorsForCurrent = useQuery(
     api.floors.listForBuilding,
     currentBuildingId ? { buildingId: currentBuildingId } : "skip",
   );
 
+  // Top floor first, as a section of the building reads.
   const sortedFloors = floorsForCurrent
-    ? [...floorsForCurrent].sort((a, b) => a.order - b.order)
+    ? [...floorsForCurrent].sort((a, b) => b.order - a.order)
     : [];
   const isEditMode = useIsEditMode();
   const openStructureDialog = useStructureDialog((state) => state.open);
@@ -343,7 +343,7 @@ export default function AppSidebar() {
 
                     {isCurrentBuilding && sortedFloors.length > 0 ? (
                       <SidebarMenuSub className="mr-0 pr-0">
-                        {sortedFloors.map((floor) => {
+                        {sortedFloors.map((floor, floorIndex) => {
                           const isActive = floor.id === currentFloorId;
                           const floorPresences = othersOn(
                             presences,
@@ -352,10 +352,19 @@ export default function AppSidebar() {
 
                           return (
                             <SidebarMenuSubItem key={floor.id}>
+                              {/* A real link: Tab reaches it, and a
+                                  middle-click opens the floor in a new tab. */}
                               <SidebarMenuSubButton
-                                onClick={() =>
-                                  setCurrentFloor(asFloorId(floor.id))
+                                render={
+                                  <Link
+                                    to="/"
+                                    search={{
+                                      site: site?.id,
+                                      floor: floor.id,
+                                    }}
+                                  />
                                 }
+                                aria-current={isActive ? "page" : undefined}
                                 className={cn(
                                   "cursor-pointer justify-between",
                                   // Room for the « ⋯ » when it shows: always
@@ -389,6 +398,10 @@ export default function AppSidebar() {
                                   target="floor"
                                   id={floor.id}
                                   name={floor.name}
+                                  canMoveUp={floorIndex > 0}
+                                  canMoveDown={
+                                    floorIndex < sortedFloors.length - 1
+                                  }
                                   trigger={
                                     <button
                                       type="button"

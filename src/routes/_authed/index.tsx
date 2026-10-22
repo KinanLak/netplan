@@ -7,7 +7,7 @@ import {
   Tick01Icon,
   ViewIcon,
 } from "@hugeicons/core-free-icons";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type { ComponentProps } from "react";
 import { useQuery } from "convex/react";
 import FlowCanvas from "@/canvas/FlowCanvas";
@@ -42,17 +42,17 @@ import { useDocumentTitle } from "@/hooks/use-document-title";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { useSignOut } from "@/panels/SidebarAccount";
 import { isAdmin } from "@/lib/roles";
-import { siteSearch, useCurrentSite } from "@/sites/useCurrentSite";
+import { mapSearch, useCurrentSite } from "@/sites/useCurrentSite";
 import { SiteRefreshShortcut } from "@/sites/CollectionFreshness";
 import { ShortcutsDialog } from "@/components/shortcuts-dialog";
 import { ShortcutHintAbsolute } from "@/components/ui/shortcut-hint";
 import { toggledCableDisplay } from "@/canvas/cablePaths";
-import { asBuildingId, asFloorId } from "@/lib/objectIds";
+import { asBuildingId, asDeviceId, asFloorId } from "@/lib/objectIds";
 import { api } from "../../../convex/_generated/api";
 
 export const Route = createFileRoute("/_authed/")({
   ssr: false,
-  validateSearch: siteSearch,
+  validateSearch: mapSearch,
   component: HomePage,
 });
 
@@ -80,6 +80,8 @@ function HomePage() {
     if (!site || site.id === requestedSiteId) return;
     void navigate({ search: { site: site.id }, replace: true });
   }, [site, requestedSiteId, navigate]);
+
+  useMapUrlSync();
 
   useEffect(() => {
     if (!buildings) return;
@@ -188,15 +190,16 @@ function MapWorkspace({
     (floor) => floor.id === currentFloorId,
   );
 
+  // `sortedFloors` runs from the ground up: Ctrl+↑ climbs a floor.
   const navigateFloorUp = () => {
-    if (currentFloorIndex > 0) {
-      setCurrentFloor(sortedFloors[currentFloorIndex - 1].id);
+    if (currentFloorIndex >= 0 && currentFloorIndex < sortedFloors.length - 1) {
+      setCurrentFloor(sortedFloors[currentFloorIndex + 1].id);
     }
   };
 
   const navigateFloorDown = () => {
-    if (currentFloorIndex >= 0 && currentFloorIndex < sortedFloors.length - 1) {
-      setCurrentFloor(sortedFloors[currentFloorIndex + 1].id);
+    if (currentFloorIndex > 0) {
+      setCurrentFloor(sortedFloors[currentFloorIndex - 1].id);
     }
   };
 
@@ -369,6 +372,70 @@ function MapWorkspace({
       </SidebarInset>
     </div>
   );
+}
+
+/**
+ * Keeps `?floor=` and `?device=` in step with the map, both ways, so a link
+ * or a reload opens the same floor and device (ADR 0030). The URL is applied
+ * only when it changes, and the map writes back only what differs, so the
+ * two never fight.
+ */
+function useMapUrlSync() {
+  const { floor, device } = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
+  const allFloors = useQuery(api.floors.listAll);
+  const currentFloorId = useCurrentFloorId();
+  const selectedDeviceId = useSelectedDeviceId();
+  const appliedRef = useRef<string | null>(null);
+
+  // One effect, so the write-back also runs when the floors arrive after
+  // the map was opened from elsewhere (the inventory, a search).
+  useEffect(() => {
+    if (!allFloors) return;
+    const key = `${floor ?? ""}|${device ?? ""}`;
+    if (appliedRef.current !== key) {
+      appliedRef.current = key;
+      applyUrl(allFloors, floor, device);
+    }
+    // Read now: applying the URL may have just changed the map.
+    const state = useMapStore.getState();
+    const nextFloor = state.currentFloorId ?? undefined;
+    const nextDevice = state.selectedDeviceId ?? undefined;
+    if (nextFloor === floor && nextDevice === device) return;
+    appliedRef.current = `${nextFloor ?? ""}|${nextDevice ?? ""}`;
+    void navigate({
+      search: (previous) => ({
+        site: previous.site,
+        ...(nextFloor ? { floor: nextFloor } : {}),
+        ...(nextDevice ? { device: nextDevice } : {}),
+      }),
+      replace: true,
+    });
+  }, [allFloors, floor, device, currentFloorId, selectedDeviceId, navigate]);
+}
+
+/**
+ * Opens the floor and device a URL names, if the floor exists; a URL that
+ * names a floor but no device leaves nothing selected.
+ */
+function applyUrl(
+  allFloors: ReadonlyArray<{ id: string; buildingId: string }>,
+  floor: string | undefined,
+  device: string | undefined,
+) {
+  const target = allFloors.find((candidate) => candidate.id === floor);
+  if (!target) return;
+  const store = useMapStore.getState();
+  if (store.currentBuildingId !== target.buildingId) {
+    store.setCurrentBuilding(asBuildingId(target.buildingId));
+  }
+  if (useMapStore.getState().currentFloorId !== target.id) {
+    store.setCurrentFloor(asFloorId(target.id));
+  }
+  const selected = useMapStore.getState().selectedDeviceId;
+  if ((device ?? null) !== selected) {
+    store.selectDevice(device ? asDeviceId(device) : null);
+  }
 }
 
 /** Folds the sidebar away and back, as Ctrl+B does; the choice is kept. */
