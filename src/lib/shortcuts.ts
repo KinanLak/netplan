@@ -227,6 +227,7 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
     label: "Texte",
     description: "Poser une étiquette de texte sur le plan",
     scope: "canvas",
+    requiresEdit: true,
   },
   "wall-eraser-size-increase": {
     keys: [
