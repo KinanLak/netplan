@@ -170,8 +170,9 @@ describe("users.invite", () => {
       (await as.query(api.users.list, {})).find((row) => row.id === userId),
     ).toMatchObject({ kind: "invited", role: "editor", username: "Camille.M" });
 
-    const { path, token } = await tokenFromLink(t, mail);
+    const { path, token, login } = await tokenFromLink(t, mail);
     expect(path).toBe("/reset-password");
+    expect(login).toBe("camille@example.test");
     expect(
       (await post(t, "/reset-password", { token, newPassword: PASSWORD }))
         .status,

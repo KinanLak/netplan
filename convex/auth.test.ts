@@ -49,9 +49,10 @@ describe("forgotten password", () => {
     const [mail] = await outbox(t);
     expect(mail.to).toBe(email);
     expect(mail.text).toContain("Bonjour Owner");
-    const { path, token } = await tokenFromLink(t, mail);
+    const { path, token, login } = await tokenFromLink(t, mail);
     expect(path).toBe("/reset-password");
     expect(token).toBeTruthy();
+    expect(login).toBe(email);
 
     expect(
       (await post(t, "/reset-password", { token, newPassword: NEW_PASSWORD }))

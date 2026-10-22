@@ -28,13 +28,20 @@ const role = v.union(...ROLES.map((name) => v.literal(name)));
 /** The signed-in user, as the app shows them. */
 export const me = readerQuery({
   args: {},
-  returns: v.object({ id: v.string(), name: v.string(), role: v.string() }),
-  handler: (ctx) =>
-    Promise.resolve({
-      id: ctx.user.id,
-      name: ctx.user.name,
-      role: ctx.user.role,
-    }),
+  returns: v.object({
+    id: v.string(),
+    name: v.string(),
+    role: v.string(),
+    // A Keycloak account's role comes from the role mapping, so a page that
+    // refuses it says to ask there.
+    sso: v.boolean(),
+  }),
+  handler: async (ctx) => ({
+    id: ctx.user.id,
+    name: ctx.user.name,
+    role: ctx.user.role,
+    sso: (await kindOf(ctx, ctx.user.id)) === "sso",
+  }),
 });
 
 type AuthDoc = { _id: string } & Record<string, unknown>;
@@ -222,7 +229,9 @@ async function sendInvitation(
     value: user.id,
     expiresAt: new Date(Date.now() + INVITATION_SECONDS * 1000),
   });
-  const url = `${context.baseURL}/reset-password/${token}?callbackURL=${encodeURIComponent("/reset-password")}`;
+  // `login` lets the page tell a password manager whose password it is.
+  const landing = `/reset-password?${new URLSearchParams({ login: user.email }).toString()}`;
+  const url = `${context.baseURL}/reset-password/${token}?callbackURL=${encodeURIComponent(landing)}`;
   try {
     await ctx.runAction(internal.mail.send, {
       to: user.email,

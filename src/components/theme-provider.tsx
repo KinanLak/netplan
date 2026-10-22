@@ -1,4 +1,5 @@
 import * as React from "react";
+import { useHydrated } from "@/hooks/use-hydrated";
 
 type ResolvedTheme = "dark" | "light";
 type Theme = "dark" | "light" | "system";
@@ -86,8 +87,6 @@ const subscribeToColorScheme = (onStoreChange: () => void) => {
   };
 };
 
-const subscribeToNothing = () => () => {};
-
 const subscribeToTheme = (storageKey: string, onStoreChange: () => void) => {
   if (!isBrowser) {
     return () => {};
@@ -127,11 +126,7 @@ export function ThemeProvider({
   const resolvedTheme = resolveTheme(theme, prefersDark);
   // The hydration render reads the server's snapshots, which do not know the
   // stored theme: applying them would undo the head script for a frame.
-  const hydrated = React.useSyncExternalStore(
-    subscribeToNothing,
-    () => true,
-    () => false,
-  );
+  const hydrated = useHydrated();
 
   React.useEffect(() => {
     if (!hydrated) {

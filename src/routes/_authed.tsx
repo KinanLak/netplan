@@ -9,7 +9,8 @@ import { MapDocumentProvider } from "@/map-session/MapDocumentProvider";
 import { RefreshOutcomes } from "@/sites/RefreshOutcomes";
 import { useCurrentFloorId } from "@/store/selectors";
 import { providerAuthClient } from "@/lib/auth-client";
-import { isSessionLost } from "@/lib/login";
+import { isSessionLost, sessionLostReason } from "@/lib/login";
+import type { SessionLostReason } from "@/lib/login";
 import { api } from "../../convex/_generated/api";
 
 // Every page except the login page needs a session (ADR 0003).
@@ -24,11 +25,22 @@ export const Route = createFileRoute("/_authed")({
 
 // A session can end while the page is open: expiry, sign-out in another tab,
 // a disabled account. The Convex token outlives it, so functions start
-// refusing and the boundary sends the user to the login page. A full load,
-// so the server reads the cleared cookie.
+// refusing and the boundary sends the user to the login page, which says
+// why. A full load, so the server reads the cleared cookie.
+let lostReason: SessionLostReason = "expired";
+
+const isAuthError = (error: unknown) => {
+  if (!isSessionLost(error)) return false;
+  lostReason = sessionLostReason(error);
+  return true;
+};
+
 const backToLogin = () => {
   const { pathname, search, hash } = window.location;
-  const params = new URLSearchParams({ redirect: pathname + search + hash });
+  const params = new URLSearchParams({
+    redirect: pathname + search + hash,
+    reason: lostReason,
+  });
   window.location.assign(`/login?${params.toString()}`);
 };
 
@@ -37,7 +49,7 @@ function AuthedLayout() {
     <AuthBoundary
       authClient={providerAuthClient}
       getAuthUserFn={api.users.me}
-      isAuthError={isSessionLost}
+      isAuthError={isAuthError}
       onUnauth={backToLogin}
     >
       <CurrentUserProvider>

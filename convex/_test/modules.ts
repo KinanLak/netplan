@@ -32,6 +32,7 @@ export const modules: Record<string, () => Promise<Record<string, any>>> = {
   "./netboxPush.ts": () => import("../netboxPush"),
   "./presences.ts": () => import("../presences"),
   "./schema.ts": () => import("../schema"),
+  "./signInAttempts.ts": () => import("../signInAttempts"),
   "./sites.ts": () => import("../sites"),
   "./unknownMacs.ts": () => import("../unknownMacs"),
   "./users.ts": () => import("../users"),

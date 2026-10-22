@@ -10,7 +10,8 @@ import {
   FieldGroup,
   FieldLabel,
 } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/password-input";
+import { useHydrated } from "@/hooks/use-hydrated";
 import { authClient } from "@/lib/auth-client";
 import {
   MIN_PASSWORD_LENGTH,
@@ -19,20 +20,21 @@ import {
 } from "@/lib/login";
 
 // The mailed link goes through better-auth, which checks the token and lands
-// here with `?token=` or, once it has expired, `?error=INVALID_TOKEN`.
+// here with `?token=` or, once it has expired, `?error=INVALID_TOKEN`. The
+// link also carries the account's address as `login`, for password managers.
 export const Route = createFileRoute("/reset-password")({
   validateSearch: (search: Record<string, unknown>) => ({
     token: typeof search.token === "string" ? search.token : undefined,
     error: typeof search.error === "string" ? search.error : undefined,
+    login: typeof search.login === "string" ? search.login : undefined,
   }),
   head: () => ({ meta: [{ title: "Choisir un mot de passe" }] }),
   component: ResetPasswordPage,
 });
 
 function ResetPasswordPage() {
-  const { token, error: linkError } = Route.useSearch();
-  const [password, setPassword] = useState("");
-  const [confirmation, setConfirmation] = useState("");
+  const { token, error: linkError, login } = Route.useSearch();
+  const hydrated = useHydrated();
   const [error, setError] = useState<string | null>(null);
   const [expired, setExpired] = useState(false);
   const [pending, setPending] = useState(false);
@@ -60,7 +62,11 @@ function ResetPasswordPage() {
         title="Mot de passe enregistré"
         description="Connectez-vous avec votre nouveau mot de passe. Vos autres sessions ont été fermées."
       >
-        <Link to="/login" className={buttonVariants({ className: "w-full" })}>
+        <Link
+          to="/login"
+          search={login ? { login } : {}}
+          className={buttonVariants({ className: "w-full" })}
+        >
           Se connecter
         </Link>
       </AuthCard>
@@ -69,6 +75,10 @@ function ResetPasswordPage() {
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    // From the form: a password manager may fill it before hydration.
+    const form = new FormData(event.currentTarget);
+    const password = String(form.get("password") ?? "");
+    const confirmation = String(form.get("confirmation") ?? "");
     if (password !== confirmation) {
       setError("Les deux mots de passe ne correspondent pas.");
       return;
@@ -90,39 +100,46 @@ function ResetPasswordPage() {
 
   return (
     <AuthCard title="Choisir un mot de passe">
-      <form onSubmit={(event) => void submit(event)}>
+      <form method="post" onSubmit={(event) => void submit(event)}>
+        {/* Tells a password manager which account the new password is for. */}
+        <input
+          type="text"
+          name="username"
+          autoComplete="username"
+          value={login ?? ""}
+          readOnly
+          hidden
+        />
         <FieldGroup>
           <Field>
             <FieldLabel htmlFor="password">Nouveau mot de passe</FieldLabel>
-            <Input
+            <PasswordInput
               id="password"
               name="password"
-              type="password"
               autoComplete="new-password"
               autoFocus
               required
               minLength={MIN_PASSWORD_LENGTH}
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
+              onChange={() => setError(null)}
             />
             <FieldDescription>
               {MIN_PASSWORD_LENGTH} caractères au moins.
             </FieldDescription>
           </Field>
           <Field>
-            <FieldLabel htmlFor="confirmation">Confirmation</FieldLabel>
-            <Input
+            <FieldLabel htmlFor="confirmation">
+              Confirmer le mot de passe
+            </FieldLabel>
+            <PasswordInput
               id="confirmation"
               name="confirmation"
-              type="password"
               autoComplete="new-password"
               required
-              value={confirmation}
-              onChange={(event) => setConfirmation(event.target.value)}
+              onChange={() => setError(null)}
             />
           </Field>
           {error ? <FieldError>{error}</FieldError> : null}
-          <Button type="submit" disabled={pending}>
+          <Button type="submit" disabled={!hydrated || pending}>
             {pending ? "Enregistrement…" : "Enregistrer le mot de passe"}
           </Button>
         </FieldGroup>

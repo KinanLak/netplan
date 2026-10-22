@@ -44,8 +44,9 @@ geometry key so that two blocks never occupy the same cell.
 Built by lot 1 (ADRs 0003, 0004 and 0021). better-auth runs inside Convex as
 a locally installed component (`convex/betterAuth/`, `convex/auth.ts`); the
 app server proxies `/api/auth/*` to the Convex site and sends a visitor
-without a session to `/login` before any page loads. There is no sign-up and
-a session lasts 24 hours from login, never extended.
+without a session to `/login` before any page loads. There is no sign-up; a
+session lasts 24 hours from its last use and 7 days from login at most, and
+sign-in attempts are limited per identifier typed (ADR 0031).
 
 - **Roles.** `reader`, `editor` and `admin` on the better-auth user, shown as
   Lecteur, Éditeur and Admin. Public Convex functions are built only with the

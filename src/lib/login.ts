@@ -44,8 +44,9 @@ export function loginErrorMessage(error: {
   status?: number;
   code?: string;
 }): string {
+  // Five attempts per identifier and minute (ADR 0031).
   if (error.status === 429) {
-    return "Trop de tentatives. Réessayez dans quelques minutes.";
+    return "Trop de tentatives. Réessayez dans une minute.";
   }
   if (error.code === "BANNED_USER") {
     return "Ce compte est désactivé. Contactez un administrateur.";
@@ -81,7 +82,7 @@ export const MIN_PASSWORD_LENGTH = 8;
 
 export function forgotPasswordErrorMessage(error: { status?: number }): string {
   if (error.status === 429) {
-    return "Trop de demandes. Réessayez dans quelques minutes.";
+    return "Trop de demandes. Réessayez dans une minute.";
   }
   return "La demande a échoué. Réessayez.";
 }
@@ -91,7 +92,7 @@ export function resetPasswordErrorMessage(error: {
   code?: string;
 }): string {
   if (error.status === 429) {
-    return "Trop de tentatives. Réessayez dans quelques minutes.";
+    return "Trop de tentatives. Réessayez dans un instant.";
   }
   if (error.code === "PASSWORD_TOO_SHORT") {
     return `Le mot de passe doit compter au moins ${MIN_PASSWORD_LENGTH} caractères.`;
@@ -109,6 +110,27 @@ export function resetPasswordErrorMessage(error: {
 export function isSessionLost(error: unknown): boolean {
   return authErrorCode(error) === "unauthenticated";
 }
+
+export type SessionLostReason = "expired" | "disabled";
+
+/** Why the session ended, as the server says it; expired when it does not. */
+export function sessionLostReason(error: unknown): SessionLostReason {
+  const reason =
+    error instanceof ConvexError
+      ? (error.data as { reason?: unknown } | null)?.reason
+      : undefined;
+  return reason === "disabled" ? "disabled" : "expired";
+}
+
+/** What the sign-in page says above the form after a session ended. */
+export const SESSION_LOST_MESSAGES: Record<SessionLostReason, string> = {
+  expired: "Votre session a pris fin. Reconnectez-vous pour continuer.",
+  disabled: "Ce compte a été désactivé. Contactez un administrateur.",
+};
+
+export const isSessionLostReason = (
+  value: unknown,
+): value is SessionLostReason => value === "expired" || value === "disabled";
 
 /** The error a Convex function throws when the caller's role is too low. */
 export function isForbidden(error: unknown): boolean {

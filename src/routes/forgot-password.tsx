@@ -11,6 +11,7 @@ import {
   FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { useHydrated } from "@/hooks/use-hydrated";
 import { authClient } from "@/lib/auth-client";
 import { forgotPasswordErrorMessage, requestFailure } from "@/lib/login";
 
@@ -20,6 +21,7 @@ export const Route = createFileRoute("/forgot-password")({
 });
 
 function ForgotPasswordPage() {
+  const hydrated = useHydrated();
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -27,11 +29,16 @@ function ForgotPasswordPage() {
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    // From the form: the browser may fill it before hydration.
+    const address = String(
+      new FormData(event.currentTarget).get("email") ?? "",
+    ).trim();
+    setEmail(address);
     setPending(true);
     setError(null);
     const failure = await requestFailure(
       authClient.requestPasswordReset({
-        email: email.trim(),
+        email: address,
         redirectTo: "/reset-password",
       }),
     );
@@ -66,7 +73,7 @@ function ForgotPasswordPage() {
       title="Mot de passe oublié"
       description="Saisissez l'adresse e-mail de votre compte : vous recevrez un lien pour choisir un nouveau mot de passe."
     >
-      <form onSubmit={(event) => void submit(event)}>
+      <form method="post" onSubmit={(event) => void submit(event)}>
         <FieldGroup>
           <Field>
             <FieldLabel htmlFor="email">Adresse e-mail</FieldLabel>
@@ -77,8 +84,7 @@ function ForgotPasswordPage() {
               autoComplete="email"
               autoFocus
               required
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
+              onChange={() => setError(null)}
             />
             <FieldDescription>
               Un compte qui se connecte avec Keycloak change son mot de passe
@@ -86,7 +92,7 @@ function ForgotPasswordPage() {
             </FieldDescription>
           </Field>
           {error ? <FieldError>{error}</FieldError> : null}
-          <Button type="submit" disabled={pending}>
+          <Button type="submit" disabled={!hydrated || pending}>
             {pending ? "Envoi…" : "Envoyer le lien"}
           </Button>
           <FieldDescription className="text-center">

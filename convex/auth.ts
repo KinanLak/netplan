@@ -2,7 +2,11 @@ import { createClient } from "@convex-dev/better-auth";
 import type { GenericCtx } from "@convex-dev/better-auth";
 import { convex } from "@convex-dev/better-auth/plugins";
 import { requireActionCtx } from "@convex-dev/better-auth/utils";
-import { createAuthEndpoint } from "better-auth/api";
+import {
+  APIError,
+  createAuthEndpoint,
+  createAuthMiddleware,
+} from "better-auth/api";
 import { betterAuth } from "better-auth/minimal";
 import type { BetterAuthOptions } from "better-auth/minimal";
 import { admin } from "better-auth/plugins/admin";
@@ -22,7 +26,11 @@ import {
 import type { KeycloakConfig } from "./lib/keycloak";
 import { resetPasswordMail } from "./lib/mailTemplates";
 
+// A session ends after 24 hours without use, and 7 days after login
+// whatever its use (ADR 0031). Use extends it at most once an hour.
 const SESSION_SECONDS = 24 * 60 * 60;
+const SESSION_REFRESH_SECONDS = 60 * 60;
+const SESSION_MAX_MS = 7 * 24 * 60 * 60 * 1000;
 const RESET_PASSWORD_SECONDS = 60 * 60;
 
 export const authComponent = createClient<DataModel, typeof authSchema>(
@@ -121,9 +129,7 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
     database: authComponent.adapter(ctx),
     session: {
       expiresIn: SESSION_SECONDS,
-      // ADR 0004 bounds a Keycloak role removal by the session length, so the
-      // 24 hours run from login and activity does not extend them.
-      disableSessionRefresh: true,
+      updateAge: SESSION_REFRESH_SECONDS,
     },
     rateLimit: {
       enabled: true,
@@ -140,7 +146,40 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
         // Only starts the redirect to Keycloak, which guards the password;
         // the strict sign-in rule would turn a team's morning logins away.
         "/sign-in/oauth2": { window: 10, max: 100 },
+        // Without a client address every user shares these buckets, so they
+        // only stop an attempt spread over many accounts; the hook below
+        // limits each identifier (ADR 0031).
+        "/sign-in/username": { window: 60, max: 60 },
+        "/sign-in/email": { window: 60, max: 60 },
+        // Shared too: three a minute would turn away the third person to
+        // forget a password that minute.
+        "/request-password-reset": { window: 60, max: 10 },
       },
+    },
+    hooks: {
+      before: createAuthMiddleware(async (endpoint) => {
+        const field =
+          endpoint.path === "/sign-in/username"
+            ? "username"
+            : endpoint.path === "/sign-in/email"
+              ? "email"
+              : null;
+        if (!field) return;
+        const identifier: unknown = (
+          endpoint.body as Record<string, unknown> | undefined
+        )?.[field];
+        if (typeof identifier !== "string") return;
+        const allowed = await requireActionCtx(ctx).runMutation(
+          internal.signInAttempts.consume,
+          { identifier },
+        );
+        if (!allowed) {
+          throw new APIError("TOO_MANY_REQUESTS", {
+            code: "TOO_MANY_ATTEMPTS",
+            message: "Too many sign-in attempts for this identifier.",
+          });
+        }
+      }),
     },
     account: {
       // A Keycloak login whose email a local account already uses is refused
@@ -161,6 +200,31 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
     },
     databaseHooks: {
       session: {
+        // Activity extends a session up to 7 days after its login, so a
+        // role removed in Keycloak lands within a week (ADR 0031).
+        update: {
+          before: async (session, endpoint) => {
+            if (!(session.expiresAt instanceof Date)) return;
+            const token = endpoint
+              ? await endpoint.getSignedCookie(
+                  endpoint.context.authCookies.sessionToken.name,
+                  endpoint.context.secret,
+                )
+              : null;
+            const current = token
+              ? await endpoint?.context.internalAdapter.findSession(token)
+              : null;
+            // Refusing the update would end the session: better-auth signs
+            // out when it fails. The browser sends the cookie, and the
+            // bearer plugin turns a token into one.
+            if (!current) return;
+            // The Convex adapter hands dates back as numbers.
+            const cap =
+              new Date(current.session.createdAt).getTime() + SESSION_MAX_MS;
+            if (session.expiresAt.getTime() <= cap) return;
+            return { data: { ...session, expiresAt: new Date(cap) } };
+          },
+        },
         create: {
           before: async (session, context) => {
             if (
@@ -183,9 +247,16 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
       // form says nothing about which addresses have an account.
       sendResetPassword: async ({ user, url }) => {
         if (!(await mayResetPassword(ctx, user.id))) return;
+        // The landing page names the account for password managers, from
+        // the account itself rather than from what the request said.
+        const link = new URL(url);
+        link.searchParams.set(
+          "callbackURL",
+          `/reset-password?${new URLSearchParams({ login: user.email }).toString()}`,
+        );
         await requireActionCtx(ctx).scheduler.runAfter(0, internal.mail.send, {
           to: user.email,
-          ...resetPasswordMail({ name: user.name, url }),
+          ...resetPasswordMail({ name: user.name, url: link.toString() }),
         });
       },
     },

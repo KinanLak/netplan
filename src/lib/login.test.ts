@@ -5,6 +5,7 @@ import {
   isEmail,
   isForbidden,
   isSessionLost,
+  sessionLostReason,
   keycloakErrorMessage,
   loginErrorMessage,
   requestFailure,
@@ -66,6 +67,28 @@ describe("isSessionLost", () => {
   });
 });
 
+describe("sessionLostReason", () => {
+  it("reads a disabled account from the server's refusal", () => {
+    expect(
+      sessionLostReason(
+        new ConvexError({ code: "unauthenticated", reason: "disabled" }),
+      ),
+    ).toBe("disabled");
+  });
+
+  it("reads anything else as an expired session", () => {
+    expect(
+      sessionLostReason(
+        new ConvexError({ code: "unauthenticated", reason: "expired" }),
+      ),
+    ).toBe("expired");
+    expect(
+      sessionLostReason(new ConvexError({ code: "unauthenticated" })),
+    ).toBe("expired");
+    expect(sessionLostReason(new Error("unauthenticated"))).toBe("expired");
+  });
+});
+
 describe("isForbidden", () => {
   it("recognises the error a function throws for a role too low", () => {
     expect(isForbidden(new ConvexError({ code: "forbidden" }))).toBe(true);
@@ -84,7 +107,7 @@ describe("password reset messages", () => {
   it("tells a rate-limited user to wait rather than retry", () => {
     expect(forgotPasswordErrorMessage({ status: 429 })).toContain("Réessayez");
     expect(resetPasswordErrorMessage({ status: 429 })).toContain(
-      "quelques minutes",
+      "Réessayez dans",
     );
   });
 

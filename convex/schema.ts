@@ -377,6 +377,16 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_floor", ["floorId"]),
 
+  // Sign-in attempts per identifier typed, for the current minute
+  // (ADR 0031). Purged once their window has ended.
+  signInAttempts: defineTable({
+    identifier: v.string(),
+    windowStart: v.number(),
+    count: v.number(),
+  })
+    .index("by_identifier", ["identifier"])
+    .index("by_window_start", ["windowStart"]),
+
   // A single row: the Keycloak role names that grant Éditeur and Admin
   // (ADR 0004). Absent until an admin first saves them.
   authSettings: defineTable({
