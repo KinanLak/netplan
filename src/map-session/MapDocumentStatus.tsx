@@ -10,6 +10,7 @@ import {
   useMapDocumentSyncStatus,
 } from "./useMapDocument";
 import { FORBIDDEN_REJECTION } from "./outbox";
+import { dispatchUndoRedoEvent } from "./history";
 
 // Long enough to see the tick, short enough to be gone before the next edit.
 const SETTLED_MS = 1_000;
@@ -45,6 +46,8 @@ export function MapDocumentStatus({
     toast.error("Modification non appliquée", {
       description: getRejectedOperationMessage(rejectedMessage),
     });
+    // The toolbar flashes red, as an undo flashes neutral (A19).
+    dispatchUndoRedoEvent("refused");
     dismissRejectedOperation();
   }, [rejectedMessage, dismissRejectedOperation]);
 

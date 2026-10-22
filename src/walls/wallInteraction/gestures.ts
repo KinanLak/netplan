@@ -5,7 +5,11 @@ import type {
 } from "@/types/map";
 import { arePositionsEqual } from "@/walls/gridGeometry/cells";
 import { createBrushWallDraft } from "@/walls/gridGeometry/drafts";
-import { toLineFailureMessage, toRoomFailureMessage } from "./messages";
+import {
+  COLLISION_LINE_MESSAGE,
+  toLineFailureMessage,
+  toRoomFailureMessage,
+} from "./messages";
 import { stabilizeWallInteractionState } from "./state";
 import type {
   PointerSample,
@@ -69,6 +73,30 @@ export const clickWallPane = (
   };
 };
 
+/**
+ * Pressing the pane with the wall or room tool sets the first point, so the
+ * natural press-drag-release draws the shape (A14); two clicks still do.
+ */
+export const pressWallPane = (
+  state: WallInteractionState,
+  context: WallInteractionContext,
+  adapter: WallInteractionAdapter,
+  sample: PointerSample,
+): WallInteractionState => {
+  if (
+    !canUseWallTool(context) ||
+    (context.activeDrawTool !== "wall" && context.activeDrawTool !== "room") ||
+    state.drawAnchor
+  ) {
+    return state;
+  }
+  const anchored = clickDrawPane(state, context, adapter, sample);
+  return stabilizeWallInteractionState(state, {
+    ...anchored,
+    anchoredByPress: anchored.drawAnchor !== null,
+  });
+};
+
 const computeClickedWallPane = (
   state: WallInteractionState,
   context: WallInteractionContext,
@@ -77,6 +105,22 @@ const computeClickedWallPane = (
 ): WallInteractionResult => {
   if (!canUseWallTool(context) || !context.currentFloorId) {
     return { state, handled: false };
+  }
+
+  if (state.anchoredByPress) {
+    const released = { ...state, anchoredByPress: false };
+    // A press released where it started was a click: the anchor stays for
+    // the second one. Released elsewhere, it ends the shape there.
+    if (
+      state.drawAnchor &&
+      arePositionsEqual(sample.snappedPoint, state.drawAnchor)
+    ) {
+      return { state: released, handled: true };
+    }
+    return {
+      state: clickDrawPane(released, context, adapter, sample),
+      handled: true,
+    };
   }
 
   if (context.activeDrawTool === "wall-erase") {
@@ -324,7 +368,7 @@ const clickBrushPane = (
   const brushResult = addBrushAtPoint(context, adapter, sample.snappedPoint);
   const nextMessage =
     brushResult.reason === "collision-with-device"
-      ? "Mur refuse: collision avec un device."
+      ? COLLISION_LINE_MESSAGE
       : brushResult.changed
         ? null
         : state.drawMessage;
@@ -417,6 +461,7 @@ const resetFinishedDrawState = (
   state: WallInteractionState,
 ): WallInteractionState => ({
   ...state,
+  anchoredByPress: false,
   drawAnchor: null,
   lastWallStartPoint: null,
   pointerPreview: null,

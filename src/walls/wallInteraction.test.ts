@@ -254,7 +254,7 @@ describe("wall interaction", () => {
     expect(rejected.state.drawAnchor).toEqual({ x: 10, y: 10 });
     expect(rejected.state.pointerPreview).toEqual({ x: 50, y: 10 });
     expect(rejected.state.drawMessage).toBe(
-      "Mur refuse: collision avec un device.",
+      "Mur refusé : il traverse un équipement.",
     );
   });
 
@@ -306,7 +306,7 @@ describe("wall interaction", () => {
 
     expect(rejected.state.drawAnchor).toEqual({ x: 10, y: 10 });
     expect(rejected.state.pointerPreview).toEqual({ x: 10, y: 50 });
-    expect(rejected.state.drawMessage).toBe("Salle refusée: rectangle vide.");
+    expect(rejected.state.drawMessage).toBe("Salle refusée : rectangle vide.");
   });
 
   it("suppresses the click that follows a brush drag", () => {
@@ -422,7 +422,7 @@ describe("wall interaction", () => {
     );
 
     expect(clicked.state.drawMessage).toBe(
-      "Mur refuse: collision avec un device.",
+      "Mur refusé : il traverse un équipement.",
     );
   });
 

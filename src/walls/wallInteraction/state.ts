@@ -39,6 +39,7 @@ export const areWallInteractionStatesEqual = (
     areNullablePositionsEqual(a.pointerSnapPoint, b.pointerSnapPoint) &&
     areNullablePositionsEqual(a.lastWallStartPoint, b.lastWallStartPoint) &&
     a.drawMessage === b.drawMessage &&
+    a.anchoredByPress === b.anchoredByPress &&
     areEraseKeysEqual(a.erasePreviewKeys, b.erasePreviewKeys) &&
     arePointerSamplesEqual(a.eraseStrokeLastSample, b.eraseStrokeLastSample) &&
     a.isEraseStrokeActive === b.isEraseStrokeActive &&
@@ -66,6 +67,7 @@ export const createWallInteractionState = (): WallInteractionState => ({
   pointerSnapPoint: null,
   lastWallStartPoint: null,
   drawMessage: null,
+  anchoredByPress: false,
   erasePreviewKeys: [],
   eraseStrokeLastSample: null,
   isEraseStrokeActive: false,

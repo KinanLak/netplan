@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNodesState } from "@xyflow/react";
 import type { OnNodesChange } from "@xyflow/react";
 import type {
@@ -15,6 +15,7 @@ import { useDevicePlacement } from "@/devices/useDevicePlacement";
 import { toDeviceNodes } from "@/devices/reactFlowDeviceAdapter";
 import type { DeviceNode } from "@/devices/reactFlowDeviceAdapter";
 import { portsByDevice } from "@/devices/ports";
+import { GRID_SIZE } from "@/lib/grid";
 
 interface UseCanvasDeviceNodesParams {
   devices: Array<Device>;
@@ -40,8 +41,16 @@ interface UseCanvasDeviceNodesParams {
   setHoveredDevice: (deviceId: DeviceId | null) => void;
 }
 
+/** Where a dragged device cannot go: the spot under the cursor (A13, A22). */
+export type BlockedSpot = {
+  deviceId: DeviceId;
+  position: Position;
+  size: Size;
+};
+
 interface UseCanvasDeviceNodesResult {
   nodes: Array<DeviceNode>;
+  blockedSpots: ReadonlyArray<BlockedSpot>;
   handleNodesChange: OnNodesChange<DeviceNode>;
   handleNodeClick: (_: React.MouseEvent, node: DeviceNode) => void;
   handleNodeMouseEnter: (_: React.MouseEvent, node: DeviceNode) => void;
@@ -50,6 +59,26 @@ interface UseCanvasDeviceNodesResult {
 
 const arePositionsEqual = (a: Position, b: Position) =>
   a.x === b.x && a.y === b.y;
+
+/** The spots with `deviceId`'s replaced, the same array when nothing moved. */
+const withBlockedSpot = (
+  current: ReadonlyArray<BlockedSpot>,
+  deviceId: DeviceId,
+  spot: BlockedSpot | null,
+): ReadonlyArray<BlockedSpot> => {
+  const previous = current.find((entry) => entry.deviceId === deviceId);
+  if (!previous && !spot) return current;
+  if (previous && spot && arePositionsEqual(previous.position, spot.position)) {
+    return current;
+  }
+  const others = current.filter((entry) => entry.deviceId !== deviceId);
+  return spot ? [...others, spot] : others;
+};
+
+const snapToGrid = ({ x, y }: Position): Position => ({
+  x: Math.round(x / GRID_SIZE) * GRID_SIZE,
+  y: Math.round(y / GRID_SIZE) * GRID_SIZE,
+});
 
 const areSizesEqual = (a: Size, b: Size) =>
   a.width === b.width && a.height === b.height;
@@ -139,6 +168,9 @@ export function useCanvasDeviceNodes({
     ),
   );
   const draggingDeviceIdsRef = useRef<Set<DeviceId>>(new Set());
+  const [blockedSpots, setBlockedSpots] = useState<ReadonlyArray<BlockedSpot>>(
+    [],
+  );
 
   useEffect(() => {
     const nextNodes = toDeviceNodes(
@@ -208,6 +240,16 @@ export function useCanvasDeviceNodes({
             });
 
             if (result.ok) {
+              // The device never overlaps an obstacle: it waits at the
+              // nearest free spot, and the spot under the cursor shows it
+              // cannot go there.
+              const wanted = snapToGrid(change.position);
+              const spot = arePositionsEqual(wanted, result.position)
+                ? null
+                : { deviceId: device.id, position: wanted, size: device.size };
+              setBlockedSpots((current) =>
+                withBlockedSpot(current, device.id, spot),
+              );
               return {
                 ...change,
                 position: result.position,
@@ -218,6 +260,9 @@ export function useCanvasDeviceNodes({
 
         if (change.type === "position" && change.position && !change.dragging) {
           draggingDeviceIdsRef.current.delete(change.id as DeviceId);
+          setBlockedSpots((current) =>
+            withBlockedSpot(current, change.id as DeviceId, null),
+          );
           const committedPosition = devicePlacement.commitDrag(
             change.id as DeviceId,
           );
@@ -286,6 +331,7 @@ export function useCanvasDeviceNodes({
 
   return {
     nodes,
+    blockedSpots,
     handleNodesChange,
     handleNodeClick,
     handleNodeMouseEnter,

@@ -141,6 +141,36 @@ export const wallCollidesWithDevices = (
   );
 };
 
+/**
+ * What a wall drawn as `blocks` would run into (A13): the new blocks that
+ * cross a device, and the devices they cross, so the preview can show both.
+ */
+export const wallConflicts = <
+  TBlock extends WallShape,
+  TDevice extends Pick<Device, "position" | "size">,
+>(
+  blocks: ReadonlyArray<TBlock>,
+  devices: ReadonlyArray<TDevice>,
+): { blocks: Array<TBlock>; devices: Array<TDevice> } => {
+  const crossed = new Set<TDevice>();
+  const blocked: Array<TBlock> = [];
+  for (const block of blocks) {
+    const rect = getWallCollisionRect(block);
+    const hits = devices.filter((device) =>
+      rectanglesOverlap(
+        { x: rect.x, y: rect.y },
+        { width: rect.width, height: rect.height },
+        device.position,
+        device.size,
+      ),
+    );
+    if (hits.length === 0) continue;
+    blocked.push(block);
+    for (const hit of hits) crossed.add(hit);
+  }
+  return { blocks: blocked, devices: [...crossed] };
+};
+
 export function computeWallMaskBounds(
   walls: ReadonlyArray<WallShape>,
   padding = GRID_SIZE,

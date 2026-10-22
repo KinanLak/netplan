@@ -137,7 +137,13 @@ export const coalesceHistoryGroupOperations = (
     : { kind: "batch", meta: first.meta, operations: batchOperations };
 };
 
-export const dispatchUndoRedoEvent = (type: "undo" | "redo") => {
+/**
+ * What the toolbar flashes for (A19): an undo or a redo flashes neutral, a
+ * refused change red.
+ */
+export type MapFlash = "undo" | "redo" | "refused";
+
+export const dispatchUndoRedoEvent = (type: MapFlash) => {
   if (typeof window === "undefined") return;
   window.dispatchEvent(
     new CustomEvent(UNDO_REDO_EVENT_NAME, { detail: { type } }),

@@ -19,7 +19,9 @@ import {
   snapPositionToWallGrid,
   WALL_GRID_OFFSET,
   wallCollidesWithDevices,
+  wallConflicts,
 } from "./cells";
+import { createBrushWallDraft, splitWallDraftIntoBlocks } from "./drafts";
 
 const wall = (
   start: { x: number; y: number },
@@ -143,6 +145,38 @@ describe("wall grid cell math", () => {
 
     expect(wallCollidesWithDevices(segment, [overlapping])).toBe(true);
     expect(wallCollidesWithDevices(segment, [next])).toBe(false);
+  });
+
+  it("names the blocks of a drawn wall that cross a device, and the device", () => {
+    const blocks = [
+      wall({ x: 10, y: 30 }, { x: 30, y: 30 }),
+      wall({ x: 30, y: 30 }, { x: 50, y: 30 }),
+      wall({ x: 90, y: 30 }, { x: 110, y: 30 }),
+    ];
+    const crossed = device({ x: 30, y: 20 });
+    const clear = device({ x: 30, y: 80 });
+
+    const conflicts = wallConflicts(blocks, [crossed, clear]);
+    expect(conflicts.blocks).toEqual([blocks[1]]);
+    expect(conflicts.devices).toEqual([crossed]);
+    expect(wallConflicts(blocks, [clear])).toEqual({ blocks: [], devices: [] });
+  });
+
+  it("sees a brush cell's whole width once the stub is split into its block", () => {
+    const point = snapPositionToWallGrid({ x: 30, y: 30 });
+    const stub = createBrushWallDraft("floor-a" as FloorId, point, "concrete");
+    // Under the cell's right half, away from the one-pixel stub.
+    const beside = device(
+      { x: point.x + 6, y: point.y - 5 },
+      {
+        width: 10,
+        height: 10,
+      },
+    );
+    expect(wallConflicts([stub], [beside]).devices).toEqual([]);
+    expect(
+      wallConflicts(splitWallDraftIntoBlocks(stub), [beside]).devices,
+    ).toEqual([beside]);
   });
 
   it("detects whether a point is inside a wall collision rect", () => {
