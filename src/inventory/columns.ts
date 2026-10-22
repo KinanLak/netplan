@@ -81,9 +81,12 @@ export const sortRows = (
   }
   const compare = compareBy[sort.key];
   return rows.toSorted((a, b) => {
-    const unplacedLast =
-      sort.key === "location" && (!a.location || !b.location);
-    const order = unplacedLast ? compare(a, b) : direction * compare(a, b);
+    // Unplaced devices, and devices without a status, stay last whichever
+    // the direction.
+    const missingLast =
+      (sort.key === "location" && (!a.location || !b.location)) ||
+      (sort.key === "status" && (statusOf(a) === null || statusOf(b) === null));
+    const order = missingLast ? compare(a, b) : direction * compare(a, b);
     return order || byName(a, b);
   });
 };
