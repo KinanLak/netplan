@@ -44,6 +44,7 @@ export const useMapStore = create<MapStore>()((set, get) => ({
   wallEraserSize: WALL_ERASER_DEFAULT_SIZE,
   isOverlayPanelOpen: false,
   isPlacePanelOpen: false,
+  placeTargetId: null,
   isLabelToolActive: false,
   isOverlayHidden: false,
   overlayDraft: null,
@@ -176,11 +177,13 @@ export const useMapStore = create<MapStore>()((set, get) => ({
           : state,
     );
   },
-  setPlacePanelOpen: (open) => {
+  setPlacePanelOpen: (open, targetId) => {
     set((state) =>
       open
         ? {
             isPlacePanelOpen: true,
+            placeTargetId: targetId ?? null,
+            ...(targetId !== undefined && { isEditMode: true }),
             isOverlayPanelOpen: false,
             isLabelToolActive: false,
             isMultiSelectMode: false,

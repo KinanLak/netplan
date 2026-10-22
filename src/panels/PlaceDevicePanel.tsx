@@ -41,8 +41,10 @@ function PlaceDevicePanelContent() {
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   // The row the search field's arrows move and Enter places; a new device
-  // starts there.
-  const [activeId, setActiveId] = useState<string | null>(null);
+  // starts there, and so does the device the inventory sent here (B23).
+  const [activeId, setActiveId] = useState<string | null>(
+    () => useMapStore.getState().placeTargetId,
+  );
 
   const unplaced = devices
     ?.filter((device) => !device.location)
