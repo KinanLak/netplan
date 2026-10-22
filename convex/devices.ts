@@ -14,6 +14,7 @@ import {
 import { deleteDeviceCabling, insertDeviceCabling } from "./lib/ports";
 import { observedMetadata } from "./lib/statuses";
 import { recordArrival } from "./history";
+import { lastSighting, lastSightingOf } from "./cables";
 import { requireSite } from "./sites";
 import {
   IDENTITY_FIELD_NAMES,
@@ -94,6 +95,22 @@ export const listForSite = readerQuery({
             : null,
       };
     });
+  },
+});
+
+/**
+ * Where and when the network last saw a device, by its MAC addresses, for
+ * every role (ADR 0032): the place and the time, not the history.
+ */
+export const lastSeen = readerQuery({
+  args: { deviceId: v.string() },
+  returns: lastSighting,
+  handler: async (ctx, { deviceId }) => {
+    const device = await ctx.db
+      .query("devices")
+      .withIndex("by_object_id", (q) => q.eq("objectId", deviceId))
+      .unique();
+    return device ? await lastSightingOf(ctx, device) : null;
   },
 });
 

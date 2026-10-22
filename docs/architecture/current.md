@@ -227,9 +227,13 @@ Built by lot 3b (ADR 0025) and redrawn by the UX lot U3 (ADR 0029).
   read (`siteCycles.switchReads`). A switch's status, its ports' link and
   "Appareil vu", and the status of every device last seen on it rest on
   that read. Past twice the longest cadence plus the lease, the minute cron
-  removes them (`expireStaleReads`), so a dead LibreNMS turns the map to
-  "Inconnu" rather than freezing it. `convex/lib/statuses.ts` drops what an
-  undo or a create brings back that no fresh read vouches for. A manual
+  expires them (`expireStaleReads`): port facts go, and a device or switch
+  the network did see turns `stale`, « Plus de nouvelles depuis … », with
+  `metadata.lastSeenAt` (ADR 0032), so a dead LibreNMS shows as such rather
+  than freezing the map. « Inconnu » means never seen.
+  `convex/lib/statuses.ts` derives the same from the sightings for what an
+  undo or a create brings back. `devices.lastSeen` gives every role the
+  newest sighting, the drawer's « Vu sur le réseau ». A manual
   switch whose ports still carry their default names takes LibreNMS's.
 - **Ports and dots.** Switches and patch panels draw their real ports, coloured
   by `src/devices/portState.ts`. Every device with a status carries a dot.
@@ -264,8 +268,8 @@ Built by lot 5 (ADR 0027).
   step, so it has no map operation and no undo. `deviceEvents` records,
   for pcs and endpoints, a `located` event when a device is first seen or
   seen on none of the ports its latest sighting saw, and `online`/`offline`
-  when its derived status changes; a status cleared because its read grew
-  old records nothing. Each event copies the names it shows, so renaming or
+  when its derived status changes; a status turned stale because its read
+  grew old records nothing. Each event copies the names it shows, so renaming or
   deleting a socket never rewrites the past.
 - **Snapshots.** At 08, 12, 14, 16 and 19h site time, the first cycle whose
   LibreNMS step reads within the slot's window claims a `historySlots` row

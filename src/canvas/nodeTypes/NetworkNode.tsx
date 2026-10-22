@@ -33,6 +33,7 @@ const SELECTED_GLOWS: Record<Tone, string> = {
   up: "shadow-[0_0_8px_2px_var(--up)]!",
   down: "shadow-[0_0_8px_2px_var(--down)]!",
   unknown: "shadow-[0_0_8px_2px_var(--unknown)]!",
+  stale: "shadow-[0_0_8px_2px_var(--unknown)]!",
   passive: "shadow-[0_0_8px_2px_var(--ring)]!",
 };
 
@@ -40,6 +41,7 @@ const SHOWN_GLOWS: Record<Tone, string> = {
   up: "shadow-[0_0_6px_1px_var(--up)]!",
   down: "shadow-[0_0_6px_1px_var(--down)]!",
   unknown: "shadow-[0_0_6px_1px_var(--unknown)]!",
+  stale: "shadow-[0_0_6px_1px_var(--unknown)]!",
   passive: "shadow-[0_0_6px_1px_var(--ring)]!",
 };
 

@@ -158,6 +158,7 @@ const STATUS_FILTERS: Array<{ value: StatusFilter; label: string }> = [
   { value: "all", label: "Tous" },
   { value: "up", label: DEVICE_STATUS_LABELS.up },
   { value: "down", label: DEVICE_STATUS_LABELS.down },
+  { value: "stale", label: DEVICE_STATUS_LABELS.stale },
   { value: "unknown", label: DEVICE_STATUS_LABELS.unknown },
 ];
 
@@ -191,6 +192,7 @@ function SiteInventory({ site }: { site: SiteSummary }) {
     all: sorted.length,
     up: sorted.filter((device) => statusOf(device) === "up").length,
     down: sorted.filter((device) => statusOf(device) === "down").length,
+    stale: sorted.filter((device) => statusOf(device) === "stale").length,
     unknown: sorted.filter((device) => statusOf(device) === "unknown").length,
   };
   const coverage = coverageByType(sorted);
@@ -841,7 +843,8 @@ function DeviceStatusCell({ status }: { status: DeviceStatus | null }) {
         "flex items-center gap-2",
         status === "down"
           ? "text-down"
-          : status === "unknown" && "text-muted-foreground",
+          : (status === "unknown" || status === "stale") &&
+              "text-muted-foreground",
       )}
     >
       <StatusDot status={status} decorative />

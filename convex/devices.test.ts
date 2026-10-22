@@ -348,6 +348,34 @@ describe("the site inventory", () => {
     expect(await t.query(api.devices.unplacedCount, { siteId })).toBe(1);
   });
 
+  it("tells where and when the network last saw a device", async () => {
+    const t = await signedInTest();
+    const { siteId, floorId } = await siteWithFloor(t);
+    await createDevice(t, floorId, "device:seen", "PC-Vu", 0, [MAC]);
+    await createDevice(t, floorId, "device:never", "PC-Jamais", 100);
+    await t.run(async (ctx) => {
+      await ctx.db.insert("macSightings", {
+        siteId,
+        mac: MAC,
+        switchId: "device:never",
+        portId: "port:none",
+        seenAt: 5_000,
+        misses: 3,
+      });
+    });
+    // A Lecteur reads it too: `authorization.test.ts` lists it as "reader".
+    expect(
+      await t.query(api.devices.lastSeen, { deviceId: "device:seen" }),
+    ).toMatchObject({
+      at: 5_000,
+      current: false,
+      place: { switchName: "PC-Jamais", portName: "port:none" },
+    });
+    expect(
+      await t.query(api.devices.lastSeen, { deviceId: "device:never" }),
+    ).toBeNull();
+  });
+
   it("refuses a device whose MAC another device of the site carries", async () => {
     const t = await signedInTest();
     const { siteId, floorId } = await siteWithFloor(t);

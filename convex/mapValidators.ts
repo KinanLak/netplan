@@ -14,6 +14,8 @@ export const deviceStatus = v.union(
   v.literal("up"),
   v.literal("down"),
   v.literal("unknown"),
+  // The network once saw the device, and no read vouches for it any more.
+  v.literal("stale"),
 );
 
 export const wallColor = v.union(
@@ -28,6 +30,8 @@ export const size = v.object({ width: v.number(), height: v.number() });
 export const deviceMetadata = v.object({
   status: v.optional(deviceStatus),
   lastUser: v.optional(v.string()),
+  /** With a `stale` status: when the network last saw the device. */
+  lastSeenAt: v.optional(v.number()),
 });
 
 export const portKind = v.union(

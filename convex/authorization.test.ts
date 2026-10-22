@@ -26,6 +26,7 @@ const POLICY: Record<string, Role> = {
   "devices:listForFloor": "reader",
   "devices:listForSite": "reader",
   "devices:unplacedCount": "reader",
+  "devices:lastSeen": "reader",
   "devices:remove": "editor",
   "devices:updateIdentity": "editor",
   "floorOverlays:imageUrl": "reader",
