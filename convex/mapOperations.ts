@@ -254,8 +254,7 @@ const deviceFields = (id: string, device: Omit<DeviceInput, "id">) => ({
   id,
   floorId: device.floorId,
   type: device.type,
-  // A device drawn with a hostname is named after it (B10).
-  name: device.hostname?.trim() || device.name,
+  name: device.name,
   hostname: device.hostname,
   serial: device.serial,
   macs: device.macs,
@@ -854,8 +853,14 @@ const deviceMacsError = (
 
 const planDeviceCreate = (
   state: PlanningState,
-  operation: DeviceCreateOperation,
+  created: DeviceCreateOperation,
 ): string | null => {
+  // A device drawn with a hostname is named after it (B10), so the row
+  // inserted, and the replay compared with it, carry that name.
+  const hostname = created.device.hostname?.trim();
+  const operation = hostname
+    ? { ...created, device: { ...created.device, name: hostname } }
+    : created;
   const siteId = state.floorSites.get(operation.device.floorId);
   if (!siteId) return "Cet étage n'existe plus.";
   const shapeError = validateDeviceShape(operation.device);

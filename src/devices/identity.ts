@@ -29,7 +29,8 @@ export const isSourceOwned = (
 
 export const IDENTITY_TEXT_LIMITS: Record<IdentityTextField | "notes", number> =
   {
-    name: 120,
+    // A name may be a hostname (B10), so it is as long as one may be.
+    name: 253,
     // The longest DNS name.
     hostname: 253,
     serial: 120,
