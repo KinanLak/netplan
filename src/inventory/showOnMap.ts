@@ -19,3 +19,16 @@ export function showOnMap(
     search: { site: siteId, floor: location.floorId, device: deviceId },
   });
 }
+
+/**
+ * Opens the map, in edit mode, with « Placer » on a device that is on no
+ * floor (B23): it lands on the floor the reader last had open.
+ */
+export function openPlacement(
+  navigate: ReturnType<typeof useNavigate>,
+  siteId: string,
+  deviceId: string,
+) {
+  useMapStore.getState().setPlacePanelOpen(true, deviceId);
+  void navigate({ to: "/", search: { site: siteId } });
+}

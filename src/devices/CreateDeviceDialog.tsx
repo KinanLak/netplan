@@ -69,7 +69,7 @@ export function CreateDeviceDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** Called with the new device's id once the server has it. */
-  onCreated?: (deviceId: string) => void;
+  onCreated?: (deviceId: string, name: string) => void;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -108,7 +108,7 @@ function CreateDeviceForm({
   onDone,
 }: {
   site: SiteSummary;
-  onCreated?: (deviceId: string) => void;
+  onCreated?: (deviceId: string, name: string) => void;
   onDone: () => void;
 }) {
   const createDevice = useMutation(api.devices.create);
@@ -146,7 +146,7 @@ function CreateDeviceForm({
     setError(null);
     try {
       await createDevice({ siteId: site.id, deviceId, type, identity });
-      onCreated?.(deviceId);
+      onCreated?.(deviceId, identity.name ?? "");
       onDone();
     } catch (caught) {
       setError(failureMessage(caught, "editor"));
