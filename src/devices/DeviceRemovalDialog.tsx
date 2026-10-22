@@ -1,4 +1,6 @@
 import { create } from "zustand";
+import { toast } from "sonner";
+import { MAX_SELECTION_MOVE } from "@/canvas/hooks/useSelectionCommands";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -37,6 +39,13 @@ export function useUnplaceDevices() {
   const ask = useDeviceRemoval((state) => state.ask);
   return (deviceIds: ReadonlyArray<DeviceId>) => {
     if (deviceIds.length === 0) return;
+    // The server applies at most this many operations in one change.
+    if (deviceIds.length > MAX_SELECTION_MOVE) {
+      toast.error(
+        `Sélectionnez au plus ${MAX_SELECTION_MOVE} équipements pour les retirer ensemble.`,
+      );
+      return;
+    }
     if (deviceIds.length > 1) {
       ask({ kind: "unplace", deviceIds });
       return;

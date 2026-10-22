@@ -148,9 +148,15 @@ export function useSelectionShortcuts() {
     };
     window.addEventListener("keyup", release);
     window.addEventListener("blur", endHold);
+    // Ctrl+↑ during a hold: the gesture ends on the floor it moved, before
+    // the session switches to the next one.
+    const unsubscribe = useMapStore.subscribe((state, previous) => {
+      if (state.currentFloorId !== previous.currentFloorId) endHold();
+    });
     return () => {
       window.removeEventListener("keyup", release);
       window.removeEventListener("blur", endHold);
+      unsubscribe();
       endHold();
     };
   }, [commands]);
