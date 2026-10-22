@@ -147,16 +147,19 @@ export const overview = adminQuery({
         const librenmsStep = lastRun?.steps.find(
           (step) => step.source === "librenms",
         );
-        const reads = (cycle?.switchReads ?? []).filter(
-          (entry) => !entry.expired && onSite.has(entry.switchId),
+        const allReads = (cycle?.switchReads ?? []).filter((entry) =>
+          onSite.has(entry.switchId),
         );
+        // What the last cycle read, even if its statuses have expired since;
+        // only the age of statuses still shown leaves expired reads out.
         const readNow = new Set(
           lastRun
-            ? reads
+            ? allReads
                 .filter((entry) => entry.readAt >= lastRun.startedAt)
                 .map((entry) => entry.switchId)
             : [],
         );
+        const reads = allReads.filter((entry) => !entry.expired);
         return {
           id: siteId,
           name: site.name,

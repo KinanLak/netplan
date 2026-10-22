@@ -186,7 +186,8 @@ describe("the admin health overview", () => {
         },
         switchReads: [
           { switchId: "device:a", readAt: 1_500 },
-          { switchId: "device:b", readAt: 1_500 },
+          // Read by the last cycle; its status has expired since.
+          { switchId: "device:b", readAt: 1_500, expired: true },
           { switchId: "device:c", readAt: 500 },
         ],
       });
@@ -199,6 +200,42 @@ describe("the admin health overview", () => {
       failed: 1,
       notPolled: 1,
       oldestReadAt: 500,
+    });
+  });
+
+  it("names no removed source in a partial collection's headline", async () => {
+    const t = await admin();
+    const siteId = await createTestSite(t);
+    await t.run(async (ctx) => {
+      await ctx.db.insert("integrations", {
+        siteId,
+        kind: "netbox",
+        baseUrl: "https://netbox.test",
+        enabled: true,
+        token: { keyId: "k", iv: "iv", ciphertext: "c" },
+        updatedAt: 0,
+      });
+      await ctx.db.insert("siteCycles", {
+        siteId,
+        nextRunAt: 3_000,
+        failures: 1,
+        last: {
+          startedAt: 1_000,
+          finishedAt: 2_000,
+          manual: false,
+          steps: [
+            { source: "netbox", ok: true, message: "12 importés." },
+            { source: "librenms", ok: false, message: "Injoignable." },
+          ],
+        },
+      });
+    });
+
+    const freshness = await t.query(api.collection.freshness, { siteId });
+
+    expect(freshness?.last).toMatchObject({
+      failed: [],
+      succeeded: ["netbox"],
     });
   });
 

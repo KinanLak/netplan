@@ -414,6 +414,12 @@ export const freshnessOf = async (
   const last = cycle?.last;
   const sources = await enabledSources(ctx, site.objectId);
   const reads = cycle?.switchReads ?? [];
+  // A source removed since says nothing of what the site collects now.
+  const configured = await ctx.db
+    .query("integrations")
+    .withIndex("by_site_kind", (q) => q.eq("siteId", site.objectId))
+    .collect();
+  const steps = withoutRemovedSources(last, configured)?.steps ?? [];
   const polled = last?.steps.find(
     (step) => step.source === "librenms",
   )?.switches;
@@ -432,12 +438,8 @@ export const freshnessOf = async (
       ? {
           startedAt: last.startedAt,
           finishedAt: last.finishedAt,
-          failed: last.steps
-            .filter((step) => !step.ok)
-            .map((step) => step.source),
-          succeeded: last.steps
-            .filter((step) => step.ok)
-            .map((step) => step.source),
+          failed: steps.filter((step) => !step.ok).map((step) => step.source),
+          succeeded: steps.filter((step) => step.ok).map((step) => step.source),
         }
       : null,
     lastSuccessAt: cycle?.lastSuccessAt ?? null,
