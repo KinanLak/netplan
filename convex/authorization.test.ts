@@ -42,6 +42,7 @@ const POLICY: Record<string, Role> = {
   "health:overview": "admin",
   "history:forDevice": "editor",
   "history:forSite": "editor",
+  "history:latestSlot": "editor",
   "history:slotEntries": "editor",
   "history:slotsForDay": "editor",
   "history:snapshotsForDevice": "editor",
