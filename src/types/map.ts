@@ -311,6 +311,8 @@ export interface MapInteractionState {
   isOverlayPanelOpen: boolean;
   /** The panel that places inventory devices on the floor (C2). */
   isPlacePanelOpen: boolean;
+  /** The device the panel opened for, from the inventory (B23). */
+  placeTargetId: string | null;
   /** The next click on the plan puts a text label there (C4). */
   isLabelToolActive: boolean;
   /** Personal and per session: hiding the calque changes nothing for others. */
@@ -368,7 +370,11 @@ export interface MapInteractionActions {
   showCables: (deviceId: DeviceId | null) => void;
   setCableDraft: (draft: CableDraft | null) => void;
   setOverlayPanelOpen: (open: boolean) => void;
-  setPlacePanelOpen: (open: boolean) => void;
+  /**
+   * `targetId` opens the panel on that device, in edit mode: the inventory's
+   * « Placer sur le plan… ».
+   */
+  setPlacePanelOpen: (open: boolean, targetId?: string) => void;
   setLabelToolActive: (active: boolean) => void;
   toggleOverlayHidden: () => void;
   setOverlayDraft: (draft: OverlayDraft | null) => void;

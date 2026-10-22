@@ -105,6 +105,25 @@ describe("placing panel state", () => {
   });
 });
 
+describe("placing from the inventory", () => {
+  beforeEach(() => {
+    useMapStore.setState(initialState, true);
+  });
+
+  it("opens the panel on a device in edit mode, and forgets it on a plain open", () => {
+    useMapStore.setState({ isEditMode: false });
+    useMapStore.getState().setPlacePanelOpen(true, "device:pc");
+    expect(useMapStore.getState()).toMatchObject({
+      isPlacePanelOpen: true,
+      placeTargetId: "device:pc",
+      isEditMode: true,
+    });
+    useMapStore.getState().setPlacePanelOpen(false);
+    useMapStore.getState().setPlacePanelOpen(true);
+    expect(useMapStore.getState().placeTargetId).toBeNull();
+  });
+});
+
 describe("text tool state", () => {
   beforeEach(() => {
     useMapStore.setState(initialState, true);
