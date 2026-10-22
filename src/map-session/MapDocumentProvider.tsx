@@ -794,6 +794,8 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
     }
     const opposite = buildInverseOperation(snapshotBefore, operation);
     dispatchOperation(operation, { recordHistory: false });
+    // A redo is the latest map change, as a new edit would be (B14).
+    if (type === "redo") forgetCableChange();
     if (opposite) {
       const nextEntry = {
         label: operationLabel(opposite),

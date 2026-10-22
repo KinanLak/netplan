@@ -1,18 +1,26 @@
-// Cables stay outside the map's undo history (ADR 0022). So that Ctrl+Z
-// still reaches a cable just plugged or unplugged (B14), the last cable change
-// keeps a way to show its « Annuler » toast again until a map edit comes
-// after it or the toast is used.
+// Cables stay outside the map's undo history (ADR 0022). So that undo still
+// reaches a cable just plugged or unplugged (B14), the last cable change
+// keeps a way to show its « Annuler » toast again until a map edit or a redo
+// comes after it, or the toast is used.
+import { useSyncExternalStore } from "react";
 
 let lastCableChange: (() => void) | null = null;
+const listeners = new Set<() => void>();
+
+const set = (next: (() => void) | null) => {
+  if (next === lastCableChange) return;
+  lastCableChange = next;
+  for (const listener of listeners) listener();
+};
 
 /** Remembers how to show the latest cable change's toast again. */
 export const rememberCableChange = (showToast: () => void) => {
-  lastCableChange = showToast;
+  set(showToast);
 };
 
-/** Forgets it: a map edit came after it, or its « Annuler » was used. */
+/** Forgets it: a map edit or a redo came after it, or its « Annuler » was used. */
 export const forgetCableChange = () => {
-  lastCableChange = null;
+  set(null);
 };
 
 /**
@@ -21,7 +29,20 @@ export const forgetCableChange = () => {
  */
 export const reshowCableChange = (): boolean => {
   const show = lastCableChange;
-  lastCableChange = null;
+  set(null);
   show?.();
   return show !== null;
 };
+
+const subscribe = (listener: () => void) => {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+};
+
+/** Whether undo would show a cable change's toast again. */
+export const useHasCableChange = (): boolean =>
+  useSyncExternalStore(
+    subscribe,
+    () => lastCableChange !== null,
+    () => false,
+  );

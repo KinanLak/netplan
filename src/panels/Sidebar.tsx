@@ -1,4 +1,5 @@
 import { HugeiconsIcon } from "@hugeicons/react";
+import { useHasCableChange } from "@/devices/cableUndo";
 import {
   Add01Icon,
   Building05Icon,
@@ -106,7 +107,10 @@ function SidebarFloorShortcutHint() {
 function SidebarUndoRedo() {
   const isEditMode = useIsEditMode();
   const { handleUndo, handleRedo } = useUndoRedo();
-  const canUndo = useTemporalStore((s) => s.pastStates.length > 0);
+  // Undo also shows a cable change's toast again (B14).
+  const hasCableChange = useHasCableChange();
+  const canUndo =
+    useTemporalStore((s) => s.pastStates.length > 0) || hasCableChange;
   const canRedo = useTemporalStore((s) => s.futureStates.length > 0);
 
   return (

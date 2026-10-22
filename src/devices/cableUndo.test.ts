@@ -18,7 +18,7 @@ describe("cable undo", () => {
     expect(reshowCableChange()).toBe(false);
   });
 
-  it("forgets the change once a map edit comes after it", () => {
+  it("forgets the change once a map edit or a redo comes after it", () => {
     const show = mock(() => {});
     rememberCableChange(show);
     forgetCableChange();
