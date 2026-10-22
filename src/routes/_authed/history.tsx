@@ -36,7 +36,7 @@ export const Route = createFileRoute("/_authed/history")({
 });
 
 function HistoryPage() {
-  const { site } = useCurrentSite();
+  const { sites, site } = useCurrentSite();
   const canEdit = useCanEdit();
   return (
     <div className="flex h-svh flex-col bg-background text-foreground">
@@ -67,7 +67,9 @@ function HistoryPage() {
             <ListSkeleton />
           ) : site === null ? (
             <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-              Aucun site n'est encore configuré.
+              {sites && sites.length > 0
+                ? "Tous les sites sont archivés."
+                : "Aucun site n'est encore configuré."}
             </p>
           ) : (
             <SiteHistory key={site.id} site={site} />

@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { CurrentSiteArchived } from "@/sites/useCurrentSite";
 import { AuthBoundary } from "@convex-dev/better-auth/react";
 import { Outlet, createFileRoute, redirect } from "@tanstack/react-router";
 import { ConnectionBanner } from "@/components/connection-banner";
@@ -57,13 +58,15 @@ function AuthedLayout() {
       <CurrentUserProvider>
         {/* One shortcut listener for every page; each page registers the
             actions it handles (ADR 0030). */}
-        <ShortcutIntentProvider>
-          <ThemeShortcut />
-          <MapSession>
-            <Outlet />
-            <ConnectionBanner />
-          </MapSession>
-        </ShortcutIntentProvider>
+        <CurrentSiteArchived>
+          <ShortcutIntentProvider>
+            <ThemeShortcut />
+            <MapSession>
+              <Outlet />
+              <ConnectionBanner />
+            </MapSession>
+          </ShortcutIntentProvider>
+        </CurrentSiteArchived>
         <RefreshOutcomes />
       </CurrentUserProvider>
       {/* The only toaster, so a toast survives a change of page. Bottom

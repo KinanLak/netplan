@@ -1,4 +1,5 @@
 import { HugeiconsIcon } from "@hugeicons/react";
+import { useCanEdit } from "@/hooks/use-current-user";
 import {
   Add01Icon,
   MoreHorizontalIcon,
@@ -52,7 +53,6 @@ import { SiteSwitcher } from "@/sites/SiteSwitcher";
 import { UnknownMacs } from "@/sites/UnknownMacs";
 import { CreateDeviceDialog } from "@/devices/CreateDeviceDialog";
 import {
-  SiteArchivedContext,
   siteSearch,
   useCanEditSite,
   useCurrentSite,
@@ -93,7 +93,7 @@ export const Route = createFileRoute("/_authed/inventory")({
 });
 
 function InventoryPage() {
-  const { site } = useCurrentSite();
+  const { sites, site } = useCurrentSite();
   return (
     <div className="flex h-svh flex-col bg-background text-foreground">
       <header className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b bg-sidebar px-4 py-2">
@@ -119,12 +119,12 @@ function InventoryPage() {
             <ListSkeleton />
           ) : site === null ? (
             <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-              Aucun site n'est encore configuré.
+              {sites && sites.length > 0
+                ? "Tous les sites sont archivés."
+                : "Aucun site n'est encore configuré."}
             </p>
           ) : (
-            <SiteArchivedContext value={site.archived}>
-              <SiteInventory key={site.id} site={site} />
-            </SiteArchivedContext>
+            <SiteInventory key={site.id} site={site} />
           )}
         </div>
       </main>
@@ -487,7 +487,9 @@ function InventoryItem({
   const [showingCables, setShowingCables] = useState(false);
   const [showingHistory, setShowingHistory] = useState(false);
   const [showingSheet, setShowingSheet] = useState(false);
-  const hasHistory = canEdit && HAS_HISTORY.has(device.type);
+  // History is read by role, archived site or not (ADR 0033).
+  const canReadHistory = useCanEdit();
+  const hasHistory = canReadHistory && HAS_HISTORY.has(device.type);
   const { location, source } = device;
   const removable = canEdit && !location && !source;
 

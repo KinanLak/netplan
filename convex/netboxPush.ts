@@ -36,7 +36,13 @@ const netboxRow = async (ctx: QueryCtx, siteId: string) =>
 
 export const pushEnabled = async (ctx: QueryCtx, siteId: string) => {
   const row = await netboxRow(ctx, siteId);
-  return row?.enabled === true && row.netbox?.push === true;
+  if (row?.enabled !== true || row.netbox?.push !== true) return false;
+  // An archived site writes nothing anywhere, NetBox included (ADR 0033).
+  const site = await ctx.db
+    .query("sites")
+    .withIndex("by_object_id", (q) => q.eq("objectId", siteId))
+    .unique();
+  return site?.archivedAt === undefined;
 };
 
 /** Called as a cycle ends: the push follows it when it is on. */

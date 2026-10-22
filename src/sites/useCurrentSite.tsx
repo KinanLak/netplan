@@ -1,6 +1,7 @@
 import { useQuery } from "convex/react";
 import { useSearch } from "@tanstack/react-router";
 import { createContext, useContext } from "react";
+import type { ReactNode } from "react";
 import { useCanEdit } from "@/hooks/use-current-user";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "../../convex/_generated/api";
@@ -44,10 +45,20 @@ export function useCurrentSite(): {
 }
 
 /**
- * Whether the site the page shows is archived, set by the pages that show
- * one (the map, the inventory). Read only then, as for a Lecteur (ADR 0033).
+ * Whether the site the page shows is archived: read only then, as for a
+ * Lecteur (ADR 0033). A context, so components render without a router in
+ * tests; `CurrentSiteArchived` sets it for every signed-in page.
  */
 export const SiteArchivedContext = createContext(false);
+
+export function CurrentSiteArchived({ children }: { children: ReactNode }) {
+  const { site } = useCurrentSite();
+  return (
+    <SiteArchivedContext value={site?.archived === true}>
+      {children}
+    </SiteArchivedContext>
+  );
+}
 
 /** Whether the user may change the site the page shows: role and archive. */
 export function useCanEditSite(): boolean {

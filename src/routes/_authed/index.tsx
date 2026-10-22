@@ -43,7 +43,6 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { useSignOut } from "@/panels/SidebarAccount";
 import { isAdmin } from "@/lib/roles";
 import {
-  SiteArchivedContext,
   mapSearch,
   useCanEditSite,
   useCurrentSite,
@@ -158,15 +157,13 @@ function HomePage() {
         : null;
 
   return (
-    <SiteArchivedContext value={site?.archived === true}>
-      <SidebarProvider>
-        {isBootstrappingMap ? (
-          <MapSkeleton />
-        ) : (
-          <MapWorkspace sortedFloors={sortedFloors} empty={empty} />
-        )}
-      </SidebarProvider>
-    </SiteArchivedContext>
+    <SidebarProvider>
+      {isBootstrappingMap ? (
+        <MapSkeleton />
+      ) : (
+        <MapWorkspace sortedFloors={sortedFloors} empty={empty} />
+      )}
+    </SidebarProvider>
   );
 }
 
@@ -503,18 +500,27 @@ function NoSite() {
   const admin = me ? isAdmin(me.role) : false;
   // Without a site there is no sidebar, which holds the sign-out button.
   const { signingOut, signOut } = useSignOut();
+  // Sites may exist, all archived (ADR 0033).
+  const { sites } = useCurrentSite();
+  const allArchived = (sites?.length ?? 0) > 0;
   return (
     <main className="flex h-screen w-screen flex-col items-center justify-center gap-3 bg-background p-6 text-center">
-      <h1 className="text-lg font-semibold">Aucun site</h1>
+      <h1 className="text-lg font-semibold">
+        {allArchived ? "Tous les sites sont archivés" : "Aucun site"}
+      </h1>
       <p className="max-w-sm text-sm text-muted-foreground">
-        {admin
-          ? "Créez un premier site pour commencer à dessiner son plan."
-          : "Aucun site n'est encore configuré. Demandez à un administrateur d'en créer un."}
+        {allArchived
+          ? admin
+            ? "Désarchivez un site ou créez-en un pour retrouver un plan."
+            : "Demandez à un administrateur de désarchiver un site."
+          : admin
+            ? "Créez un premier site pour commencer à dessiner son plan."
+            : "Aucun site n'est encore configuré. Demandez à un administrateur d'en créer un."}
       </p>
       <div className="flex flex-wrap justify-center gap-2">
         {admin ? (
           <Link to="/admin/sites" className={buttonVariants()}>
-            Créer un site
+            {allArchived ? "Voir les sites" : "Créer un site"}
           </Link>
         ) : null}
         <Button
