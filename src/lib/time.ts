@@ -114,6 +114,26 @@ export const dayOf = (at: number, timeZone?: string): string => {
   return `${parts.year}-${parts.month}-${parts.day}`;
 };
 
+/** The calendar day before `YYYY-MM-DD`, whatever the clocks do that night. */
+export const previousDay = (day: string): string =>
+  new Date(Date.parse(`${day}T12:00:00Z`) - 24 * 60 * MINUTE)
+    .toISOString()
+    .slice(0, 10);
+
+/** The calendar day after `YYYY-MM-DD`. */
+export const nextDay = (day: string): string =>
+  new Date(Date.parse(`${day}T12:00:00Z`) + 24 * 60 * MINUTE)
+    .toISOString()
+    .slice(0, 10);
+
+/** Whether `value` is a real calendar day written `YYYY-MM-DD`. */
+export const isCalendarDay = (value: unknown): value is string =>
+  typeof value === "string" &&
+  /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+  !Number.isNaN(Date.parse(`${value}T12:00:00Z`)) &&
+  new Date(Date.parse(`${value}T12:00:00Z`)).toISOString().slice(0, 10) ===
+    value;
+
 /** « Aujourd'hui », « Hier », else `mercredi 21 octobre`, with the year when not this one. */
 export const formatDay = (
   at: number,
@@ -122,7 +142,7 @@ export const formatDay = (
 ): string => {
   const day = dayOf(at, timeZone);
   if (day === dayOf(now, timeZone)) return "Aujourd'hui";
-  if (day === dayOf(now - 24 * 60 * MINUTE, timeZone)) return "Hier";
+  if (day === previousDay(dayOf(now, timeZone))) return "Hier";
   const label = format(
     at,
     {
@@ -138,9 +158,13 @@ export const formatDay = (
   return label.charAt(0).toUpperCase() + label.slice(1);
 };
 
+const QUARTER = 15 * MINUTE;
+
 /**
  * The first instant of the reader's day `YYYY-MM-DD`. The offset is read at
- * a first guess, then again in case midnight crosses a change of offset.
+ * a first guess, then again in case midnight crosses a change of offset;
+ * where the clocks skip midnight, the day starts at its first real minute.
+ * Offsets and their changes fall on quarter hours.
  */
 export const startOfDay = (day: string, timeZone?: string): number => {
   const asUtc = Date.parse(`${day}T00:00:00Z`);
@@ -163,5 +187,16 @@ export const startOfDay = (day: string, timeZone?: string): number => {
     );
     return shown - at;
   };
-  return asUtc - offsetAt(asUtc - offsetAt(asUtc));
+  let start = asUtc - offsetAt(asUtc - offsetAt(asUtc));
+  for (let step = 0; step < 16 && dayOf(start, timeZone) < day; step += 1) {
+    start += QUARTER;
+  }
+  for (
+    let step = 0;
+    step < 16 && dayOf(start - QUARTER, timeZone) === day;
+    step += 1
+  ) {
+    start -= QUARTER;
+  }
+  return start;
 };

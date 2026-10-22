@@ -12,30 +12,35 @@ export type TimelineRow = {
 
 export type TimelineDay = { day: string; at: number; rows: Array<TimelineRow> };
 
-const sameArrival = (a: HistoryEvent, b: HistoryEvent) =>
-  a.deviceId === b.deviceId &&
-  a.at === b.at &&
-  new Set([a.kind, b.kind]).size === 2 &&
-  [a.kind, b.kind].includes("located") &&
-  [a.kind, b.kind].includes("online");
+const key = (event: HistoryEvent) => `${event.deviceId}|${event.at}`;
 
-/** Events newest first, grouped by the reader's day, arrivals merged. */
+/**
+ * Events newest first, grouped by the reader's day, arrivals merged. A cycle
+ * writes every location before any presence, so an arrival's two events may
+ * lie apart, with other devices' events between them.
+ */
 export const timeline = (
   events: ReadonlyArray<HistoryEvent>,
   timeZone?: string,
 ): Array<TimelineDay> => {
-  const rows: Array<TimelineRow> = [];
-  for (let index = 0; index < events.length; index += 1) {
-    const event = events[index];
-    const next = index + 1 < events.length ? events[index + 1] : undefined;
-    if (next !== undefined && sameArrival(event, next)) {
-      const located = event.kind === "located" ? event : next;
-      rows.push({ event: located, cameOnline: true });
-      index += 1;
-    } else {
-      rows.push({ event, cameOnline: false });
-    }
-  }
+  const located = new Set(
+    events.filter(({ kind }) => kind === "located").map(key),
+  );
+  const cameOnline = new Set(
+    events
+      .filter(({ kind }) => kind === "online")
+      .map(key)
+      .filter((arrival) => located.has(arrival)),
+  );
+  const rows: Array<TimelineRow> = events.flatMap((event) => {
+    if (event.kind === "online" && cameOnline.has(key(event))) return [];
+    return [
+      {
+        event,
+        cameOnline: event.kind === "located" && cameOnline.has(key(event)),
+      },
+    ];
+  });
   const days: Array<TimelineDay> = [];
   for (const row of rows) {
     const day = dayOf(row.event.at, timeZone);
