@@ -8,6 +8,7 @@ import { overlayImportMessage } from "./importMessages";
 import { closePdf as destroyPdf, openPdf, rasterizePdfPage } from "./pdf";
 import type { PdfDocument } from "./pdf";
 import { initialOverlay, replacedOverlay } from "./placement";
+import { useFitOverlay } from "./useFitOverlay";
 import type { PlanRect } from "./placement";
 import {
   OverlayImportError,
@@ -32,6 +33,7 @@ export function useOverlayImport() {
   const upload = useAction(api.floorOverlays.upload);
   const { commands, getDocument } = useMapDocumentActions();
   const flowStore = useStoreApi();
+  const fitOverlay = useFitOverlay();
   const [state, setState] = useState<OverlayImportState>(IDLE);
   const openPdfRef = useRef<PdfDocument | null>(null);
   // The floor the import started on; a floor switch meanwhile cancels it.
@@ -109,6 +111,8 @@ export function useOverlayImport() {
       });
       return;
     }
+    // The view follows the plan it just received (A26).
+    fitOverlay(overlay);
     setState(IDLE);
   };
 

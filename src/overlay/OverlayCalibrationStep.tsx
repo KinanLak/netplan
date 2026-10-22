@@ -11,6 +11,8 @@ import {
   calibrationPatch,
 } from "./calibration";
 import { formatDecimal, parseDecimal } from "./units";
+import { useFitOverlay } from "./useFitOverlay";
+import { applyOverlayPatch } from "@/map-engine/overlay";
 
 interface OverlayCalibrationStepProps {
   overlay: FloorOverlay;
@@ -28,6 +30,7 @@ export function OverlayCalibrationStep({
   calibration,
 }: OverlayCalibrationStepProps) {
   const { commands } = useMapDocumentActions();
+  const fitOverlay = useFitOverlay();
   const setOverlayCalibration = useMapStore((s) => s.setOverlayCalibration);
   const cancel = () => setOverlayCalibration(null);
   const a = calibration.points.at(0);
@@ -49,6 +52,8 @@ export function OverlayCalibrationStep({
             if (!result.ok || !commands.patchOverlay(result.patch)) {
               return false;
             }
+            // A calque that grows or shrinks stays in view (A26).
+            fitOverlay(applyOverlayPatch(overlay, result.patch));
             setOverlayCalibration(null);
             return true;
           }}

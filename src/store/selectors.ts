@@ -29,6 +29,7 @@ export const useSelectedWallColor = () =>
 export const useWallEraserSize = () => useMapStore((s) => s.wallEraserSize);
 export const useIsOverlayPanelOpen = () =>
   useMapStore((s) => s.isOverlayPanelOpen);
+export const useIsPlacePanelOpen = () => useMapStore((s) => s.isPlacePanelOpen);
 export const useIsOverlayHidden = () => useMapStore((s) => s.isOverlayHidden);
 export const useShownCablesDeviceId = () =>
   useMapStore((s) => s.shownCablesDeviceId);

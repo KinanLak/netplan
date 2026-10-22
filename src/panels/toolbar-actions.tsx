@@ -24,7 +24,7 @@ export const drawToolbarActions: Array<DrawToolbarAction> = [
     tool: "wall",
     label: "Mur",
     shortcut: "tool-wall",
-    title: "Tracer mur",
+    title: "Dessiner un mur",
     icon: (
       <HugeiconsIcon
         icon={DashedLine01Icon}
@@ -39,7 +39,7 @@ export const drawToolbarActions: Array<DrawToolbarAction> = [
     tool: "room",
     label: "Salle",
     shortcut: "tool-room",
-    title: "Tracer salle",
+    title: "Dessiner une salle",
     icon: (
       <HugeiconsIcon
         icon={DashedLine02Icon}

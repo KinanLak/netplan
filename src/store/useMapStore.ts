@@ -24,6 +24,7 @@ const withoutEditTools = (state: MapInteractionState) => ({
   cableDraft: null,
   activeDrawTool: "device" as const,
   isOverlayPanelOpen: false,
+  isPlacePanelOpen: false,
 });
 
 export const useMapStore = create<MapStore>()((set) => ({
@@ -41,6 +42,7 @@ export const useMapStore = create<MapStore>()((set) => ({
   selectedWallColor: "concrete",
   wallEraserSize: WALL_ERASER_DEFAULT_SIZE,
   isOverlayPanelOpen: false,
+  isPlacePanelOpen: false,
   isOverlayHidden: false,
   overlayDraft: null,
   overlayCalibration: null,
@@ -80,8 +82,10 @@ export const useMapStore = create<MapStore>()((set) => ({
             selectedDeviceId: deviceId,
             selectedDeviceIds: deviceId ? [deviceId] : [],
             selectedDeviceIdSet: deviceId ? new Set([deviceId]) : new Set(),
-            // The device drawer and the calque panel share the right edge.
+            // The device drawer, the calque panel and the placing panel
+            // share the right edge.
             isOverlayPanelOpen: deviceId === null && state.isOverlayPanelOpen,
+            isPlacePanelOpen: deviceId === null && state.isPlacePanelOpen,
           },
     );
   },
@@ -122,6 +126,7 @@ export const useMapStore = create<MapStore>()((set) => ({
       isMultiSelectMode: !state.isMultiSelectMode,
       activeDrawTool: "device",
       isOverlayPanelOpen: false,
+      isPlacePanelOpen: false,
       selectedDeviceId: null,
       selectedDeviceIds: [],
       selectedDeviceIdSet: new Set(),
@@ -131,6 +136,7 @@ export const useMapStore = create<MapStore>()((set) => ({
     set((state) => ({
       activeDrawTool: tool,
       isOverlayPanelOpen: tool === "device" && state.isOverlayPanelOpen,
+      isPlacePanelOpen: tool === "device" && state.isPlacePanelOpen,
     }));
   },
   setSelectedWallColor: (color) => {
@@ -149,6 +155,7 @@ export const useMapStore = create<MapStore>()((set) => ({
       open
         ? {
             isOverlayPanelOpen: true,
+            isPlacePanelOpen: false,
             isMultiSelectMode: false,
             activeDrawTool: "device",
             selectedDeviceId: null,
@@ -157,6 +164,23 @@ export const useMapStore = create<MapStore>()((set) => ({
           }
         : state.isOverlayPanelOpen
           ? { isOverlayPanelOpen: false }
+          : state,
+    );
+  },
+  setPlacePanelOpen: (open) => {
+    set((state) =>
+      open
+        ? {
+            isPlacePanelOpen: true,
+            isOverlayPanelOpen: false,
+            isMultiSelectMode: false,
+            activeDrawTool: "device",
+            selectedDeviceId: null,
+            selectedDeviceIds: [],
+            selectedDeviceIdSet: new Set(),
+          }
+        : state.isPlacePanelOpen
+          ? { isPlacePanelOpen: false }
           : state,
     );
   },

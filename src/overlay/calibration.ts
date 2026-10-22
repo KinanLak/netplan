@@ -95,3 +95,23 @@ export function calibrationPatch(
   }
   return { ok: true, patch };
 }
+
+/** The box the calque covers on the plan, rotated as it is. */
+export function overlayBounds(overlay: FloorOverlay): {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+} {
+  const corners = [
+    { x: 0, y: 0 },
+    { x: overlay.imageWidth, y: 0 },
+    { x: 0, y: overlay.imageHeight },
+    { x: overlay.imageWidth, y: overlay.imageHeight },
+  ].map((pixel) => imageToPlan(overlay, pixel));
+  const xs = corners.map(({ x }) => x);
+  const ys = corners.map(({ y }) => y);
+  const x = Math.min(...xs);
+  const y = Math.min(...ys);
+  return { x, y, width: Math.max(...xs) - x, height: Math.max(...ys) - y };
+}

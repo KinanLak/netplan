@@ -253,9 +253,11 @@ function MapWorkspace({
     const {
       activeDrawTool,
       isOverlayPanelOpen,
+      isPlacePanelOpen,
       overlayCalibration,
       setOverlayCalibration,
       setOverlayPanelOpen,
+      setPlacePanelOpen,
       setSelectedDevices,
       selectedDeviceIds,
       shownCablesDeviceId,
@@ -263,6 +265,7 @@ function MapWorkspace({
     const isEditing = isEditMode && activeDrawTool === "device";
     if (isEditing && overlayCalibration) setOverlayCalibration(null);
     else if (isEditing && isOverlayPanelOpen) setOverlayPanelOpen(false);
+    else if (isEditing && isPlacePanelOpen) setPlacePanelOpen(false);
     else if (shownCablesDeviceId) showCables(null);
     else if (selectedDeviceIds.length > 0) setSelectedDevices([]);
   });
