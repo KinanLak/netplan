@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useCanEdit } from "@/hooks/use-current-user";
 import { useCanEditSite } from "@/sites/useCurrentSite";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { HelpCircleIcon } from "@hugeicons/core-free-icons";
@@ -30,8 +31,9 @@ type ShortcutsDialogProps = {
 export function ShortcutsDialog({ hasRightDrawerOpen }: ShortcutsDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const canEdit = useCanEditSite();
+  const hasEditorRole = useCanEdit();
   const groups = buildBalancedShortcutGrid(
-    shortcutGroupsFor(canEdit),
+    shortcutGroupsFor(canEdit, hasEditorRole),
     SHORTCUT_GROUP_GRID_COLUMN_COUNT,
   );
   const overlayModifierLabel = isMac ? "⌘" : "Ctrl";

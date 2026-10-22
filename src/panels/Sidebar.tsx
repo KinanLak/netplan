@@ -60,7 +60,7 @@ import {
 } from "@/sites/CollectionFreshness";
 import { SiteSwitcher } from "@/sites/SiteSwitcher";
 import { DeviceSearch } from "@/search/DeviceSearch";
-import { useCanEditSite, useCurrentSite } from "@/sites/useCurrentSite";
+import { useCurrentSite } from "@/sites/useCurrentSite";
 import { useCanEdit } from "@/hooks/use-current-user";
 import { api } from "../../convex/_generated/api";
 
@@ -195,7 +195,7 @@ function UnplacedDevicesLink({ siteId }: { siteId: string }) {
 
 export default function AppSidebar() {
   const { site } = useCurrentSite();
-  const canEdit = useCanEditSite();
+  const hasEditorRole = useCanEdit();
   const buildings =
     useQuery(api.buildings.listForSite, site ? { siteId: site.id } : "skip") ??
     [];
@@ -260,7 +260,8 @@ export default function AppSidebar() {
                   Inventaire
                 </SidebarMenuButton>
               </SidebarMenuItem>
-              {canEdit ? (
+              {/* History is read by role, archived site or not (ADR 0033). */}
+              {hasEditorRole ? (
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     render={<Link to="/history" search={{ site: site.id }} />}

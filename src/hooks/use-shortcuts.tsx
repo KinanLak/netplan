@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useCanEdit } from "@/hooks/use-current-user";
 import type { ReactNode } from "react";
 import type { ShortcutAction } from "@/lib/shortcuts";
 import { isMac } from "@/lib/shortcuts";
@@ -64,6 +65,7 @@ export function ShortcutIntentProvider({
 }: ShortcutIntentProviderProps) {
   const effectsRef = useRef(new Map<string, ShortcutEffect>());
   const canEdit = useCanEditSite();
+  const hasEditorRole = useCanEdit();
 
   const register = useCallback((effect: ShortcutEffect) => {
     effectsRef.current.set(effect.id, effect);
@@ -87,6 +89,7 @@ export function ShortcutIntentProvider({
         runtime: {
           activeDrawTool: state.activeDrawTool,
           canEdit,
+          hasEditorRole,
           currentFloorId: state.currentFloorId,
           isEditMode:
             state.isEditMode &&
@@ -117,7 +120,7 @@ export function ShortcutIntentProvider({
     return () => {
       window.removeEventListener("keydown", handleKeyDown, true);
     };
-  }, [canEdit]);
+  }, [canEdit, hasEditorRole]);
 
   const contextValue = useMemo(() => ({ register }), [register]);
 

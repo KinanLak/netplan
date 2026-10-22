@@ -73,6 +73,11 @@ export type ShortcutConfig = {
    * sees it in the shortcuts dialog (ADR 0030).
    */
   requiresEdit?: boolean;
+  /**
+   * With `requiresEdit`: the role is enough, even where the site is read
+   * only (an archived site, ADR 0033). For what reads, not what changes.
+   */
+  byRoleOnly?: boolean;
 };
 
 export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
@@ -370,6 +375,7 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
       "Voir où le réseau a vu l'appareil et quand il était en ligne, sur 30 jours",
     scope: "drawer",
     requiresEdit: true,
+    byRoleOnly: true,
   },
   "toggle-device-cables": {
     keys: ["H"],
