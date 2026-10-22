@@ -43,7 +43,10 @@ console is worth reading.
 
 ## 2. Look at it
 
-Open the `App` URL in your own T3 Code preview tab (`preview_open`), then
+Open the `App` URL in your own T3 Code preview tab (`preview_open`). It is
+a `.localhost` name of the worktree's own: cookies are scoped by host, not
+port, so on `127.0.0.1` another worktree's login would replace your session
+and send you back to the login page. Then
 drive it with `preview_click`, `preview_type`, `preview_drag` and check it with
 `preview_snapshot`. Save a screenshot (`save: true`) of each state a reviewer
 should see, and upload it to the pull request rather than committing it.
