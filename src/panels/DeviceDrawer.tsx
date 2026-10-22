@@ -9,7 +9,8 @@ import {
   WasteIcon,
   WorkHistoryIcon,
 } from "@hugeicons/core-free-icons";
-import type { DeviceId } from "@/types/map";
+import type { DeviceId, PortId } from "@/types/map";
+import { portLabel, shortPortName } from "@/devices/portState";
 import { useMapStore } from "@/store/useMapStore";
 import {
   useMapDocumentActions,
@@ -67,8 +68,13 @@ export default function DeviceDrawer() {
     setIdentityDeviceId(selectedDeviceId),
   );
   const [cablesDeviceId, setCablesDeviceId] = useState<DeviceId | null>(null);
+  const [cablesPortId, setCablesPortId] = useState<PortId | null>(null);
+  const showPortCables = (deviceId: DeviceId | null, portId?: PortId) => {
+    setCablesPortId(portId ?? null);
+    setCablesDeviceId(deviceId);
+  };
   useShortcutIntentEffect("show-port-cables", () =>
-    setCablesDeviceId(selectedDeviceId),
+    showPortCables(selectedDeviceId),
   );
   // History is read by role, in or out of edit mode (ADR 0027).
   const canEdit = useCanEdit();
@@ -84,6 +90,19 @@ export default function DeviceDrawer() {
     : undefined;
 
   const connections = device ? deviceConnections(cables, ports, device.id) : [];
+  const farEnds = new Map(
+    connections.flatMap(({ port, far, farPort }) => {
+      const other = deviceById.get(far.deviceId);
+      if (!other) return [];
+      const farName =
+        farPort && other.type === "patch-panel"
+          ? `${other.name} ${portLabel(farPort, other.type)}`
+          : farPort && other.type === "switch"
+            ? `${other.name} ${shortPortName(farPort.name)}`
+            : other.name;
+      return [[port.id, farName] as const];
+    }),
+  );
   const devicePorts = device
     ? ports.filter((port) => port.deviceId === device.id).sort(comparePorts)
     : [];
@@ -330,6 +349,7 @@ export default function DeviceDrawer() {
           <DrawerConnectionsSection
             // Folded again on another device.
             key={device.id}
+            deviceType={device.type}
             connections={connections}
             deviceById={deviceById}
             onSelectConnected={handleSelectConnected}
@@ -337,7 +357,9 @@ export default function DeviceDrawer() {
 
           <DrawerPortsSection
             ports={devicePorts}
-            onShowCables={() => setCablesDeviceId(device.id)}
+            deviceType={device.type}
+            farEnds={farEnds}
+            onShowCables={(portId) => showPortCables(device.id, portId)}
           />
         </div>
       </ScrollArea>
@@ -403,7 +425,8 @@ export default function DeviceDrawer() {
         device={device}
         editable={isEditMode}
         open={cablesDeviceId === device.id}
-        onOpenChange={(open) => setCablesDeviceId(open ? device.id : null)}
+        onOpenChange={(open) => showPortCables(open ? device.id : null)}
+        focusPortId={cablesPortId}
       />
       {site ? (
         <DeviceHistoryDialog

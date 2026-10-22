@@ -165,7 +165,11 @@ export default defineSchema({
      * MAC still has its status settled.
      */
     ownerId: v.optional(v.string()),
-  }).index("by_site_mac", ["siteId", "mac"]),
+  })
+    .index("by_site_mac", ["siteId", "mac"])
+    // What a port table shows was seen on a switch port or behind a socket.
+    .index("by_site_switch_port", ["siteId", "switchId", "portId"])
+    .index("by_site_socket", ["siteId", "socketId"]),
 
   // What the network observed of each pc and endpoint, kept 30 days (ADR
   // 0027): where it was first seen and seen again elsewhere, and when it went

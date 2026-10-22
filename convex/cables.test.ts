@@ -160,6 +160,104 @@ describe("cables", () => {
     ).toBeNull();
   });
 
+  it("says what the network saw on a switch port and behind a socket, and where a device was last seen", async () => {
+    const t = await signedInTest();
+    const floorId = await cabledRun(t);
+    counter += 1;
+    await t.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "device.create",
+        meta: {
+          opId: `op:cables:${counter}`,
+          clientId: "client:cables",
+          clientSeq: counter,
+          createdAt: counter,
+        },
+        device: {
+          id: "device:pc",
+          floorId,
+          type: "pc",
+          name: "pc-1",
+          position: { x: 600, y: 0 },
+          size: { width: 80, height: 80 },
+          macs: ["02:00:00:00:00:01"],
+          metadata: {},
+        },
+      },
+    });
+    const switchPortId = end("device:sw", "interface").portId;
+    await t.run(async (ctx) => {
+      const sw = await ctx.db
+        .query("devices")
+        .withIndex("by_object_id", (q) => q.eq("objectId", "device:sw"))
+        .unique();
+      const base = {
+        siteId: sw!.siteId,
+        switchId: "device:sw",
+        portId: switchPortId,
+        socketId: "device:socket",
+      };
+      await ctx.db.insert("macSightings", {
+        ...base,
+        mac: "02:00:00:00:00:01",
+        seenAt: 2_000,
+        misses: 0,
+      });
+      // A MAC no device carries, seen earlier.
+      await ctx.db.insert("macSightings", {
+        ...base,
+        mac: "02:00:00:00:00:99",
+        seenAt: 1_000,
+        misses: 3,
+      });
+    });
+
+    const switchPort = await portOf(t, "device:sw", switchPortId);
+    expect(switchPort?.observed).toEqual([
+      { deviceId: "device:pc", name: "pc-1", at: 2_000, current: true },
+      { name: "02:00:00:00:00:99", at: 1_000, current: false },
+    ]);
+    const socketPort = await portOf(
+      t,
+      "device:socket",
+      end("device:socket", "front").portId,
+    );
+    expect(socketPort?.observed.map((seen) => seen.name)).toEqual([
+      "pc-1",
+      "02:00:00:00:00:99",
+    ]);
+    // A source may model a socket with a rear port alone.
+    await t.run(async (ctx) => {
+      const port = await ctx.db
+        .query("ports")
+        .withIndex("by_device", (q) => q.eq("deviceId", "device:socket"))
+        .unique();
+      if (port) await ctx.db.patch(port._id, { kind: "rear" });
+    });
+    const rearOnly = await t.query(api.cables.portTable, {
+      deviceId: "device:socket",
+    });
+    expect(rearOnly?.ports[0]?.observed).toHaveLength(2);
+    // The panel's ports see nothing themselves.
+    const panelFront = await portOf(
+      t,
+      "device:panel",
+      end("device:panel", "front").portId,
+    );
+    expect(panelFront?.observed).toEqual([]);
+
+    const pc = await t.query(api.cables.portTable, { deviceId: "device:pc" });
+    expect(pc?.lastSeen).toMatchObject({
+      at: 2_000,
+      current: true,
+      place: { switchName: "sw", portName: "1", socketName: "socket" },
+    });
+    expect(
+      (await t.query(api.cables.portTable, { deviceId: "device:sw" }))
+        ?.lastSeen,
+    ).toBeNull();
+  });
+
   it("refuses a cable to a taken, missing or same port, across sites, or with a taken id", async () => {
     const t = await signedInTest();
     await cabledRun(t);

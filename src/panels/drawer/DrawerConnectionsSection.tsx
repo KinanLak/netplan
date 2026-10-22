@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { Device, DeviceId } from "@/types/map";
 import { StatusDot } from "@/components/StatusDot";
 import type { DeviceConnection } from "@/devices/ports";
-import { portLabel } from "@/devices/portState";
+import { portLabel, shortPortName } from "@/devices/portState";
 
 // A patch panel has a dozen cables; past this many they fold away.
 const SHOWN = 6;
@@ -11,6 +11,8 @@ const SHOWN = 6;
 const MANY_PORTS = new Set<Device["type"]>(["switch", "patch-panel"]);
 
 interface DrawerConnectionsSectionProps {
+  /** The device's own type, which says whether its ports have sides. */
+  deviceType: Device["type"];
   /** The device's cables, in the order of its own ports. */
   connections: ReadonlyArray<DeviceConnection>;
   /** The floor's devices: a far end on another floor is not among them. */
@@ -18,8 +20,12 @@ interface DrawerConnectionsSectionProps {
   onSelectConnected: (deviceId: DeviceId) => void;
 }
 
+const nameOf = (port: DeviceConnection["port"], type: Device["type"]) =>
+  type === "patch-panel" ? portLabel(port, type) : shortPortName(port.name);
+
 /** One compact line per cable: « Avant 1 → Prise B-01 », sorted by port. */
 export function DrawerConnectionsSection({
+  deviceType,
   connections,
   deviceById,
   onSelectConnected,
@@ -45,7 +51,7 @@ export function DrawerConnectionsSection({
                   className="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm outline-hidden hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <span className="shrink-0 font-mono text-xs text-muted-foreground">
-                    {portLabel(port)}
+                    {nameOf(port, deviceType)}
                   </span>
                   <span aria-hidden className="text-muted-foreground">
                     →
@@ -55,7 +61,7 @@ export function DrawerConnectionsSection({
                     {farPort && MANY_PORTS.has(other.type) ? (
                       <span className="font-mono text-xs text-muted-foreground">
                         {" "}
-                        {portLabel(farPort)}
+                        {nameOf(farPort, other.type)}
                       </span>
                     ) : null}
                   </span>
@@ -67,7 +73,7 @@ export function DrawerConnectionsSection({
               ) : (
                 <div className="flex items-center gap-2 px-2 py-1 text-sm text-muted-foreground">
                   <span className="shrink-0 font-mono text-xs">
-                    {portLabel(port)}
+                    {nameOf(port, deviceType)}
                   </span>
                   <span aria-hidden>→</span>
                   {/* Another floor, or no floor at all: the port table says which. */}

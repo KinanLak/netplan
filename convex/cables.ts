@@ -18,6 +18,9 @@ import {
 } from "./mapValidators";
 import { comparePorts, isCableId } from "../src/devices/ports";
 import { INTEGRATION_LABELS } from "../src/sites/integrations";
+import { placeNamer } from "./history";
+import { historyPlace } from "./historyValidators";
+import { ownerOf } from "./librenmsCycle";
 import type { Doc } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 
@@ -33,6 +36,91 @@ const portEnd = v.object({
   place: v.union(v.null(), v.string()),
 });
 
+const observation = v.object({
+  deviceId: v.optional(v.string()),
+  name: v.string(),
+  at: v.number(),
+  /** Seen by the switch's last read, rather than earlier. */
+  current: v.boolean(),
+});
+
+// A port with more is a trunk or an uplink; its first few say enough.
+const OBSERVED_SHOWN = 5;
+
+/** Where the network last saw a device: its newest sighting, named. */
+export const lastSightingOf = async (
+  ctx: QueryCtx,
+  device: Pick<Doc<"devices">, "siteId" | "macs">,
+) => {
+  let latest: Doc<"macSightings"> | null = null;
+  for (const mac of device.macs) {
+    const row = await ctx.db
+      .query("macSightings")
+      .withIndex("by_site_mac", (q) =>
+        q.eq("siteId", device.siteId).eq("mac", mac),
+      )
+      .unique();
+    if (row && (!latest || row.seenAt > latest.seenAt)) latest = row;
+  }
+  if (!latest) return null;
+  return {
+    place: await placeNamer(ctx)(latest),
+    at: latest.seenAt,
+    current: latest.misses === 0,
+  };
+};
+
+export const lastSighting = v.union(
+  v.null(),
+  v.object({ place: historyPlace, at: v.number(), current: v.boolean() }),
+);
+
+/**
+ * What a switch port or a socket saw, named by the devices of the site. A
+ * socket's sightings go on its front port, or on its only port when a source
+ * models it with a rear port alone.
+ */
+const observedOn = async (
+  ctx: QueryCtx,
+  device: Doc<"devices">,
+  port: Doc<"ports">,
+  socketPortId: string | undefined,
+) => {
+  const rows =
+    device.type === "switch"
+      ? await ctx.db
+          .query("macSightings")
+          .withIndex("by_site_switch_port", (q) =>
+            q
+              .eq("siteId", device.siteId)
+              .eq("switchId", device.objectId)
+              .eq("portId", port.objectId),
+          )
+          .collect()
+      : port.objectId === socketPortId
+        ? await ctx.db
+            .query("macSightings")
+            .withIndex("by_site_socket", (q) =>
+              q.eq("siteId", device.siteId).eq("socketId", device.objectId),
+            )
+            .collect()
+        : [];
+  const newest = rows
+    .toSorted((a, b) => b.seenAt - a.seenAt)
+    .slice(0, OBSERVED_SHOWN);
+  return await Promise.all(
+    newest.map(async (row) => {
+      const owner = await ownerOf(ctx, device.siteId, row.mac);
+      return {
+        ...(owner && { deviceId: owner.objectId }),
+        name: owner?.name ?? row.mac,
+        at: row.seenAt,
+        current: row.misses === 0,
+      };
+    }),
+  );
+};
+
 const portTableRow = v.object({
   id: v.string(),
   name: v.string(),
@@ -47,6 +135,11 @@ const portTableRow = v.object({
   ),
   /** Where the trace ends, when it goes past the cable's far end. */
   traceEnd: v.union(v.null(), portEnd),
+  /**
+   * What the network saw on the port, a switch's or a socket's, newest
+   * first: the device carrying the MAC, or the MAC itself.
+   */
+  observed: v.array(observation),
 });
 
 /** Names the devices and places of the ports a table shows, reading each once. */
@@ -106,7 +199,13 @@ export const portTable = readerQuery({
   args: { deviceId: v.string() },
   returns: v.union(
     v.null(),
-    v.object({ siteId: v.string(), ports: v.array(portTableRow) }),
+    v.object({
+      siteId: v.string(),
+      deviceType,
+      ports: v.array(portTableRow),
+      /** Where the network last saw the device itself, by its MACs. */
+      lastSeen: lastSighting,
+    }),
   ),
   handler: async (ctx, { deviceId }) => {
     const device = await ctx.db
@@ -116,6 +215,10 @@ export const portTable = readerQuery({
     if (!device) return null;
     const nameEnd = portEndNamer(ctx);
     const rows = (await portRowsOf(ctx, deviceId)).sort(comparePorts);
+    const socketPortId =
+      device.type === "wall-port"
+        ? (rows.find((row) => row.kind === "front") ?? rows.at(0))?.objectId
+        : undefined;
     const ports = await Promise.all(
       rows.map(async (row) => {
         const cable = await cableRowAt(ctx, row.objectId);
@@ -135,10 +238,16 @@ export const portTable = readerQuery({
               ? { id: cable.objectId, source: cable.source, far }
               : null,
           traceEnd: last && hops.length > 1 ? await nameEnd(last) : null,
+          observed: await observedOn(ctx, device, row, socketPortId),
         };
       }),
     );
-    return { siteId: device.siteId, ports };
+    return {
+      siteId: device.siteId,
+      deviceType: device.type,
+      ports,
+      lastSeen: await lastSightingOf(ctx, device),
+    };
   },
 });
 

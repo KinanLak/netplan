@@ -1,4 +1,4 @@
-import type { Port, PortKind } from "@/types/map";
+import type { DeviceType, Port, PortKind } from "@/types/map";
 
 /** What the network last observed on a port, strongest first (ADR 0025). */
 export type PortState = "seen" | "up" | "down" | "unknown";
@@ -27,17 +27,47 @@ const KIND_LABELS: Record<PortKind, string | null> = {
   rear: "Arrière",
 };
 
-/** A port as a person reads it: a patch panel's says which side it is on. */
-export const portLabel = (port: Pick<Port, "name" | "kind">): string => {
+/**
+ * A port as a person reads it: a patch panel's says which side it is on.
+ * Other devices' ports need no side, even when a source models them as rear
+ * ports, as NetBox does a switch's; without the device's type, the side is
+ * always said.
+ */
+export const portLabel = (
+  port: Pick<Port, "name" | "kind">,
+  deviceType?: DeviceType,
+): string => {
   const kind = KIND_LABELS[port.kind];
-  return kind ? `${kind} ${port.name}` : port.name;
+  if (!kind || (deviceType && deviceType !== "patch-panel")) return port.name;
+  return `${kind} ${port.name}`;
 };
 
 /** One end of a cable as a toast or a menu names it. */
 export const endLabel = (
   deviceName: string,
   port: Pick<Port, "name" | "kind">,
-): string => `« ${deviceName} » ${portLabel(port)}`;
+  deviceType?: DeviceType,
+): string => `« ${deviceName} » ${portLabel(port, deviceType)}`;
+
+// Cisco's abbreviations, which every network technician reads.
+const INTERFACE_ABBREVIATIONS: ReadonlyArray<[RegExp, string]> = [
+  [/^TenGigabitEthernet\s*(?=\d)/i, "Te"],
+  [/^TwentyFiveGigE\s*(?=\d)/i, "Twe"],
+  [/^FortyGigabitEthernet\s*(?=\d)/i, "Fo"],
+  [/^HundredGigE\s*(?=\d)/i, "Hu"],
+  [/^GigabitEthernet\s*(?=\d)/i, "Gi"],
+  [/^FastEthernet\s*(?=\d)/i, "Fa"],
+  [/^Ethernet\s*(?=\d)/i, "Eth"],
+  [/^Port-channel\s*(?=\d)/i, "Po"],
+];
+
+/** An interface name in its short form: `GigabitEthernet1/0/1` is `Gi1/0/1`. */
+export const shortPortName = (name: string): string => {
+  for (const [long, short] of INTERFACE_ABBREVIATIONS) {
+    if (long.test(name)) return name.replace(long, short);
+  }
+  return name;
+};
 
 export const portState = (port: Pick<Port, "status" | "seen">): PortState => {
   if (port.seen) return "seen";
