@@ -32,26 +32,29 @@ const isStatus = (value: unknown): value is DeviceStatus =>
   typeof value === "string" && Object.hasOwn(DEVICE_STATUS_LABELS, value);
 
 /**
- * Reads the inventory's part of the URL. A type is kept as written: one the
- * site no longer has filters nothing (see `effectiveFilters`).
+ * Reads the inventory's part of the URL. Every key is written, `undefined`
+ * when invalid: the router merges the root route's raw query under this
+ * one, so a key left out would leak in. A type is kept as written: one the
+ * site no longer has filters nothing (see the inventory page).
  */
 export const parseInventorySearch = (
   search: Record<string, unknown>,
 ): InventorySearch => ({
-  ...(typeof search.q === "string" && search.q !== "" && { q: search.q }),
-  ...((search.placement === "placed" || search.placement === "unplaced") && {
-    placement: search.placement,
-  }),
-  ...(isStatus(search.status) && { status: search.status }),
-  ...(typeof search.type === "string" &&
-    search.type !== "" && { type: search.type as DeviceType }),
-  ...(typeof search.sort === "string" &&
-    SORT_KEYS.includes(search.sort) && {
-      sort: search.sort as Exclude<SortKey, "name">,
-    }),
-  ...((search.desc === true || search.desc === "true") && {
-    desc: true as const,
-  }),
+  q: typeof search.q === "string" && search.q !== "" ? search.q : undefined,
+  placement:
+    search.placement === "placed" || search.placement === "unplaced"
+      ? search.placement
+      : undefined,
+  status: isStatus(search.status) ? search.status : undefined,
+  type:
+    typeof search.type === "string" && search.type !== ""
+      ? (search.type as DeviceType)
+      : undefined,
+  sort:
+    typeof search.sort === "string" && SORT_KEYS.includes(search.sort)
+      ? (search.sort as Exclude<SortKey, "name">)
+      : undefined,
+  desc: search.desc === true || search.desc === "true" ? true : undefined,
 });
 
 export const filtersOf = (search: InventorySearch): InventoryFilters => ({
