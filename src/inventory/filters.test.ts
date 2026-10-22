@@ -87,7 +87,13 @@ describe("filters", () => {
       type: "all",
     });
     // Two devices are down, one of them unplaced; two are unplaced, one down.
-    expect(counts.status).toEqual({ all: 2, up: 0, down: 1, unknown: 1 });
+    expect(counts.status).toEqual({
+      all: 2,
+      up: 0,
+      down: 1,
+      stale: 0,
+      unknown: 1,
+    });
     expect(counts.placement).toEqual({ all: 2, placed: 1, unplaced: 1 });
   });
 });
