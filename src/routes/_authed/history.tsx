@@ -1,5 +1,10 @@
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Location01Icon, Search01Icon } from "@hugeicons/core-free-icons";
+import {
+  ArrowLeft01Icon,
+  ArrowRight01Icon,
+  Location01Icon,
+  Search01Icon,
+} from "@hugeicons/core-free-icons";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { usePaginatedQuery, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
@@ -25,6 +30,7 @@ import {
   formatTime,
   isCalendarDay,
   nextDay,
+  previousDay,
   startOfDay,
   timeZoneHint,
 } from "@/lib/time";
@@ -51,6 +57,9 @@ type HistorySearch = {
   kind?: Exclude<KindFilter, "all">;
   from?: string;
   to?: string;
+  /** The site's calendar day of the snapshots shown. */
+  day?: string;
+  slot?: string;
 };
 
 /**
@@ -69,6 +78,11 @@ const historySearch = (search: Record<string, unknown>): HistorySearch => ({
       : undefined,
   from: isCalendarDay(search.from) ? search.from : undefined,
   to: isCalendarDay(search.to) ? search.to : undefined,
+  day: isCalendarDay(search.day) ? search.day : undefined,
+  slot:
+    typeof search.slot === "string" && SNAPSHOT_TIMES.includes(search.slot)
+      ? search.slot
+      : undefined,
 });
 
 export const Route = createFileRoute("/_authed/history")({
@@ -419,32 +433,76 @@ type Slot = FunctionReturnType<typeof api.history.slotsForDay>[number];
 const DAY_MS = 24 * 60 * 60_000;
 
 function SiteSnapshots({ site }: { site: SiteSummary }) {
+  const search = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
   // Slots open and close by the minute.
   const now = useNow(60_000);
   const today = siteDay(site.timezone, now);
-  const [day, setDay] = useState(today);
-  const [time, setTime] = useState<string | null>(null);
-  const slots = useQuery(api.history.slotsForDay, { siteId: site.id, day });
+  const earliest = siteDay(site.timezone, now - 30 * DAY_MS);
+  const latest = useQuery(api.history.latestSlot, { siteId: site.id });
+  // Without a day in the URL, the view opens on the latest snapshot taken.
+  const day =
+    search.day ?? (latest === undefined ? undefined : (latest?.day ?? today));
+  const slots = useQuery(
+    api.history.slotsForDay,
+    day === undefined ? "skip" : { siteId: site.id, day },
+  );
   const slotOf = new Map((slots ?? []).map((slot) => [slot.time, slot]));
-  const chosen = time === null ? undefined : slotOf.get(time);
+  const taken = SNAPSHOT_TIMES.filter(
+    (time) => slotOf.get(time)?.entries !== undefined,
+  );
+  // Without a slot in the URL, the day's last snapshot taken.
+  const time = search.slot ?? taken.at(-1);
+  const chosen = time === undefined ? undefined : slotOf.get(time);
 
+  const go = (next: { day?: string; slot?: string }) =>
+    void navigate({
+      search: (current) => ({ ...current, ...next }),
+      replace: true,
+    });
+
+  if (day === undefined) return null;
   return (
     <section className="space-y-4">
       <div className="flex flex-wrap items-end gap-3">
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="text-muted-foreground">Jour</span>
-          <Input
-            type="date"
-            value={day}
-            min={siteDay(site.timezone, now - 30 * DAY_MS)}
-            max={today}
-            onChange={(event) => {
-              if (event.target.value) setDay(event.target.value);
-              setTime(null);
-            }}
-            className="w-44"
-          />
-        </label>
+        <div className="flex flex-col gap-1 text-sm">
+          <label htmlFor="snapshot-day" className="text-muted-foreground">
+            Jour
+          </label>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Jour précédent"
+              disabled={day <= earliest}
+              onClick={() => go({ day: previousDay(day), slot: undefined })}
+            >
+              <HugeiconsIcon icon={ArrowLeft01Icon} strokeWidth={2} />
+            </Button>
+            <Input
+              id="snapshot-day"
+              type="date"
+              value={day}
+              min={earliest}
+              max={today}
+              onChange={(event) => {
+                if (event.target.value) {
+                  go({ day: event.target.value, slot: undefined });
+                }
+              }}
+              className="w-44"
+            />
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Jour suivant"
+              disabled={day >= today}
+              onClick={() => go({ day: nextDay(day), slot: undefined })}
+            >
+              <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} />
+            </Button>
+          </div>
+        </div>
         <div role="group" aria-label="Relevé" className="flex flex-wrap gap-2">
           {SNAPSHOT_TIMES.map((slotTime) => (
             <SlotButton
@@ -459,17 +517,19 @@ function SiteSnapshots({ site }: { site: SiteSummary }) {
               now={now}
               loading={slots === undefined}
               active={time === slotTime}
-              onSelect={() => setTime(slotTime)}
+              onSelect={() => go({ slot: slotTime })}
             />
           ))}
         </div>
       </div>
-      {chosen?.entries === undefined ? (
-        <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-          Choisissez un relevé pour voir où était chaque adresse MAC.
-        </p>
+      {slots === undefined ? null : chosen?.entries !== undefined ? (
+        <SlotEntries key={`${day}-${time}`} site={site} slot={chosen} />
       ) : (
-        <SlotEntries site={site} slot={chosen} />
+        <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+          {taken.length === 0
+            ? "Aucun relevé ce jour-là."
+            : "Pas de relevé à cette heure-là : choisissez-en un autre."}
+        </p>
       )}
     </section>
   );
@@ -527,23 +587,27 @@ const ENTRY_PAGE = 500;
 
 function SlotEntries({ site, slot }: { site: SiteSummary; slot: Slot }) {
   const [query, setQuery] = useState("");
-  const { results, status, loadMore } = usePaginatedQuery(
+  const {
+    results: shown,
+    status,
+    loadMore,
+  } = usePaginatedQuery(
     api.history.slotEntries,
-    { siteId: site.id, day: slot.day, time: slot.time },
+    {
+      siteId: site.id,
+      day: slot.day,
+      time: slot.time,
+      ...(query.trim() && { search: query }),
+    },
     { initialNumItems: ENTRY_PAGE },
   );
-  const needle = query.trim().toLowerCase();
-  const shown = needle
-    ? results.filter((entry) =>
-        [
-          entry.mac,
-          entry.deviceName,
-          entry.place.socketName,
-          entry.place.switchName,
-          entry.place.portName,
-        ].some((value) => value?.toLowerCase().includes(needle)),
-      )
-    : results;
+  // The search runs on the whole snapshot before paging, so a page may hold
+  // few rows: read on until a page's worth shows or the snapshot ends.
+  useEffect(() => {
+    if (query.trim() && status === "CanLoadMore" && shown.length < ENTRY_PAGE) {
+      loadMore(ENTRY_PAGE);
+    }
+  }, [query, status, shown.length, loadMore]);
   return (
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground">
@@ -567,11 +631,11 @@ function SlotEntries({ site, slot }: { site: SiteSummary; slot: Slot }) {
         />
       </div>
       {status === "LoadingFirstPage" ? null : shown.length === 0 ? (
-        <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-          {status === "Exhausted"
-            ? "Aucune adresse ne correspond."
-            : "Aucune adresse chargée ne correspond ; chargez la suite du relevé."}
-        </p>
+        status === "Exhausted" ? (
+          <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+            Aucune adresse ne correspond.
+          </p>
+        ) : null
       ) : (
         <div className="overflow-x-auto rounded-lg border">
           <table className="w-full text-sm">
