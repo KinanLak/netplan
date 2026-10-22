@@ -1,6 +1,6 @@
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import type { FunctionReturnType } from "convex/server";
 import { toast } from "sonner";
@@ -227,9 +227,19 @@ function SiteSettingsForm({ site }: { site: Site }) {
         : [...draft.businessDays, day],
     });
 
-  const refuse = (found: SiteProblem) => {
+  // A field refused while saving is focused once the form is enabled again:
+  // a disabled field takes no focus.
+  const focusAfterSave = useRef<SiteField | null>(null);
+  useEffect(() => {
+    if (pending || focusAfterSave.current === null) return;
+    document.getElementById(FIELD_INPUT[focusAfterSave.current])?.focus();
+    focusAfterSave.current = null;
+  }, [pending]);
+
+  const refuse = (found: SiteProblem, whileSaving = false) => {
     setProblem(found);
-    document.getElementById(FIELD_INPUT[found.field])?.focus();
+    if (whileSaving) focusAfterSave.current = found.field;
+    else document.getElementById(FIELD_INPUT[found.field])?.focus();
   };
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
@@ -254,7 +264,7 @@ function SiteSettingsForm({ site }: { site: Site }) {
       flashSaved();
     } catch (failure) {
       const message = failureMessage(failure, "admin");
-      if (message === SITE_NAME_TAKEN) refuse({ field: "name", message });
+      if (message === SITE_NAME_TAKEN) refuse({ field: "name", message }, true);
       else setProblem({ field: null, message });
     } finally {
       setPending(false);
