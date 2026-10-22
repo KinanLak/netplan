@@ -1,5 +1,6 @@
 // How fresh a site's data is and when it is next collected (ADR 0026),
 // computed against the page's clock so it ages without the query re-running.
+import { formatAge, formatWhen } from "../lib/time";
 import { nextRunAt } from "./cadence";
 import { INTEGRATION_LABELS } from "./integrations";
 import type { IntegrationKind } from "./integrations";
@@ -70,37 +71,11 @@ export const nextRun = (freshness: SiteFreshness, now: number): NextRun => {
   return now - due < DUE_GRACE_MS ? { kind: "imminent" } : { kind: "waiting" };
 };
 
-const sameDay = (a: number, b: number, timezone: string) => {
-  const day = new Intl.DateTimeFormat("fr-FR", {
-    timeZone: timezone,
-    dateStyle: "short",
-  });
-  return day.format(a) === day.format(b);
-};
-
-/** A time of the site's day, with the day when it is not today. */
-export const formatSiteTime = (
-  at: number,
-  now: number,
-  timezone: string,
-): string =>
-  new Intl.DateTimeFormat("fr-FR", {
-    timeZone: timezone,
-    ...(sameDay(at, now, timezone)
-      ? { timeStyle: "short" }
-      : {
-          weekday: "short",
-          day: "numeric",
-          month: "short",
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-  }).format(at);
-
+/** `timeZone` is the reader's, pinned only by tests. */
 export const describeNextRun = (
   next: NextRun,
   now: number,
-  timezone: string,
+  timeZone?: string,
 ): string => {
   switch (next.kind) {
     case "running":
@@ -112,26 +87,12 @@ export const describeNextRun = (
     case "manual-only":
       return "Collecte automatique désactivée";
     case "at":
-      return `Prochaine collecte : ${formatSiteTime(next.at, now, timezone)}`;
+      return `Prochaine collecte : ${formatWhen(next.at, now, timeZone)}`;
     case "imminent":
       return "Prochaine collecte imminente";
     case "waiting":
       return "Prochaine collecte en attente";
   }
-};
-
-/** How long ago the data was collected, in words. */
-export const describeAge = (
-  at: number,
-  now: number,
-  timezone: string,
-): string => {
-  const minutes = Math.floor((now - at) / MINUTE);
-  if (minutes < 1) return "à l'instant";
-  if (minutes < 60) return `il y a ${minutes} min`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `il y a ${hours} h`;
-  return `le ${formatSiteTime(at, now, timezone)}`;
 };
 
 export type FreshnessTone = "fresh" | "late" | "none";
@@ -140,8 +101,9 @@ export type FreshnessTone = "fresh" | "late" | "none";
 export const describeFreshness = (
   freshness: SiteFreshness,
   now: number,
+  timeZone?: string,
 ): { headline: string; tone: FreshnessTone } => {
-  const { timezone, lastSuccessAt } = freshness;
+  const { lastSuccessAt } = freshness;
   if (!freshness.hasSources) {
     return { headline: "Plan dessiné à la main", tone: "none" };
   }
@@ -153,7 +115,7 @@ export const describeFreshness = (
       tone: late ? "late" : "none",
     };
   }
-  const age = describeAge(lastSuccessAt, now, timezone);
+  const age = formatAge(lastSuccessAt, now, timeZone);
   return late
     ? { headline: `Données en retard : ${age}`, tone: "late" }
     : { headline: `Données collectées ${age}`, tone: "fresh" };
@@ -177,9 +139,10 @@ const plural = (count: number, word: string) =>
 export const describeSources = (
   freshness: SiteFreshness,
   now: number,
+  timeZone?: string,
 ): Array<{ label: string; detail: string; failed: boolean }> =>
   freshness.sources.map(({ source, at, failed }) => {
-    const age = at === null ? null : describeAge(at, now, freshness.timezone);
+    const age = at === null ? null : formatAge(at, now, timeZone);
     let detail: string;
     if (source === "librenms" && freshness.switches) {
       const { read, noted } = freshness.switches;

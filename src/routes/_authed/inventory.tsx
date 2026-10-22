@@ -607,7 +607,6 @@ function InventoryItem({
         {hasHistory ? (
           <DeviceHistoryDialog
             device={device}
-            timezone={site.timezone}
             open={showingHistory}
             onOpenChange={setShowingHistory}
           />

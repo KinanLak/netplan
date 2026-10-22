@@ -1,5 +1,6 @@
 import { usePaginatedQuery } from "convex/react";
 import { useState } from "react";
+import { Time } from "@/components/time";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -9,12 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  EventSummary,
-  LoadMore,
-  PlaceLabel,
-  formatHistoryTime,
-} from "@/history/HistoryLists";
+import { EventSummary, LoadMore, PlaceLabel } from "@/history/HistoryLists";
 import type { DeviceType } from "@/types/map";
 import { api } from "../../convex/_generated/api";
 
@@ -32,12 +28,10 @@ type View = "events" | "snapshots";
  */
 export function DeviceHistoryDialog({
   device,
-  timezone,
   open,
   onOpenChange,
 }: {
   device: { id: string; name: string };
-  timezone: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -50,21 +44,13 @@ export function DeviceHistoryDialog({
             Ce que le réseau a observé ces 30 derniers jours.
           </DialogDescription>
         </DialogHeader>
-        {open ? (
-          <DeviceHistoryBody deviceId={device.id} timezone={timezone} />
-        ) : null}
+        {open ? <DeviceHistoryBody deviceId={device.id} /> : null}
       </DialogContent>
     </Dialog>
   );
 }
 
-function DeviceHistoryBody({
-  deviceId,
-  timezone,
-}: {
-  deviceId: string;
-  timezone: string;
-}) {
+function DeviceHistoryBody({ deviceId }: { deviceId: string }) {
   const [view, setView] = useState<View>("events");
   return (
     <div className="space-y-3">
@@ -91,21 +77,15 @@ function DeviceHistoryBody({
         </Button>
       </div>
       {view === "events" ? (
-        <DeviceEvents deviceId={deviceId} timezone={timezone} />
+        <DeviceEvents deviceId={deviceId} />
       ) : (
-        <DeviceSnapshots deviceId={deviceId} timezone={timezone} />
+        <DeviceSnapshots deviceId={deviceId} />
       )}
     </div>
   );
 }
 
-function DeviceEvents({
-  deviceId,
-  timezone,
-}: {
-  deviceId: string;
-  timezone: string;
-}) {
+function DeviceEvents({ deviceId }: { deviceId: string }) {
   const { results, status, loadMore } = usePaginatedQuery(
     api.history.forDevice,
     { deviceId },
@@ -130,9 +110,9 @@ function DeviceEvents({
             className="grid grid-cols-[9rem_1fr] gap-3 py-2 text-sm"
           >
             <span className="text-muted-foreground tabular-nums">
-              {formatHistoryTime(event.at, timezone)}
+              <Time at={event.at} />
             </span>
-            <EventSummary event={event} timezone={timezone} />
+            <EventSummary event={event} />
           </li>
         ))}
       </ul>
@@ -141,13 +121,7 @@ function DeviceEvents({
   );
 }
 
-function DeviceSnapshots({
-  deviceId,
-  timezone,
-}: {
-  deviceId: string;
-  timezone: string;
-}) {
+function DeviceSnapshots({ deviceId }: { deviceId: string }) {
   const { results, status, loadMore } = usePaginatedQuery(
     api.history.snapshotsForDevice,
     { deviceId },
@@ -161,8 +135,7 @@ function DeviceSnapshots({
   if (results.length === 0 && status === "Exhausted") {
     return (
       <p className="text-sm text-muted-foreground">
-        Aucun relevé de 8 h, 12 h, 14 h, 16 h ou 19 h n'a vu cet équipement ces
-        30 derniers jours.
+        Aucun relevé quotidien n'a vu cet équipement ces 30 derniers jours.
       </p>
     );
   }
@@ -175,7 +148,7 @@ function DeviceSnapshots({
             className="grid grid-cols-[9rem_1fr] gap-3 py-2 text-sm"
           >
             <span className="text-muted-foreground tabular-nums">
-              {formatHistoryTime(entry.slotAt, timezone)}
+              <Time at={entry.slotAt} />
             </span>
             <PlaceLabel place={entry.place} />
           </li>

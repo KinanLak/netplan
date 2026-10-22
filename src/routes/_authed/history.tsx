@@ -8,22 +8,20 @@ import { ModeToggle } from "@/components/mode-toggle";
 import { ListSkeleton } from "@/components/loading-skeletons";
 import { AppNavLinks, UserMenu } from "@/components/app-nav";
 import { NetplanLogo } from "@/components/netplan-logo";
+import { Time } from "@/components/time";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  EventSummary,
-  LoadMore,
-  PlaceLabel,
-  formatHistoryTime,
-} from "@/history/HistoryLists";
+import { EventSummary, LoadMore, PlaceLabel } from "@/history/HistoryLists";
 import { useCanEdit } from "@/hooks/use-current-user";
 import { useNow } from "@/hooks/use-now";
+import { formatTime, timeZoneHint } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import { SiteSwitcher } from "@/sites/SiteSwitcher";
 import {
   captureRunning,
   SNAPSHOT_TIMES,
   siteDay,
+  slotInstant,
   slotStillOpen,
 } from "@/sites/snapshots";
 import { siteSearch, useCurrentSite } from "@/sites/useCurrentSite";
@@ -90,8 +88,7 @@ function SiteHistory({ site }: { site: SiteSummary }) {
         <h1 className="text-xl font-semibold">Historique</h1>
         <p className="text-sm text-muted-foreground">
           Ce que le réseau a observé à {site.name} ces 30 derniers jours :
-          déplacements, mises en ligne et hors ligne, et les relevés de 8 h, 12
-          h, 14 h, 16 h et 19 h.
+          déplacements, mises en ligne et hors ligne, et cinq relevés par jour.
         </p>
       </header>
       <div
@@ -184,13 +181,13 @@ function SiteEvents({ site }: { site: SiteSummary }) {
                   className="align-top"
                 >
                   <td className="px-4 py-2.5 whitespace-nowrap text-muted-foreground tabular-nums">
-                    {formatHistoryTime(event.at, site.timezone)}
+                    <Time at={event.at} />
                   </td>
                   <td className="px-4 py-2.5 font-medium">
                     {event.deviceName}
                   </td>
                   <td className="px-4 py-2.5">
-                    <EventSummary event={event} timezone={site.timezone} />
+                    <EventSummary event={event} />
                   </td>
                 </tr>
               ))}
@@ -238,7 +235,11 @@ function SiteSnapshots({ site }: { site: SiteSummary }) {
           {SNAPSHOT_TIMES.map((slotTime) => (
             <SlotButton
               key={slotTime}
-              time={slotTime}
+              // A taken slot keeps its instant if the site's zone changes.
+              at={
+                slotOf.get(slotTime)?.at ??
+                slotInstant(site.timezone, day, slotTime)
+              }
               slot={slotOf.get(slotTime)}
               open={slotStillOpen(site.timezone, day, slotTime, now)}
               now={now}
@@ -261,7 +262,7 @@ function SiteSnapshots({ site }: { site: SiteSummary }) {
 }
 
 function SlotButton({
-  time,
+  at,
   slot,
   open,
   now,
@@ -269,7 +270,8 @@ function SlotButton({
   active,
   onSelect,
 }: {
-  time: string;
+  /** When the slot falls, shown on the reader's clock. */
+  at: number;
   slot: Slot | undefined;
   open: boolean;
   now: number;
@@ -299,7 +301,9 @@ function SlotButton({
         active && "border-primary bg-muted",
       )}
     >
-      <span className="font-medium tabular-nums">{time}</span>
+      <span className="font-medium tabular-nums" title={timeZoneHint(at)}>
+        {formatTime(at)}
+      </span>
       <span className="text-xs text-muted-foreground">{state}</span>
     </button>
   );
@@ -329,8 +333,8 @@ function SlotEntries({ site, slot }: { site: SiteSummary; slot: Slot }) {
   return (
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground">
-        Relevé pris {formatHistoryTime(slot.takenAt, site.timezone)}, par la
-        première collecte de sa fenêtre.
+        Relevé pris le <Time at={slot.takenAt} />, par la première collecte de
+        sa fenêtre.
       </p>
       <div className="relative max-w-md">
         <HugeiconsIcon

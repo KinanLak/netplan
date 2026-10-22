@@ -12,6 +12,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Time } from "@/components/time";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -44,12 +45,6 @@ const PLACEHOLDERS: Record<IntegrationKind, string> = {
   netbox: "https://netbox.exemple.fr",
   librenms: "https://librenms.exemple.fr",
 };
-
-const checkedAt = (at: number) =>
-  new Intl.DateTimeFormat("fr-FR", {
-    dateStyle: "short",
-    timeStyle: "short",
-  }).format(at);
 
 /** The NetBox and LibreNMS connections of a site. */
 export function IntegrationsSection({ siteId }: { siteId: string }) {
@@ -393,7 +388,7 @@ function ConnectionStatus({
         {result === null && lastCheck ? (
           <span className="whitespace-nowrap">
             {" "}
-            ({checkedAt(lastCheck.at)})
+            (<Time at={lastCheck.at} />)
           </span>
         ) : null}
         {result?.note ? ` ${result.note}` : null}

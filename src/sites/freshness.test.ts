@@ -1,6 +1,5 @@
 import { describe, expect, it } from "bun:test";
 import {
-  describeAge,
   describeSources,
   failedAttemptAt,
   describeFreshness,
@@ -87,7 +86,7 @@ describe("nextRun", () => {
 });
 
 describe("descriptions", () => {
-  it("shows the site's time, and its day when it is not today", () => {
+  it("shows the time, and its day when it is not today", () => {
     const now = WEDNESDAY_10H;
     expect(describeNextRun({ kind: "at", at: now + 5 * MINUTE }, now, TZ)).toBe(
       "Prochaine collecte : 10:05",
@@ -95,14 +94,6 @@ describe("descriptions", () => {
     expect(
       describeNextRun({ kind: "at", at: now + 24 * 60 * MINUTE }, now, TZ),
     ).toMatch(/^Prochaine collecte : jeu\. 15 oct\.,? 10:00$/);
-  });
-
-  it("ages the data in words", () => {
-    const at = WEDNESDAY_10H;
-    expect(describeAge(at, at + 30_000, TZ)).toBe("à l'instant");
-    expect(describeAge(at, at + 4 * MINUTE, TZ)).toBe("il y a 4 min");
-    expect(describeAge(at, at + 150 * MINUTE, TZ)).toBe("il y a 2 h");
-    expect(describeAge(at, at + 48 * 60 * MINUTE, TZ)).toMatch(/^le mer\. 14/);
   });
 });
 

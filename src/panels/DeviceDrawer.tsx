@@ -40,7 +40,6 @@ import {
   HAS_HISTORY,
 } from "@/history/DeviceHistoryDialog";
 import { useCanEdit } from "@/hooks/use-current-user";
-import { useCurrentSite } from "@/sites/useCurrentSite";
 import { useShortcutIntentEffect } from "@/hooks/use-shortcuts";
 import { hasStatus } from "@/devices/status";
 import { comparePorts, deviceConnections } from "@/devices/ports";
@@ -77,7 +76,6 @@ export default function DeviceDrawer() {
   );
   // History is read by role, in or out of edit mode (ADR 0027).
   const canEdit = useCanEdit();
-  const { site } = useCurrentSite();
   const [historyDeviceId, setHistoryDeviceId] = useState<DeviceId | null>(null);
   useShortcutIntentEffect("show-device-history", () =>
     setHistoryDeviceId(selectedDeviceId),
@@ -292,18 +290,15 @@ export default function DeviceDrawer() {
         onOpenChange={(open) => showPortCables(open ? device.id : null)}
         focusPortId={cablesPortId}
       />
-      {site ? (
-        <DeviceHistoryDialog
-          device={device}
-          timezone={site.timezone}
-          open={
-            canEdit &&
-            HAS_HISTORY.has(device.type) &&
-            historyDeviceId === device.id
-          }
-          onOpenChange={(open) => setHistoryDeviceId(open ? device.id : null)}
-        />
-      ) : null}
+      <DeviceHistoryDialog
+        device={device}
+        open={
+          canEdit &&
+          HAS_HISTORY.has(device.type) &&
+          historyDeviceId === device.id
+        }
+        onOpenChange={(open) => setHistoryDeviceId(open ? device.id : null)}
+      />
     </aside>
   );
 }

@@ -12,13 +12,13 @@ import { useCurrentUser } from "@/hooks/use-current-user";
 import { useShortcutIntentEffect } from "@/hooks/use-shortcuts";
 import { useNow } from "@/hooks/use-now";
 import { isAdmin } from "@/lib/roles";
+import { ageHint, formatWhen, timeZoneHint } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import {
   describeFreshness,
   describeNextRun,
   describeSources,
   failedAttemptAt,
-  formatSiteTime,
   nextRun,
 } from "@/sites/freshness";
 import type { FreshnessTone } from "@/sites/freshness";
@@ -125,11 +125,22 @@ export function CollectionFreshness({
   const { headline, tone } = describeFreshness(freshness, now);
   const late = tone === "late";
   const failedAt = failedAttemptAt(freshness);
+  const next = nextRun(freshness, now);
   const sources = describeSources(freshness, now);
   const admin = Boolean(me && isAdmin(me.role));
 
+  // The hover card names each source's age; without one, the hint does.
   const headlineText = (
-    <span className={cn("text-pretty", late && "text-down")}>{headline}</span>
+    <span
+      className={cn("text-pretty", late && "text-down")}
+      title={
+        sources.length === 0 && freshness.lastSuccessAt !== null
+          ? ageHint(freshness.lastSuccessAt, now)
+          : undefined
+      }
+    >
+      {headline}
+    </span>
   );
 
   return (
@@ -171,6 +182,13 @@ export function CollectionFreshness({
                   </li>
                 ))}
               </ul>
+              {/* The card stands in for the headline's hover hint: when
+                  the data was last collected, and on whose clock. */}
+              <p className="text-muted-foreground">
+                {freshness.lastSuccessAt === null
+                  ? timeZoneHint(now)
+                  : `Dernière collecte réussie : ${ageHint(freshness.lastSuccessAt, now)}`}
+              </p>
               {admin ? (
                 <Link
                   to="/admin/health"
@@ -190,9 +208,19 @@ export function CollectionFreshness({
             failedAt === null ? "text-muted-foreground" : "text-down",
           )}
         >
-          {failedAt === null
-            ? describeNextRun(nextRun(freshness, now), now, freshness.timezone)
-            : `Dernière tentative en échec à ${formatSiteTime(failedAt, now, freshness.timezone)}`}
+          <span
+            title={
+              failedAt !== null
+                ? timeZoneHint(failedAt)
+                : next.kind === "at"
+                  ? timeZoneHint(next.at)
+                  : undefined
+            }
+          >
+            {failedAt === null
+              ? describeNextRun(next, now)
+              : `Dernière tentative en échec à ${formatWhen(failedAt, now)}`}
+          </span>
           {!freshness.hasSources && linkToSettings && admin ? (
             <>
               {" · "}

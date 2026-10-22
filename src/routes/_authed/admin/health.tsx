@@ -2,16 +2,12 @@ import { Link, createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import type { ReactNode } from "react";
+import { Time } from "@/components/time";
 import { useNow } from "@/hooks/use-now";
+import { ageHint, timeZoneHint } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import { FRESHNESS_DOT } from "@/sites/CollectionFreshness";
-import {
-  describeAge,
-  describeFreshness,
-  describeNextRun,
-  formatSiteTime,
-  nextRun,
-} from "@/sites/freshness";
+import { describeFreshness, describeNextRun, nextRun } from "@/sites/freshness";
 import { INTEGRATION_LABELS } from "@/sites/integrations";
 import type { IntegrationKind } from "@/sites/integrations";
 import { api } from "../../../../convex/_generated/api";
@@ -82,8 +78,8 @@ const Dot = ({ className }: { className: string }) => (
 
 function SiteCard({ site, now }: { site: SiteHealth; now: number }) {
   const { freshness, last, netbox, switches } = site;
-  const { timezone } = freshness;
   const { headline, tone } = describeFreshness(freshness, now);
+  const next = nextRun(freshness, now);
   const polled = last?.steps.find(
     (step) => step.source === "librenms",
   )?.switches;
@@ -102,9 +98,21 @@ function SiteCard({ site, now }: { site: SiteHealth; now: number }) {
         <div className="flex items-center gap-2 text-sm">
           <Dot className={FRESHNESS_DOT[tone]} />
           <div>
-            <p className={cn(tone === "late" && "text-down")}>{headline}</p>
-            <p className="text-xs text-muted-foreground">
-              {describeNextRun(nextRun(freshness, now), now, timezone)}
+            <p
+              className={cn(tone === "late" && "text-down")}
+              title={
+                freshness.lastSuccessAt === null
+                  ? undefined
+                  : ageHint(freshness.lastSuccessAt, now)
+              }
+            >
+              {headline}
+            </p>
+            <p
+              className="text-xs text-muted-foreground"
+              title={next.kind === "at" ? timeZoneHint(next.at) : undefined}
+            >
+              {describeNextRun(next, now)}
             </p>
           </div>
         </div>
@@ -112,11 +120,14 @@ function SiteCard({ site, now }: { site: SiteHealth; now: number }) {
 
       <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
         <Fact label="Dernière collecte">
-          {last
-            ? `${formatSiteTime(last.finishedAt, now, timezone)}, ${
-                last.manual ? "manuelle" : "automatique"
-              }`
-            : "Aucune"}
+          {last ? (
+            <>
+              <Time at={last.finishedAt} now={now} format="when" />,{" "}
+              {last.manual ? "manuelle" : "automatique"}
+            </>
+          ) : (
+            "Aucune"
+          )}
         </Fact>
         <Fact label="Échecs de suite">
           <span className={cn(freshness.failures >= 2 && "text-down")}>
@@ -124,11 +135,13 @@ function SiteCard({ site, now }: { site: SiteHealth; now: number }) {
           </span>
         </Fact>
         <Fact label="Import NetBox">
-          {netbox === null
-            ? "NetBox inactif"
-            : netbox.importedAt === null
-              ? "Jamais"
-              : describeAge(netbox.importedAt, now, timezone)}
+          {netbox === null ? (
+            "NetBox inactif"
+          ) : netbox.importedAt === null ? (
+            "Jamais"
+          ) : (
+            <Time at={netbox.importedAt} now={now} format="age" />
+          )}
         </Fact>
         <Fact label="Switches">
           {switchTotal === 0 ? (
@@ -181,9 +194,7 @@ function SiteCard({ site, now }: { site: SiteHealth; now: number }) {
 
       {polled && polled.length > 0 ? <PolledSwitches polled={polled} /> : null}
 
-      {netbox?.push ? (
-        <PushHealth push={netbox.push} now={now} timezone={timezone} />
-      ) : null}
+      {netbox?.push ? <PushHealth push={netbox.push} now={now} /> : null}
     </li>
   );
 }
@@ -265,15 +276,7 @@ const describePush = (last: NonNullable<Push["last"]>) => {
 };
 
 /** The last push run to NetBox and every device NetBox still refuses. */
-function PushHealth({
-  push,
-  now,
-  timezone,
-}: {
-  push: Push;
-  now: number;
-  timezone: string;
-}) {
+function PushHealth({ push, now }: { push: Push; now: number }) {
   const { last, failing, more } = push;
   const ok = !last?.error && failing.length === 0;
   return (
@@ -290,9 +293,14 @@ function PushHealth({
           <span className="text-muted-foreground">
             {" "}
             ·{" "}
-            {last === null
-              ? "aucun envoi depuis qu'il est activé"
-              : `${describeAge(last.finishedAt, now, timezone)} : ${describePush(last)}`}
+            {last === null ? (
+              "aucun envoi depuis qu'il est activé"
+            ) : (
+              <>
+                <Time at={last.finishedAt} now={now} format="age" /> :{" "}
+                {describePush(last)}
+              </>
+            )}
           </span>
         </span>
       </p>
@@ -307,8 +315,8 @@ function PushHealth({
               </p>
               <p className="ps-4 text-xs text-muted-foreground">
                 En échec depuis{" "}
-                {formatSiteTime(entry.failingSince, now, timezone)}, nouvel
-                essai après {formatSiteTime(entry.retryAt, now, timezone)}
+                <Time at={entry.failingSince} now={now} format="when" />, nouvel
+                essai après <Time at={entry.retryAt} now={now} format="when" />
               </p>
             </li>
           ))}

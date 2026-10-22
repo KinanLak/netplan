@@ -6,6 +6,7 @@ import {
   WifiDisconnected01Icon,
 } from "@hugeicons/core-free-icons";
 import type { FunctionReturnType } from "convex/server";
+import { Time } from "@/components/time";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { api } from "../../convex/_generated/api";
@@ -17,17 +18,6 @@ export type SnapshotEntry = FunctionReturnType<
   typeof api.history.snapshotsForDevice
 >["page"][number];
 type Place = SnapshotEntry["place"];
-
-/** A date and time of the site's day, always with the day: history spans a month. */
-export const formatHistoryTime = (at: number, timezone: string) =>
-  new Intl.DateTimeFormat("fr-FR", {
-    timeZone: timezone,
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(at);
 
 /** Where the network saw a device, with the names it had then. */
 export function PlaceLabel({ place }: { place: Place }) {
@@ -59,13 +49,7 @@ const EVENT_ICONS = {
   offline: WifiDisconnected01Icon,
 };
 
-export function EventSummary({
-  event,
-  timezone,
-}: {
-  event: HistoryEvent;
-  timezone: string;
-}) {
+export function EventSummary({ event }: { event: HistoryEvent }) {
   return (
     <span className="flex items-start gap-2">
       <HugeiconsIcon
@@ -86,8 +70,7 @@ export function EventSummary({
           <span className="text-down">Hors ligne</span>
           {event.lastSeenAt === undefined ? null : (
             <span className="text-xs text-muted-foreground">
-              Vu pour la dernière fois{" "}
-              {formatHistoryTime(event.lastSeenAt, timezone)}
+              Vu pour la dernière fois <Time at={event.lastSeenAt} />
             </span>
           )}
         </span>
