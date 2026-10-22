@@ -10,8 +10,10 @@ export type ShortcutIntentEvent = Pick<
 
 export type ShortcutIntentRuntime = {
   activeDrawTool: DrawTool;
-  /** The user's role allows changing the map. */
+  /** The user may change this site's map: their role, and not archived. */
   canEdit: boolean;
+  /** Their role alone, for what only reads (`byRoleOnly`); `canEdit` if unset. */
+  hasEditorRole?: boolean;
   currentFloorId: string | null;
   /** Edit mode as the user sees it: their choice, and only if `canEdit`. */
   isEditMode: boolean;
@@ -353,7 +355,10 @@ export const resolveShortcutIntent = ({
       const config = shortcuts[action];
 
       return (
-        (!config.requiresEdit || runtime.canEdit) &&
+        (!config.requiresEdit ||
+          (config.byRoleOnly
+            ? (runtime.hasEditorRole ?? runtime.canEdit)
+            : runtime.canEdit)) &&
         isScopeActive(config.scope, runtime) &&
         isActionAllowedByContext(action, runtime) &&
         hasEnabledRegistration(action, registrations) !== null
