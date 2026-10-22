@@ -54,8 +54,10 @@ export const saveSettings = adminMutation({
     const refused = netboxSettingsError(args.settings);
     if (refused) throw new ConvexError(refused);
     const { site, roles } = args.settings;
-    // The push has its own switch, which this form does not show.
-    const push = row.netbox?.push;
+    // The push has its own switch, which this form does not show. Without a
+    // site or a role nothing is imported, so it goes off with them.
+    const push =
+      site === null || roles.length === 0 ? undefined : row.netbox?.push;
     await ctx.db.patch(row._id, {
       netbox: { site, roles, ...(push !== undefined && { push }) },
     });
@@ -75,11 +77,34 @@ export const setPush = adminMutation({
     const row = await netboxRow(ctx, siteId);
     if (!row)
       throw new ConvexError("Configurez d'abord la connexion à NetBox.");
+    const current = row.netbox ?? EMPTY_NETBOX_SETTINGS;
+    // Without a site and a role nothing is imported, so nothing would be
+    // written: turning it on would only look like it works.
+    if (push && (current.site === null || current.roles.length === 0)) {
+      throw new ConvexError(
+        "Choisissez d'abord le site NetBox et au moins un rôle à importer.",
+      );
+    }
     await ctx.db.patch(row._id, {
-      netbox: { ...(row.netbox ?? EMPTY_NETBOX_SETTINGS), push },
+      netbox: { ...current, push },
     });
     return null;
   },
+});
+
+/** How many of the site's devices come from NetBox, which the push writes to. */
+export const importedCount = adminQuery({
+  args: { siteId: v.string() },
+  returns: v.number(),
+  handler: async (ctx, { siteId }) =>
+    (
+      await ctx.db
+        .query("devices")
+        .withIndex("by_site_source", (q) =>
+          q.eq("siteId", siteId).eq("source.integration", "netbox"),
+        )
+        .collect()
+    ).length,
 });
 
 const choice = v.object({ id: v.number(), name: v.string() });

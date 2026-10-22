@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { randomBytes } from "node:crypto";
+import { ConvexError } from "convex/values";
 import { api, internal } from "./_generated/api";
 import {
   createSignedInUser,
@@ -157,8 +158,17 @@ async function pushingSite() {
   return { t, admin, siteId };
 }
 
-const turnOn = async (admin: TestClient, siteId: string) =>
+const turnOn = async (admin: TestClient, siteId: string) => {
+  await admin.mutation(api.netbox.saveSettings, {
+    siteId,
+    baseUrl: NETBOX,
+    settings: {
+      site: { id: 1, name: "Siège" },
+      roles: [{ id: 1, name: "PC", type: "pc" }],
+    },
+  });
   await admin.mutation(api.netbox.setPush, { siteId, push: true });
+};
 
 const push = async (admin: TestClient, siteId: string) =>
   await admin.action(internal.sources.pushToNetBox, { siteId });
@@ -236,6 +246,30 @@ describe("the push to NetBox", () => {
     await push(admin, siteId);
     expect(patches).toEqual([]);
     expect(await lastPush(admin, siteId)).toBeNull();
+  });
+
+  it("cannot be turned on before a NetBox site and role are chosen", async () => {
+    const { admin, siteId } = await pushingSite();
+    const error: unknown = await admin
+      .mutation(api.netbox.setPush, { siteId, push: true })
+      .catch((failure: unknown) => failure);
+    expect(error instanceof ConvexError ? error.data : error).toBe(
+      "Choisissez d'abord le site NetBox et au moins un rôle à importer.",
+    );
+    expect(await admin.query(api.netbox.importedCount, { siteId })).toBe(2);
+  });
+
+  it("goes off when the import loses its NetBox site", async () => {
+    const { admin, siteId } = await pushingSite();
+    await turnOn(admin, siteId);
+    await admin.mutation(api.netbox.saveSettings, {
+      siteId,
+      baseUrl: NETBOX,
+      settings: { site: null, roles: [] },
+    });
+    expect((await admin.query(api.netbox.settings, { siteId }))?.push).toBe(
+      undefined,
+    );
   });
 
   it("writes where each NetBox device was seen, once", async () => {

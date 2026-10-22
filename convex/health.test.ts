@@ -57,6 +57,14 @@ describe("the admin health overview", () => {
       ],
     };
     await t.run(async (ctx) => {
+      await ctx.db.insert("integrations", {
+        siteId: busy,
+        kind: "librenms",
+        baseUrl: "https://librenms.test",
+        enabled: true,
+        token: { keyId: "k", iv: "iv", ciphertext: "c" },
+        updatedAt: 0,
+      });
       await ctx.db.insert("siteCycles", {
         siteId: busy,
         nextRunAt: 3_000,
@@ -119,6 +127,30 @@ describe("the admin health overview", () => {
     const [site] = await t.query(api.health.overview, {});
 
     expect(site.netbox).toBeNull();
+  });
+
+  it("leaves out the steps of a source removed since the last cycle", async () => {
+    const t = await admin();
+    const siteId = await createTestSite(t);
+    await t.run(async (ctx) => {
+      await ctx.db.insert("siteCycles", {
+        siteId,
+        nextRunAt: 3_000,
+        failures: 0,
+        last: {
+          startedAt: 1_000,
+          finishedAt: 2_000,
+          manual: false,
+          steps: [{ source: "netbox", ok: true, message: "12 importés." }],
+        },
+      });
+    });
+
+    const [site] = await t.query(api.health.overview, {});
+    const status = await t.query(api.collection.status, { siteId });
+
+    expect(site.last?.steps).toEqual([]);
+    expect(status.last?.steps).toEqual([]);
   });
 
   it("names the integrations that ignore certificate errors", async () => {

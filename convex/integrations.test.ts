@@ -104,16 +104,25 @@ describe("integrations", () => {
       "./lenientProbe.ts": () =>
         Promise.resolve({
           probe: internalAction({
-            args: { siteId: v.string() },
-            handler: async (ctx, { siteId }) =>
-              await testConnection(ctx, siteId, "netbox", {
-                lenient: (url) => {
-                  lenientCalls.push(url);
-                  return Promise.resolve(
-                    Response.json({ "netbox-version": "4.6.10" }),
-                  );
+            args: { siteId: v.string(), lenient: v.boolean() },
+            handler: async (ctx, { siteId, lenient }) =>
+              await testConnection(
+                ctx,
+                {
+                  siteId,
+                  kind: "netbox",
+                  baseUrl: "https://netbox.test",
+                  ignoreCertificateErrors: lenient,
                 },
-              }),
+                {
+                  lenient: (url) => {
+                    lenientCalls.push(url);
+                    return Promise.resolve(
+                      Response.json({ "netbox-version": "4.6.10" }),
+                    );
+                  },
+                },
+              ),
           }),
         }),
     });
@@ -124,21 +133,155 @@ describe("integrations", () => {
     const probe = makeFunctionReference<"action">("lenientProbe:probe");
 
     await saveNetBox(admin, siteId);
-    await t.action(probe, { siteId });
+    await t.action(probe, { siteId, lenient: false });
     expect(lenientCalls).toEqual([]);
 
-    // Stored directly: saving through the action would probe the real address.
-    await admin.mutation(internal.integrations.store, {
+    await t.action(probe, { siteId, lenient: true });
+    expect(lenientCalls).toEqual(["https://netbox.test/api/status/"]);
+  });
+
+  it("tests what the form shows, and records only a test of the saved connection", async () => {
+    const admin = await signedInTest("admin");
+    const siteId = await createTestSite(admin);
+    await saveNetBox(admin, siteId);
+    const [saved] = await stored(admin);
+    fetchStub.restore();
+    fetchStub = stubFetch(() => new Response(null, { status: 403 }));
+
+    expect(
+      await admin.action(api.sources.testIntegration, {
+        siteId,
+        kind: "netbox",
+        baseUrl: "https://other-netbox.test",
+        ignoreCertificateErrors: false,
+        token: "another-token-for-tests", // gitleaks:allow
+      }),
+    ).toEqual({ ok: false, message: "NetBox refuse ce jeton (403)." });
+    expect(String(fetchStub.calls[0]?.[0])).toBe(
+      "https://other-netbox.test/api/status/",
+    );
+    expect((await stored(admin))[0]).toEqual(saved);
+
+    await admin.action(api.sources.testIntegration, {
       siteId,
       kind: "netbox",
       baseUrl: "https://netbox.test",
-      enabled: true,
-      ignoreCertificateErrors: true,
+      ignoreCertificateErrors: false,
     });
+    expect((await stored(admin))[0]?.lastCheck?.message).toBe(
+      "NetBox refuse ce jeton (403).",
+    );
+  });
+
+  it("never sends the saved token to another address", async () => {
+    const admin = await signedInTest("admin");
+    const siteId = await createTestSite(admin);
+    await saveNetBox(admin, siteId);
+    const calls = fetchStub.calls.length;
+
+    expect(
+      await refusal(
+        admin.action(api.sources.testIntegration, {
+          siteId,
+          kind: "netbox",
+          baseUrl: "https://elsewhere.test",
+          ignoreCertificateErrors: false,
+        }),
+      ),
+    ).toContain("Saisissez à nouveau le jeton");
+    expect(fetchStub.calls.length).toBe(calls);
+  });
+
+  it("saves a new connection only when its test succeeds", async () => {
+    const admin = await signedInTest("admin");
+    const siteId = await createTestSite(admin);
+    fetchStub.restore();
+    fetchStub = stubFetch(() => new Response(null, { status: 403 }));
+
+    expect(await saveNetBox(admin, siteId)).toEqual({
+      ok: false,
+      message: "NetBox refuse ce jeton (403).",
+    });
+    expect(await stored(admin)).toEqual([]);
+  });
+
+  it("keeps the saved connection when a new address fails its test", async () => {
+    const admin = await signedInTest("admin");
+    const siteId = await createTestSite(admin);
+    await saveNetBox(admin, siteId);
+    const [saved] = await stored(admin);
+    fetchStub.restore();
+    fetchStub = stubFetch(() => new Response(null, { status: 403 }));
+
+    expect(
+      (
+        await saveNetBox(admin, siteId, {
+          baseUrl: "https://elsewhere.test",
+          token: "another-token-for-tests", // gitleaks:allow
+        })
+      )?.ok,
+    ).toBe(false);
+    expect((await stored(admin))[0]).toEqual(saved);
+  });
+
+  it("turns a connection off without testing it", async () => {
+    const admin = await signedInTest("admin");
+    const siteId = await createTestSite(admin);
+    await saveNetBox(admin, siteId);
+    const calls = fetchStub.calls.length;
+
+    expect(
+      await admin.action(api.sources.saveIntegration, {
+        siteId,
+        kind: "netbox",
+        baseUrl: "https://netbox.test",
+        enabled: false,
+        ignoreCertificateErrors: false,
+      }),
+    ).toBeNull();
+    expect(fetchStub.calls.length).toBe(calls);
     const [row] = await stored(admin);
-    expect(row.ignoreCertificateErrors).toBe(true);
-    await t.action(probe, { siteId });
-    expect(lenientCalls).toEqual(["https://netbox.test/api/status/"]);
+    expect(row.enabled).toBe(false);
+    expect(row.lastCheck?.ok).toBe(true);
+  });
+
+  it("turns a connection off even without the encryption key", async () => {
+    const admin = await signedInTest("admin");
+    const siteId = await createTestSite(admin);
+    await saveNetBox(admin, siteId);
+    delete process.env.NETPLAN_SECRET_KEY;
+
+    expect(
+      await admin.action(api.sources.saveIntegration, {
+        siteId,
+        kind: "netbox",
+        baseUrl: "https://netbox.test",
+        enabled: false,
+        ignoreCertificateErrors: false,
+      }),
+    ).toBeNull();
+    expect((await stored(admin))[0]?.enabled).toBe(false);
+  });
+
+  it("does not bring back a connection removed while it was tested", async () => {
+    const admin = await signedInTest("admin");
+    const siteId = await createTestSite(admin);
+    await saveNetBox(admin, siteId);
+    const [row] = await stored(admin);
+    await admin.mutation(api.integrations.remove, { siteId, kind: "netbox" });
+
+    expect(
+      await refusal(
+        admin.mutation(internal.integrations.store, {
+          siteId,
+          kind: "netbox",
+          baseUrl: "https://netbox.test",
+          enabled: true,
+          expectedVersion: row.updatedAt,
+        }),
+      ),
+    ).toBe("Cette connexion a été retirée pendant le test.");
+    expect(await stored(admin)).toEqual([]);
   });
 
   it("forgets the last test when the certificate option changes", async () => {
@@ -213,6 +356,8 @@ describe("integrations", () => {
       await admin.action(api.sources.testIntegration, {
         siteId,
         kind: "netbox",
+        baseUrl: "https://netbox.test",
+        ignoreCertificateErrors: false,
       }),
     ).toEqual({
       ok: false,
@@ -239,6 +384,8 @@ describe("integrations", () => {
     await admin.action(api.sources.testIntegration, {
       siteId,
       kind: "netbox",
+      baseUrl: "https://netbox.test",
+      ignoreCertificateErrors: false,
     });
     const [, init] = fetchStub.calls.at(-1) ?? [];
     expect(new Headers(init?.headers).get("Authorization")).toBe(

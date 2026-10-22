@@ -1,7 +1,18 @@
 import { useAction, useMutation, useQuery } from "convex/react";
 import { useState } from "react";
 import type { FunctionReturnType } from "convex/server";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Field,
   FieldDescription,
@@ -98,14 +109,32 @@ export function NetBoxSettingsSection({ siteId }: { siteId: string }) {
           </div>
         </>
       )}
-      <PushSetting siteId={siteId} push={settings.push === true} />
+      <PushSetting
+        siteId={siteId}
+        push={settings.push === true}
+        ready={settings.site !== null && settings.roles.length > 0}
+      />
     </section>
   );
 }
 
-/** The push of observed locations to NetBox custom fields (ADR 0027). */
-function PushSetting({ siteId, push }: { siteId: string; push: boolean }) {
+/**
+ * The push of observed locations to NetBox custom fields (ADR 0027). It
+ * writes to a real NetBox, so turning it on is confirmed, and it waits for a
+ * NetBox site and role: without them nothing is imported, so nothing written.
+ */
+function PushSetting({
+  siteId,
+  push,
+  ready,
+}: {
+  siteId: string;
+  push: boolean;
+  ready: boolean;
+}) {
   const setPush = useMutation(api.netbox.setPush);
+  const imported = useQuery(api.netbox.importedCount, { siteId });
+  const [confirming, setConfirming] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -124,19 +153,23 @@ function PushSetting({ siteId, push }: { siteId: string; push: boolean }) {
   return (
     <div className="space-y-2 border-t pt-4">
       <Field orientation="horizontal">
-        <input
+        <Checkbox
           id="netbox-push"
-          type="checkbox"
-          className="size-4 accent-primary"
           checked={push}
-          disabled={pending}
-          onChange={(event) => void change(event.target.checked)}
+          disabled={pending || (!push && !ready)}
+          onCheckedChange={(checked) => {
+            if (checked) setConfirming(true);
+            else void change(false);
+          }}
         />
         <FieldLabel htmlFor="netbox-push">
           Écrire dans NetBox où le réseau voit chaque équipement
         </FieldLabel>
       </Field>
       <FieldDescription>
+        {!push && !ready
+          ? "Choisissez d'abord le site NetBox et au moins un rôle à importer. "
+          : null}
         Après chaque collecte, NetPlan écrit la prise, l'étage, le port de
         switch et la dernière observation des équipements importés de NetBox
         dans leurs champs personnalisés{" "}
@@ -151,6 +184,35 @@ function PushSetting({ siteId, push }: { siteId: string; push: boolean }) {
         écrit.
       </FieldDescription>
       {error ? <FieldError>{error}</FieldError> : null}
+      <AlertDialog open={confirming} onOpenChange={setConfirming}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Écrire dans NetBox ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {imported === undefined || imported === 0
+                ? "NetPlan modifiera les équipements importés de NetBox"
+                : `NetPlan modifiera ${
+                    imported === 1
+                      ? "l'équipement importé"
+                      : `les ${imported} équipements importés`
+                  } de NetBox`}{" "}
+              après chaque collecte, dans leurs champs personnalisés seulement.
+              Ce qu'il écrit reste dans NetBox si vous décochez la case.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setConfirming(false);
+                void change(true);
+              }}
+            >
+              Écrire dans NetBox
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

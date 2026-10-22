@@ -1,6 +1,10 @@
 // Every site's collection at a glance, for the admin (ADR 0026).
 import { v } from "convex/values";
-import { freshnessOf, siteFreshness } from "./collection";
+import {
+  freshnessOf,
+  siteFreshness,
+  withoutRemovedSources,
+} from "./collection";
 import { cycleOf } from "./lib/cycles";
 import { adminQuery } from "./lib/functions";
 import type { QueryCtx } from "./_generated/server";
@@ -115,7 +119,7 @@ export const overview = adminQuery({
           id: siteId,
           name: site.name,
           freshness: await freshnessOf(ctx, site, cycle),
-          last: cycle?.last ?? null,
+          last: withoutRemovedSources(cycle?.last, integrations),
           netbox: netbox?.enabled
             ? {
                 importedAt: cycle?.netboxImportedAt ?? null,

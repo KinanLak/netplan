@@ -8,9 +8,12 @@ description: Connecting a site to NetBox and LibreNMS, checking that a LibreNMS 
 Each site reads its own NetBox and LibreNMS (ADR 0022). An admin connects
 them in **Administration › Sites › <site> › Intégrations**: the address,
 then an API token, which is stored encrypted and never shown again.
-"Enregistrer et tester" proves the address and the token before the first
-collection; the "Collecte" section below it shows the last cycle's report,
-step by step, and when the next one runs.
+"Tester" tries what the form shows without saving it; "Enregistrer et
+tester" tries it and saves it only when the source answers, so a typo never
+replaces a working connection. A connection that cannot be reached can still
+be switched off: unticking "Utiliser … dans la collecte" saves without a
+test. The "Collecte" section below shows the last cycle's report, step by
+step, and when the next one runs.
 
 A NetBox token only reads, unless the site writes locations back to NetBox
 (below). LibreNMS needs a token that may read devices, ports and forwarding

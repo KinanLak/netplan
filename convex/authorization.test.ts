@@ -56,6 +56,7 @@ const POLICY: Record<string, Role> = {
   "mapDocument:getFloorWalls": "reader",
   "mapOperations:apply": "editor",
   "mapOperations:observePending": "reader",
+  "netbox:importedCount": "admin",
   "netbox:saveSettings": "admin",
   "netbox:setPush": "admin",
   "netbox:settings": "admin",
