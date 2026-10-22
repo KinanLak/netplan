@@ -93,11 +93,20 @@ export interface MapDocumentCommands {
   addDevice: (draft: DeviceDraft) => DeviceId | null;
   addDevices: (drafts: Array<DeviceDraft>) => Array<DeviceId>;
   updateDevicePosition: (deviceId: DeviceId, position: Position) => void;
-  updateDevicePositions: (updates: Array<DevicePositionUpdate>) => void;
+  /**
+   * Moves several devices in one change. They are sorted for a move in one
+   * direction unless `ordered` says the caller already ordered them.
+   */
+  updateDevicePositions: (
+    updates: Array<DevicePositionUpdate>,
+    options?: { ordered?: boolean },
+  ) => void;
   /** False when the device cannot be deleted yet, or at all. */
   deleteDevice: (deviceId: DeviceId) => boolean;
   /** Takes a device off the map; it stays in the site inventory. */
   unplaceDevice: (deviceId: DeviceId) => void;
+  /** Takes several devices off the map in one change, so one undo. */
+  unplaceDevices: (deviceIds: ReadonlyArray<DeviceId>) => void;
   /** Puts an inventory device on the current floor; false when it cannot. */
   placeDevice: (device: Device) => boolean;
   checkCollision: (
@@ -438,20 +447,24 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
     });
   };
 
-  const updateDevicePositions = (updates: Array<DevicePositionUpdate>) => {
+  const updateDevicePositions = (
+    updates: Array<DevicePositionUpdate>,
+    options: { ordered?: boolean } = {},
+  ) => {
     if (!isReadyRef.current || updates.length === 0) return;
     const devices = documentRef.current.devices;
     const deviceById = new Map(devices.map((device) => [device.id, device]));
-    const changedUpdates = sortGroupPositionUpdates(devices, updates).filter(
-      (update) => {
-        const device = deviceById.get(update.deviceId);
-        return (
-          device &&
-          (device.position.x !== update.position.x ||
-            device.position.y !== update.position.y)
-        );
-      },
-    );
+    const sorted = options.ordered
+      ? updates
+      : sortGroupPositionUpdates(devices, updates);
+    const changedUpdates = sorted.filter((update) => {
+      const device = deviceById.get(update.deviceId);
+      return (
+        device &&
+        (device.position.x !== update.position.x ||
+          device.position.y !== update.position.y)
+      );
+    });
     if (changedUpdates.length === 0) return;
     const meta = freshMeta();
     if (!meta) return;
@@ -492,6 +505,26 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
     const meta = freshMeta();
     if (!meta) return;
     dispatchOperation({ kind: "device.unplace", meta, deviceId });
+  };
+
+  const unplaceDevices = (deviceIds: ReadonlyArray<DeviceId>) => {
+    if (!isReadyRef.current) return;
+    const placed = new Set(documentRef.current.devices.map((d) => d.id));
+    const ids = deviceIds.filter((id) => placed.has(id));
+    if (ids.length <= 1) {
+      if (ids[0]) unplaceDevice(ids[0]);
+      return;
+    }
+    const meta = freshMeta();
+    if (!meta) return;
+    dispatchOperation({
+      kind: "batch",
+      meta,
+      operations: ids.map((deviceId) => ({
+        kind: "device.unplace" as const,
+        deviceId,
+      })),
+    });
   };
 
   const placeDevice = (device: Device): boolean => {
@@ -859,6 +892,7 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
       updateDevicePositions,
       deleteDevice,
       unplaceDevice,
+      unplaceDevices,
       placeDevice,
       checkCollision,
       addWallLine,

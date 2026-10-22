@@ -18,6 +18,8 @@ export type ShortcutAction =
   | "toggle-edit-mode"
   | "escape"
   | "delete"
+  | "nudge-selection"
+  | "select-all"
   | "undo"
   | "redo"
   | "show-shortcuts"
@@ -51,7 +53,6 @@ export type ShortcutAction =
   | "calibrate-overlay"
   // Device drawer
   | "close-drawer"
-  | "delete-device"
   | "edit-device-identity"
   | "unplace-device"
   | "show-port-cables"
@@ -91,8 +92,32 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
   },
   delete: {
     keys: ["Delete", "Backspace"],
-    label: "Supprimer",
-    description: "Supprimer l'élément sélectionné",
+    label: "Retirer du plan",
+    description:
+      "Retirer la sélection du plan ; elle reste dans l'inventaire du site",
+    scope: "global",
+    requiresEdit: true,
+  },
+  "nudge-selection": {
+    keys: [
+      { key: "ArrowUp", display: "↑↓←→" },
+      { key: "ArrowDown", hiddenFromDisplay: true },
+      { key: "ArrowLeft", hiddenFromDisplay: true },
+      { key: "ArrowRight", hiddenFromDisplay: true },
+      { key: "ArrowUp", shift: true, hiddenFromDisplay: true },
+      { key: "ArrowDown", shift: true, hiddenFromDisplay: true },
+      { key: "ArrowLeft", shift: true, hiddenFromDisplay: true },
+      { key: "ArrowRight", shift: true, hiddenFromDisplay: true },
+    ],
+    label: "Décaler",
+    description: "Décaler la sélection d'une case (Shift : quatre)",
+    scope: "global",
+    requiresEdit: true,
+  },
+  "select-all": {
+    keys: ["Mod+A"],
+    label: "Tout sélectionner",
+    description: "Sélectionner tous les équipements de l'étage",
     scope: "global",
     requiresEdit: true,
   },
@@ -316,13 +341,6 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
     label: "Fermer",
     description: "Fermer le panneau de détails",
     scope: "drawer",
-  },
-  "delete-device": {
-    keys: ["Delete", "Backspace"],
-    label: "Supprimer",
-    description: "Supprimer l'appareil sélectionné",
-    scope: "drawer",
-    requiresEdit: true,
   },
   "edit-device-identity": {
     keys: ["I"],

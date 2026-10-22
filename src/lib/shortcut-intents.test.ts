@@ -20,6 +20,8 @@ const baseRuntime: ShortcutIntentRuntime = {
   isInputFocused: false,
   isWidgetFocused: false,
   selectedDeviceId: null,
+  selectionCount: 0,
+  isMapFocused: true,
 };
 
 const keyEvent = (
@@ -101,9 +103,9 @@ describe("shortcut intents", () => {
     ).toBe(null);
     expect(
       resolveAction({
-        actions: ["delete-device"],
+        actions: ["delete"],
         event: keyEvent({ code: "Delete", key: "Delete" }),
-        runtime: { ...reader, selectedDeviceId: "device-1" },
+        runtime: { ...reader, selectedDeviceId: "device-1", selectionCount: 1 },
       }),
     ).toBe(null);
   });
@@ -111,11 +113,11 @@ describe("shortcut intents", () => {
   it("keeps drawer and canvas scope exclusive", () => {
     expect(
       resolveAction({
-        actions: ["delete", "delete-device"],
-        event: keyEvent({ code: "Delete", key: "Delete" }),
+        actions: ["edit-device-identity", "tool-wall"],
+        event: keyEvent({ code: "KeyI", key: "i" }),
         runtime: { ...baseRuntime, selectedDeviceId: "device-1" },
       }),
-    ).toBe("delete-device");
+    ).toBe("edit-device-identity");
 
     expect(
       resolveAction({
@@ -328,5 +330,56 @@ describe("shortcut intents", () => {
       false,
     );
     document.body.innerHTML = "";
+  });
+
+  it("nudges a selection with the arrows only from the map, in edit mode", () => {
+    const arrow = keyEvent({ code: "ArrowLeft", key: "ArrowLeft" });
+    const selected = { ...baseRuntime, selectionCount: 2 };
+    expect(
+      resolveAction({
+        actions: ["nudge-selection"],
+        event: arrow,
+        runtime: selected,
+      }),
+    ).toBe("nudge-selection");
+    expect(
+      resolveAction({
+        actions: ["nudge-selection"],
+        event: keyEvent({
+          code: "ArrowLeft",
+          key: "ArrowLeft",
+          shiftKey: true,
+        }),
+        runtime: selected,
+      }),
+    ).toBe("nudge-selection");
+    for (const runtime of [
+      { ...selected, isMapFocused: false },
+      { ...selected, isEditMode: false },
+      { ...selected, selectionCount: 0 },
+      { ...selected, activeDrawTool: "wall" as const },
+    ]) {
+      expect(
+        resolveAction({ actions: ["nudge-selection"], event: arrow, runtime }),
+      ).toBe(null);
+    }
+  });
+
+  it("takes the selection off the plan with Delete, and selects all with Ctrl+A", () => {
+    const del = keyEvent({ code: "Delete", key: "Delete" });
+    expect(
+      resolveAction({
+        actions: ["delete"],
+        event: del,
+        runtime: { ...baseRuntime, selectionCount: 3 },
+      }),
+    ).toBe("delete");
+    expect(resolveAction({ actions: ["delete"], event: del })).toBe(null);
+    expect(
+      resolveAction({
+        actions: ["select-all"],
+        event: keyEvent({ code: "KeyA", key: "a", ctrlKey: true }),
+      }),
+    ).toBe("select-all");
   });
 });

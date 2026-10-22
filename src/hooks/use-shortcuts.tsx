@@ -13,6 +13,7 @@ import type { ShortcutAction } from "@/lib/shortcuts";
 import { isMac } from "@/lib/shortcuts";
 import {
   isShortcutInputTarget,
+  isShortcutMapTarget,
   isShortcutWidgetTarget,
   resolveShortcutIntent,
 } from "@/lib/shortcut-intents";
@@ -94,6 +95,8 @@ export function ShortcutIntentProvider({
           isInputFocused: isShortcutInputTarget(event.target),
           isWidgetFocused: isShortcutWidgetTarget(event.target),
           selectedDeviceId: state.selectedDeviceId,
+          selectionCount: state.selectedDeviceIds.length,
+          isMapFocused: isShortcutMapTarget(event.target),
         },
       });
 

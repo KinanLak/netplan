@@ -42,6 +42,7 @@ import { useCanEdit } from "@/hooks/use-current-user";
 import { useShortcutIntentEffect } from "@/hooks/use-shortcuts";
 import { hasStatus } from "@/devices/status";
 import { comparePorts, deviceConnections } from "@/devices/ports";
+import { useDeviceRemoval } from "@/devices/DeviceRemovalDialog";
 
 export default function DeviceDrawer() {
   const selectedDeviceId = useSelectedDeviceId();
@@ -54,7 +55,7 @@ export default function DeviceDrawer() {
   const { document } = useMapDocumentData();
   const { commands } = useMapDocumentActions();
   const { devices, ports, cables } = document;
-  const { deleteDevice, unplaceDevice } = commands;
+  const { unplaceDevice } = commands;
 
   // Held by device, so the dialog never reopens on another one.
   const [identityDeviceId, setIdentityDeviceId] = useState<DeviceId | null>(
@@ -124,9 +125,10 @@ export default function DeviceDrawer() {
     selectDevice(null);
   };
 
+  const askRemoval = useDeviceRemoval((state) => state.ask);
   const handleDeleteDevice = () => {
     if (!device) return;
-    if (deleteDevice(device.id)) selectDevice(null);
+    askRemoval({ kind: "delete", deviceId: device.id, name: device.name });
   };
 
   if (!device) {
@@ -266,8 +268,8 @@ export default function DeviceDrawer() {
               variant="destructive"
               size="icon"
               onClick={handleDeleteDevice}
-              aria-label="Supprimer"
-              title="Supprimer (Suppr)"
+              aria-label="Supprimer du site"
+              title="Supprimer du site"
             >
               <HugeiconsIcon
                 icon={WasteIcon}

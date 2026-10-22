@@ -136,6 +136,42 @@ describe("session history", () => {
     });
   });
 
+  it("coalesces a held nudge into one move per device, in its last order", () => {
+    const a = "device:a" as DeviceId;
+    const b = "device:b" as DeviceId;
+    const nudge = (seq: number, x: number): MapOperation => ({
+      kind: "batch",
+      meta: meta(seq),
+      operations: [
+        {
+          kind: "device.patch",
+          deviceId: b,
+          patch: { position: { x: x + 100, y: 0 } },
+        },
+        { kind: "device.patch", deviceId: a, patch: { position: { x, y: 0 } } },
+      ],
+    });
+
+    expect(
+      coalesceHistoryGroupOperations([nudge(1, 20), nudge(2, 40)]),
+    ).toEqual({
+      kind: "batch",
+      meta: meta(1),
+      operations: [
+        {
+          kind: "device.patch",
+          deviceId: b,
+          patch: { position: { x: 140, y: 0 } },
+        },
+        {
+          kind: "device.patch",
+          deviceId: a,
+          patch: { position: { x: 40, y: 0 } },
+        },
+      ],
+    });
+  });
+
   it("coalesces grouped wall deletes into one operation", () => {
     const grouped = coalesceHistoryGroupOperations([
       { kind: "walls.delete", meta: meta(1), wallIds: ["wall:a" as WallId] },

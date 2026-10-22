@@ -153,3 +153,16 @@ describe("locating a device", () => {
     expect(useMapStore.getState().selectedDeviceId).toBe(did("pc-1"));
   });
 });
+
+describe("clearing the selection", () => {
+  beforeEach(() => {
+    useMapStore.setState(initialState, true);
+  });
+
+  it("drops a selection of several, as a click on the empty plan does", () => {
+    useMapStore.getState().setSelectedDevices([did("a"), did("b")]);
+    useMapStore.getState().selectDevice(null);
+    expect(useMapStore.getState().selectedDeviceIds).toEqual([]);
+    expect(useMapStore.getState().selectedDeviceIdSet.size).toBe(0);
+  });
+});
