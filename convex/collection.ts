@@ -17,7 +17,7 @@ import { adminQuery, editorMutation, readerQuery } from "./lib/functions";
 import { SOURCE_RETRY } from "./lib/httpRetry";
 import { probeIntegration } from "./lib/integrationProbe";
 import type { Transport } from "./lib/integrationProbe";
-import { requireSite } from "./sites";
+import { requireOpenSite } from "./sites";
 import {
   cycleRun,
   cycleStep,
@@ -136,6 +136,7 @@ export const startDue = internalMutation({
       // keeps them true then (ADR 0025).
       if (cycle) await expireStaleReads(ctx, site, cycle, now);
       if (collectionPaused() || !site.automaticRefresh) continue;
+      if (site.archivedAt !== undefined) continue;
       if (isRunning(cycle, now) || (cycle && cycle.nextRunAt > now)) continue;
       if ((await enabledSources(ctx, site.objectId)).length === 0) continue;
       await begin(ctx, site.objectId, cycle, false, now);
@@ -153,7 +154,7 @@ export const refresh = editorMutation({
   args: { siteId: v.string() },
   returns: v.number(),
   handler: async (ctx, { siteId }) => {
-    const site = await requireSite(ctx, siteId);
+    const site = await requireOpenSite(ctx, siteId);
     if (!site.manualRefresh) {
       throw new ConvexError(
         "L'actualisation manuelle est désactivée pour ce site.",
@@ -185,7 +186,9 @@ export const claim = internalMutation({
   handler: async (ctx, { siteId, cycleId }) => {
     const cycle = await cycleOf(ctx, siteId);
     if (!cycle?.running || cycle.running.cycleId !== cycleId) return null;
-    if (collectionPaused()) {
+    const site = await siteOf(ctx, siteId);
+    // Archived since it was queued: nothing is collected (ADR 0033).
+    if (collectionPaused() || site?.archivedAt !== undefined) {
       await ctx.db.patch(cycle._id, { running: undefined });
       return null;
     }
@@ -362,6 +365,8 @@ export const status = adminQuery({
 /** What `freshness` says of a site (`SiteFreshness`, ADR 0026). */
 export const siteFreshness = v.object({
   paused: v.boolean(),
+  /** Archived sites are never collected (ADR 0033). */
+  archived: v.boolean(),
   hasSources: v.boolean(),
   automaticRefresh: v.boolean(),
   manualRefresh: v.boolean(),
@@ -425,6 +430,7 @@ export const freshnessOf = async (
   )?.switches;
   return {
     paused: collectionPaused(),
+    archived: site.archivedAt !== undefined,
     hasSources: sources.length > 0,
     automaticRefresh: site.automaticRefresh,
     manualRefresh: site.manualRefresh,

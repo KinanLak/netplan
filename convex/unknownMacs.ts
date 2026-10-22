@@ -5,6 +5,7 @@ import { ConvexError, v } from "convex/values";
 import type { QueryCtx } from "./_generated/server";
 import { insertManualDevice } from "./devices";
 import { editorMutation, editorQuery } from "./lib/functions";
+import { requireOpenSite } from "./sites";
 import { ignoredMacsOf, ignoredRowsOf } from "./lib/ignoredMacs";
 import { deviceOf, ownerOf, placeNextTo } from "./librenmsCycle";
 import { normalizeMac } from "../src/devices/mac";
@@ -77,6 +78,7 @@ export const createDevice = editorMutation({
   },
   returns: v.object({ placed: v.boolean() }),
   handler: async (ctx, { siteId, mac, deviceId, name }) => {
+    await requireOpenSite(ctx, siteId);
     const row = await ctx.db
       .query("macSightings")
       .withIndex("by_site_mac", (q) => q.eq("siteId", siteId).eq("mac", mac))
@@ -129,6 +131,7 @@ export const ignore = editorMutation({
   args: { siteId: v.string(), mac: v.string() },
   returns: v.null(),
   handler: async (ctx, { siteId, mac: text }) => {
+    await requireOpenSite(ctx, siteId);
     const mac = await siteMac(ctx, siteId, text);
     const owner = await ownerOf(ctx, siteId, mac);
     if (owner) {
@@ -153,6 +156,7 @@ export const restore = editorMutation({
   args: { siteId: v.string(), mac: v.string() },
   returns: v.null(),
   handler: async (ctx, { siteId, mac: text }) => {
+    await requireOpenSite(ctx, siteId);
     const mac = await siteMac(ctx, siteId, text);
     const row = await ignoredRowOf(ctx, siteId, mac);
     if (row) await ctx.db.delete(row._id);

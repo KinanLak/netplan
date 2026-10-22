@@ -22,6 +22,7 @@ import { placeNamer } from "./history";
 import { historyPlace } from "./historyValidators";
 import { integrationKind } from "./siteValidators";
 import { ownerOf } from "./librenmsCycle";
+import { requireOpenSite } from "./sites";
 import type { Doc } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 
@@ -284,6 +285,7 @@ export const connect = editorMutation({
     if (portA.siteId !== portB.siteId) {
       throw new ConvexError("Un câble relie deux ports du même site.");
     }
+    await requireOpenSite(ctx, portA.siteId);
     const taken = await ctx.db
       .query("cables")
       .withIndex("by_object_id", (q) => q.eq("objectId", id))
@@ -314,6 +316,7 @@ export const disconnect = editorMutation({
       .withIndex("by_object_id", (q) => q.eq("objectId", cableId))
       .unique();
     if (!row) return null;
+    await requireOpenSite(ctx, row.siteId);
     if (row.source) {
       throw new ConvexError(
         `Ce câble vient de ${INTEGRATION_LABELS[row.source.integration]} : il ne se débranche pas dans NetPlan.`,
