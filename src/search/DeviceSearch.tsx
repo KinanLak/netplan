@@ -1,15 +1,30 @@
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { create } from "zustand";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Search01Icon } from "@hugeicons/core-free-icons";
 import { matchesDeviceSearch, rankDeviceMatches } from "@/devices/search";
-import { useShortcutIntentEffect } from "@/hooks/use-shortcuts";
 import { cn } from "@/lib/utils";
 import { useSiteDeviceLocator } from "@/search/useSiteDeviceLocator";
 import type { SiteDevice } from "@/search/useSiteDeviceLocator";
 
 const SHOWN = 8;
+
+/**
+ * Ctrl+K asks for the search field. The map holds the shortcut, so it works
+ * with the sidebar folded or, on a phone, unmounted; the field takes the
+ * focus once it is there and interactive.
+ */
+export const useDeviceSearchFocus = create<{
+  pending: boolean;
+  request: () => void;
+  done: () => void;
+}>((set) => ({
+  pending: false,
+  request: () => set({ pending: true }),
+  done: () => set({ pending: false }),
+}));
 
 /**
  * Finds a device of the site by name, hostname, IP or MAC, from the sidebar
@@ -23,10 +38,18 @@ export function DeviceSearch() {
   const inputRef = useRef<HTMLInputElement>(null);
   const listId = useId();
 
-  useShortcutIntentEffect("focus-device-search", () => {
-    inputRef.current?.focus();
-    inputRef.current?.select();
-  });
+  const navigate = useNavigate();
+  const focusPending = useDeviceSearchFocus((state) => state.pending);
+  useEffect(() => {
+    if (!focusPending) return;
+    // After the sidebar has unfolded and is no longer inert.
+    const frame = requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+      useDeviceSearchFocus.getState().done();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [focusPending]);
 
   const matches = rankDeviceMatches(devices ?? [], query, matchesDeviceSearch);
   const shown = matches.slice(0, SHOWN);
@@ -38,10 +61,16 @@ export function DeviceSearch() {
   };
 
   const pick = (device: SiteDevice) => {
-    if (!device.location) return;
-    locate(device, { select: true });
     close();
     inputRef.current?.blur();
+    if (device.location) {
+      locate(device, { select: true });
+    } else {
+      void navigate({
+        to: "/inventory",
+        search: site ? { site: site.id } : {},
+      });
+    }
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {

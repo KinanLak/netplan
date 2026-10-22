@@ -1,4 +1,5 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef } from "react";
+import { create } from "zustand";
 import type { KeyboardEvent } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Cancel01Icon, Search01Icon } from "@hugeicons/core-free-icons";
@@ -7,6 +8,24 @@ import { useShortcutIntentEffect } from "@/hooks/use-shortcuts";
 import { cn } from "@/lib/utils";
 import { useSiteDeviceLocator } from "@/search/useSiteDeviceLocator";
 import { useMapStore } from "@/store/useMapStore";
+
+/**
+ * The find bar's state, outside the map workspace: a match in another
+ * building unmounts the workspace while that building loads.
+ */
+const useMapFindState = create<{
+  open: boolean;
+  query: string;
+  index: number;
+  set: (
+    patch: Partial<{ open: boolean; query: string; index: number }>,
+  ) => void;
+}>((set) => ({
+  open: false,
+  query: "",
+  index: 0,
+  set: (patch) => set(patch),
+}));
 
 /**
  * Ctrl+F on the map: a small find bar that moves the view to the device
@@ -19,10 +38,12 @@ export function MapFind({
   hasRightDrawerOpen: boolean;
 }) {
   const { devices, locate } = useSiteDeviceLocator();
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const [index, setIndex] = useState(0);
+  const { open, query, index, set } = useMapFindState();
   const inputRef = useRef<HTMLInputElement>(null);
+  // Back after a building loaded, the bar keeps the focus it had.
+  useEffect(() => {
+    if (open) inputRef.current?.focus();
+  }, [open]);
 
   const placed = (devices ?? []).filter((device) => device.location);
   const matches = rankDeviceMatches(placed, query, matchesDeviceName);
@@ -30,14 +51,14 @@ export function MapFind({
   const goTo = (next: number) => {
     const device = matches.at(next);
     if (!device) return;
-    setIndex(next);
+    set({ index: next });
     locate(device, { select: false });
   };
 
   useShortcutIntentEffect("find-device", () => {
     // The calque panel holds the same corner.
     useMapStore.getState().setOverlayPanelOpen(false);
-    setOpen(true);
+    set({ open: true });
     requestAnimationFrame(() => {
       inputRef.current?.focus();
       inputRef.current?.select();
@@ -46,11 +67,7 @@ export function MapFind({
 
   if (!open) return null;
 
-  const close = () => {
-    setOpen(false);
-    setQuery("");
-    setIndex(0);
-  };
+  const close = () => set({ open: false, query: "", index: 0 });
 
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Enter" && matches.length > 0) {
@@ -71,7 +88,8 @@ export function MapFind({
       role="search"
       className={cn(
         "absolute top-4 z-30 flex items-center gap-1 rounded-lg border border-border bg-card py-1 pr-1 pl-2 shadow-lg transition-[right]",
-        hasRightDrawerOpen ? "right-84" : "right-4",
+        // On a phone the drawer fills the width: the bar goes over it.
+        hasRightDrawerOpen ? "right-4 md:right-84" : "right-4",
       )}
     >
       <HugeiconsIcon
@@ -89,8 +107,7 @@ export function MapFind({
         value={query}
         onChange={(event) => {
           const next = event.target.value;
-          setQuery(next);
-          setIndex(0);
+          set({ query: next, index: 0 });
           const first = rankDeviceMatches(placed, next, matchesDeviceName).at(
             0,
           );

@@ -46,6 +46,7 @@ import { mapSearch, useCurrentSite } from "@/sites/useCurrentSite";
 import { SiteRefreshShortcut } from "@/sites/CollectionFreshness";
 import { ShortcutsDialog } from "@/components/shortcuts-dialog";
 import { MapFind } from "@/search/MapFind";
+import { useDeviceSearchFocus } from "@/search/DeviceSearch";
 import { ShortcutHintAbsolute } from "@/components/ui/shortcut-hint";
 import { toggledCableDisplay } from "@/canvas/cablePaths";
 import { asBuildingId, asDeviceId, asFloorId } from "@/lib/objectIds";
@@ -284,6 +285,13 @@ function MapWorkspace({
   });
   useShortcutIntentEffect("floor-up", navigateFloorUp);
   useShortcutIntentEffect("floor-down", navigateFloorDown);
+  const sidebar = useSidebar();
+  // Here, not in the sidebar: folded, it is inert, and on a phone unmounted.
+  useShortcutIntentEffect("focus-device-search", () => {
+    if (sidebar.isMobile) sidebar.setOpenMobile(true);
+    else sidebar.setOpen(true);
+    useDeviceSearchFocus.getState().request();
+  });
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background">

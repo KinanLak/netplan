@@ -43,7 +43,14 @@ export const shortcutGroups: Array<ShortcutGroup> = [
     id: "navigation",
     title: "Navigation",
     orderPriority: 70,
-    actions: ["zoom-in", "zoom-out", "zoom-reset", "fit-view"],
+    actions: [
+      "zoom-in",
+      "zoom-out",
+      "zoom-reset",
+      "fit-view",
+      "focus-device-search",
+      "find-device",
+    ],
   },
   {
     id: "build-tools",
