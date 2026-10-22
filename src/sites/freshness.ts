@@ -115,6 +115,13 @@ export const describeFreshness = (
   // Failing cycles make a site late before it ever succeeded.
   if (lastSuccessAt === null) {
     const { last } = freshness;
+    // Every source still connected answered: the failing one was removed.
+    if (last && last.succeeded.length > 0 && last.failed.length === 0) {
+      const age = formatAge(last.finishedAt, now, timeZone);
+      return late
+        ? { headline: `Données en retard : ${age}`, tone: "late" }
+        : { headline: `Données collectées ${age}`, tone: "fresh" };
+    }
     // A cycle with one source read did bring data, only not all of it.
     if (last && last.succeeded.length > 0) {
       return {

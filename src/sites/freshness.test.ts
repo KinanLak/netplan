@@ -118,6 +118,23 @@ describe("describeFreshness", () => {
     ).toEqual({ headline: "Aucune donnée collectée", tone: "none" });
   });
 
+  it("names no failure once the failing source is gone", () => {
+    expect(
+      describeFreshness(
+        site({
+          lastSuccessAt: null,
+          last: {
+            startedAt: WEDNESDAY_10H,
+            finishedAt: WEDNESDAY_10H,
+            failed: [],
+            succeeded: ["netbox"],
+          },
+        }),
+        WEDNESDAY_10H + 5 * MINUTE,
+      ),
+    ).toEqual({ headline: "Données collectées il y a 5 min", tone: "fresh" });
+  });
+
   it("tells a partial collection from none at all", () => {
     expect(
       describeFreshness(
