@@ -56,8 +56,9 @@ export function MapFind({
   };
 
   useShortcutIntentEffect("find-device", () => {
-    // The calque panel holds the same corner.
+    // The calque and placing panels hold the same corner.
     useMapStore.getState().setOverlayPanelOpen(false);
+    useMapStore.getState().setPlacePanelOpen(false);
     set({ open: true });
     requestAnimationFrame(() => {
       inputRef.current?.focus();
