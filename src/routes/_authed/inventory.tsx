@@ -47,7 +47,6 @@ import { SiteSwitcher } from "@/sites/SiteSwitcher";
 import { UnknownMacs } from "@/sites/UnknownMacs";
 import { CreateDeviceDialog } from "@/devices/CreateDeviceDialog";
 import {
-  SiteArchivedContext,
   siteSearch,
   useCanEditSite,
   useCurrentSite,
@@ -73,7 +72,7 @@ export const Route = createFileRoute("/_authed/inventory")({
 });
 
 function InventoryPage() {
-  const { site } = useCurrentSite();
+  const { sites, site } = useCurrentSite();
   return (
     <div className="flex h-svh flex-col bg-background text-foreground">
       <header className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b bg-sidebar px-4 py-2">
@@ -102,12 +101,12 @@ function InventoryPage() {
             <ListSkeleton />
           ) : site === null ? (
             <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-              Aucun site n'est encore configuré.
+              {sites && sites.length > 0
+                ? "Tous les sites sont archivés."
+                : "Aucun site n'est encore configuré."}
             </p>
           ) : (
-            <SiteArchivedContext value={site.archived}>
-              <SiteInventory key={site.id} site={site} />
-            </SiteArchivedContext>
+            <SiteInventory key={site.id} site={site} />
           )}
         </div>
       </main>

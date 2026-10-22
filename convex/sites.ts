@@ -1,5 +1,5 @@
 import { ConvexError, v } from "convex/values";
-import { deleteCycle, rescheduleCycle } from "./lib/cycles";
+import { cycleOf, deleteCycle, rescheduleCycle } from "./lib/cycles";
 import { deleteDeviceMacs } from "./lib/deviceMacs";
 import { deleteIgnoredMacs } from "./lib/ignoredMacs";
 import { deleteDeviceCabling } from "./lib/ports";
@@ -338,6 +338,15 @@ export const setArchived = adminMutation({
       archivedAt: archived ? now : undefined,
       updatedAt: now,
     });
+    // A cycle or a push under way loses its lease, so nothing it brings back
+    // is written; every writer checks the lease first.
+    const cycle = archived ? await cycleOf(ctx, siteId) : null;
+    if (cycle && (cycle.running || cycle.pushRunning)) {
+      await ctx.db.patch(cycle._id, {
+        running: undefined,
+        pushRunning: undefined,
+      });
+    }
     // Back from the archive, a cycle long overdue starts within the minute.
     return null;
   },

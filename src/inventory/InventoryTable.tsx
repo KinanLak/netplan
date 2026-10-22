@@ -1,4 +1,5 @@
 import { HugeiconsIcon } from "@hugeicons/react";
+import { useCanEdit } from "@/hooks/use-current-user";
 import {
   ArrowDown01Icon,
   ArrowUp01Icon,
@@ -245,7 +246,9 @@ function InventoryItem({
   const [showingCables, setShowingCables] = useState(false);
   const [showingHistory, setShowingHistory] = useState(false);
   const [showingSheet, setShowingSheet] = useState(false);
-  const hasHistory = canEdit && HAS_HISTORY.has(device.type);
+  // History is read by role, archived site or not (ADR 0033).
+  const canReadHistory = useCanEdit();
+  const hasHistory = canReadHistory && HAS_HISTORY.has(device.type);
   const { location, source } = device;
   const removable = canEdit && !location && !source;
   const status = statusOf(device);

@@ -7,7 +7,7 @@ export const SITE_PARTS = [
   { id: "correspondances", label: "Correspondances" },
   { id: "buildings", label: "Bâtiments" },
   { id: "collections", label: "Dernières collectes" },
-  { id: "danger", label: "Archivage" },
+  { id: "danger", label: "Archivage et suppression" },
 ] as const;
 
 export type SitePart = (typeof SITE_PARTS)[number]["id"];

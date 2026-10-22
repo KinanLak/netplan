@@ -186,7 +186,9 @@ export const claim = internalMutation({
   handler: async (ctx, { siteId, cycleId }) => {
     const cycle = await cycleOf(ctx, siteId);
     if (!cycle?.running || cycle.running.cycleId !== cycleId) return null;
-    if (collectionPaused()) {
+    const site = await siteOf(ctx, siteId);
+    // Archived since it was queued: nothing is collected (ADR 0033).
+    if (collectionPaused() || site?.archivedAt !== undefined) {
       await ctx.db.patch(cycle._id, { running: undefined });
       return null;
     }

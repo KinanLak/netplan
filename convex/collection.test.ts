@@ -73,6 +73,16 @@ const status = (t: TestClient, siteId: string) =>
   t.query(api.collection.status, { siteId });
 
 describe("collection cycles", () => {
+  it("drops the cycle under way when its site is archived", async () => {
+    const { admin, siteId } = await siteWithNetBox();
+    expect(await startDue(admin)).toBe(1);
+    expect((await status(admin, siteId)).running).not.toBeNull();
+
+    await admin.mutation(api.sites.setArchived, { siteId, archived: true });
+
+    expect((await status(admin, siteId)).running).toBeNull();
+  });
+
   it("never collects an archived site, by the cron or by hand", async () => {
     const { admin, editor, siteId } = await siteWithNetBox();
     await admin.mutation(api.sites.setArchived, { siteId, archived: true });
