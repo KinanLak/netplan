@@ -54,6 +54,7 @@ export const shortcutGroups: Array<ShortcutGroup> = [
       "tool-room",
       "tool-wall-brush",
       "tool-wall-erase",
+      "tool-label",
       "wall-eraser-size-increase",
       "wall-eraser-size-decrease",
       "place-device",

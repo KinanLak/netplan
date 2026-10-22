@@ -40,6 +40,7 @@ export type ShortcutAction =
   | "wall-eraser-size-increase"
   | "wall-eraser-size-decrease"
   | "tool-room"
+  | "tool-label"
   | "place-device"
   // Calque
   | "toggle-overlay-panel"
@@ -218,6 +219,13 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
     keys: ["4", "X"],
     label: "Suppression murs",
     description: "Effacer des blocs de mur",
+    scope: "canvas",
+    requiresEdit: true,
+  },
+  "tool-label": {
+    keys: ["5", "T"],
+    label: "Texte",
+    description: "Poser une étiquette de texte sur le plan",
     scope: "canvas",
     requiresEdit: true,
   },

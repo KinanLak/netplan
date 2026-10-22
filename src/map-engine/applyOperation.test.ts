@@ -41,6 +41,7 @@ const emptySnapshot = {
   ports: [],
   cables: [],
   overlay: null,
+  labels: [],
 };
 
 /** Joins the only interface of two PCs. */

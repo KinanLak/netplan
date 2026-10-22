@@ -1,6 +1,8 @@
 import type { MapDocumentSnapshot } from "@/types/map";
 import { cableTouches } from "@/devices/ports";
 import { applyOperation } from "./applyOperation";
+import { applyLabelPatch } from "./labels";
+import type { LabelPatch } from "./labels";
 import type { BatchSubOperation, DevicePatch, MapOperation } from "./types";
 
 /** Sub-operations of an inverse, flattening a nested batch. */
@@ -167,6 +169,48 @@ export function buildInverseOperation(
 
     case "overlay.patch":
       return invertOverlayPatch(snapshotBeforeOperation, operation);
+
+    case "label.create":
+      return {
+        kind: "label.delete",
+        meta: operation.meta,
+        labelId: operation.label.id,
+      };
+
+    case "label.patch": {
+      const label = snapshotBeforeOperation.labels.find(
+        (item) => item.id === operation.labelId,
+      );
+      if (!label) return null;
+      const next = applyLabelPatch(label, operation.patch);
+      const restore: LabelPatch = {};
+      const expected: LabelPatch = {};
+      if (operation.patch.text !== undefined) {
+        restore.text = label.text;
+        expected.text = next.text;
+      }
+      if (operation.patch.position !== undefined) {
+        restore.position = label.position;
+        expected.position = next.position;
+      }
+      return {
+        kind: "label.patch",
+        meta: operation.meta,
+        labelId: label.id,
+        patch: restore,
+        // Someone else may have moved or renamed it since.
+        expected,
+      };
+    }
+
+    case "label.delete": {
+      const label = snapshotBeforeOperation.labels.find(
+        (item) => item.id === operation.labelId,
+      );
+      return label
+        ? { kind: "label.create", meta: operation.meta, label }
+        : null;
+    }
 
     case "batch": {
       const inverses: Array<MapOperation> = [];

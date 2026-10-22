@@ -111,6 +111,9 @@ export function validateOperation(
     case "walls.delete":
     case "overlay.set":
     case "overlay.patch":
+    case "label.create":
+    case "label.patch":
+    case "label.delete":
       return valid();
   }
 }

@@ -11,7 +11,12 @@ import { useConvexConnectionState, useMutation, useQuery } from "convex/react";
 import { applyOperation } from "@/map-engine/applyOperation";
 import { buildInverseOperation } from "@/map-engine/buildInverseOperation";
 import { materializeDocument } from "@/map-engine/materializeDocument";
-import type { MapOperation, OverlayPatch } from "@/map-engine/types";
+import type {
+  LabelPatch,
+  MapOperation,
+  OverlayPatch,
+} from "@/map-engine/types";
+import { normalizeLabelText } from "@/map-engine/labels";
 import {
   createObjectId,
   createOperationMeta,
@@ -27,6 +32,8 @@ import type {
   DeviceId,
   FloorId,
   FloorOverlay,
+  LabelId,
+  MapLabel,
   MapDocumentSnapshot,
   Port,
   Position,
@@ -107,6 +114,10 @@ export interface MapDocumentCommands {
   /** Places, replaces or removes the floor's calque; false when refused. */
   setOverlay: (overlay: FloorOverlay | null) => boolean;
   patchOverlay: (patch: OverlayPatch) => boolean;
+  /** Puts a free text label on the floor; its id, or null when refused. */
+  createLabel: (position: Position, text: string) => LabelId | null;
+  patchLabel: (labelId: LabelId, patch: LabelPatch) => boolean;
+  deleteLabel: (labelId: LabelId) => boolean;
   beginHistoryGroup: () => void;
   endHistoryGroup: () => void;
 }
@@ -174,6 +185,7 @@ const emptyDocument = (floorId: FloorId): MapDocumentSnapshot => ({
   ports: [],
   cables: [],
   overlay: null,
+  labels: [],
 });
 
 const NONE_FLOOR_ID = "floor:none" as FloorId;
@@ -227,6 +239,8 @@ const operationFloorId = (
     case "overlay.set":
     case "overlay.patch":
       return operation.floorId;
+    case "label.create":
+      return operation.label.floorId;
     case "batch": {
       if (operation.operations.length === 0) return fallbackFloorId;
       const first = operation.operations[0];
@@ -242,6 +256,8 @@ const operationFloorId = (
     case "device.delete":
     case "device.unplace":
     case "walls.delete":
+    case "label.patch":
+    case "label.delete":
       return fallbackFloorId;
   }
 };
@@ -516,6 +532,39 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
       meta,
       floorId,
       patch,
+    }));
+
+  // Labels are floor objects like the calque: one operation each, refused
+  // locally before it reaches the outbox (C4).
+  const createLabel = (position: Position, text: string): LabelId | null => {
+    const identity = identityRef.current;
+    if (!identity) return null;
+    const id = createObjectId("label", identity) as LabelId;
+    return dispatchOverlayOperation((meta, floorId) => ({
+      kind: "label.create",
+      meta,
+      label: { id, floorId, text: normalizeLabelText(text), position },
+    }))
+      ? id
+      : null;
+  };
+
+  const patchLabel = (labelId: LabelId, patch: LabelPatch) =>
+    dispatchOverlayOperation((meta) => ({
+      kind: "label.patch",
+      meta,
+      labelId,
+      patch:
+        patch.text === undefined
+          ? patch
+          : { ...patch, text: normalizeLabelText(patch.text) },
+    }));
+
+  const deleteLabel = (labelId: LabelId) =>
+    dispatchOverlayOperation((meta) => ({
+      kind: "label.delete",
+      meta,
+      labelId,
     }));
 
   const checkCollision = (
@@ -811,6 +860,9 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
       previewEraseWallAtPointer,
       setOverlay,
       patchOverlay,
+      createLabel,
+      patchLabel,
+      deleteLabel,
       beginHistoryGroup,
       endHistoryGroup,
     },
@@ -842,6 +894,7 @@ export function MapDocumentProvider({
   const queriedCables = useQuery(api.mapDocument.getFloorCables, queryArgs);
   const queriedRevision = useQuery(api.mapDocument.getFloorRevision, queryArgs);
   const queriedOverlay = useQuery(api.mapDocument.getFloorOverlay, queryArgs);
+  const queriedLabels = useQuery(api.mapDocument.getFloorLabels, queryArgs);
 
   const [pendingEntries, setPendingEntries] = useState<
     ReadonlyArray<PendingOperationEntry>
@@ -869,7 +922,8 @@ export function MapDocumentProvider({
       queriedPorts !== undefined &&
       queriedCables !== undefined &&
       queriedRevision !== undefined &&
-      queriedOverlay !== undefined
+      queriedOverlay !== undefined &&
+      queriedLabels !== undefined
         ? ({
             floorId: activeFloorId,
             revision: queriedRevision,
@@ -878,6 +932,7 @@ export function MapDocumentProvider({
             ports: queriedPorts as Array<Port>,
             cables: queriedCables as Array<Cable>,
             overlay: queriedOverlay as FloorOverlay | null,
+            labels: queriedLabels as Array<MapLabel>,
           } satisfies MapDocumentSnapshot)
         : undefined,
     [
@@ -887,6 +942,7 @@ export function MapDocumentProvider({
       queriedCables,
       queriedRevision,
       queriedOverlay,
+      queriedLabels,
       activeFloorId,
     ],
   );

@@ -11,6 +11,7 @@ import { PRESENT_TYPES, freshSwitchesOf } from "./lib/statuses";
 import {
   cable,
   floorOverlay,
+  mapLabel,
   placedDevice,
   port,
   wallSegment,
@@ -129,6 +130,24 @@ export const getFloorRevision = readerQuery({
       .withIndex("by_floor", (q) => q.eq("floorId", floorId))
       .unique();
     return revision?.revision ?? 0;
+  },
+});
+
+/** The floor's free text labels (C4). */
+export const getFloorLabels = readerQuery({
+  args: { floorId: v.string() },
+  returns: v.array(mapLabel),
+  handler: async (ctx, { floorId }) => {
+    const rows = await ctx.db
+      .query("mapLabels")
+      .withIndex("by_floor", (q) => q.eq("floorId", floorId))
+      .collect();
+    return rows.map((row) => ({
+      id: row.objectId,
+      floorId: row.floorId,
+      text: row.text,
+      position: row.position,
+    }));
   },
 });
 

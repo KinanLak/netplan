@@ -156,6 +156,19 @@ export const overlayPatch = v.object({
   locked: v.optional(v.boolean()),
 });
 
+/** A free text on a floor (C4, ADR 0029). */
+export const mapLabel = v.object({
+  id: v.string(),
+  floorId: v.string(),
+  text: v.string(),
+  position,
+});
+
+export const labelPatch = v.object({
+  text: v.optional(v.string()),
+  position: v.optional(position),
+});
+
 export const mapOperation = v.union(
   v.object({
     kind: v.literal("device.create"),
@@ -210,6 +223,23 @@ export const mapOperation = v.union(
     patch: overlayPatch,
   }),
   v.object({
+    kind: v.literal("label.create"),
+    meta: operationMeta,
+    label: mapLabel,
+  }),
+  v.object({
+    kind: v.literal("label.patch"),
+    meta: operationMeta,
+    labelId: v.string(),
+    patch: labelPatch,
+    expected: v.optional(labelPatch),
+  }),
+  v.object({
+    kind: v.literal("label.delete"),
+    meta: operationMeta,
+    labelId: v.string(),
+  }),
+  v.object({
     kind: v.literal("batch"),
     meta: operationMeta,
     operations: v.array(
@@ -257,6 +287,14 @@ export const mapOperation = v.union(
           floorId: v.string(),
           patch: overlayPatch,
         }),
+        v.object({ kind: v.literal("label.create"), label: mapLabel }),
+        v.object({
+          kind: v.literal("label.patch"),
+          labelId: v.string(),
+          patch: labelPatch,
+          expected: v.optional(labelPatch),
+        }),
+        v.object({ kind: v.literal("label.delete"), labelId: v.string() }),
       ),
     ),
   }),

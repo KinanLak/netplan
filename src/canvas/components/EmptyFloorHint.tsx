@@ -27,6 +27,7 @@ export function EmptyFloorHint() {
   const isBusy = useMapStore(
     (s) =>
       s.activeDrawTool !== "device" ||
+      s.isLabelToolActive ||
       s.isPlacePanelOpen ||
       s.isOverlayPanelOpen,
   );
@@ -35,6 +36,7 @@ export function EmptyFloorHint() {
     !isBusy &&
     document.devices.length === 0 &&
     document.walls.length === 0 &&
+    document.labels.length === 0 &&
     document.overlay?.floorId !== document.floorId;
   if (!isEmpty) return null;
 

@@ -68,6 +68,12 @@ export const withOperationMeta = (
       return { ...operation, meta };
     case "overlay.patch":
       return { ...operation, meta };
+    case "label.create":
+      return { ...operation, meta };
+    case "label.patch":
+      return { ...operation, meta };
+    case "label.delete":
+      return { ...operation, meta };
     case "batch":
       return {
         ...operation,

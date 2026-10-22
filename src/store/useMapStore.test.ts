@@ -100,3 +100,23 @@ describe("placing panel state", () => {
     expect(useMapStore.getState().isPlacePanelOpen).toBe(true);
   });
 });
+
+describe("text tool state", () => {
+  beforeEach(() => {
+    useMapStore.setState(initialState, true);
+  });
+
+  it("gives way to either panel, and takes over from both", () => {
+    for (const open of [
+      () => useMapStore.getState().setPlacePanelOpen(true),
+      () => useMapStore.getState().setOverlayPanelOpen(true),
+    ]) {
+      useMapStore.getState().setLabelToolActive(true);
+      open();
+      expect(useMapStore.getState().isLabelToolActive).toBe(false);
+    }
+    useMapStore.getState().setLabelToolActive(true);
+    expect(useMapStore.getState().isPlacePanelOpen).toBe(false);
+    expect(useMapStore.getState().isOverlayPanelOpen).toBe(false);
+  });
+});

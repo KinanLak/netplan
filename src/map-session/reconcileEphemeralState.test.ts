@@ -25,6 +25,7 @@ describe("reconcileEphemeralState", () => {
         ports: [],
         cables: [],
         overlay: null,
+        labels: [],
       },
       {
         selectedDeviceId: "device:missing" as DeviceId,
@@ -56,6 +57,7 @@ describe("reconcileEphemeralState", () => {
           ports: [],
           cables: [],
           overlay: null,
+          labels: [],
         },
         {
           selectedDeviceId: "device:a" as DeviceId,

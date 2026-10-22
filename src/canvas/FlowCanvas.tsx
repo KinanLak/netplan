@@ -34,6 +34,7 @@ import {
 import { edgeTypes } from "@/canvas/edges/CablePathEdge";
 import { SeenSocketsContext, useFloorSeenSockets } from "@/canvas/seenSockets";
 import { BlockedSpots } from "@/canvas/components/BlockedSpots";
+import { MapLabelsLayer } from "@/canvas/components/MapLabelsLayer";
 import { EmptyFloorHint } from "@/canvas/components/EmptyFloorHint";
 import { CanvasZoomControls } from "@/canvas/components/CanvasZoomControls";
 import { DeviceNameTooltip } from "@/canvas/components/DeviceNameTooltip";
@@ -446,6 +447,7 @@ export default function FlowCanvas() {
                 bridge={paneBridge}
                 floorWalls={floorWalls}
               />
+              <MapLabelsLayer />
               <CablePathLabels ends={cablePaths.ends} />
               <DeviceNameTooltip />
               <BlockedSpots spots={blockedSpots} />

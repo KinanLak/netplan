@@ -6,6 +6,7 @@ import {
   portListError,
 } from "@/devices/ports";
 import { isAsExpected } from "./devicePatch";
+import { applyLabelPatch, labelError, labelIsAsExpected } from "./labels";
 import {
   applyOverlayPatch,
   isPatchBlockedByLock,
@@ -112,8 +113,13 @@ const isSafeBatchNoop = (
       return reason === "missing-wall";
     case "overlay.set":
       return reason === "already-exists";
+    case "label.create":
+      return reason === "already-exists";
+    case "label.delete":
+      return reason === "missing-label";
     case "overlay.patch":
     case "device.patch":
+    case "label.patch":
     case "batch":
       return false;
   }
@@ -298,6 +304,43 @@ export function applyOperation(
       const next = applyOverlayPatch(current, operation.patch);
       if (overlayError(next)) return unchanged(snapshot, "invalid-overlay");
       return changed({ ...snapshot, overlay: next });
+    }
+
+    case "label.create": {
+      const { label } = operation;
+      if (snapshot.labels.some((item) => item.id === label.id)) {
+        return unchanged(snapshot, "already-exists");
+      }
+      if (label.floorId !== snapshot.floorId) {
+        return unchanged(snapshot, "wrong-floor");
+      }
+      if (labelError(label)) return unchanged(snapshot, "invalid-label");
+      return changed({ ...snapshot, labels: [...snapshot.labels, label] });
+    }
+
+    case "label.patch": {
+      const current = snapshot.labels.find(
+        (item) => item.id === operation.labelId,
+      );
+      if (!current) return unchanged(snapshot, "missing-label");
+      if (!labelIsAsExpected(current, operation.expected)) {
+        return unchanged(snapshot, "conflict");
+      }
+      const next = applyLabelPatch(current, operation.patch);
+      if (labelError(next)) return unchanged(snapshot, "invalid-label");
+      return changed({
+        ...snapshot,
+        labels: snapshot.labels.map((item) => (item === current ? next : item)),
+      });
+    }
+
+    case "label.delete": {
+      const labels = snapshot.labels.filter(
+        (item) => item.id !== operation.labelId,
+      );
+      return labels.length === snapshot.labels.length
+        ? unchanged(snapshot, "missing-label")
+        : changed({ ...snapshot, labels });
     }
 
     case "batch":

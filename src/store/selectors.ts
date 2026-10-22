@@ -42,3 +42,5 @@ export const useIsDeviceSelected = (id: DeviceId) =>
   );
 export const useShowsCables = (id: DeviceId) =>
   useMapStore((s) => s.shownCablesDeviceId === id);
+export const useIsLabelToolActive = () =>
+  useMapStore((s) => s.isLabelToolActive);
