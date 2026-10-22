@@ -2442,6 +2442,13 @@ Questions of 2026-10-21 and 22, from the UX review's map items (ADR 0029).
 - Why: proposed correction and B5 default with the owner's halo comment.
 - Who: owner (A56, B5)
 
+#### Does Shift+drag draw a selection box with a wall tool?
+
+- Context: zipzoup read ADR 0030's "without changing tool" as every tool, wall tools included.
+- Decision: no. Shift+drag lassos with the device tool, without the « Sélection » mode; with a wall, room, brush or eraser tool the drag belongs to the tool.
+- Why: A23 asks for a lasso « sans changer de mode »; the room tool draws by dragging, and a selection box there would fight it.
+- Who: agent (judgement call)
+
 #### Screenshots in pull requests
 
 - Decision: uploaded to a gist (`KinanLak/5379e3c24ab1debd47d1eacd688cc53d`), as earlier lots did; never committed.
