@@ -36,7 +36,6 @@ import type { TypeCoverage } from "@/devices/coverage";
 import { getDeviceKindLabel } from "@/devices/deviceKindRegistry";
 import { DEVICE_STATUS_LABELS, hasStatus } from "@/devices/status";
 import { failureMessage } from "@/lib/errors";
-import { useCanEdit } from "@/hooks/use-current-user";
 import { asBuildingId, asDeviceId, asFloorId } from "@/lib/objectIds";
 import { cn } from "@/lib/utils";
 import { DeviceIdentityDialog } from "@/panels/drawer/DeviceIdentityDialog";
@@ -52,7 +51,12 @@ import { INTEGRATION_LABELS } from "@/sites/integrations";
 import { SiteSwitcher } from "@/sites/SiteSwitcher";
 import { UnknownMacs } from "@/sites/UnknownMacs";
 import { CreateDeviceDialog } from "@/devices/CreateDeviceDialog";
-import { siteSearch, useCurrentSite } from "@/sites/useCurrentSite";
+import {
+  SiteArchivedContext,
+  siteSearch,
+  useCanEditSite,
+  useCurrentSite,
+} from "@/sites/useCurrentSite";
 import type { SiteSummary } from "@/sites/useCurrentSite";
 import { useMapStore } from "@/store/useMapStore";
 import type { DeviceStatus, DeviceType } from "@/types/map";
@@ -118,7 +122,9 @@ function InventoryPage() {
               Aucun site n'est encore configuré.
             </p>
           ) : (
-            <SiteInventory key={site.id} site={site} />
+            <SiteArchivedContext value={site.archived}>
+              <SiteInventory key={site.id} site={site} />
+            </SiteArchivedContext>
           )}
         </div>
       </main>
@@ -148,7 +154,7 @@ const byName = new Intl.Collator("fr", { numeric: true, sensitivity: "base" });
 
 function SiteInventory({ site }: { site: SiteSummary }) {
   const devices = useQuery(api.devices.listForSite, { siteId: site.id });
-  const canEdit = useCanEdit();
+  const canEdit = useCanEditSite();
   const search = Route.useSearch();
   const [query, setQuery] = useState("");
   const [placement, setPlacement] = useState<Placement>(

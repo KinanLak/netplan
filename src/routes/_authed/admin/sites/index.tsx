@@ -5,6 +5,7 @@ import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
 import type { FormEvent } from "react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -44,7 +45,9 @@ type SiteListing = FunctionReturnType<typeof api.sites.listSettings>[number];
 /** A site at a glance: how fresh its data is, what it holds and reads. */
 function SiteRow({ site, now }: { site: SiteListing; now: number }) {
   const freshness = useQuery(api.collection.freshness, { siteId: site.id });
-  const status = freshness ? describeFreshness(freshness, now) : null;
+  // An archived site is not collected: its age would only alarm.
+  const status =
+    freshness && !site.archived ? describeFreshness(freshness, now) : null;
   const tools = site.integrations.map(
     ({ kind, enabled }) =>
       `${INTEGRATION_LABELS[kind]}${enabled ? "" : " (suspendu)"}`,
@@ -57,7 +60,10 @@ function SiteRow({ site, now }: { site: SiteListing; now: number }) {
     >
       <div className="min-w-0 flex-1 space-y-1">
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-          <span className="font-medium">{site.name}</span>
+          <span className="flex items-center gap-2">
+            <span className="font-medium">{site.name}</span>
+            {site.archived ? <Badge variant="secondary">Archivé</Badge> : null}
+          </span>
           {status ? (
             <span className="flex items-center gap-2 text-sm">
               <span
@@ -123,11 +129,14 @@ function SitesPage() {
         </p>
       ) : (
         <ul className="divide-y rounded-lg border">
-          {sites.map((site) => (
-            <li key={site.id}>
-              <SiteRow site={site} now={now} />
-            </li>
-          ))}
+          {/* Archived sites last: they are kept, not used. */}
+          {sites
+            .toSorted((a, b) => Number(a.archived) - Number(b.archived))
+            .map((site) => (
+              <li key={site.id}>
+                <SiteRow site={site} now={now} />
+              </li>
+            ))}
         </ul>
       )}
 

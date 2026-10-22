@@ -24,7 +24,7 @@ import {
 } from "@/lib/constants";
 import { useConnectionStore } from "@/store/useConnectionStore";
 import { useMapStore } from "@/store/useMapStore";
-import { useCanEdit } from "@/hooks/use-current-user";
+import { useCanEditSite } from "@/sites/useCurrentSite";
 
 type ShortcutEffect = ShortcutIntentRegistration & {
   run: (event: KeyboardEvent) => void;
@@ -63,7 +63,7 @@ export function ShortcutIntentProvider({
   children,
 }: ShortcutIntentProviderProps) {
   const effectsRef = useRef(new Map<string, ShortcutEffect>());
-  const canEdit = useCanEdit();
+  const canEdit = useCanEditSite();
 
   const register = useCallback((effect: ShortcutEffect) => {
     effectsRef.current.set(effect.id, effect);

@@ -37,6 +37,8 @@ export default defineSchema({
     cadence: siteCadence,
     automaticRefresh: v.boolean(),
     manualRefresh: v.boolean(),
+    /** Hidden from the picker, read only and not collected (ADR 0033). */
+    archivedAt: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
   }).index("by_object_id", ["objectId"]),

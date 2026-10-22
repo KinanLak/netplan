@@ -74,6 +74,7 @@ const POLICY: Record<string, Role> = {
   "sites:list": "reader",
   "sites:listSettings": "admin",
   "sites:remove": "admin",
+  "sites:setArchived": "admin",
   "sites:structure": "admin",
   "sites:update": "admin",
   "sources:librenmsDevices": "admin",

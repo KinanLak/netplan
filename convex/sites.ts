@@ -21,12 +21,16 @@ const siteSummary = v.object({
   id: v.string(),
   name: v.string(),
   timezone: v.string(),
+  /** Read only and out of the picker (ADR 0033). */
+  archived: v.boolean(),
 });
 
 const siteSettings = v.object({
   id: v.string(),
   name: v.string(),
   timezone: v.string(),
+  archived: v.boolean(),
+  archivedAt: v.union(v.null(), v.number()),
   cadence: siteCadence,
   automaticRefresh: v.boolean(),
   manualRefresh: v.boolean(),
@@ -49,6 +53,7 @@ const toSummary = (site: Doc<"sites">) => ({
   id: site.objectId,
   name: site.name,
   timezone: site.timezone,
+  archived: site.archivedAt !== undefined,
 });
 
 const byName = (a: { name: string }, b: { name: string }) =>
@@ -70,6 +75,7 @@ const countBuildings = async (ctx: QueryCtx, siteId: string) =>
 
 const toSettings = async (ctx: QueryCtx, site: Doc<"sites">) => ({
   ...toSummary(site),
+  archivedAt: site.archivedAt ?? null,
   cadence: site.cadence,
   automaticRefresh: site.automaticRefresh,
   manualRefresh: site.manualRefresh,
@@ -80,6 +86,30 @@ export const requireSite = async (ctx: QueryCtx, siteId: string) => {
   const site = await getByObjectId(ctx, siteId);
   if (!site) throw new ConvexError("Ce site n'existe plus.");
   return site;
+};
+
+export const ARCHIVED_SITE = "Ce site est archivé : il est en lecture seule.";
+
+/**
+ * The site, for a change to its plan, inventory or collection: an archived
+ * site refuses every one (ADR 0033). Its admin settings stay editable.
+ */
+export const requireOpenSite = async (ctx: QueryCtx, siteId: string) => {
+  const site = await requireSite(ctx, siteId);
+  if (site.archivedAt !== undefined) throw new ConvexError(ARCHIVED_SITE);
+  return site;
+};
+
+/** Refuses a change to anything of an archived site, through its building. */
+export const requireOpenBuilding = async (
+  ctx: QueryCtx,
+  buildingId: string,
+) => {
+  const building = await ctx.db
+    .query("buildings")
+    .withIndex("by_object_id", (q) => q.eq("objectId", buildingId))
+    .unique();
+  if (building) await requireOpenSite(ctx, building.siteId);
 };
 
 // Two sites with one name would be the same entry in the site picker.
@@ -288,6 +318,27 @@ export const update = adminMutation({
     await assertNameFree(ctx, settings.name, siteId);
     await ctx.db.patch(site._id, { ...settings, updatedAt: Date.now() });
     await rescheduleCycle(ctx, { ...site, ...settings });
+    return null;
+  },
+});
+
+/**
+ * Archives a site, or brings it back (C8, ADR 0033). Archived, it leaves the
+ * picker, refuses every change to its plan and inventory, and is never
+ * collected; nothing is deleted, so bringing it back is the same site.
+ */
+export const setArchived = adminMutation({
+  args: { siteId: v.string(), archived: v.boolean() },
+  returns: v.null(),
+  handler: async (ctx, { siteId, archived }) => {
+    const site = await requireSite(ctx, siteId);
+    if (archived === (site.archivedAt !== undefined)) return null;
+    const now = Date.now();
+    await ctx.db.patch(site._id, {
+      archivedAt: archived ? now : undefined,
+      updatedAt: now,
+    });
+    // Back from the archive, a cycle long overdue starts within the minute.
     return null;
   },
 });

@@ -42,6 +42,8 @@ import { SITE_PARTS, SiteNav } from "@/admin/SiteNav";
 import { SiteSetupSteps } from "@/admin/SiteSetupSteps";
 import { UnsavedChanges, useUnsavedSection } from "@/admin/unsaved";
 import { useFlash } from "@/hooks/use-flash";
+import { useNow } from "@/hooks/use-now";
+import { describeSince } from "@/admin/users";
 import {
   MAX_INTERVAL_MINUTES,
   MIN_INTERVAL_MINUTES,
@@ -133,8 +135,11 @@ function SiteContent({ site }: { site: Site }) {
           </Link>
         </div>
       </header>
+      {site.archived ? <ArchivedNotice site={site} /> : null}
       <SiteNav parts={parts} />
-      <SiteSetupSteps siteId={site.id} buildingCount={site.buildingCount} />
+      {site.archived ? null : (
+        <SiteSetupSteps siteId={site.id} buildingCount={site.buildingCount} />
+      )}
       <div id="general" className="scroll-mt-14">
         <SiteSettingsForm key={site.id} site={site} />
       </div>
@@ -149,7 +154,8 @@ function SiteContent({ site }: { site: Site }) {
       <div id="collections" className="scroll-mt-14">
         <CollectionSection siteId={site.id} />
       </div>
-      <div id="danger" className="scroll-mt-14">
+      <div id="danger" className="scroll-mt-14 space-y-8">
+        <ArchiveSite site={site} />
         <DeleteSite site={site} />
       </div>
     </div>
@@ -473,6 +479,99 @@ function SiteSettingsForm({ site }: { site: Site }) {
         ) : null}
       </div>
     </form>
+  );
+}
+
+/** What an archived site is, at the top of its page, with the way back. */
+function ArchivedNotice({ site }: { site: Site }) {
+  const now = useNow(60_000);
+  return (
+    <p className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-warning bg-warning-background p-3 text-sm">
+      <span>
+        Site archivé{" "}
+        {site.archivedAt === null ? null : describeSince(site.archivedAt, now)}{" "}
+        : absent du sélecteur, en lecture seule et sans collecte.
+      </span>
+      <SetArchivedButton site={site} archived={false} />
+    </p>
+  );
+}
+
+function SetArchivedButton({
+  site,
+  archived,
+}: {
+  site: Site;
+  archived: boolean;
+}) {
+  const setArchived = useMutation(api.sites.setArchived);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
+
+  const run = async () => {
+    setPending(true);
+    setError(null);
+    try {
+      await setArchived({ siteId: site.id, archived });
+    } catch (failure) {
+      setError(failureMessage(failure, "admin"));
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return (
+    <>
+      <Button
+        variant="outline"
+        size={archived ? "default" : "sm"}
+        disabled={pending}
+        onClick={() => (archived ? setConfirming(true) : void run())}
+      >
+        {archived ? "Archiver le site" : "Désarchiver"}
+      </Button>
+      {error ? <FieldError>{error}</FieldError> : null}
+      <AlertDialog open={confirming} onOpenChange={setConfirming}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Archiver « {site.name} » ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Le site disparaît du sélecteur de tous les utilisateurs. Son plan
+              et son inventaire restent consultables par leur lien, mais plus
+              personne ne peut les modifier, et la collecte s'arrête. Rien n'est
+              effacé : le désarchiver le rend tel quel.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setConfirming(false);
+                void run();
+              }}
+            >
+              Archiver
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}
+
+/** Archiving keeps a site that is no longer used, plan and all (C8). */
+function ArchiveSite({ site }: { site: Site }) {
+  if (site.archived) return null;
+  return (
+    <section className="space-y-2 border-t pt-6">
+      <h2 className="font-medium">Archiver le site</h2>
+      <p className="text-sm text-muted-foreground">
+        Pour un site qui ne sert plus : il sort du sélecteur, son plan passe en
+        lecture seule et la collecte s'arrête. Réversible, sans rien effacer.
+      </p>
+      <SetArchivedButton site={site} archived />
+    </section>
   );
 }
 

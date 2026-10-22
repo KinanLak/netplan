@@ -13,6 +13,8 @@ export const DUE_GRACE_MS = 2 * MINUTE;
 
 export interface SiteFreshness {
   paused: boolean;
+  /** Never collected while archived (ADR 0033). */
+  archived: boolean;
   hasSources: boolean;
   automaticRefresh: boolean;
   manualRefresh: boolean;
@@ -41,8 +43,9 @@ export interface SiteFreshness {
  * after two failures in a row. Only automatic cycles make a promise to keep.
  */
 export const isLate = (freshness: SiteFreshness, now: number): boolean => {
-  const { paused, hasSources, automaticRefresh, failures } = freshness;
-  if (paused || !hasSources || !automaticRefresh) return false;
+  const { paused, archived, hasSources, automaticRefresh, failures } =
+    freshness;
+  if (paused || archived || !hasSources || !automaticRefresh) return false;
   if (failures >= 2) return true;
   if (freshness.lastSuccessAt === null) return false;
   const { cadence, timezone } = freshness;
@@ -54,6 +57,7 @@ export const isLate = (freshness: SiteFreshness, now: number): boolean => {
 export type NextRun =
   | { kind: "running" }
   | { kind: "paused" }
+  | { kind: "archived" }
   | { kind: "no-source" }
   | { kind: "manual-only" }
   | { kind: "at"; at: number }
@@ -64,6 +68,7 @@ export type NextRun =
 export const nextRun = (freshness: SiteFreshness, now: number): NextRun => {
   if (freshness.running) return { kind: "running" };
   if (freshness.paused) return { kind: "paused" };
+  if (freshness.archived) return { kind: "archived" };
   if (!freshness.hasSources) return { kind: "no-source" };
   if (!freshness.automaticRefresh) return { kind: "manual-only" };
   // No cycle yet: the cron starts the first one within the minute.
@@ -83,6 +88,8 @@ export const describeNextRun = (
       return "Collecte en cours…";
     case "paused":
       return "Collecte suspendue sur le serveur";
+    case "archived":
+      return "Plan en lecture seule";
     case "no-source":
       return "Aucune intégration active";
     case "manual-only":
@@ -108,6 +115,9 @@ export const describeFreshness = (
   timeZone?: string,
 ): { headline: string; tone: FreshnessTone } => {
   const { lastSuccessAt } = freshness;
+  if (freshness.archived) {
+    return { headline: "Site archivé : aucune collecte", tone: "none" };
+  }
   if (!freshness.hasSources) {
     return { headline: "Plan dessiné à la main", tone: "none" };
   }
@@ -146,7 +156,8 @@ export const describeFreshness = (
  */
 export const failedAttemptAt = (freshness: SiteFreshness): number | null => {
   const { last, lastSuccessAt } = freshness;
-  if (!last || last.failed.length === 0) return null;
+  // An archived site is not collected: an old failure is no news.
+  if (freshness.archived || !last || last.failed.length === 0) return null;
   if (lastSuccessAt !== null && lastSuccessAt >= last.startedAt) return null;
   return last.finishedAt;
 };
