@@ -383,3 +383,18 @@ button:hover {
 .label-cursor-text .react-flow__pane {
   cursor: text !important;
 }
+
+/* A device brought into view from outside the plan rings twice, briefly. */
+.react-flow__node.device-locate-flash {
+  border-radius: 0.5rem;
+  animation: device-locate-flash 450ms ease-out 2;
+}
+
+@keyframes device-locate-flash {
+  from {
+    box-shadow: 0 0 0 0 var(--color-primary);
+  }
+  to {
+    box-shadow: 0 0 0 14px transparent;
+  }
+}

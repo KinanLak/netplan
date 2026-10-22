@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "bun:test";
 import { useMapStore } from "@/store/useMapStore";
-import type { DeviceId, FloorId, OverlayFileId } from "@/types/map";
+import type { BuildingId, DeviceId, FloorId, OverlayFileId } from "@/types/map";
 
 const initialState = useMapStore.getState();
 const did = (s: string) => s as DeviceId;
@@ -118,5 +118,38 @@ describe("text tool state", () => {
     useMapStore.getState().setLabelToolActive(true);
     expect(useMapStore.getState().isPlacePanelOpen).toBe(false);
     expect(useMapStore.getState().isOverlayPanelOpen).toBe(false);
+  });
+});
+
+describe("locating a device", () => {
+  beforeEach(() => {
+    useMapStore.setState(initialState, true);
+  });
+
+  it("opens its floor, selects it when asked, and asks the canvas once", () => {
+    useMapStore.getState().locateDevice(
+      {
+        deviceId: did("pc-1"),
+        buildingId: "building-b" as BuildingId,
+        floorId: "floor-2" as FloorId,
+      },
+      { select: true },
+    );
+    const state = useMapStore.getState();
+    expect(state.currentBuildingId).toBe("building-b" as BuildingId);
+    expect(state.currentFloorId).toBe("floor-2" as FloorId);
+    expect(state.selectedDeviceId).toBe(did("pc-1"));
+    const request = state.locateRequest;
+    expect(request?.deviceId).toBe(did("pc-1"));
+
+    // A request already replaced by a newer one is not cleared by the old one.
+    state.locateDevice({
+      deviceId: did("pc-2"),
+      buildingId: "building-b" as BuildingId,
+      floorId: "floor-2" as FloorId,
+    });
+    useMapStore.getState().clearLocateRequest(request?.nonce ?? 0);
+    expect(useMapStore.getState().locateRequest?.deviceId).toBe(did("pc-2"));
+    expect(useMapStore.getState().selectedDeviceId).toBe(did("pc-1"));
   });
 });

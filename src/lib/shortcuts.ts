@@ -32,6 +32,8 @@ export type ShortcutAction =
   | "fit-view"
   | "floor-up"
   | "floor-down"
+  | "focus-device-search"
+  | "find-device"
   | "cancel-wall-tool"
   // Tools - Walls (numbers + letter aliases)
   | "tool-wall"
@@ -171,6 +173,18 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
     keys: [{ key: "1", code: "Digit1", shift: true }],
     label: "Centrer la vue",
     description: "Cadrer tout l'étage",
+    scope: "global",
+  },
+  "focus-device-search": {
+    keys: ["Mod+K"],
+    label: "Rechercher",
+    description: "Rechercher un équipement du site",
+    scope: "global",
+  },
+  "find-device": {
+    keys: ["Mod+F"],
+    label: "Trouver sur le plan",
+    description: "Trouver un équipement sur le plan par son nom",
     scope: "global",
   },
   "floor-up": {

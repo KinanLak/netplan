@@ -28,7 +28,7 @@ const withoutEditTools = (state: MapInteractionState) => ({
   isLabelToolActive: false,
 });
 
-export const useMapStore = create<MapStore>()((set) => ({
+export const useMapStore = create<MapStore>()((set, get) => ({
   currentBuildingId: null,
   currentFloorId: null,
   selectedDeviceId: null,
@@ -48,6 +48,7 @@ export const useMapStore = create<MapStore>()((set) => ({
   isOverlayHidden: false,
   overlayDraft: null,
   overlayCalibration: null,
+  locateRequest: null,
 
   setCurrentBuilding: (buildingId: BuildingId | null) => {
     set({
@@ -223,5 +224,24 @@ export const useMapStore = create<MapStore>()((set) => ({
   },
   setCableDraft: (draft) => {
     set({ cableDraft: draft });
+  },
+  locateDevice: ({ deviceId, buildingId, floorId }, options = {}) => {
+    const state = get();
+    if (state.currentBuildingId !== buildingId) {
+      state.setCurrentBuilding(buildingId);
+    }
+    if (get().currentFloorId !== floorId) get().setCurrentFloor(floorId);
+    if (options.select) get().selectDevice(deviceId);
+    set((current) => ({
+      locateRequest: {
+        deviceId,
+        nonce: (current.locateRequest?.nonce ?? 0) + 1,
+      },
+    }));
+  },
+  clearLocateRequest: (nonce) => {
+    set((state) =>
+      state.locateRequest?.nonce === nonce ? { locateRequest: null } : state,
+    );
   },
 }));

@@ -45,6 +45,8 @@ import { isAdmin } from "@/lib/roles";
 import { mapSearch, useCurrentSite } from "@/sites/useCurrentSite";
 import { SiteRefreshShortcut } from "@/sites/CollectionFreshness";
 import { ShortcutsDialog } from "@/components/shortcuts-dialog";
+import { MapFind } from "@/search/MapFind";
+import { useDeviceSearchFocus } from "@/search/DeviceSearch";
 import { ShortcutHintAbsolute } from "@/components/ui/shortcut-hint";
 import { toggledCableDisplay } from "@/canvas/cablePaths";
 import { asBuildingId, asDeviceId, asFloorId } from "@/lib/objectIds";
@@ -283,6 +285,13 @@ function MapWorkspace({
   });
   useShortcutIntentEffect("floor-up", navigateFloorUp);
   useShortcutIntentEffect("floor-down", navigateFloorDown);
+  const sidebar = useSidebar();
+  // Here, not in the sidebar: folded, it is inert, and on a phone unmounted.
+  useShortcutIntentEffect("focus-device-search", () => {
+    if (sidebar.isMobile) sidebar.setOpenMobile(true);
+    else sidebar.setOpen(true);
+    useDeviceSearchFocus.getState().request();
+  });
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background">
@@ -365,6 +374,7 @@ function MapWorkspace({
           {empty ? <MapEmptyState {...empty} /> : null}
           <MapDocumentStatus floorless={empty !== null} />
           {site ? <SiteRefreshShortcut siteId={site.id} /> : null}
+          <MapFind hasRightDrawerOpen={Boolean(selectedDeviceId)} />
         </ReactFlowProvider>
 
         <ShortcutsDialog hasRightDrawerOpen={Boolean(selectedDeviceId)} />
@@ -426,15 +436,26 @@ function applyUrl(
   const target = allFloors.find((candidate) => candidate.id === floor);
   if (!target) return;
   const store = useMapStore.getState();
-  if (store.currentBuildingId !== target.buildingId) {
-    store.setCurrentBuilding(asBuildingId(target.buildingId));
+  const location = {
+    buildingId: asBuildingId(target.buildingId),
+    floorId: asFloorId(target.id),
+  };
+  if (device) {
+    // A shared link to a device opens on it, not on the floor's last view.
+    store.locateDevice(
+      { ...location, deviceId: asDeviceId(device) },
+      { select: true },
+    );
+    return;
   }
-  if (useMapStore.getState().currentFloorId !== target.id) {
-    store.setCurrentFloor(asFloorId(target.id));
+  if (store.currentBuildingId !== location.buildingId) {
+    store.setCurrentBuilding(location.buildingId);
   }
-  const selected = useMapStore.getState().selectedDeviceId;
-  if ((device ?? null) !== selected) {
-    store.selectDevice(device ? asDeviceId(device) : null);
+  if (useMapStore.getState().currentFloorId !== location.floorId) {
+    store.setCurrentFloor(location.floorId);
+  }
+  if (useMapStore.getState().selectedDeviceId !== null) {
+    store.selectDevice(null);
   }
 }
 

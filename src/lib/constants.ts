@@ -19,6 +19,12 @@ export const TOOLBAR_WALL_COLOR_SELECTION_ENABLED = false;
 export const FLOW_CANVAS_ZOOM_DURATION_MS = 200;
 export const FLOW_CANVAS_RESET_DURATION_MS = 300;
 export const FLOW_CANVAS_CENTER_DURATION_MS = 250;
+// Quick but eased: the eye follows the camera to a located device.
+export const FLOW_CANVAS_LOCATE_DURATION_MS = 350;
+// A located device is shown at least this close, so it can be read.
+export const FLOW_CANVAS_LOCATE_MIN_ZOOM = 0.8;
+// The device drawer covers this much of the map's right edge (w-80).
+export const DEVICE_DRAWER_WIDTH_PX = 320;
 export const FLOW_CANVAS_FIT_VIEW_PADDING = 0.2;
 export const FLOW_CANVAS_MIN_ZOOM = 0.3;
 export const FLOW_CANVAS_MAX_ZOOM = 2;

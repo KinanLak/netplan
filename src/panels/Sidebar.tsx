@@ -59,6 +59,7 @@ import {
   SiteRefreshButton,
 } from "@/sites/CollectionFreshness";
 import { SiteSwitcher } from "@/sites/SiteSwitcher";
+import { DeviceSearch } from "@/search/DeviceSearch";
 import { useCurrentSite } from "@/sites/useCurrentSite";
 import { useCanEdit } from "@/hooks/use-current-user";
 import { api } from "../../convex/_generated/api";
@@ -239,6 +240,7 @@ export default function AppSidebar() {
               </div>
               <SiteRefreshButton siteId={site.id} withShortcut />
             </div>
+            <DeviceSearch />
             <CollectionFreshness
               siteId={site.id}
               withRefresh={false}
