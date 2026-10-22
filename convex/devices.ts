@@ -20,6 +20,7 @@ import {
   IDENTITY_FIELD_NAMES,
   identityEditError,
   isSourceOwned,
+  namedAfterHostname,
   normalizeIdentityEdit,
 } from "../src/devices/identity";
 import type { IdentityEdit } from "../src/devices/identity";
@@ -215,7 +216,7 @@ export async function insertManualDevice(
     throw new ConvexError("Cet identifiant d'équipement est déjà pris.");
   }
 
-  const edit = normalizeIdentityEdit(identity);
+  const edit = namedAfterHostname(normalizeIdentityEdit(identity), {});
   if (!edit.name) throw new ConvexError("Le nom est obligatoire.");
   const error = identityEditError(edit);
   if (error) throw new ConvexError(error);
@@ -307,7 +308,7 @@ export const updateIdentity = editorMutation({
     const device = await getDevice(ctx, deviceId);
     if (!device) throw new ConvexError("Cet équipement n'existe plus.");
 
-    const edit = normalizeIdentityEdit(rawEdit);
+    const edit = namedAfterHostname(normalizeIdentityEdit(rawEdit), device);
     const error = identityEditError(edit);
     if (error) throw new ConvexError(error);
 

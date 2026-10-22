@@ -127,7 +127,9 @@ site-scoped mutations from the drawer or the inventory page
 (`/inventory`), which also creates and deletes devices. The map's « Placer »
 panel lists the unplaced ones, places one by a click or a drop, and creates
 new ones; it stays open while a floor fills up. A
-MAC belongs to at most one device of a site (`deviceMacs`). A device a
+MAC belongs to at most one device of a site (`deviceMacs`). A device with
+a hostname is named after it (`namedAfterHostname`, ADR 0029), unless a
+source owns its name. A device a
 source brought records it, and the fields that source owns
 (`src/devices/identity.ts`) are read-only in the UI and refused by the
 server.

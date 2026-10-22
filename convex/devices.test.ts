@@ -169,12 +169,29 @@ describe("devices.updateIdentity", () => {
     });
 
     const [device] = await t.query(api.devices.listForFloor, { floorId });
+    // Named after its hostname while it had one (B10), it keeps that name.
     expect(device).toMatchObject({
-      name: "Accueil",
+      name: "pc-accueil",
       serial: "SN-9",
       notes: "Bureau 4",
     });
     expect(device.hostname).toBeUndefined();
+  });
+
+  it("names a manual device after its hostname, whatever name it is given", async () => {
+    const t = await signedInTest();
+    const floorId = await freshFloor(t);
+    const id = await createDevice(t, floorId, "device:id:host", "PC", 0);
+    await t.mutation(api.devices.updateIdentity, {
+      deviceId: id,
+      edit: { hostname: "pc-0042" },
+    });
+    await t.mutation(api.devices.updateIdentity, {
+      deviceId: id,
+      edit: { name: "Accueil" },
+    });
+    const [device] = await t.query(api.devices.listForFloor, { floorId });
+    expect(device).toMatchObject({ name: "pc-0042", hostname: "pc-0042" });
   });
 
   it("moves MAC addresses between devices of a site, never sharing one", async () => {

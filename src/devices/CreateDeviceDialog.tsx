@@ -30,6 +30,7 @@ import { deviceKinds } from "@/devices/deviceKindRegistry";
 import {
   IDENTITY_TEXT_LIMITS,
   identityEditError,
+  namedAfterHostname,
   normalizeIdentityEdit,
 } from "@/devices/identity";
 import { parseMacList } from "@/devices/mac";
@@ -121,6 +122,9 @@ function CreateDeviceForm({
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  // A device with a hostname is named after it (B10, ADR 0029).
+  const followsHostname = text.hostname.trim() !== "";
+
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     const parsed = parseMacList(macs);
@@ -128,11 +132,10 @@ function CreateDeviceForm({
       setError(`« ${parsed.unreadable} » n'est pas une adresse MAC.`);
       return;
     }
-    const identity = normalizeIdentityEdit({
-      ...text,
-      macs: parsed.macs,
-      notes,
-    });
+    const identity = namedAfterHostname(
+      normalizeIdentityEdit({ ...text, macs: parsed.macs, notes }),
+      {},
+    );
     const invalid = identityEditError(identity);
     if (invalid) {
       setError(invalid);
@@ -164,7 +167,12 @@ function CreateDeviceForm({
               <FieldLabel htmlFor={`${id}-${field}`}>{label}</FieldLabel>
               <Input
                 id={`${id}-${field}`}
-                value={text[field]}
+                value={
+                  field === "name" && followsHostname
+                    ? text.hostname.trim()
+                    : text[field]
+                }
+                readOnly={field === "name" && followsHostname}
                 maxLength={IDENTITY_TEXT_LIMITS[field]}
                 required={field === "name"}
                 // The one required field comes first and takes the focus.
@@ -177,6 +185,9 @@ function CreateDeviceForm({
                   }))
                 }
               />
+              {field === "name" && followsHostname ? (
+                <FieldDescription>Le nom suit le hostname.</FieldDescription>
+              ) : null}
             </Field>
             {field === "name" ? (
               <Field>

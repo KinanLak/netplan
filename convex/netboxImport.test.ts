@@ -269,7 +269,7 @@ describe("NetBox import", () => {
     expect(source.reads).toEqual(["/api/status/"]);
     expect(
       (await inventory(editor, siteId)).map((d) => [d.name, d.source ?? null]),
-    ).toEqual([["Accueil", null]]);
+    ).toEqual([["pc-0013", null]]);
     expect(
       await t.run(async (ctx) => await ctx.db.query("importReviews").collect()),
     ).toEqual([]);
@@ -305,8 +305,8 @@ describe("NetBox import", () => {
     expect(
       (await inventory(editor, siteId)).map((d) => [d.name, d.source ?? null]),
     ).toEqual([
-      ["Accueil", null],
       ["pc-0012", null],
+      ["pc-0013", null],
     ]);
     expect(await reviews()).toEqual([]);
   });
@@ -452,7 +452,7 @@ describe("Import reviews", () => {
       {
         kind: "suggestion",
         device: { externalId: "12" },
-        candidates: [{ id: "device:manual", name: "Accueil", placed: false }],
+        candidates: [{ id: "device:manual", name: "pc-0012", placed: false }],
       },
     ]);
 

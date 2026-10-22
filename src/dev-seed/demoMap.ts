@@ -61,7 +61,15 @@ const createFloorBuilder = (floorId: FloorId, slug: string) => {
   ) => {
     const { key, macs = [], ...rest } = device;
     const id = deviceId(key);
-    devices.push({ id, floorId, macs, ...rest });
+    // A device with a hostname is named after it, as the server would name
+    // it (B10); the name given stays only for those without one.
+    devices.push({
+      id,
+      floorId,
+      macs,
+      ...rest,
+      name: rest.hostname ?? rest.name,
+    });
     return id;
   };
 

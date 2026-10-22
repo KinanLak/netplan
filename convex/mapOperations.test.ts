@@ -1100,6 +1100,24 @@ describe("mapOperations.apply on the site inventory", () => {
     expect(macs).toMatchObject([{ siteId, mac: MAC, deviceId: "device:site" }]);
   });
 
+  it("names a drawn device after its hostname, and replays the same create", async () => {
+    const t = await signedInTest();
+    const floorId = await freshFloor(t);
+    const drawn = {
+      ...device("device:named", floorId, 0),
+      name: "Poste 3",
+      hostname: "pc-003",
+    };
+
+    await create(t, 1, drawn);
+    // A retry of the same operation under a new id is the same device.
+    const replay = await create(t, 2, drawn);
+
+    const [row] = await t.query(api.devices.listForFloor, { floorId });
+    expect(row).toMatchObject({ name: "pc-003", hostname: "pc-003" });
+    expect(replay.status).toBe("applied");
+  });
+
   it("keeps a MAC address to one device of a site", async () => {
     const t = await signedInTest();
     const siteId = await createTestSite(t);
@@ -1151,7 +1169,7 @@ describe("mapOperations.apply on the site inventory", () => {
 
     const longName = await create(t, 1, {
       ...device("device:long", floorId, 0, 0),
-      name: "x".repeat(121),
+      name: "x".repeat(254),
     });
 
     expect(longName.error).toContain("Trop long");

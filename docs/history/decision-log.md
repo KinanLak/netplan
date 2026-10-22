@@ -2234,4 +2234,96 @@ Questions of 2026-10-21, in the order they came up (ADR 0031, #93, #99, #105, #1
 
 - Context: U3 and U2 merged ADRs 0029 and 0030 first.
 - Decision: the lot's ADR is 0031.
+
+### U3 — Map editing and rendering
+
+Questions of 2026-10-21 and 22, from the UX review's map items (ADR 0029).
+
+#### How are cables drawn (A37)?
+
+- Context: the owner asked for @xyflow edges, smooth curves, possibly an animated flow, coloured by the connection's state, and a readable fan-out.
+- Decision: shown paths are React Flow edges between handles each node carries: one per shown port on switches and patch panels, the socket icon, the status dot of a PC or endpoint (A102). Bézier curves leave on the side facing the other end; edges render under the nodes. A cable takes the state of the switch port at either end of its trace (looking behind a patch panel when the trace starts on it): live (link up or device seen) in the online colour with a moving flow, down quiet solid grey, unknown dotted grey; reduced motion stops the flow. ADR 0029.
+- Why: each cable leaves from its own port, so a switch's fan-out reads port by port; an inactive link is normal (as the port squares already say), so it stays quiet rather than red.
+- Who: owner (A37 choice), design by agent
+
+#### When does a path's label show (A102)?
+
+- Context: the owner wants the label visible only conditionally.
+- Decision: under the device it ends on, else over it, and not drawn when both would cover another device; the full stack height (padding, border, gaps) is reserved.
+- Why: the path itself still shows, and the drawer and the port table name every end.
+- Who: owner (comment), rule by agent
+
+#### What replaces « Afficher les câbles » / « Câbles » (A103)?
+
+- Context: the audit proposed « Tracer sur le plan »; the owner dislikes « Tracer ».
+- Decision: « Voir les câbles sur le plan » / « Masquer les câbles du plan », and « Ports et câbles… » for the table. The toolbar's « Tracer mur / salle » tooltips became « Dessiner … » for the same reason.
+- Who: owner (comment), wording by agent
+
+#### How does a long name fit a node (A17, B10)?
+
+- Context: the owner wants the text to shrink down to a fairly high minimum, the full name on hover and in the drawer, never under the node; the name in capitals.
+- Decision: `fitLabel` picks the largest size that fits the node's lines, breaking after hyphens, down to a floor per node type (7 px on cards, 6 px on sockets and racks); past it, a middle ellipsis keeps the name's end, wrapping at any letter. One canvas-level tooltip shows the full name, and the hostname when it differs. A socket's label drops « Prise », which its icon says (A105).
+- Why: the end of a name is what tells two devices apart; one tooltip for the whole plan costs nothing per node.
+- Who: owner (A17 choice), sizes by agent
+
+#### Name or hostname (B10)?
+
+- Context: the owner thought it was settled that a device with a hostname has its hostname as its name.
+- Decision: a shared rule `namedAfterHostname`, applied by the server on every identity write and when a map operation creates a device, and shown in both identity forms (« Nom » read-only, « Le nom suit le hostname. »). A source that owns the name (NetBox) keeps it. The demo seed follows the rule (SW-DEMO-COEUR, PC-DEMO-POSTE-1). No migration: the next identity edit applies it.
+- Why: one name everywhere — plan, lists, search, network.
+- Who: owner (B10 choice), mechanism by agent
+
+#### Which status colours, and what do passive devices show (B7, B13)?
+
+- Decision: « En ligne » green, « Hors ligne » red, « Inconnu » grey, as tokens; no legend. `DEVICE_STATUS_CLASSES` is a `Record<DeviceStatus, …>` so U4's `stale` must bring its classes. Sockets, patch panels and racks have no status: neutral border, no dot, no drawer badge, « — » in the inventory and out of its counts. A socket's icon turns green when a fresh read saw any MAC behind it (`mapDocument.getFloorSeenSockets`, on U4's `by_site_socket` index), whoever owns that MAC.
+- Why: the owner wants explicit colours and no clutter; 244 of 339 real « Inconnu » were passive devices.
+- Who: owner (B7 choice), audit default (B13)
+
+#### What does a blocked drop or wall show (A13, A22)?
+
+- Context: the owner: a dragged device never visually overlaps a wall, it sticks to the nearest free spot by the cursor, and an impossible spot shows visually, without a message.
+- Decision: while dragging, the device waits at the nearest free spot and a dashed red outline marks the spot under the cursor. A wall, room or brush preview turns its blocked cells red and outlines the device it crosses, before any click.
+- Who: owner (comments)
+
+#### How does the room tool draw (A14)?
+
+- Decision: press-drag-release as well as two clicks; while any wall tool is active the map pans with the right button; a press with Space or a modifier is navigation and sets no anchor. The help card gains one short line per tool.
+- Why: minimal guidance, as the owner asked; the natural gesture now works.
+- Who: owner (comment), gesture by agent
+
+#### Undo flash (A19)?
+
+- Decision: undo and redo flash the toolbar neutral; any refusal (an undo the engine refuses, a server rejection) flashes it red. No label on undo.
+- Who: owner (choice)
+
+#### What does « Placer » become (A15, C2, A25)?
+
+- Context: C2 option (b): inventory first, « Nouvel équipement » in « Placer », a dialog that stays open, placing by click or drag.
+- Decision: a panel on the right of the map, open until closed: search with arrows and Enter, click places at the centre, drag drops where released (only over the map), « Nouvel équipement » opens the shared create dialog (moved to `src/devices/`) and highlights the new device. Its empty states tell an empty inventory from a placed one. An empty floor shows one small card with three actions for Éditeurs and one sentence for Lecteurs.
+- Why: an open dialog would hide the plan it places on.
+- Who: owner (C2 choice), layout by agent
+
+#### Calque after import and calibration (A26)?
+
+- Decision: the view moves onto the calque after an import and after a calibration; the panel gives its size in metres.
+- Who: agent (audit default)
+
+#### What are text labels (C4)?
+
+- Context: C4 option (b): free text labels with no link to walls.
+- Decision: a new map object `MapLabel` with `label.create/patch/delete` operations, inverses (a patch's undo carries `expected`), server planning on a `mapLabels` table, and a « Texte » tool (5 or T). Every role sees them; only edit mode moves (drag), renames (double-click) or deletes (emptied text or bin). They go with a deleted floor and do not keep it from being deleted.
+- Why: deleting a floor already requires emptying devices, walls and calque; labels only name parts of it, and touching the delete dialog would collide with U2's B9.
+- Who: owner (C4 choice), model by agent
+
+#### How is a cable undone (B14)?
+
+- Decision: cables stay outside the history; undo right after a cable change (Ctrl+Z or the sidebar's « Annuler ») shows its toast again with « Annuler »; a map edit or a redo after it lets undo reach the map. Cable toasts share one id instead of piling up. No « Identité enregistrée » toast: the drawer shows the saved values.
+- Why: the owner wants few toasts, and the result of an identity save is visible.
+- Who: audit default, adjusted to the owner's standing preference
+
+#### Why did login on `ux-u3.localhost` fail after a reseed?
+
+- Context: after `dev:agent --reseed`, sign-in from `ux-u3.localhost` returned 403 while `127.0.0.1` worked.
+- Decision: verified on `127.0.0.1` for that check.
+- Why: the fresh backend's trusted origins no longer included the `.localhost` alias; not U3's code.
 - Who: agent (obvious)

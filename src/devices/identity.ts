@@ -29,7 +29,8 @@ export const isSourceOwned = (
 
 export const IDENTITY_TEXT_LIMITS: Record<IdentityTextField | "notes", number> =
   {
-    name: 120,
+    // A name may be a hostname (B10), so it is as long as one may be.
+    name: 253,
     // The longest DNS name.
     hostname: 253,
     serial: 120,
@@ -87,6 +88,24 @@ const OPTIONAL_TEXT_FIELDS = [
   "ip",
   "notes",
 ] as const;
+
+/**
+ * A device with a hostname is named after it, so the plan, the lists and the
+ * network all say the same thing (B10, ADR 0029). A source that owns the
+ * name keeps it.
+ */
+export function namedAfterHostname(
+  edit: IdentityEdit,
+  current: {
+    hostname?: string | null;
+    source?: { integration: IntegrationKind };
+  },
+): IdentityEdit {
+  if (isSourceOwned(current.source, "name")) return edit;
+  const hostname =
+    edit.hostname !== undefined ? edit.hostname : (current.hostname ?? null);
+  return hostname ? { ...edit, name: hostname } : edit;
+}
 
 /** Trims text; an emptied optional field is removed (`null`). */
 export function normalizeIdentityEdit(edit: IdentityEdit): IdentityEdit {
