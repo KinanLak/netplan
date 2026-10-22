@@ -182,6 +182,8 @@ export function CollectionFreshness({
                   </li>
                 ))}
               </ul>
+              {/* Ages turn into dates after a day: say whose clock. */}
+              <p className="text-muted-foreground">{timeZoneHint(now)}</p>
               {admin ? (
                 <Link
                   to="/admin/health"
