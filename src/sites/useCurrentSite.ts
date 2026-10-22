@@ -1,5 +1,7 @@
 import { useQuery } from "convex/react";
 import { useSearch } from "@tanstack/react-router";
+import { createContext, useContext } from "react";
+import { useCanEdit } from "@/hooks/use-current-user";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "../../convex/_generated/api";
 
@@ -21,8 +23,9 @@ export const siteSearch = (
   typeof search.site === "string" ? { site: search.site } : {};
 
 /**
- * The site the page shows: the one the URL names, else the first by name.
- * `site` is `undefined` while the sites load and `null` when there is none.
+ * The site the page shows: the one the URL names, else the first open one by
+ * name. An archived site opens only by its link (ADR 0033). `site` is
+ * `undefined` while the sites load and `null` when there is none.
  */
 export function useCurrentSite(): {
   sites: Array<SiteSummary> | undefined;
@@ -33,6 +36,22 @@ export function useCurrentSite(): {
   if (sites === undefined) return { sites, site: undefined };
   return {
     sites,
-    site: sites.find((site) => site.id === requested) ?? sites.at(0) ?? null,
+    site:
+      sites.find((site) => site.id === requested) ??
+      sites.find((site) => !site.archived) ??
+      null,
   };
+}
+
+/**
+ * Whether the site the page shows is archived, set by the pages that show
+ * one (the map, the inventory). Read only then, as for a Lecteur (ADR 0033).
+ */
+export const SiteArchivedContext = createContext(false);
+
+/** Whether the user may change the site the page shows: role and archive. */
+export function useCanEditSite(): boolean {
+  const canEdit = useCanEdit();
+  const archived = useContext(SiteArchivedContext);
+  return canEdit && !archived;
 }

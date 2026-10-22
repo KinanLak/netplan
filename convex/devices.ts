@@ -15,7 +15,7 @@ import { deleteDeviceCabling, insertDeviceCabling } from "./lib/ports";
 import { observedMetadata } from "./lib/statuses";
 import { recordArrival } from "./history";
 import { lastSighting, lastSightingOf } from "./cables";
-import { requireSite } from "./sites";
+import { requireOpenSite, requireSite } from "./sites";
 import {
   IDENTITY_FIELD_NAMES,
   identityEditError,
@@ -183,6 +183,7 @@ export const create = editorMutation({
   args: { siteId: v.string(), deviceId: v.string(), ...removedDevice },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await requireOpenSite(ctx, args.siteId);
     await insertManualDevice(ctx, args, ctx.user.id);
     return null;
   },
@@ -259,6 +260,7 @@ export const remove = editorMutation({
   handler: async (ctx, { deviceId }) => {
     const device = await getDevice(ctx, deviceId);
     if (!device) return null;
+    await requireOpenSite(ctx, device.siteId);
     if (device.source) {
       throw new ConvexError(
         `Cet équipement vient de ${INTEGRATION_LABELS[device.source.integration]} : il ne se supprime pas dans NetPlan.`,
@@ -307,6 +309,7 @@ export const updateIdentity = editorMutation({
   handler: async (ctx, { deviceId, edit: rawEdit }) => {
     const device = await getDevice(ctx, deviceId);
     if (!device) throw new ConvexError("Cet équipement n'existe plus.");
+    await requireOpenSite(ctx, device.siteId);
 
     const edit = namedAfterHostname(normalizeIdentityEdit(rawEdit), device);
     const error = identityEditError(edit);

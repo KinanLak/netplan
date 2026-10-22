@@ -73,6 +73,19 @@ const status = (t: TestClient, siteId: string) =>
   t.query(api.collection.status, { siteId });
 
 describe("collection cycles", () => {
+  it("never collects an archived site, by the cron or by hand", async () => {
+    const { admin, editor, siteId } = await siteWithNetBox();
+    await admin.mutation(api.sites.setArchived, { siteId, archived: true });
+
+    expect(await startDue(admin)).toBe(0);
+    await expect(
+      editor.mutation(api.collection.refresh, { siteId }),
+    ).rejects.toThrow("archivé");
+    expect(
+      (await editor.query(api.collection.freshness, { siteId }))?.archived,
+    ).toBe(true);
+  });
+
   it("starts a due site's cycle, asks each enabled source, and plans the next", async () => {
     const { admin, siteId } = await siteWithNetBox();
     const before = fetchStub.calls.length;

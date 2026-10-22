@@ -18,13 +18,15 @@ describe("sites", () => {
       id: siteId,
       name: "Arles",
       timezone: "Europe/Paris",
+      archived: false,
+      archivedAt: null,
       cadence: DEFAULT_CADENCE,
       automaticRefresh: true,
       manualRefresh: true,
       buildingCount: 0,
     });
     expect(await admin.query(api.sites.list, {})).toEqual([
-      { id: siteId, name: "Arles", timezone: "Europe/Paris" },
+      { id: siteId, name: "Arles", timezone: "Europe/Paris", archived: false },
     ]);
   });
 
@@ -189,6 +191,36 @@ describe("sites", () => {
         floors: [{ id: "floor:rdc", name: "RDC", devices: 1 }],
       },
     ]);
+  });
+
+  it("archives a site out of the picker, keeps its settings, and brings it back", async () => {
+    const admin = await signedInTest("admin");
+    const siteId = await admin.mutation(api.sites.create, arles);
+
+    await admin.mutation(api.sites.setArchived, { siteId, archived: true });
+    expect(await admin.query(api.sites.list, {})).toMatchObject([
+      { id: siteId, archived: true },
+    ]);
+    expect(await admin.query(api.sites.getSettings, { siteId })).toMatchObject({
+      archived: true,
+      archivedAt: expect.any(Number),
+    });
+    // Its admin settings stay editable.
+    await admin.mutation(api.sites.update, {
+      siteId,
+      name: "Arles (ancien)",
+      timezone: "Europe/Paris",
+      cadence: DEFAULT_CADENCE,
+      automaticRefresh: true,
+      manualRefresh: true,
+    });
+
+    await admin.mutation(api.sites.setArchived, { siteId, archived: false });
+    expect(await admin.query(api.sites.getSettings, { siteId })).toMatchObject({
+      archived: false,
+      archivedAt: null,
+      name: "Arles (ancien)",
+    });
   });
 
   it("removes an empty site", async () => {

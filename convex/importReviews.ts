@@ -5,6 +5,7 @@
 import { ConvexError, v } from "convex/values";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { editorMutation, editorQuery } from "./lib/functions";
+import { requireOpenSite } from "./sites";
 import { hasRole } from "./lib/roles";
 import { macRowsOf, sourceFields } from "./netboxImport";
 import { importedDevice } from "./siteValidators";
@@ -73,6 +74,7 @@ export const resolve = editorMutation({
   },
   returns: v.null(),
   handler: async (ctx, { siteId, externalId, deviceId }) => {
+    await requireOpenSite(ctx, siteId);
     const review = await ctx.db
       .query("importReviews")
       .withIndex("by_site", (q) =>

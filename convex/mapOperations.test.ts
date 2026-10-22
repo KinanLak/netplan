@@ -230,6 +230,45 @@ describe("mapOperations.apply", () => {
     expect(document.devices[0].position).toEqual({ x: 300, y: 0 });
   });
 
+  it("refuses any change to an archived site's plan, and takes them again once it is back", async () => {
+    const t = await signedInTest("admin");
+    const siteId = await createTestSite(t);
+    const floorId = await freshFloor(t, siteId);
+    await t.mutation(api.sites.setArchived, { siteId, archived: true });
+
+    const refused = await t.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "device.create",
+        meta: meta(40),
+        device: device("device:archived", floorId, 0),
+      },
+    });
+    expect(refused).toMatchObject({
+      status: "rejected",
+      error: "Ce site est archivé : il est en lecture seule.",
+    });
+    await expect(
+      t.mutation(api.floors.rename, { id: floorId, name: "Autre" }),
+    ).rejects.toThrow("archivé");
+    await expect(
+      t.mutation(api.buildings.create, {
+        siteId,
+        objectId: "building:late",
+        name: "Late",
+      }),
+    ).rejects.toThrow("archivé");
+
+    await t.mutation(api.sites.setArchived, { siteId, archived: false });
+    const placed = await t.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "device.create",
+        meta: meta(41),
+        device: device("device:archived", floorId, 0),
+      },
+    });
+    expect(placed.status).toBe("applied");
+  });
+
   it("rejects moving into a wall", async () => {
     const t = await signedInTest();
     const floorId = await freshFloor(t);

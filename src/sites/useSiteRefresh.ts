@@ -49,7 +49,10 @@ export const offersRefresh = (
   canEdit: boolean,
   freshness: SiteFreshness | null | undefined,
 ): boolean =>
-  canEdit && Boolean(freshness?.hasSources && freshness.manualRefresh);
+  canEdit &&
+  Boolean(
+    freshness?.hasSources && freshness.manualRefresh && !freshness.archived,
+  );
 
 /** A site's freshness, and "Actualiser" for those who may press it. */
 export function useSiteRefresh(siteId: string) {

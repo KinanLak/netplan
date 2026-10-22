@@ -60,7 +60,7 @@ import {
 } from "@/sites/CollectionFreshness";
 import { SiteSwitcher } from "@/sites/SiteSwitcher";
 import { DeviceSearch } from "@/search/DeviceSearch";
-import { useCurrentSite } from "@/sites/useCurrentSite";
+import { useCanEditSite, useCurrentSite } from "@/sites/useCurrentSite";
 import { useCanEdit } from "@/hooks/use-current-user";
 import { api } from "../../convex/_generated/api";
 
@@ -195,7 +195,7 @@ function UnplacedDevicesLink({ siteId }: { siteId: string }) {
 
 export default function AppSidebar() {
   const { site } = useCurrentSite();
-  const canEdit = useCanEdit();
+  const canEdit = useCanEditSite();
   const buildings =
     useQuery(api.buildings.listForSite, site ? { siteId: site.id } : "skip") ??
     [];

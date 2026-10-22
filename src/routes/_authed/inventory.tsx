@@ -23,7 +23,6 @@ import { coverageByType } from "@/devices/coverage";
 import type { TypeCoverage } from "@/devices/coverage";
 import { getDeviceKindLabel } from "@/devices/deviceKindRegistry";
 import { DEVICE_STATUS_LABELS } from "@/devices/status";
-import { useCanEdit } from "@/hooks/use-current-user";
 import { cn } from "@/lib/utils";
 import {
   readHiddenColumns,
@@ -47,7 +46,12 @@ import { ImportReviews } from "@/sites/ImportReviews";
 import { SiteSwitcher } from "@/sites/SiteSwitcher";
 import { UnknownMacs } from "@/sites/UnknownMacs";
 import { CreateDeviceDialog } from "@/devices/CreateDeviceDialog";
-import { siteSearch, useCurrentSite } from "@/sites/useCurrentSite";
+import {
+  SiteArchivedContext,
+  siteSearch,
+  useCanEditSite,
+  useCurrentSite,
+} from "@/sites/useCurrentSite";
 import type { SiteSummary } from "@/sites/useCurrentSite";
 import type { DeviceStatus, DeviceType } from "@/types/map";
 import { api } from "../../../convex/_generated/api";
@@ -101,7 +105,9 @@ function InventoryPage() {
               Aucun site n'est encore configuré.
             </p>
           ) : (
-            <SiteInventory key={site.id} site={site} />
+            <SiteArchivedContext value={site.archived}>
+              <SiteInventory key={site.id} site={site} />
+            </SiteArchivedContext>
           )}
         </div>
       </main>
@@ -125,7 +131,7 @@ const STATUS_FILTERS: Array<{ value: StatusFilter; label: string }> = [
 
 function SiteInventory({ site }: { site: SiteSummary }) {
   const devices = useQuery(api.devices.listForSite, { siteId: site.id });
-  const canEdit = useCanEdit();
+  const canEdit = useCanEditSite();
   const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   // Typing runs ahead of the URL: each navigation first waits for the root's

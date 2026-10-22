@@ -2,7 +2,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { Add01Icon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
 import { useStructureDialog } from "@/buildings/useStructureDialog";
-import { useCanEdit } from "@/hooks/use-current-user";
+import { useCanEditSite } from "@/sites/useCurrentSite";
 import { useConnectionStore } from "@/store/useConnectionStore";
 
 /**
@@ -16,7 +16,7 @@ export function MapEmptyState({
   siteId: string;
   building: { id: string; name: string } | null;
 }) {
-  const canEdit = useCanEdit();
+  const canEdit = useCanEditSite();
   // Structure edits pause with the map's while the connection is lost.
   const isMapFrozen = useConnectionStore((state) => state.isMapFrozen);
   const open = useStructureDialog((state) => state.open);

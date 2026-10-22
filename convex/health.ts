@@ -106,9 +106,10 @@ export const overview = adminQuery({
     }),
   ),
   handler: async (ctx) => {
-    const sites = (await ctx.db.query("sites").collect()).sort((a, b) =>
-      byName.compare(a.name, b.name),
-    );
+    // An archived site is not collected, so it has no health to show.
+    const sites = (await ctx.db.query("sites").collect())
+      .filter((site) => site.archivedAt === undefined)
+      .sort((a, b) => byName.compare(a.name, b.name));
     return await Promise.all(
       sites.map(async (site) => {
         const siteId = site.objectId;

@@ -7,24 +7,40 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useCurrentSite } from "@/sites/useCurrentSite";
+import type { SiteSummary } from "@/sites/useCurrentSite";
 
-/** The site the page shows; a list only when there is more than one. */
+const labelOf = (site: SiteSummary) =>
+  site.archived ? `${site.name} (archivé)` : site.name;
+
+/**
+ * The site the page shows; a list only when there is more than one. Archived
+ * sites stay out of it, unless the page shows one (ADR 0033).
+ */
 export function SiteSwitcher() {
   const { sites, site } = useCurrentSite();
   const navigate = useNavigate();
   if (!sites || !site) return null;
+  const choices = sites.filter(
+    (other) => !other.archived || other.id === site.id,
+  );
 
-  if (sites.length === 1) {
+  if (choices.length === 1) {
     return (
-      <div className="truncate px-2 text-sm font-medium" title={site.name}>
+      <div className="truncate px-2 text-sm font-medium" title={labelOf(site)}>
         {site.name}
+        {site.archived ? (
+          <span className="font-normal text-muted-foreground"> (archivé)</span>
+        ) : null}
       </div>
     );
   }
 
   return (
     <Select
-      items={sites.map(({ id, name }) => ({ value: id, label: name }))}
+      items={choices.map((choice) => ({
+        value: choice.id,
+        label: labelOf(choice),
+      }))}
       value={site.id}
       onValueChange={(siteId) => {
         if (siteId) void navigate({ to: ".", search: { site: siteId } });
@@ -34,9 +50,9 @@ export function SiteSwitcher() {
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        {sites.map(({ id, name }) => (
-          <SelectItem key={id} value={id}>
-            {name}
+        {choices.map((choice) => (
+          <SelectItem key={choice.id} value={choice.id}>
+            {labelOf(choice)}
           </SelectItem>
         ))}
       </SelectContent>

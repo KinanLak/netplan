@@ -37,12 +37,17 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useShortcutIntentEffect } from "@/hooks/use-shortcuts";
-import { useCanEdit, useCurrentUser } from "@/hooks/use-current-user";
+import { useCurrentUser } from "@/hooks/use-current-user";
 import { useDocumentTitle } from "@/hooks/use-document-title";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { useSignOut } from "@/panels/SidebarAccount";
 import { isAdmin } from "@/lib/roles";
-import { mapSearch, useCurrentSite } from "@/sites/useCurrentSite";
+import {
+  SiteArchivedContext,
+  mapSearch,
+  useCanEditSite,
+  useCurrentSite,
+} from "@/sites/useCurrentSite";
 import { SiteRefreshShortcut } from "@/sites/CollectionFreshness";
 import { ShortcutsDialog } from "@/components/shortcuts-dialog";
 import { MapFind } from "@/search/MapFind";
@@ -153,13 +158,15 @@ function HomePage() {
         : null;
 
   return (
-    <SidebarProvider>
-      {isBootstrappingMap ? (
-        <MapSkeleton />
-      ) : (
-        <MapWorkspace sortedFloors={sortedFloors} empty={empty} />
-      )}
-    </SidebarProvider>
+    <SiteArchivedContext value={site?.archived === true}>
+      <SidebarProvider>
+        {isBootstrappingMap ? (
+          <MapSkeleton />
+        ) : (
+          <MapWorkspace sortedFloors={sortedFloors} empty={empty} />
+        )}
+      </SidebarProvider>
+    </SiteArchivedContext>
   );
 }
 
@@ -173,7 +180,7 @@ function MapWorkspace({
   const currentFloorId = useCurrentFloorId();
   const selectedDeviceId = useSelectedDeviceId();
   const isEditMode = useIsEditMode();
-  const canEdit = useCanEdit();
+  const canEdit = useCanEditSite();
   const me = useCurrentUser();
   const isReady = useMapDocumentReady();
   const { site } = useCurrentSite();
