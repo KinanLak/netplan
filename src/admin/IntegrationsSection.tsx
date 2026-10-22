@@ -308,7 +308,7 @@ function IntegrationForm({
           {ignoreCertificateErrors ? (
             <p
               role="note"
-              className="rounded-lg border border-down bg-down-background p-3 text-sm"
+              className="rounded-lg border border-warning bg-warning-background p-3 text-sm"
             >
               Rien ne prouve plus que le serveur qui répond à cette adresse est
               bien {label} : le jeton lui est envoyé quand même. À réserver à un

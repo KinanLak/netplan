@@ -118,6 +118,43 @@ describe("describeFreshness", () => {
     ).toEqual({ headline: "Aucune donnée collectée", tone: "none" });
   });
 
+  it("names no failure once the failing source is gone", () => {
+    expect(
+      describeFreshness(
+        site({
+          lastSuccessAt: null,
+          last: {
+            startedAt: WEDNESDAY_10H,
+            finishedAt: WEDNESDAY_10H,
+            failed: [],
+            succeeded: ["netbox"],
+          },
+        }),
+        WEDNESDAY_10H + 5 * MINUTE,
+      ),
+    ).toEqual({ headline: "Données collectées il y a 5 min", tone: "fresh" });
+  });
+
+  it("tells a partial collection from none at all", () => {
+    expect(
+      describeFreshness(
+        site({
+          lastSuccessAt: null,
+          last: {
+            startedAt: WEDNESDAY_10H,
+            finishedAt: WEDNESDAY_10H,
+            failed: ["librenms"],
+            succeeded: ["netbox"],
+          },
+        }),
+        WEDNESDAY_10H + 5 * MINUTE,
+      ),
+    ).toEqual({
+      headline: "Collecte partielle il y a 5 min : LibreNMS en échec",
+      tone: "partial",
+    });
+  });
+
   it("warns of a site whose cycles keep failing before any succeeded", () => {
     expect(
       describeFreshness(
@@ -137,7 +174,14 @@ describe("refreshOutcome", () => {
     ).toEqual({ kind: "pending" });
     expect(
       refreshOutcome(
-        site({ last: { startedAt, finishedAt: startedAt, failed: [] } }),
+        site({
+          last: {
+            startedAt,
+            finishedAt: startedAt,
+            failed: [],
+            succeeded: ["netbox"],
+          },
+        }),
         startedAt,
       ),
     ).toEqual({ kind: "succeeded" });
@@ -148,6 +192,7 @@ describe("refreshOutcome", () => {
             startedAt,
             finishedAt: startedAt,
             failed: ["netbox", "librenms"],
+            succeeded: [],
           },
         }),
         startedAt,
@@ -166,6 +211,7 @@ describe("failedAttemptAt", () => {
     startedAt,
     finishedAt: startedAt + MINUTE,
     failed: ["librenms" as const],
+    succeeded: [],
   });
 
   it("keeps a failure said until a cycle succeeds", () => {
@@ -188,6 +234,7 @@ describe("failedAttemptAt", () => {
             startedAt: WEDNESDAY_10H,
             finishedAt: WEDNESDAY_10H + MINUTE,
             failed: [],
+            succeeded: ["netbox"],
           },
         }),
       ),

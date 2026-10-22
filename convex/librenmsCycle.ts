@@ -817,6 +817,14 @@ type SwitchResult = Infer<typeof switchResult>;
  * could not be asked, the devices that did not finish in time, and those
  * that did.
  */
+/** The note for a device LibreNMS answers 404 for: it was deleted there. */
+export const MISSING_NOTE =
+  "n'existe plus dans LibreNMS (404) : revoyez la correspondance des switchs.";
+
+// A 404 on a device's own path says the device is gone, not the API.
+const deviceFailure = (answer: { message: string; status?: number }) =>
+  answer.status === 404 ? MISSING_NOTE : answer.message;
+
 const rediscover = async (
   readOnce: LibreNMSRead,
   trigger: LibreNMSRead,
@@ -831,7 +839,7 @@ const rediscover = async (
   for (const device of devices) {
     const current = await readOnce(`/api/v0/devices/${device.id}`);
     if (!current.ok) {
-      failures.set(device.id, current.message);
+      failures.set(device.id, deviceFailure(current));
       continue;
     }
     const asked = await trigger(`/api/v0/devices/${device.id}/discover`);
@@ -895,8 +903,11 @@ export const collectFromLibreNMS = async (
 
   // What each device's line in the step says after its name.
   const notes = new Map<number, Array<string>>();
-  const note = (deviceId: number, phrase: string) =>
-    notes.set(deviceId, [...(notes.get(deviceId) ?? []), phrase]);
+  // A device gone from LibreNMS fails its discovery and its read alike.
+  const note = (deviceId: number, phrase: string) => {
+    const current = notes.get(deviceId) ?? [];
+    if (!current.includes(phrase)) notes.set(deviceId, [...current, phrase]);
+  };
   const failed = new Set<number>();
   let finished = new Set<number>();
   // What a switch's table looked like before its discovery, when no earlier
@@ -950,7 +961,7 @@ export const collectFromLibreNMS = async (
       const reason = [state, portList, fdbList].find(
         (answer): answer is Extract<typeof answer, { ok: false }> => !answer.ok,
       );
-      if (reason) note(device.id, reason.message);
+      if (reason) note(device.id, deviceFailure(reason));
       continue;
     }
     const status = readLibreNMSDeviceStatus(state.body) ?? undefined;
@@ -999,7 +1010,10 @@ export const collectFromLibreNMS = async (
     );
     if (table) tables.push({ deviceId: device.id, table });
     if (entries.length > 0 && fresh.length === 0) {
-      note(device.id, "sa dernière découverte n'a rafraîchi aucune entrée.");
+      note(
+        device.id,
+        "LibreNMS ne rafraîchit plus la table d'adresses de ce switch : vérifiez sa découverte dans LibreNMS.",
+      );
     }
     fdb.push(...fresh);
     ports.push(...own);
@@ -1036,19 +1050,23 @@ export const collectFromLibreNMS = async (
   if (plan.devices.length === 0) {
     return { ok: true, message: "Aucun switch n'est interrogé." };
   }
-  const switches = plan.devices.map((device) => ({
-    name: device.name,
-    ok: !failed.has(device.id),
-    notes: notes.get(device.id) ?? [],
-  }));
+  const switches = plan.devices.map((device) => {
+    const deviceNotes = notes.get(device.id) ?? [];
+    return {
+      name: device.name,
+      ok: !failed.has(device.id),
+      notes: deviceNotes,
+      ...(deviceNotes.includes(MISSING_NOTE) && { missing: true }),
+    };
+  });
+  // Each switch's own trouble is in `switches`; the step says how many.
   return {
     ok: failed.size === 0,
-    message: [
-      sightingSummary({ switches: readCount, ...counts }),
-      ...switches.flatMap((entry) =>
-        entry.notes.map((phrase) => `« ${entry.name} » : ${phrase}`),
-      ),
-    ].join(" "),
+    message: sightingSummary({
+      switches: readCount,
+      polled: plan.devices.length,
+      ...counts,
+    }),
     switches,
   };
 };

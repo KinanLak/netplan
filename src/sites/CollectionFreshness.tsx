@@ -26,6 +26,7 @@ import { usePendingRefreshes, useSiteRefresh } from "@/sites/useSiteRefresh";
 
 export const FRESHNESS_DOT: Record<FreshnessTone, string> = {
   fresh: "bg-up",
+  partial: "bg-warning",
   late: "bg-down",
   none: "bg-muted-foreground",
 };

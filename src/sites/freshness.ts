@@ -23,6 +23,7 @@ export interface SiteFreshness {
     startedAt: number;
     finishedAt: number;
     failed: Array<IntegrationKind>;
+    succeeded: Array<IntegrationKind>;
   } | null;
   lastSuccessAt: number | null;
   nextRunAt: number | null;
@@ -95,7 +96,10 @@ export const describeNextRun = (
   }
 };
 
-export type FreshnessTone = "fresh" | "late" | "none";
+const listSources = (sources: Array<IntegrationKind>) =>
+  sources.map((source) => INTEGRATION_LABELS[source]).join(" et ");
+
+export type FreshnessTone = "fresh" | "partial" | "late" | "none";
 
 /** The freshness line every user reads, and the colour of its dot. */
 export const describeFreshness = (
@@ -110,6 +114,21 @@ export const describeFreshness = (
   const late = isLate(freshness, now);
   // Failing cycles make a site late before it ever succeeded.
   if (lastSuccessAt === null) {
+    const { last } = freshness;
+    // Every source still connected answered: the failing one was removed.
+    if (last && last.succeeded.length > 0 && last.failed.length === 0) {
+      const age = formatAge(last.finishedAt, now, timeZone);
+      return late
+        ? { headline: `Données en retard : ${age}`, tone: "late" }
+        : { headline: `Données collectées ${age}`, tone: "fresh" };
+    }
+    // A cycle with one source read did bring data, only not all of it.
+    if (last && last.succeeded.length > 0) {
+      return {
+        headline: `Collecte partielle ${formatAge(last.finishedAt, now, timeZone)} : ${listSources(last.failed)} en échec`,
+        tone: late ? "late" : "partial",
+      };
+    }
     return {
       headline: "Aucune donnée collectée",
       tone: late ? "late" : "none",
@@ -155,9 +174,6 @@ export const describeSources = (
     if (failed) detail += " · échec à la dernière collecte";
     return { label: INTEGRATION_LABELS[source], detail, failed };
   });
-
-const listSources = (sources: Array<IntegrationKind>) =>
-  sources.map((source) => INTEGRATION_LABELS[source]).join(" et ");
 
 export type RefreshOutcome =
   | { kind: "pending" }

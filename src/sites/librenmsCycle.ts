@@ -581,6 +581,8 @@ export function portMoves<Seen extends { mac: string; portId: string }>(
 export type SightingCounts = {
   /** LibreNMS devices read. */
   switches: number;
+  /** LibreNMS devices asked; the summary says « 1 switch lu sur 2 ». */
+  polled?: number;
   /** MAC addresses seen on edge ports. */
   seen: number;
   /** Devices that came online or went offline during the cycle. */
@@ -615,6 +617,10 @@ export function sightingSummary(counts: SightingCounts): string {
       ? counted(counts.unknown, "inconnue", "inconnues")
       : null,
   ].filter((part) => part !== null);
-  const read = `${counted(counts.switches, "switch lu", "switchs lus")}, ${counted(counts.seen, "MAC vue", "MAC vues")}`;
+  const switches =
+    counts.polled !== undefined && counts.polled !== counts.switches
+      ? `${counts.switches} ${counts.switches > 1 ? "switchs lus" : "switch lu"} sur ${counts.polled}`
+      : counted(counts.switches, "switch lu", "switchs lus");
+  const read = `${switches}, ${counted(counts.seen, "MAC vue", "MAC vues")}`;
   return changes.length > 0 ? `${read} (${changes.join(", ")}).` : `${read}.`;
 }

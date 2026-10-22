@@ -4,10 +4,10 @@ import type { FunctionReturnType } from "convex/server";
 import type { ReactNode } from "react";
 import { Time } from "@/components/time";
 import { useNow } from "@/hooks/use-now";
-import { ageHint, timeZoneHint } from "@/lib/time";
 import { cn } from "@/lib/utils";
-import { FRESHNESS_DOT } from "@/sites/CollectionFreshness";
-import { describeFreshness, describeNextRun, nextRun } from "@/sites/freshness";
+import { CollectionFreshness } from "@/sites/CollectionFreshness";
+import { describeFreshness } from "@/sites/freshness";
+import type { SitePart } from "@/admin/SiteNav";
 import { INTEGRATION_LABELS } from "@/sites/integrations";
 import type { IntegrationKind } from "@/sites/integrations";
 import { api } from "../../../../convex/_generated/api";
@@ -28,7 +28,7 @@ function HealthPage() {
       <header className="space-y-1">
         <h1 className="text-xl font-semibold">Santé</h1>
         <p className="text-sm text-muted-foreground">
-          La collecte de chaque site : ses sources, ses switches et leur état.
+          La collecte de chaque site : ses sources, ses switchs et leur état.
         </p>
       </header>
 
@@ -54,36 +54,71 @@ function HealthPage() {
         </div>
       ) : (
         <ul className="space-y-4">
-          {sites.map((site) => (
-            <SiteCard key={site.id} site={site} now={now} />
-          ))}
+          {sites
+            // Sites in trouble first, then by name as the server sends them.
+            .toSorted(
+              (a, b) => Number(needsLook(b, now)) - Number(needsLook(a, now)),
+            )
+            .map((site) => (
+              <SiteCard key={site.id} site={site} now={now} />
+            ))}
         </ul>
       )}
     </div>
   );
 }
 
+/** A failing source, a late site or a refused push puts a site first. */
+const needsLook = (site: SiteHealth, now: number) =>
+  site.freshness.failures > 0 ||
+  describeFreshness(site.freshness, now).tone === "late" ||
+  (site.last?.steps.some((step) => !step.ok) ?? false) ||
+  (site.netbox?.push?.failing.length ?? 0) > 0;
+
 const certificateWarning = (kinds: ReadonlyArray<IntegrationKind>) => {
   const names = kinds.map((kind) => INTEGRATION_LABELS[kind]).join(" et ");
-  const subject =
-    kinds.length > 1
-      ? `${names} sont interrogés sans vérifier leur certificat TLS`
-      : `${names} est interrogé sans vérifier son certificat TLS`;
-  return `${subject} : décochez « Ignorer les erreurs de certificat TLS » dans les intégrations du site une fois le certificat corrigé.`;
+  return kinds.length > 1
+    ? `${names} sont interrogés sans vérifier leur certificat TLS, comme réglé dans leurs connexions.`
+    : `${names} est interrogé sans vérifier son certificat TLS, comme réglé dans sa connexion.`;
 };
 
 const Dot = ({ className }: { className: string }) => (
   <span aria-hidden className={cn("size-2 shrink-0 rounded-full", className)} />
 );
 
+const linkClass = "text-primary underline underline-offset-4";
+
+function SiteLink({
+  siteId,
+  part,
+  children,
+}: {
+  siteId: string;
+  part: SitePart;
+  children: ReactNode;
+}) {
+  return (
+    <Link
+      to="/admin/sites/$siteId"
+      params={{ siteId }}
+      hash={part}
+      className={linkClass}
+    >
+      {children}
+    </Link>
+  );
+}
+
+const counted = (n: number, one: string, many: string) =>
+  `${n} ${n > 1 ? many : one}`;
+
 function SiteCard({ site, now }: { site: SiteHealth; now: number }) {
-  const { freshness, last, netbox, switches } = site;
-  const { headline, tone } = describeFreshness(freshness, now);
-  const next = nextRun(freshness, now);
+  const { freshness, last, netbox, switches, switchReads } = site;
   const polled = last?.steps.find(
     (step) => step.source === "librenms",
   )?.switches;
   const switchTotal = switches.up + switches.down + switches.unknown;
+  const failedSteps = last?.steps.filter((step) => !step.ok) ?? [];
 
   return (
     <li className="space-y-4 rounded-lg border p-4">
@@ -95,27 +130,7 @@ function SiteCard({ site, now }: { site: SiteHealth; now: number }) {
         >
           {site.name}
         </Link>
-        <div className="flex items-center gap-2 text-sm">
-          <Dot className={FRESHNESS_DOT[tone]} />
-          <div>
-            <p
-              className={cn(tone === "late" && "text-down")}
-              title={
-                freshness.lastSuccessAt === null
-                  ? undefined
-                  : ageHint(freshness.lastSuccessAt, now)
-              }
-            >
-              {headline}
-            </p>
-            <p
-              className="text-xs text-muted-foreground"
-              title={next.kind === "at" ? timeZoneHint(next.at) : undefined}
-            >
-              {describeNextRun(next, now)}
-            </p>
-          </div>
-        </div>
+        <CollectionFreshness siteId={site.id} linkToSettings={false} />
       </div>
 
       <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
@@ -130,9 +145,14 @@ function SiteCard({ site, now }: { site: SiteHealth; now: number }) {
           )}
         </Fact>
         <Fact label="Échecs de suite">
-          <span className={cn(freshness.failures >= 2 && "text-down")}>
-            {freshness.failures === 0 ? "Aucun" : freshness.failures}
-          </span>
+          {freshness.failures === 0 ? (
+            "Aucun"
+          ) : (
+            <span className="flex items-center gap-1.5 font-medium text-down">
+              <Dot className="bg-down" />
+              {freshness.failures}
+            </span>
+          )}
         </Fact>
         <Fact label="Import NetBox">
           {netbox === null ? (
@@ -143,26 +163,52 @@ function SiteCard({ site, now }: { site: SiteHealth; now: number }) {
             <Time at={netbox.importedAt} now={now} format="age" />
           )}
         </Fact>
-        <Fact label="Switches">
+        <Fact label="Switchs">
           {switchTotal === 0 ? (
             "Aucun"
           ) : (
-            <span className="flex flex-wrap gap-x-3">
-              <Count dot="bg-up" n={switches.up} label="en ligne" />
-              <Count dot="bg-down" n={switches.down} label="hors ligne" />
-              <Count
-                dot="bg-muted-foreground"
-                n={switches.unknown}
-                label={switches.unknown > 1 ? "inconnus" : "inconnu"}
-              />
-            </span>
+            <div className="space-y-0.5">
+              {switchReads ? (
+                <p>
+                  {[
+                    `${switchReads.read} ${switchReads.read > 1 ? "lus" : "lu"}`,
+                    switchReads.failed > 0
+                      ? `${switchReads.failed} en échec`
+                      : null,
+                    switchReads.notPolled > 0
+                      ? `${switchReads.notPolled} non ${switchReads.notPolled > 1 ? "interrogés" : "interrogé"}`
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(", ")}
+                </p>
+              ) : null}
+              <p className="flex flex-wrap gap-x-3 text-muted-foreground">
+                <Count dot="bg-up" n={switches.up} label="en ligne" />
+                <Count dot="bg-down" n={switches.down} label="hors ligne" />
+                <Count
+                  dot="bg-muted-foreground"
+                  n={switches.unknown}
+                  label={switches.unknown > 1 ? "inconnus" : "inconnu"}
+                />
+              </p>
+              {switchReads?.oldestReadAt ? (
+                <p className="text-xs text-muted-foreground">
+                  Statut le plus ancien :{" "}
+                  <Time at={switchReads.oldestReadAt} now={now} format="age" />
+                </p>
+              ) : null}
+            </div>
           )}
         </Fact>
       </dl>
 
       {site.ignoringCertificates.length > 0 ? (
-        <p className="rounded-lg border border-down bg-down-background p-3 text-sm">
-          {certificateWarning(site.ignoringCertificates)}
+        <p className="rounded-lg border border-warning bg-warning-background p-3 text-sm">
+          {certificateWarning(site.ignoringCertificates)}{" "}
+          <SiteLink siteId={site.id} part="integrations">
+            Revoir la connexion
+          </SiteLink>
         </p>
       ) : null}
 
@@ -192,7 +238,17 @@ function SiteCard({ site, now }: { site: SiteHealth; now: number }) {
         </ul>
       ) : null}
 
-      {polled && polled.length > 0 ? <PolledSwitches polled={polled} /> : null}
+      {failedSteps.length > 0 ? (
+        <p className="text-sm">
+          <SiteLink siteId={site.id} part="integrations">
+            Ouvrir les intégrations du site
+          </SiteLink>
+        </p>
+      ) : null}
+
+      {polled && polled.length > 0 ? (
+        <PolledSwitches siteId={site.id} polled={polled} />
+      ) : null}
 
       {netbox?.push ? <PushHealth push={netbox.push} now={now} /> : null}
     </li>
@@ -219,24 +275,35 @@ function Count({ dot, n, label }: { dot: string; n: number; label: string }) {
   );
 }
 
-// A note is a phrase written to follow the switch's name in the step's text.
-const sentence = (phrase: string) =>
-  phrase.charAt(0).toUpperCase() + phrase.slice(1);
-
 type Polled = NonNullable<
   NonNullable<SiteHealth["last"]>["steps"][number]["switches"]
 >;
 
-/** Each polled switch's result in the last LibreNMS read, failures first. */
-function PolledSwitches({ polled }: { polled: Polled }) {
+/**
+ * Each polled switch's result in the last LibreNMS read, failures first: a
+ * red dot for a switch not read, amber for one read with a remark.
+ */
+function PolledSwitches({
+  siteId,
+  polled,
+}: {
+  siteId: string;
+  polled: Polled;
+}) {
   const failed = polled.filter((entry) => !entry.ok).length;
-  const ordered = polled.toSorted((a, b) => Number(a.ok) - Number(b.ok));
+  const ordered = polled.toSorted(
+    (a, b) => Number(a.ok) - Number(b.ok) || b.notes.length - a.notes.length,
+  );
+  const missing = polled.some((entry) => entry.missing);
   return (
     // A failing switch keeps the list open; a healthy site folds it away.
     <details open={failed > 0} className="text-sm">
       <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
-        {polled.length} {polled.length > 1 ? "switches lus" : "switch lu"} dans
-        LibreNMS
+        {counted(
+          polled.length,
+          "équipement LibreNMS interrogé",
+          "équipements LibreNMS interrogés",
+        )}
         {failed > 0 ? `, ${failed} en échec` : ""}
       </summary>
       <ul className="mt-2 divide-y rounded-lg border">
@@ -245,18 +312,34 @@ function PolledSwitches({ polled }: { polled: Polled }) {
             key={`${entry.name}-${index}`}
             className="flex items-baseline gap-2 px-3 py-2"
           >
-            <Dot className={entry.ok ? "bg-up" : "bg-down"} />
-            <span className="font-medium">{entry.name}</span>
-            {entry.notes.length > 0 ? (
+            <Dot
+              className={cn(
+                "translate-y-[-1px]",
+                !entry.ok
+                  ? "bg-down"
+                  : entry.notes.length > 0
+                    ? "bg-warning"
+                    : "bg-up",
+              )}
+            />
+            <span className="min-w-0 break-words">
+              <span className="font-medium">{entry.name}</span>
               <span className="text-muted-foreground">
-                {entry.notes.map(sentence).join(" ")}
+                {entry.notes.length > 0
+                  ? ` : ${entry.notes.join(" ")}`
+                  : " : lu"}
               </span>
-            ) : (
-              <span className="text-muted-foreground">Lu</span>
-            )}
+            </span>
           </li>
         ))}
       </ul>
+      {missing ? (
+        <p className="mt-2">
+          <SiteLink siteId={siteId} part="correspondances">
+            Revoir la correspondance des switchs
+          </SiteLink>
+        </p>
+      ) : null}
     </details>
   );
 }

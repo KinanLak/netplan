@@ -1,4 +1,9 @@
-import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
+import {
+  Link,
+  createFileRoute,
+  useLocation,
+  useNavigate,
+} from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
@@ -90,6 +95,20 @@ function SiteContent({ site }: { site: Site }) {
   const integrations = useQuery(api.integrations.listForSite, {
     siteId: site.id,
   });
+  const { hash } = useLocation();
+  // A link from Santé names a part of the page; its sections, and the setup
+  // card above them, load after the router's own scroll.
+  const setupQueries = [
+    useQuery(api.netbox.settings, { siteId: site.id }),
+    useQuery(api.librenms.settings, { siteId: site.id }),
+    useQuery(api.collection.freshness, { siteId: site.id }),
+  ];
+  const loaded =
+    integrations !== undefined &&
+    setupQueries.every((answer) => answer !== undefined);
+  useEffect(() => {
+    if (loaded && hash) document.getElementById(hash)?.scrollIntoView();
+  }, [loaded, hash]);
   // Correspondances only exist for a connected tool.
   const parts = SITE_PARTS.filter(
     (part) => part.id !== "correspondances" || (integrations?.length ?? 0) > 0,

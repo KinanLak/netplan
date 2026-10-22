@@ -42,6 +42,8 @@ export const switchResult = v.object({
   ok: v.boolean(),
   /** What went wrong or looks off, each a phrase after its name. */
   notes: v.array(v.string()),
+  /** LibreNMS no longer has it: the switch mapping needs a look. */
+  missing: v.optional(v.boolean()),
 });
 
 /** What one source answered during a collection cycle. */
