@@ -182,8 +182,13 @@ export function CollectionFreshness({
                   </li>
                 ))}
               </ul>
-              {/* Ages turn into dates after a day: say whose clock. */}
-              <p className="text-muted-foreground">{timeZoneHint(now)}</p>
+              {/* The card stands in for the headline's hover hint: when
+                  the data was last collected, and on whose clock. */}
+              <p className="text-muted-foreground">
+                {freshness.lastSuccessAt === null
+                  ? timeZoneHint(now)
+                  : `Dernière collecte réussie : ${ageHint(freshness.lastSuccessAt, now)}`}
+              </p>
               {admin ? (
                 <Link
                   to="/admin/health"
