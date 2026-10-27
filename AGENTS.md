@@ -119,6 +119,27 @@ in a browser with it.
 - Online users: `convex/presences.ts`, `src/hooks/use-presence.ts`, shown in
   the sidebar.
 
+## Interface
+
+The owner's standing preferences; each was broken more than once.
+
+- Words: « équipement », never « appareil »; « plan », never « carte » or
+  « canvas » (« vue » for what is on screen); « switchs »; « hors plan »;
+  « NetPlan ». Device types in sentence case (« Switch réseau »), a narrow
+  no-break space (U+202F) before « % », and no « Tracer ».
+- Add the least UI that works: no legends, no element for its own sake.
+- Few toasts. A small action confirms in place (a copy icon becomes a check,
+  a label changes briefly); toasts are for errors and for results the user
+  cannot see.
+- A Lecteur never sees an edit action: not disabled, not in a hint, not in
+  help text.
+- Keys on the map follow ADR 0030: arrows nudge the selection and never pan,
+  Ctrl+/Ctrl− and the wheel zoom the map, Tab skips the devices.
+- Times go through `<Time>` (`src/components/time.tsx`) or `src/lib/time.ts`:
+  the browser's zone, 24-hour clock, the zone on hover.
+- Checkboxes, not switches. Every icon-only button has a French
+  `aria-label`.
+
 ## Hit every surface
 
 The most common defect is a change that works on the path you tried and is
