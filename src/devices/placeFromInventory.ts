@@ -1,9 +1,41 @@
 import { getDeviceKind } from "./deviceKindRegistry";
 import type { DevicePlacement } from "./devicePlacement";
+import { asDeviceId } from "@/lib/objectIds";
 import type { Device, FloorId, Position } from "@/types/map";
 
 /** An inventory device, before it stands anywhere. */
 export type UnplacedDevice = Omit<Device, "floorId" | "position" | "size">;
+
+/**
+ * The device an inventory row stands for, its identity fields only: the
+ * row also carries what the list shows (`location`, `seenAt`), which the
+ * map operation's validator refuses.
+ */
+export const unplacedDeviceOf = (row: {
+  id: string;
+  type: Device["type"];
+  name: string;
+  hostname?: string;
+  serial?: string;
+  macs: Array<string>;
+  model?: string;
+  ip?: string;
+  notes?: string;
+  source?: Device["source"];
+  metadata: Device["metadata"];
+}): UnplacedDevice => ({
+  id: asDeviceId(row.id),
+  type: row.type,
+  name: row.name,
+  macs: row.macs,
+  metadata: row.metadata,
+  ...(row.hostname !== undefined && { hostname: row.hostname }),
+  ...(row.serial !== undefined && { serial: row.serial }),
+  ...(row.model !== undefined && { model: row.model }),
+  ...(row.ip !== undefined && { ip: row.ip }),
+  ...(row.notes !== undefined && { notes: row.notes }),
+  ...(row.source !== undefined && { source: row.source }),
+});
 
 /** The flow coordinates at the middle of the visible canvas. */
 export const viewportCentre = ({

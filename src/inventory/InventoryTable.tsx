@@ -408,7 +408,7 @@ function InventoryItem({
         </td>
       ) : null}
       {shows("seen") ? (
-        <td className={cn(CELL, "whitespace-nowrap text-muted-foreground")}>
+        <td className={cn(CELL, "truncate text-xs text-muted-foreground")}>
           {device.seenAt === undefined ? (
             "—"
           ) : (

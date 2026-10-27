@@ -1,6 +1,10 @@
 import { describe, expect, it } from "bun:test";
 import { createDevicePlacement } from "./devicePlacement";
-import { placeAround, viewportCentre } from "./placeFromInventory";
+import {
+  placeAround,
+  unplacedDeviceOf,
+  viewportCentre,
+} from "./placeFromInventory";
 import type { UnplacedDevice } from "./placeFromInventory";
 import type { DeviceId, FloorId } from "@/types/map";
 
@@ -48,5 +52,28 @@ describe("placing an inventory device", () => {
     const placement = createDevicePlacement({ checkCollision: () => true });
 
     expect(placeAround(printer, floorId, { x: 0, y: 0 }, placement)).toBeNull();
+  });
+});
+
+describe("unplacedDeviceOf", () => {
+  it("keeps the identity and leaves what only the list shows", () => {
+    const device = unplacedDeviceOf({
+      id: "device:pc",
+      type: "pc",
+      name: "Poste",
+      hostname: "pc-1",
+      macs: ["02:6e:70:00:01:05"],
+      metadata: { status: "up" },
+      // Fields of the inventory row that a map operation refuses.
+      ...{ location: null, seenAt: 1_000 },
+    });
+    expect(device).toEqual({
+      id: "device:pc",
+      type: "pc",
+      name: "Poste",
+      hostname: "pc-1",
+      macs: ["02:6e:70:00:01:05"],
+      metadata: { status: "up" },
+    });
   });
 });
