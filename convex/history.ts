@@ -6,6 +6,7 @@ import {
   paginationOptsValidator,
   paginationResultValidator,
 } from "convex/server";
+import { filter } from "convex-helpers/server/filter";
 import { v } from "convex/values";
 import type { Infer } from "convex/values";
 import { internal } from "./_generated/api";
@@ -22,6 +23,7 @@ import {
   publicSnapshotSlot,
 } from "./historyValidators";
 import type { historyPlace } from "./historyValidators";
+import { matchesSearch } from "../src/devices/search";
 import { slotAt as snapshotSlotAt } from "../src/sites/snapshots";
 
 export const RETENTION_MS = 30 * 24 * 60 * 60_000;
@@ -253,26 +255,63 @@ export const forDevice = editorQuery({
   },
 });
 
-/** A site's history, newest first, of one kind of event or all. */
+/**
+ * A site's history, newest first, of one kind of event or all, between
+ * `from` and `to` (milliseconds, `to` excluded). `search` keeps the events
+ * whose device name, place or one of the device's MACs holds every word: it
+ * runs before pagination, so a page may come back short but none is missed.
+ */
 export const forSite = editorQuery({
   args: {
     siteId: v.string(),
     kind: v.optional(deviceEventKind),
+    search: v.optional(v.string()),
+    from: v.optional(v.number()),
+    to: v.optional(v.number()),
     paginationOpts: paginationOptsValidator,
   },
   returns: eventPage,
-  handler: async (ctx, { siteId, kind, paginationOpts }) => {
+  handler: async (ctx, { siteId, kind, search, from, to, paginationOpts }) => {
     const events =
       kind === undefined
-        ? ctx.db
-            .query("deviceEvents")
-            .withIndex("by_site_at", (q) => q.eq("siteId", siteId))
-        : ctx.db
-            .query("deviceEvents")
-            .withIndex("by_site_kind_at", (q) =>
-              q.eq("siteId", siteId).eq("kind", kind),
-            );
-    const result = await events.order("desc").paginate(paginationOpts);
+        ? ctx.db.query("deviceEvents").withIndex("by_site_at", (q) => {
+            const site = q.eq("siteId", siteId);
+            const after = from === undefined ? site : site.gte("at", from);
+            return to === undefined ? after : after.lt("at", to);
+          })
+        : ctx.db.query("deviceEvents").withIndex("by_site_kind_at", (q) => {
+            const site = q.eq("siteId", siteId).eq("kind", kind);
+            const after = from === undefined ? site : site.gte("at", from);
+            return to === undefined ? after : after.lt("at", to);
+          });
+    const ordered = events.order("desc");
+    const query = search?.trim() ?? "";
+    if (query === "") {
+      const result = await ordered.paginate(paginationOpts);
+      return { ...result, page: result.page.map(toPublicEvent) };
+    }
+    const macsOf = cached(async (deviceId) =>
+      (
+        await ctx.db
+          .query("deviceMacs")
+          .withIndex("by_device", (q) => q.eq("deviceId", deviceId))
+          .collect()
+      ).map(({ mac }) => mac),
+    );
+    const result = await filter(ordered, async (event) =>
+      matchesSearch(
+        [
+          event.deviceName,
+          event.place?.socketName,
+          event.place?.switchName,
+          event.place?.portName,
+          event.place?.floorName,
+          event.place?.buildingName,
+        ],
+        await macsOf(event.deviceId),
+        query,
+      ),
+    ).paginate(paginationOpts);
     return { ...result, page: result.page.map(toPublicEvent) };
   },
 });

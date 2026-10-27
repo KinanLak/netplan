@@ -49,11 +49,18 @@ const EVENT_ICONS = {
   offline: WifiDisconnected01Icon,
 };
 
-export function EventSummary({ event }: { event: HistoryEvent }) {
+/** What an event says; `cameOnline` merges an arrival's two rows (B21). */
+export function EventSummary({
+  event,
+  cameOnline = false,
+}: {
+  event: HistoryEvent;
+  cameOnline?: boolean;
+}) {
   return (
     <span className="flex items-start gap-2">
       <HugeiconsIcon
-        icon={EVENT_ICONS[event.kind]}
+        icon={cameOnline ? WifiConnected01Icon : EVENT_ICONS[event.kind]}
         size={16}
         strokeWidth={1.5}
         className={cn(
@@ -62,7 +69,10 @@ export function EventSummary({ event }: { event: HistoryEvent }) {
         )}
       />
       {event.kind === "located" && event.place ? (
-        <PlaceLabel place={event.place} />
+        <span className="flex min-w-0 flex-col">
+          {cameOnline ? <span>En ligne</span> : null}
+          <PlaceLabel place={event.place} />
+        </span>
       ) : event.kind === "online" ? (
         <span>En ligne</span>
       ) : (

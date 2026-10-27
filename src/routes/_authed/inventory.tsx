@@ -49,6 +49,7 @@ import { ImportReviews } from "@/sites/ImportReviews";
 import { SiteSwitcher } from "@/sites/SiteSwitcher";
 import { UnknownMacs } from "@/sites/UnknownMacs";
 import { CreateDeviceDialog } from "@/devices/CreateDeviceDialog";
+import { Segmented } from "@/components/segmented";
 import { UnderlineTabs } from "@/components/underline-tabs";
 import {
   siteSearch,
@@ -318,48 +319,26 @@ function SiteInventory({ site }: { site: SiteSummary }) {
                     </Kbd>
                   )}
                 </div>
-                <div
-                  role="group"
-                  aria-label="Emplacement"
-                  className="flex gap-1 rounded-lg border p-1"
-                >
-                  {PLACEMENT_FILTERS.map(({ value, label }) => (
-                    <Button
-                      key={value}
-                      size="sm"
-                      variant={
-                        filters.placement === value ? "secondary" : "ghost"
-                      }
-                      aria-pressed={filters.placement === value}
-                      onClick={() => update({ placement: value })}
-                    >
-                      {label}
-                      <span className="text-muted-foreground tabular-nums">
-                        {counts.placement[value]}
-                      </span>
-                    </Button>
-                  ))}
-                </div>
-                <div
-                  role="group"
-                  aria-label="État"
-                  className="flex gap-1 rounded-lg border p-1"
-                >
-                  {STATUS_FILTERS.map(({ value, label }) => (
-                    <Button
-                      key={value}
-                      size="sm"
-                      variant={filters.status === value ? "secondary" : "ghost"}
-                      aria-pressed={filters.status === value}
-                      onClick={() => update({ status: value })}
-                    >
-                      {label}
-                      <span className="text-muted-foreground tabular-nums">
-                        {counts.status[value]}
-                      </span>
-                    </Button>
-                  ))}
-                </div>
+                <Segmented
+                  label="Emplacement"
+                  value={filters.placement}
+                  onChange={(placement) => update({ placement })}
+                  options={PLACEMENT_FILTERS.map(({ value, label }) => ({
+                    value,
+                    label,
+                    count: counts.placement[value],
+                  }))}
+                />
+                <Segmented
+                  label="État"
+                  value={filters.status}
+                  onChange={(status) => update({ status })}
+                  options={STATUS_FILTERS.map(({ value, label }) => ({
+                    value,
+                    label,
+                    count: counts.status[value],
+                  }))}
+                />
                 <Select
                   items={typeFilters}
                   value={type}
