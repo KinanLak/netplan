@@ -27,7 +27,7 @@
     "better-auth": "1.6.33",
     "convex": "^1.48.0",
     "convex-helpers": "^0.1.129",
-    "nodemailer": "^10.1.1",
+    "nodemailer": "^10.2.1",
     "undici": "^8.12.3"
   },
   "devDependencies": {
