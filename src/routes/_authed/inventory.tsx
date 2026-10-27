@@ -2,8 +2,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { Add01Icon, Search01Icon } from "@hugeicons/core-free-icons";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
-import { useEffect, useId, useRef, useState } from "react";
-import type { RefObject } from "react";
+import { useEffect, useId, useState } from "react";
 import { ModeToggle } from "@/components/mode-toggle";
 import { ListSkeleton } from "@/components/loading-skeletons";
 import { AppNavLinks, UserMenu } from "@/components/app-nav";
@@ -39,13 +38,18 @@ import {
   toSearch,
 } from "@/inventory/filters";
 import type { Sort } from "@/inventory/columns";
-import type { InventoryFilters, Placement } from "@/inventory/filters";
+import type {
+  InventoryFilters,
+  InventorySearch,
+  Placement,
+} from "@/inventory/filters";
 import { ColumnPicker, InventoryTable } from "@/inventory/InventoryTable";
 import { useRestoredScroll } from "@/inventory/useRestoredScroll";
 import { ImportReviews } from "@/sites/ImportReviews";
 import { SiteSwitcher } from "@/sites/SiteSwitcher";
 import { UnknownMacs } from "@/sites/UnknownMacs";
 import { CreateDeviceDialog } from "@/devices/CreateDeviceDialog";
+import { UnderlineTabs } from "@/components/underline-tabs";
 import {
   siteSearch,
   useCanEditSite,
@@ -59,9 +63,12 @@ type StatusFilter = "all" | DeviceStatus;
 type TypeFilter = "all" | DeviceType;
 
 /** Filters and order live in the URL (A62); the map's links open it filtered. */
-const inventorySearch = (search: Record<string, unknown>) => ({
+const inventorySearch = (
+  search: Record<string, unknown>,
+): InventorySearch & { site?: string; view?: "unknown" } => ({
   ...siteSearch(search),
   ...parseInventorySearch(search),
+  view: search.view === "unknown" ? ("unknown" as const) : undefined,
 });
 
 export const Route = createFileRoute("/_authed/inventory")({
@@ -141,8 +148,7 @@ function SiteInventory({ site }: { site: SiteSummary }) {
   const sort = sortOf(search);
   const [creating, setCreating] = useState(false);
   const [hidden, setHidden] = useState(readHiddenColumns);
-  const searchRef = useRef<HTMLInputElement>(null);
-  useSlashToSearch(searchRef);
+  useSlashToSearch();
   useRestoredScroll("inventory-page", devices !== undefined);
   useRestoredScroll("inventory-table", devices !== undefined);
 
@@ -166,6 +172,17 @@ function SiteInventory({ site }: { site: SiteSummary }) {
   };
 
   const all = devices ?? [];
+  // Only Éditeurs see unknown MACs, and only a site that has some gets a tab.
+  const unknownMacs = useQuery(
+    api.unknownMacs.listForSite,
+    canEdit ? { siteId: site.id } : "skip",
+  );
+  const ignoredMacs = useQuery(
+    api.unknownMacs.listIgnored,
+    canEdit ? { siteId: site.id } : "skip",
+  );
+  const macTabs = (unknownMacs?.length ?? 0) + (ignoredMacs?.length ?? 0) > 0;
+  const view = search.view ?? "devices";
   const coverage = coverageByType(all);
   // A type whose last device went away, here or in another tab, filters nothing.
   const type = coverage.some((entry) => entry.type === filters.type)
@@ -219,153 +236,198 @@ function SiteInventory({ site }: { site: SiteSummary }) {
       </header>
 
       {canEdit ? <ImportReviews siteId={site.id} /> : null}
-      {canEdit ? <UnknownMacs siteId={site.id} /> : null}
 
-      {coverage.length > 0 ? (
-        <PlanCoverage
-          coverage={coverage}
-          active={filters.placement === "unplaced" ? type : null}
-          canEdit={canEdit}
-          onSelect={showUnplaced}
+      {macTabs ? (
+        <UnderlineTabs
+          label="Vue"
+          idPrefix="inventory"
+          value={view}
+          onChange={(next) =>
+            void navigate({
+              search: (current) => ({
+                ...current,
+                view: next === "unknown" ? ("unknown" as const) : undefined,
+              }),
+              replace: true,
+            })
+          }
+          tabs={[
+            { value: "devices", label: "Équipements", count: all.length },
+            {
+              value: "unknown",
+              label: "MAC inconnues",
+              count: unknownMacs?.length ?? 0,
+            },
+          ]}
         />
       ) : null}
 
-      {devices === undefined ? (
-        <ListSkeleton />
-      ) : all.length === 0 ? (
-        <InventoryEmpty canEdit={canEdit} onCreate={() => setCreating(true)} />
+      {macTabs && view === "unknown" ? (
+        <div
+          id="inventory-panel"
+          role="tabpanel"
+          aria-labelledby="inventory-tab-unknown"
+        >
+          <UnknownMacs siteId={site.id} />
+        </div>
       ) : (
-        <>
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="relative min-w-60 flex-1">
-              <HugeiconsIcon
-                icon={Search01Icon}
-                size={16}
-                strokeWidth={1.5}
-                className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-muted-foreground"
-              />
-              <Input
-                ref={searchRef}
-                type="search"
-                value={filters.query}
-                onChange={(event) => typeQuery(event.target.value)}
-                placeholder="Nom, hostname, MAC, IP, emplacement…"
-                aria-label="Rechercher un équipement"
-                aria-keyshortcuts="/"
-                className="pr-9 pl-8"
-              />
-              {filters.query ? null : (
-                <Kbd className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2">
-                  /
-                </Kbd>
-              )}
-            </div>
-            <div
-              role="group"
-              aria-label="Emplacement"
-              className="flex gap-1 rounded-lg border p-1"
-            >
-              {PLACEMENT_FILTERS.map(({ value, label }) => (
-                <Button
-                  key={value}
-                  size="sm"
-                  variant={filters.placement === value ? "secondary" : "ghost"}
-                  aria-pressed={filters.placement === value}
-                  onClick={() => update({ placement: value })}
-                >
-                  {label}
-                  <span className="text-muted-foreground tabular-nums">
-                    {counts.placement[value]}
-                  </span>
-                </Button>
-              ))}
-            </div>
-            <div
-              role="group"
-              aria-label="État"
-              className="flex gap-1 rounded-lg border p-1"
-            >
-              {STATUS_FILTERS.map(({ value, label }) => (
-                <Button
-                  key={value}
-                  size="sm"
-                  variant={filters.status === value ? "secondary" : "ghost"}
-                  aria-pressed={filters.status === value}
-                  onClick={() => update({ status: value })}
-                >
-                  {label}
-                  <span className="text-muted-foreground tabular-nums">
-                    {counts.status[value]}
-                  </span>
-                </Button>
-              ))}
-            </div>
-            <Select
-              items={typeFilters}
-              value={type}
-              onValueChange={(value) => {
-                if (value) update({ type: value });
-              }}
-            >
-              <SelectTrigger aria-label="Type" className="w-48">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {typeFilters.map(({ value, label }) => (
-                  <SelectItem key={value} value={value}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-sm text-muted-foreground" aria-live="polite">
-              {filtered
-                ? `${shown.length} sur ${all.length} équipement${all.length > 1 ? "s" : ""}`
-                : `${all.length} équipement${all.length > 1 ? "s" : ""}`}
-              {/* An empty list offers the same button in its message. */}
-              {filtered && shown.length > 0 ? (
-                <>
-                  {" · "}
-                  <button
-                    type="button"
-                    onClick={reset}
-                    className="rounded-sm underline-offset-2 outline-none hover:text-foreground hover:underline focus-visible:ring-[3px] focus-visible:ring-ring"
-                  >
-                    Réinitialiser les filtres
-                  </button>
-                </>
-              ) : null}
-            </p>
-            <ColumnPicker
-              hidden={hidden}
-              onChange={(next) => {
-                setHidden(next);
-                writeHiddenColumns(next);
-              }}
-            />
-          </div>
-
-          {shown.length === 0 ? (
-            <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-              <p>Aucun équipement ne correspond à ces filtres.</p>
-              <Button variant="outline" size="sm" onClick={reset}>
-                Réinitialiser les filtres
-              </Button>
-            </div>
-          ) : (
-            <InventoryTable
-              rows={shown}
-              site={site}
+        <div
+          id="inventory-panel"
+          role={macTabs ? "tabpanel" : undefined}
+          aria-labelledby={macTabs ? "inventory-tab-devices" : undefined}
+          className="space-y-6"
+        >
+          {coverage.length > 0 ? (
+            <PlanCoverage
+              coverage={coverage}
+              active={filters.placement === "unplaced" ? type : null}
               canEdit={canEdit}
-              hidden={hidden}
-              sort={sort}
-              onSort={(next) => update({}, next)}
+              onSelect={showUnplaced}
             />
+          ) : null}
+
+          {devices === undefined ? (
+            <ListSkeleton />
+          ) : all.length === 0 ? (
+            <InventoryEmpty
+              canEdit={canEdit}
+              onCreate={() => setCreating(true)}
+            />
+          ) : (
+            <>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="relative min-w-60 flex-1">
+                  <HugeiconsIcon
+                    icon={Search01Icon}
+                    size={16}
+                    strokeWidth={1.5}
+                    className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-muted-foreground"
+                  />
+                  <Input
+                    type="search"
+                    value={filters.query}
+                    onChange={(event) => typeQuery(event.target.value)}
+                    placeholder="Nom, hostname, MAC, IP, emplacement…"
+                    aria-label="Rechercher un équipement"
+                    aria-keyshortcuts="/"
+                    className="pr-9 pl-8"
+                  />
+                  {filters.query ? null : (
+                    <Kbd className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2">
+                      /
+                    </Kbd>
+                  )}
+                </div>
+                <div
+                  role="group"
+                  aria-label="Emplacement"
+                  className="flex gap-1 rounded-lg border p-1"
+                >
+                  {PLACEMENT_FILTERS.map(({ value, label }) => (
+                    <Button
+                      key={value}
+                      size="sm"
+                      variant={
+                        filters.placement === value ? "secondary" : "ghost"
+                      }
+                      aria-pressed={filters.placement === value}
+                      onClick={() => update({ placement: value })}
+                    >
+                      {label}
+                      <span className="text-muted-foreground tabular-nums">
+                        {counts.placement[value]}
+                      </span>
+                    </Button>
+                  ))}
+                </div>
+                <div
+                  role="group"
+                  aria-label="État"
+                  className="flex gap-1 rounded-lg border p-1"
+                >
+                  {STATUS_FILTERS.map(({ value, label }) => (
+                    <Button
+                      key={value}
+                      size="sm"
+                      variant={filters.status === value ? "secondary" : "ghost"}
+                      aria-pressed={filters.status === value}
+                      onClick={() => update({ status: value })}
+                    >
+                      {label}
+                      <span className="text-muted-foreground tabular-nums">
+                        {counts.status[value]}
+                      </span>
+                    </Button>
+                  ))}
+                </div>
+                <Select
+                  items={typeFilters}
+                  value={type}
+                  onValueChange={(value) => {
+                    if (value) update({ type: value });
+                  }}
+                >
+                  <SelectTrigger aria-label="Type" className="w-48">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {typeFilters.map(({ value, label }) => (
+                      <SelectItem key={value} value={value}>
+                        {label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm text-muted-foreground" aria-live="polite">
+                  {filtered
+                    ? `${shown.length} sur ${all.length} équipement${all.length > 1 ? "s" : ""}`
+                    : `${all.length} équipement${all.length > 1 ? "s" : ""}`}
+                  {/* An empty list offers the same button in its message. */}
+                  {filtered && shown.length > 0 ? (
+                    <>
+                      {" · "}
+                      <button
+                        type="button"
+                        onClick={reset}
+                        className="rounded-sm underline-offset-2 outline-none hover:text-foreground hover:underline focus-visible:ring-[3px] focus-visible:ring-ring"
+                      >
+                        Réinitialiser les filtres
+                      </button>
+                    </>
+                  ) : null}
+                </p>
+                <ColumnPicker
+                  hidden={hidden}
+                  onChange={(next) => {
+                    setHidden(next);
+                    writeHiddenColumns(next);
+                  }}
+                />
+              </div>
+
+              {shown.length === 0 ? (
+                <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+                  <p>Aucun équipement ne correspond à ces filtres.</p>
+                  <Button variant="outline" size="sm" onClick={reset}>
+                    Réinitialiser les filtres
+                  </Button>
+                </div>
+              ) : (
+                <InventoryTable
+                  rows={shown}
+                  site={site}
+                  canEdit={canEdit}
+                  hidden={hidden}
+                  sort={sort}
+                  onSort={(next) => update({}, next)}
+                />
+              )}
+            </>
           )}
-        </>
+        </div>
       )}
 
       {canEdit ? (
@@ -380,7 +442,7 @@ function SiteInventory({ site }: { site: SiteSummary }) {
 }
 
 /** « / » puts the cursor in the search, from anywhere but a field. */
-function useSlashToSearch(input: RefObject<HTMLInputElement | null>) {
+function useSlashToSearch() {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "/" || event.ctrlKey || event.metaKey || event.altKey) {
@@ -394,12 +456,17 @@ function useSlashToSearch(input: RefObject<HTMLInputElement | null>) {
       ) {
         return;
       }
+      // The tab shown has one search: the devices' or the MACs'.
+      const search = document.querySelector<HTMLInputElement>(
+        "main input[type='search']",
+      );
+      if (!search) return;
       event.preventDefault();
-      input.current?.focus();
+      search.focus();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [input]);
+  }, []);
 }
 
 /**

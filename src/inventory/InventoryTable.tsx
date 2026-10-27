@@ -30,6 +30,7 @@ import {
   HAS_HISTORY,
 } from "@/history/DeviceHistoryDialog";
 import { OPTIONAL_COLUMNS, locationLabel, statusOf } from "@/inventory/columns";
+import { showOnMap } from "@/inventory/showOnMap";
 import type {
   ColumnId,
   InventoryRow,
@@ -37,13 +38,12 @@ import type {
   SortKey,
 } from "@/inventory/columns";
 import { failureMessage } from "@/lib/errors";
-import { asBuildingId, asDeviceId, asFloorId } from "@/lib/objectIds";
+import { asDeviceId } from "@/lib/objectIds";
 import { cn } from "@/lib/utils";
 import { DeviceIdentityDialog } from "@/panels/drawer/DeviceIdentityDialog";
 import { PortTableDialog } from "@/panels/drawer/PortTableDialog";
 import { DeviceSheet } from "@/panels/DeviceSheet";
 import type { SiteSummary } from "@/sites/useCurrentSite";
-import { useMapStore } from "@/store/useMapStore";
 import { api } from "../../convex/_generated/api";
 
 const SORTABLE: ReadonlySet<string> = new Set<SortKey>([
@@ -254,17 +254,8 @@ function InventoryItem({
   const status = statusOf(device);
   const place = locationLabel(device);
 
-  const showOnMap = () => {
-    if (!location) return;
-    const { setCurrentBuilding, setCurrentFloor, selectDevice } =
-      useMapStore.getState();
-    setCurrentBuilding(asBuildingId(location.buildingId));
-    setCurrentFloor(asFloorId(location.floorId));
-    selectDevice(asDeviceId(device.id));
-    void navigate({
-      to: "/",
-      search: { site: site.id, floor: location.floorId, device: device.id },
-    });
+  const openOnMap = () => {
+    if (location) showOnMap(navigate, site.id, device.id, location);
   };
 
   const remove = async () => {
@@ -396,7 +387,7 @@ function InventoryItem({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             {location ? (
-              <DropdownMenuItem onClick={showOnMap}>
+              <DropdownMenuItem onClick={openOnMap}>
                 Voir sur le plan
               </DropdownMenuItem>
             ) : null}
@@ -428,7 +419,7 @@ function InventoryItem({
           onOpenChange={setShowingSheet}
           onShowCables={() => setShowingCables(true)}
           onShowHistory={hasHistory ? () => setShowingHistory(true) : undefined}
-          onShowOnMap={location ? showOnMap : undefined}
+          onShowOnMap={location ? openOnMap : undefined}
         />
         <PortTableDialog
           device={device}

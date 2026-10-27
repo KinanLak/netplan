@@ -1,13 +1,18 @@
 import { HugeiconsIcon } from "@hugeicons/react";
-import { SocketName } from "@/devices/SocketName";
-import { ArrowDown01Icon, ArrowRight01Icon } from "@hugeicons/core-free-icons";
+import {
+  ArrowDown01Icon,
+  ArrowRight01Icon,
+  Search01Icon,
+} from "@hugeicons/core-free-icons";
+import { useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useId, useState } from "react";
-import type { FormEvent } from "react";
+import type { FormEvent, ReactNode } from "react";
 import { toast } from "sonner";
 import { Time } from "@/components/time";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -16,9 +21,25 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Field, FieldError, FieldLabel } from "@/components/ui/field";
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldLabel,
+} from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { getDeviceKindLabel } from "@/devices/deviceKindRegistry";
+import { SocketName } from "@/devices/SocketName";
 import { IDENTITY_TEXT_LIMITS } from "@/devices/identity";
+import { matchesDeviceSearch } from "@/devices/search";
+import { showOnMap } from "@/inventory/showOnMap";
 import { failureMessage } from "@/lib/errors";
 import { createStandaloneObjectId } from "@/lib/identity";
 import { api } from "../../convex/_generated/api";
@@ -26,155 +47,295 @@ import { api } from "../../convex/_generated/api";
 type UnknownMac = FunctionReturnType<
   typeof api.unknownMacs.listForSite
 >[number];
+type IgnoredMac = FunctionReturnType<
+  typeof api.unknownMacs.listIgnored
+>[number];
 
-// A busy site sees many; the newest are the ones worth a look.
-const SHOWN = 10;
+/** The MAC in any notation, or where it was seen, every word required. */
+const matches = (
+  mac: string,
+  place: ReadonlyArray<string | null | undefined>,
+  query: string,
+) =>
+  matchesDeviceSearch(
+    { name: "", macs: [mac] },
+    query,
+    place.map((part) => part ?? undefined),
+  );
+
+/** What one request may ignore or restore: `MAX_MACS` on the server. */
+const MAX_BATCH = 500;
+
+const plural = (count: number, one: string, many: string) =>
+  `${count} ${count > 1 ? many : one}`;
 
 /**
  * MAC addresses the network sees that no device of the site carries, for an
- * Éditeur to turn into equipment (ADR 0022) or ignore (ADR 0026).
+ * Éditeur to turn into equipment (ADR 0022) or ignore (ADR 0026), one by one
+ * or by selection.
  */
 export function UnknownMacs({ siteId }: { siteId: string }) {
   const unknown = useQuery(api.unknownMacs.listForSite, { siteId });
   const ignored = useQuery(api.unknownMacs.listIgnored, { siteId });
-  const ignoreMac = useMutation(api.unknownMacs.ignore);
-  const restoreMac = useMutation(api.unknownMacs.restore);
-  const [all, setAll] = useState(false);
+  const ignoreMacs = useMutation(api.unknownMacs.ignore);
+  const restoreMacs = useMutation(api.unknownMacs.restore);
+  const [query, setQuery] = useState("");
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const [chosenIgnored, setChosenIgnored] = useState<ReadonlySet<string>>(
+    new Set(),
+  );
   const [showIgnored, setShowIgnored] = useState(false);
   const [creating, setCreating] = useState<UnknownMac | null>(null);
   if (!unknown || !ignored) return null;
-  if (unknown.length === 0 && ignored.length === 0) return null;
-  const shown = all ? unknown : unknown.slice(0, SHOWN);
 
-  const restore = async (mac: string) => {
+  const shown = unknown.filter((row) =>
+    matches(row.mac, [row.socket?.name, row.switchName, row.portName], query),
+  );
+  const shownIgnored = ignored.filter((row) =>
+    matches(
+      row.mac,
+      [
+        row.lastSeen?.socketName,
+        row.lastSeen?.switchName,
+        row.lastSeen?.portName,
+      ],
+      query,
+    ),
+  );
+  // A selection never holds a row the list no longer shows.
+  const picked = shown.filter((row) => selected.has(row.mac));
+  const pickedIgnored = shownIgnored.filter((row) =>
+    chosenIgnored.has(row.mac),
+  );
+
+  const restore = async (macs: Array<string>, announce: boolean) => {
     try {
-      await restoreMac({ siteId, mac });
+      await restoreMacs({ siteId, macs });
+      setChosenIgnored(new Set());
+      if (announce) {
+        toast(
+          macs.length === 1
+            ? `${macs[0]} rétablie`
+            : `${plural(macs.length, "adresse rétablie", "adresses rétablies")}`,
+          {
+            action: {
+              label: "Annuler",
+              onClick: () => void ignore(macs, false),
+            },
+            duration: 10_000,
+          },
+        );
+      }
     } catch (error) {
       toast.error(failureMessage(error, "editor"));
     }
   };
-  const ignore = async (mac: string) => {
+  const ignore = async (macs: Array<string>, announce: boolean) => {
     try {
-      await ignoreMac({ siteId, mac });
-      toast(`${mac} ignorée`, {
-        action: { label: "Annuler", onClick: () => void restore(mac) },
-        duration: 10_000,
-      });
+      await ignoreMacs({ siteId, macs });
+      setSelected(new Set());
+      if (announce) {
+        toast(
+          macs.length === 1
+            ? `${macs[0]} ignorée`
+            : `${plural(macs.length, "adresse ignorée", "adresses ignorées")}`,
+          {
+            action: {
+              label: "Annuler",
+              onClick: () => void restore(macs, false),
+            },
+            duration: 10_000,
+          },
+        );
+      }
     } catch (error) {
       toast.error(failureMessage(error, "editor"));
     }
   };
 
   return (
-    <section
-      aria-labelledby="unknown-macs"
-      className="space-y-3 rounded-lg border p-4"
-    >
-      <div className="space-y-1">
-        <h2 id="unknown-macs" className="font-medium">
-          Adresses MAC inconnues ({unknown.length})
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          {unknown.length > 0
-            ? "LibreNMS les voit sur le réseau, mais aucun équipement du site ne les porte."
-            : "Toutes celles que LibreNMS voit sont portées par un équipement ou ignorées."}
-        </p>
+    <div className="space-y-4">
+      <div className="relative max-w-md">
+        <HugeiconsIcon
+          icon={Search01Icon}
+          size={16}
+          strokeWidth={1.5}
+          className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-muted-foreground"
+        />
+        <Input
+          type="search"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="MAC, prise, switch, port…"
+          aria-label="Rechercher une adresse MAC"
+          className="pl-8"
+        />
       </div>
-      {unknown.length > 0 ? (
-        <ul className="divide-y">
-          {shown.map((sighting) => (
-            <li
-              key={sighting.mac}
-              className="flex flex-col gap-2 py-2.5 first:pt-0 last:pb-0 md:flex-row md:items-center md:justify-between"
+
+      {unknown.length === 0 ? (
+        <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+          Toutes les adresses que LibreNMS voit sont portées par un équipement
+          ou ignorées.
+        </p>
+      ) : (
+        <section aria-label="Adresses MAC inconnues" className="space-y-2">
+          <SelectionBar
+            count={shown.length}
+            total={unknown.length}
+            picked={picked.length}
+            noun={["adresse inconnue", "adresses inconnues"]}
+            onClear={() => setSelected(new Set())}
+          >
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                void ignore(
+                  picked.map((row) => row.mac),
+                  true,
+                )
+              }
             >
-              <div className="min-w-0 space-y-0.5 text-sm">
-                <p className="font-mono">{sighting.mac}</p>
-                <p className="truncate text-muted-foreground">
-                  {sighting.socket ? (
-                    <SocketName name={sighting.socket.name} />
-                  ) : (
-                    "Sans prise"
-                  )}
-                  {" · "}
-                  {[
-                    [sighting.switchName, sighting.portName]
-                      .filter(Boolean)
-                      .join(" "),
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                  {" · vue le "}
-                  <Time at={sighting.seenAt} />
-                </p>
-              </div>
-              <div className="flex shrink-0 gap-2">
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => void ignore(sighting.mac)}
-                >
-                  Ignorer
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setCreating(sighting)}
-                >
-                  Créer l'équipement
-                </Button>
-              </div>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      {unknown.length > SHOWN ? (
-        <Button size="sm" variant="ghost" onClick={() => setAll(!all)}>
-          {all
-            ? "Afficher moins"
-            : `Afficher les ${unknown.length - SHOWN} autres`}
-        </Button>
-      ) : null}
+              Ignorer la sélection
+            </Button>
+          </SelectionBar>
+          {shown.length === 0 ? (
+            <NoMatch onReset={() => setQuery("")} />
+          ) : (
+            <MacTable
+              rows={shown}
+              picked={picked.length}
+              isPicked={(mac) => selected.has(mac)}
+              onPickAll={(all) =>
+                setSelected(
+                  new Set(
+                    all ? shown.slice(0, MAX_BATCH).map((row) => row.mac) : [],
+                  ),
+                )
+              }
+              onPick={(mac, on) => setSelected(toggled(selected, mac, on))}
+              where={(row) => (
+                <Where
+                  socketName={row.socket?.name ?? null}
+                  switchName={row.switchName}
+                  portName={row.portName}
+                />
+              )}
+              when={(row) => <Time at={row.seenAt} />}
+              actions={(row) => (
+                <>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => void ignore([row.mac], true)}
+                  >
+                    Ignorer
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setCreating(row)}
+                  >
+                    Créer l'équipement
+                  </Button>
+                </>
+              )}
+              whenLabel="Vue le"
+            />
+          )}
+        </section>
+      )}
+
       {ignored.length > 0 ? (
-        <div className="space-y-2 border-t pt-3">
+        <section aria-label="Adresses ignorées" className="space-y-2 pt-2">
           <Button
             size="sm"
             variant="ghost"
             aria-expanded={showIgnored}
             onClick={() => setShowIgnored(!showIgnored)}
+            className="-ml-2"
           >
             <HugeiconsIcon
               icon={showIgnored ? ArrowDown01Icon : ArrowRight01Icon}
               strokeWidth={2}
             />
-            Adresses ignorées ({ignored.length})
+            Adresses ignorées
+            <span className="text-muted-foreground tabular-nums">
+              {ignored.length}
+            </span>
           </Button>
           {showIgnored ? (
-            <ul className="divide-y">
-              {ignored.map((row) => (
-                <li
-                  key={row.mac}
-                  className="flex items-center justify-between gap-2 py-2 text-sm"
+            <>
+              <SelectionBar
+                count={shownIgnored.length}
+                total={ignored.length}
+                picked={pickedIgnored.length}
+                noun={["adresse ignorée", "adresses ignorées"]}
+                onClear={() => setChosenIgnored(new Set())}
+              >
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    void restore(
+                      pickedIgnored.map((row) => row.mac),
+                      true,
+                    )
+                  }
                 >
-                  <div className="min-w-0 space-y-0.5">
-                    <p className="font-mono">{row.mac}</p>
-                    <p className="truncate text-muted-foreground">
-                      Ignorée par {row.ignoredByName} le{" "}
-                      <Time at={row.ignoredAt} />
-                    </p>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => void restore(row.mac)}
-                  >
-                    Rétablir
-                  </Button>
-                </li>
-              ))}
-            </ul>
+                  Rétablir la sélection
+                </Button>
+              </SelectionBar>
+              {shownIgnored.length === 0 ? (
+                <NoMatch onReset={() => setQuery("")} />
+              ) : (
+                <MacTable
+                  rows={shownIgnored}
+                  picked={pickedIgnored.length}
+                  isPicked={(mac) => chosenIgnored.has(mac)}
+                  onPickAll={(all) =>
+                    setChosenIgnored(
+                      new Set(
+                        all
+                          ? shownIgnored
+                              .slice(0, MAX_BATCH)
+                              .map((row) => row.mac)
+                          : [],
+                      ),
+                    )
+                  }
+                  onPick={(mac, on) =>
+                    setChosenIgnored(toggled(chosenIgnored, mac, on))
+                  }
+                  where={(row: IgnoredMac) =>
+                    row.lastSeen ? (
+                      <Where {...row.lastSeen} />
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )
+                  }
+                  when={(row: IgnoredMac) => (
+                    <span className="text-muted-foreground">
+                      par {row.ignoredByName} le <Time at={row.ignoredAt} />
+                    </span>
+                  )}
+                  whenLabel="Ignorée"
+                  actions={(row: IgnoredMac) => (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => void restore([row.mac], true)}
+                    >
+                      Rétablir
+                    </Button>
+                  )}
+                />
+              )}
+            </>
           ) : null}
-        </div>
+        </section>
       ) : null}
+
       <Dialog
         open={creating !== null}
         onOpenChange={(open) => {
@@ -186,8 +347,8 @@ export function UnknownMacs({ siteId }: { siteId: string }) {
             <DialogTitle>Créer l'équipement</DialogTitle>
             <DialogDescription>
               {creating?.socket?.placed
-                ? `Un équipement générique portant ${creating.mac}, placé près de la prise « ${creating.socket.name} ».`
-                : `Un équipement générique portant ${creating?.mac ?? ""}, hors plan.`}
+                ? `Il portera ${creating.mac} et sera placé près de « ${creating.socket.name} ».`
+                : `Il portera ${creating?.mac ?? ""}, hors plan.`}
             </DialogDescription>
           </DialogHeader>
           {/* Keyed by MAC, so each one starts from its own form. */}
@@ -201,9 +362,169 @@ export function UnknownMacs({ siteId }: { siteId: string }) {
           ) : null}
         </DialogContent>
       </Dialog>
-    </section>
+    </div>
   );
 }
+
+const toggled = (set: ReadonlySet<string>, mac: string, on: boolean) => {
+  const next = new Set(set);
+  if (on) next.add(mac);
+  else next.delete(mac);
+  return next;
+};
+
+/** How many rows show, or how many are picked and what to do with them. */
+function SelectionBar({
+  count,
+  total,
+  picked,
+  noun,
+  onClear,
+  children,
+}: {
+  count: number;
+  total: number;
+  picked: number;
+  noun: [string, string];
+  onClear: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex min-h-8 flex-wrap items-center gap-x-3 gap-y-2 text-sm text-muted-foreground">
+      {picked > 0 ? (
+        <>
+          <span
+            className={picked > MAX_BATCH ? "text-down" : "text-foreground"}
+          >
+            {plural(picked, "sélectionnée", "sélectionnées")}
+            {picked >= MAX_BATCH ? ` (${MAX_BATCH} au plus à la fois)` : null}
+          </span>
+          {picked > MAX_BATCH ? null : children}
+          <Button size="sm" variant="ghost" onClick={onClear}>
+            Désélectionner
+          </Button>
+        </>
+      ) : (
+        <span aria-live="polite">
+          {count === total
+            ? plural(total, ...noun)
+            : `${count} sur ${plural(total, ...noun)}`}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function NoMatch({ onReset }: { onReset: () => void }) {
+  return (
+    <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+      <p>Aucune adresse ne correspond à cette recherche.</p>
+      <Button variant="outline" size="sm" onClick={onReset}>
+        Effacer la recherche
+      </Button>
+    </div>
+  );
+}
+
+function Where({
+  socketName,
+  switchName,
+  portName,
+}: {
+  socketName: string | null;
+  switchName: string | null;
+  portName: string | null;
+}) {
+  const port = [switchName, portName].filter(Boolean).join(" · ");
+  return (
+    <span className="flex min-w-0 flex-col">
+      <span className="truncate">
+        {socketName === null ? "Sans prise" : <SocketName name={socketName} />}
+      </span>
+      {port ? (
+        <span className="truncate font-mono text-xs text-muted-foreground">
+          {port}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+function MacTable<Row extends { mac: string }>({
+  rows,
+  picked,
+  isPicked,
+  onPickAll,
+  onPick,
+  where,
+  when,
+  whenLabel,
+  actions,
+}: {
+  rows: ReadonlyArray<Row>;
+  picked: number;
+  isPicked: (mac: string) => boolean;
+  onPickAll: (all: boolean) => void;
+  onPick: (mac: string, on: boolean) => void;
+  where: (row: Row) => ReactNode;
+  when: (row: Row) => ReactNode;
+  whenLabel: string;
+  actions: (row: Row) => ReactNode;
+}) {
+  const all = picked > 0 && picked === rows.length;
+  return (
+    <div className="max-h-[calc(100svh-12rem)] overflow-auto rounded-lg border">
+      <table className="w-full min-w-[44rem] border-separate border-spacing-0 text-sm">
+        <thead className="sticky top-0 z-10 bg-muted text-left text-xs text-muted-foreground">
+          <tr className="*:border-b *:px-4 *:py-2 *:font-medium">
+            <th className="w-10">
+              <Checkbox
+                checked={all}
+                indeterminate={picked > 0 && !all}
+                onCheckedChange={(checked) => onPickAll(checked)}
+                aria-label="Tout sélectionner"
+              />
+            </th>
+            <th>Adresse MAC</th>
+            <th>Vue sur</th>
+            <th>{whenLabel}</th>
+            <th>
+              <span className="sr-only">Actions</span>
+            </th>
+          </tr>
+        </thead>
+        <tbody className="[&>tr:not(:last-child)>td]:border-b">
+          {rows.map((row) => (
+            <tr key={row.mac} className="align-middle hover:bg-muted">
+              <td className="px-4 py-2">
+                <Checkbox
+                  checked={isPicked(row.mac)}
+                  onCheckedChange={(checked) => onPick(row.mac, checked)}
+                  aria-label={`Sélectionner ${row.mac}`}
+                />
+              </td>
+              <td className="px-4 py-2 font-mono text-xs whitespace-nowrap">
+                {row.mac}
+              </td>
+              <td className="max-w-64 px-4 py-2">{where(row)}</td>
+              <td className="px-4 py-2 whitespace-nowrap">{when(row)}</td>
+              <td className="px-4 py-2">
+                <div className="flex justify-end gap-2">{actions(row)}</div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// A workstation first, as most unknown MACs on edge ports are; an endpoint by
+// default, as the server knows nothing more of it.
+const TYPES = (["pc", "endpoint"] as const).map((type) => ({
+  value: type,
+  label: getDeviceKindLabel(type),
+}));
 
 function CreateForm({
   siteId,
@@ -215,10 +536,13 @@ function CreateForm({
   onDone: () => void;
 }) {
   const createDevice = useMutation(api.unknownMacs.createDevice);
+  const navigate = useNavigate();
   const id = useId();
   // One id per form, so a retry after a lost answer finds the device made.
   const [deviceId] = useState(() => createStandaloneObjectId("device"));
+  const [type, setType] = useState<"pc" | "endpoint">("endpoint");
   const [name, setName] = useState("");
+  const [hostname, setHostname] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -227,16 +551,27 @@ function CreateForm({
     setSaving(true);
     setError(null);
     try {
-      const { placed } = await createDevice({
+      const { location } = await createDevice({
         siteId,
         mac: sighting.mac,
         deviceId,
+        type,
         name,
+        ...(hostname.trim() && { hostname }),
       });
       toast.success(
-        placed && sighting.socket
-          ? `« ${name.trim()} » créé près de la prise « ${sighting.socket.name} »`
+        location && sighting.socket
+          ? `« ${name.trim()} » créé près de « ${sighting.socket.name} »`
           : `« ${name.trim()} » créé, hors plan`,
+        location
+          ? {
+              action: {
+                label: "Voir sur le plan",
+                onClick: () => showOnMap(navigate, siteId, deviceId, location),
+              },
+              duration: 10_000,
+            }
+          : undefined,
       );
       onDone();
     } catch (caught) {
@@ -248,17 +583,51 @@ function CreateForm({
 
   return (
     <form onSubmit={(event) => void handleSubmit(event)} className="grid gap-6">
-      <Field>
-        <FieldLabel htmlFor={`${id}-name`}>Nom</FieldLabel>
-        <Input
-          id={`${id}-name`}
-          value={name}
-          maxLength={IDENTITY_TEXT_LIMITS.name}
-          required
-          autoFocus
-          onChange={(event) => setName(event.target.value)}
-        />
-      </Field>
+      <div className="grid gap-4">
+        <Field>
+          <FieldLabel htmlFor={`${id}-type`}>Type</FieldLabel>
+          <Select
+            items={TYPES}
+            value={type}
+            onValueChange={(value) => {
+              if (value) setType(value);
+            }}
+          >
+            <SelectTrigger id={`${id}-type`} className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {TYPES.map(({ value, label }) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+        <Field>
+          <FieldLabel htmlFor={`${id}-name`}>Nom</FieldLabel>
+          <Input
+            id={`${id}-name`}
+            value={name}
+            maxLength={IDENTITY_TEXT_LIMITS.name}
+            required
+            autoFocus
+            onChange={(event) => setName(event.target.value)}
+          />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor={`${id}-hostname`}>Hostname</FieldLabel>
+          <Input
+            id={`${id}-hostname`}
+            value={hostname}
+            maxLength={IDENTITY_TEXT_LIMITS.hostname}
+            className="font-mono"
+            onChange={(event) => setHostname(event.target.value)}
+          />
+          <FieldDescription>Facultatif.</FieldDescription>
+        </Field>
+      </div>
       {error ? <FieldError>{error}</FieldError> : null}
       <DialogFooter>
         <Button type="button" variant="outline" onClick={onDone}>
