@@ -105,7 +105,8 @@ one no longer used is archived instead (ADR 0033): out of the picker, read
 only through `requireOpenSite` and `useCanEditSite`, never collected, and
 brought back as it was. The map shows the site the `?site=` parameter names,
 the first one not archived by name otherwise, and the sidebar switches
-between them.
+between them; `?floor=` and `?device=` name the floor and selected device
+(ADR 0030).
 
 A site may connect one NetBox and one LibreNMS (`integrations`): an address
 and a token, which actions encrypt with `NETPLAN_SECRET_KEY` before storing
@@ -271,6 +272,15 @@ Built by lot 3b (ADR 0025) and redrawn by the UX lot U3 (ADR 0029).
   operations (`label.create`, `label.patch`, `label.delete`) with an inverse
   and the same server planning as the rest; the « Texte » tool (5 or T)
   puts one where the plan is clicked. They go with a deleted floor.
+- **View, keys and selection (ADR 0030).** Each floor's view lives in
+  `sessionStorage`; a first visit fits devices, walls and calque at most at
+  100 %. A device selected from outside the plan goes through
+  `locateDevice`, which the canvas answers once the floor shows. One
+  shortcut listener in the authenticated layout routes keys by
+  `src/lib/shortcut-intents.ts`; React Flow's own keyboard handling is off.
+  The selection is the store's set: arrows nudge it inside a history group
+  that merges to one patch per device on key release, and Delete takes it
+  off the plan as one batch.
 - **Moves made by others.** The cycle moves devices through
   `applyMapOperation`, so they reach every client and enter no history. An
   undo or redo carries where it expects the device (`expected` on
