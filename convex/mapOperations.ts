@@ -39,6 +39,7 @@ import {
   portsForNewDevice,
 } from "./lib/ports";
 import type { NewCable, NewPort } from "./lib/ports";
+import { ARCHIVED_SITE } from "./sites";
 
 export type OperationInput = Infer<typeof mapOperation>;
 type DeviceCreateOperation = Extract<OperationInput, { kind: "device.create" }>;
@@ -1683,6 +1684,7 @@ export const observePending = readerQuery({
 export const applyMapOperation = async (
   ctx: MutationCtx,
   operation: OperationInput,
+  { fromUser = false }: { fromUser?: boolean } = {},
 ): Promise<Infer<typeof mapOperationResult>> => {
   const existing = await ctx.db
     .query("clientOperations")
@@ -1705,7 +1707,10 @@ export const applyMapOperation = async (
   };
   const state = await buildPlanningState(ctx, planningOperation);
   const planningError = planOperation(state, planningOperation);
-  const error = planningError ?? validateSingleAffectedFloor(state);
+  const error =
+    planningError ??
+    validateSingleAffectedFloor(state) ??
+    (fromUser ? await archivedSiteError(ctx, state.floorSites) : null);
   const status: "applied" | "rejected" = error ? "rejected" : "applied";
   let appliedRevision: number | undefined;
   let floorId = singleAffectedFloorId(state) ?? operationFloorId(operation);
@@ -1743,9 +1748,24 @@ export const applyMapOperation = async (
   };
 };
 
+/** An archived site's plan is read only (ADR 0033). */
+const archivedSiteError = async (
+  ctx: MutationCtx,
+  floorSites: Map<string, string>,
+): Promise<string | null> => {
+  for (const siteId of new Set(floorSites.values())) {
+    const site = await ctx.db
+      .query("sites")
+      .withIndex("by_object_id", (q) => q.eq("objectId", siteId))
+      .unique();
+    if (site?.archivedAt !== undefined) return ARCHIVED_SITE;
+  }
+  return null;
+};
+
 export const apply = editorMutation({
   args: { operation: mapOperation },
   returns: mapOperationResult,
   handler: async (ctx, { operation }) =>
-    await applyMapOperation(ctx, operation),
+    await applyMapOperation(ctx, operation, { fromUser: true }),
 });

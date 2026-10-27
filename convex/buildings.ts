@@ -2,7 +2,7 @@ import { ConvexError, v } from "convex/values";
 import { readerQuery, editorMutation } from "./lib/functions";
 import type { Doc } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
-import { requireSite } from "./sites";
+import { requireOpenSite } from "./sites";
 import {
   buildingRow,
   checkedName,
@@ -73,7 +73,7 @@ export const create = editorMutation({
   },
   returns: v.string(),
   handler: async (ctx, { siteId, objectId, name, firstFloor }) => {
-    await requireSite(ctx, siteId);
+    await requireOpenSite(ctx, siteId);
     const existing = await buildingRow(ctx, objectId);
     if (existing) {
       if (existing.siteId !== siteId) {
@@ -113,6 +113,7 @@ export const rename = editorMutation({
   handler: async (ctx, { id, name }) => {
     const building = await buildingRow(ctx, id);
     if (!building) throw new ConvexError("Ce bâtiment n'existe plus.");
+    await requireOpenSite(ctx, building.siteId);
     const others = (await buildingsOf(ctx, building.siteId)).filter(
       (other) => other._id !== building._id,
     );
@@ -130,6 +131,7 @@ export const remove = editorMutation({
   handler: async (ctx, { id }) => {
     const building = await buildingRow(ctx, id);
     if (!building) return null;
+    await requireOpenSite(ctx, building.siteId);
     const floors = await floorsOf(ctx, id);
     for (const floor of floors) {
       const content = describeContent(await floorContent(ctx, floor.objectId));

@@ -1,11 +1,11 @@
 import { HugeiconsIcon } from "@hugeicons/react";
+import { useCanEditSite } from "@/sites/useCurrentSite";
 import {
   Layers01Icon,
   PackageIcon,
   SquareIcon,
 } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
-import { useCanEdit } from "@/hooks/use-current-user";
 import { useMapDocumentData } from "@/map-session/useMapDocument";
 import { useIsEditMode } from "@/store/selectors";
 import { useMapStore } from "@/store/useMapStore";
@@ -16,7 +16,7 @@ import { useMapStore } from "@/store/useMapStore";
  */
 export function EmptyFloorHint() {
   const { document } = useMapDocumentData();
-  const canEdit = useCanEdit();
+  const canEdit = useCanEditSite();
   const isEditMode = useIsEditMode();
   const toggleEditMode = useMapStore((s) => s.toggleEditMode);
   const setActiveDrawTool = useMapStore((s) => s.setActiveDrawTool);

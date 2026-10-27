@@ -1,5 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import { readerQuery, editorMutation } from "./lib/functions";
+import { requireOpenBuilding, requireOpenSite } from "./sites";
 import type { Doc } from "./_generated/dataModel";
 import { describeContent } from "../src/buildings/content";
 import {
@@ -57,6 +58,7 @@ export const create = editorMutation({
   handler: async (ctx, { objectId, buildingId, name }) => {
     const building = await buildingRow(ctx, buildingId);
     if (!building) throw new ConvexError("Ce bâtiment n'existe plus.");
+    await requireOpenSite(ctx, building.siteId);
 
     const existing = await floorRow(ctx, objectId);
     if (existing) {
@@ -85,6 +87,7 @@ export const rename = editorMutation({
   handler: async (ctx, { id, name }) => {
     const floor = await floorRow(ctx, id);
     if (!floor) throw new ConvexError("Cet étage n'existe plus.");
+    await requireOpenBuilding(ctx, floor.buildingId);
     const others = (await floorsOf(ctx, floor.buildingId)).filter(
       (other) => other._id !== floor._id,
     );
@@ -102,6 +105,7 @@ export const remove = editorMutation({
   handler: async (ctx, { id }) => {
     const floor = await floorRow(ctx, id);
     if (!floor) return null;
+    await requireOpenBuilding(ctx, floor.buildingId);
     const content = describeContent(await floorContent(ctx, id));
     if (content) {
       throw new ConvexError(
@@ -142,6 +146,7 @@ export const move = editorMutation({
   handler: async (ctx, { id, direction }) => {
     const floor = await floorRow(ctx, id);
     if (!floor) throw new ConvexError("Cet étage n'existe plus.");
+    await requireOpenBuilding(ctx, floor.buildingId);
     const siblings = (await floorsOf(ctx, floor.buildingId)).toSorted(
       (a, b) => a.order - b.order,
     );

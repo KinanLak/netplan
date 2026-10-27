@@ -20,6 +20,7 @@ const WEDNESDAY_23H = Date.parse("2026-10-14T21:00:00Z");
 
 const site = (overrides: Partial<SiteFreshness> = {}): SiteFreshness => ({
   paused: false,
+  archived: false,
   hasSources: true,
   automaticRefresh: true,
   manualRefresh: true,
@@ -133,6 +134,23 @@ describe("describeFreshness", () => {
         WEDNESDAY_10H + 5 * MINUTE,
       ),
     ).toEqual({ headline: "Données collectées il y a 5 min", tone: "fresh" });
+  });
+
+  it("says an archived site is not collected, whatever its last cycle did", () => {
+    const archived = site({
+      archived: true,
+      last: {
+        startedAt: WEDNESDAY_10H,
+        finishedAt: WEDNESDAY_10H,
+        failed: ["librenms"],
+        succeeded: [],
+      },
+    });
+    expect(describeFreshness(archived, WEDNESDAY_10H)).toEqual({
+      headline: "Site archivé : aucune collecte",
+      tone: "none",
+    });
+    expect(failedAttemptAt(archived)).toBeNull();
   });
 
   it("tells a partial collection from none at all", () => {

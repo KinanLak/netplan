@@ -96,13 +96,17 @@ export const shortcutGroups: Array<ShortcutGroup> = [
  * The groups as a role sees them: a Lecteur gets no editing shortcut, and a
  * group left empty disappears (ADR 0030).
  */
-export const shortcutGroupsFor = (canEdit: boolean): Array<ShortcutGroup> =>
+export const shortcutGroupsFor = (
+  canEdit: boolean,
+  hasEditorRole: boolean = canEdit,
+): Array<ShortcutGroup> =>
   shortcutGroups
     .map((group) => ({
       ...group,
-      actions: group.actions.filter(
-        (action) => canEdit || !shortcuts[action].requiresEdit,
-      ),
+      actions: group.actions.filter((action) => {
+        const { requiresEdit, byRoleOnly } = shortcuts[action];
+        return !requiresEdit || (byRoleOnly ? hasEditorRole : canEdit);
+      }),
     }))
     .filter((group) => group.actions.length > 0);
 

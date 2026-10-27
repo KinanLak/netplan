@@ -195,7 +195,7 @@ function UnplacedDevicesLink({ siteId }: { siteId: string }) {
 
 export default function AppSidebar() {
   const { site } = useCurrentSite();
-  const canEdit = useCanEdit();
+  const hasEditorRole = useCanEdit();
   const buildings =
     useQuery(api.buildings.listForSite, site ? { siteId: site.id } : "skip") ??
     [];
@@ -260,7 +260,8 @@ export default function AppSidebar() {
                   Inventaire
                 </SidebarMenuButton>
               </SidebarMenuItem>
-              {canEdit ? (
+              {/* History is read by role, archived site or not (ADR 0033). */}
+              {hasEditorRole ? (
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     render={<Link to="/history" search={{ site: site.id }} />}

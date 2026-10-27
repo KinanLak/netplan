@@ -87,6 +87,30 @@ describe("shortcut intents", () => {
     expect(resolveAction({ actions, event: escape })).toBe("escape");
   });
 
+  it("opens a device's history on an archived site, but no edit", () => {
+    const archived = {
+      ...baseRuntime,
+      canEdit: false,
+      hasEditorRole: true,
+      isEditMode: false,
+      selectedDeviceId: "device-1",
+    };
+    expect(
+      resolveAction({
+        actions: ["show-device-history", "toggle-edit-mode"],
+        event: keyEvent({ code: "KeyJ", key: "j" }),
+        runtime: archived,
+      }),
+    ).toBe("show-device-history");
+    expect(
+      resolveAction({
+        actions: ["show-device-history"],
+        event: keyEvent({ code: "KeyJ", key: "j" }),
+        runtime: { ...archived, hasEditorRole: false },
+      }),
+    ).toBeNull();
+  });
+
   it("gives a reader no way into edit mode or its actions", () => {
     const reader = { ...baseRuntime, canEdit: false, isEditMode: false };
     const toggle = keyEvent({ code: "KeyE", key: "e" });

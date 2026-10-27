@@ -100,16 +100,20 @@ it, so anything clickable placed there needs `pointer-events-auto`.
 Built by lot 2 (ADR 0023). Admins create, configure and remove sites under
 `/admin`. A site holds its name, unique ignoring case, its time zone and the
 cadence of its collection cycle; `src/sites/settings.ts` holds the rules both
-the form and the server apply. A site with a building cannot be removed. The
-map shows the site the `?site=` parameter names, the first one by name
-otherwise, and the sidebar switches between them.
+the form and the server apply. A site with a building cannot be removed;
+one no longer used is archived instead (ADR 0033): out of the picker, read
+only through `requireOpenSite` and `useCanEditSite`, never collected, and
+brought back as it was. The map shows the site the `?site=` parameter names,
+the first one not archived by name otherwise, and the sidebar switches
+between them.
 
 A site may connect one NetBox and one LibreNMS (`integrations`): an address
 and a token, which actions encrypt with `NETPLAN_SECRET_KEY` before storing
 and no function returns. Every request to a source runs in a Node action
 (`convex/sources.ts`), which may skip certificate checks for a connection
 whose admin ticked "Ignorer les erreurs de certificat TLS" (ADR 0028). The
-admin tests the connection, then maps the
+admin tests what the form shows and saves it only once the source answers,
+then maps the
 NetBox site and the Netplan type of each NetBox role, and each Netplan switch
 to its LibreNMS device. Settings are keyed by the source's ids, so changing
 an address forgets them; a new NetBox address also turns the devices, ports
