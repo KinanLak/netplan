@@ -12,6 +12,9 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
 import { StatusDot } from "@/components/StatusDot";
+import { CopyValue } from "@/components/copy-value";
+import { Time } from "@/components/time";
+import { useNow } from "@/hooks/use-now";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -120,6 +123,7 @@ export function InventoryTable({
   /** A device just created: scrolled to and lit for a moment (A60). */
   highlightId?: string | null;
 }) {
+  const now = useNow(60_000);
   const columns = OPTIONAL_COLUMNS.filter(
     (column) => !hidden.includes(column.id),
   );
@@ -179,6 +183,7 @@ export function InventoryTable({
               site={site}
               canEdit={canEdit}
               shows={shows}
+              now={now}
               highlighted={device.id === highlightId}
             />
           ))}
@@ -237,12 +242,15 @@ function InventoryItem({
   site,
   canEdit,
   shows,
+  now,
   highlighted,
 }: {
   device: InventoryRow;
   site: SiteSummary;
   canEdit: boolean;
   shows: (id: ColumnId) => boolean;
+  /** Today, for « Vu le »: one clock for the whole table. */
+  now: number;
   highlighted: boolean;
 }) {
   const navigate = useNavigate();
@@ -333,12 +341,11 @@ function InventoryItem({
           )}
         </div>
         {device.hostname ? (
-          <div
-            className="truncate font-mono text-xs text-muted-foreground"
-            title={device.hostname}
-          >
-            {device.hostname}
-          </div>
+          <CopyValue
+            value={device.hostname}
+            label="le hostname"
+            className="flex max-w-full text-xs text-muted-foreground"
+          />
         ) : null}
       </td>
       {shows("type") ? (
@@ -371,21 +378,42 @@ function InventoryItem({
           {device.macs.length === 0 ? (
             <span className="text-muted-foreground">—</span>
           ) : (
-            device.macs.map((mac) => <div key={mac}>{mac}</div>)
+            device.macs.map((mac) => (
+              <CopyValue
+                key={mac}
+                value={mac}
+                label="l'adresse MAC"
+                className="flex max-w-full"
+              />
+            ))
           )}
         </td>
       ) : null}
       {shows("ip") ? (
-        <td
-          className={cn(CELL, "truncate font-mono text-xs")}
-          title={device.ip}
-        >
-          {device.ip ?? <span className="text-muted-foreground">—</span>}
+        <td className={cn(CELL, "text-xs")}>
+          {device.ip ? (
+            <CopyValue
+              value={device.ip}
+              label="l'adresse IP"
+              className="flex max-w-full"
+            />
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          )}
         </td>
       ) : null}
       {shows("location") ? (
         <td className={cn(CELL, "truncate")} title={place}>
           {place ?? <span className="text-muted-foreground">Hors plan</span>}
+        </td>
+      ) : null}
+      {shows("seen") ? (
+        <td className={cn(CELL, "truncate text-xs text-muted-foreground")}>
+          {device.seenAt === undefined ? (
+            "—"
+          ) : (
+            <Time at={device.seenAt} format="when" now={now} />
+          )}
         </td>
       ) : null}
       <td className="px-2 py-1.5 align-middle">

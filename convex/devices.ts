@@ -52,6 +52,8 @@ const inventoryDevice = v.object({
   ...deviceIdentityFields,
   source: v.optional(deviceSource),
   metadata: deviceMetadata,
+  /** When the network last saw one of its MACs (A71), whatever its status. */
+  seenAt: v.optional(v.number()),
   /** Where it stands, or `null` for a device on no floor. */
   location: v.union(
     v.null(),
@@ -69,15 +71,26 @@ export const listForSite = readerQuery({
   args: { siteId: v.string() },
   returns: v.array(inventoryDevice),
   handler: async (ctx, { siteId }) => {
-    const [rows, floorNames] = await Promise.all([
+    const [rows, floorNames, sightings] = await Promise.all([
       ctx.db
         .query("devices")
         .withIndex("by_site", (q) => q.eq("siteId", siteId))
         .collect(),
       siteFloorNames(ctx, siteId),
+      // One read of the site's sightings rather than one per MAC: the list
+      // holds every device.
+      ctx.db
+        .query("macSightings")
+        .withIndex("by_site_mac", (q) => q.eq("siteId", siteId))
+        .collect(),
     ]);
+    const seenAtOf = new Map(sightings.map(({ mac, seenAt }) => [mac, seenAt]));
     return rows.map((row) => {
       const floor = row.placement && floorNames.get(row.placement.floorId);
+      const seenAt = Math.max(
+        0,
+        ...row.macs.map((mac) => seenAtOf.get(mac) ?? 0),
+      );
       return {
         id: row.objectId,
         type: row.type,
@@ -90,6 +103,7 @@ export const listForSite = readerQuery({
         notes: row.notes,
         source: row.source,
         metadata: row.metadata,
+        ...(seenAt > 0 && { seenAt }),
         location:
           row.placement && floor
             ? { floorId: row.placement.floorId, ...floor }

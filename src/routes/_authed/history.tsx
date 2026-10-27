@@ -15,6 +15,7 @@ import { AppNavLinks, UserMenu } from "@/components/app-nav";
 import { NetplanLogo } from "@/components/netplan-logo";
 import { Segmented } from "@/components/segmented";
 import { Time } from "@/components/time";
+import { CopyValue } from "@/components/copy-value";
 import { UnderlineTabs } from "@/components/underline-tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -653,7 +654,9 @@ function SlotEntries({ site, slot }: { site: SiteSummary; slot: Slot }) {
             <tbody className="divide-y">
               {shown.map((entry) => (
                 <tr key={entry.mac} className="align-top">
-                  <td className="px-4 py-2.5 font-mono text-xs">{entry.mac}</td>
+                  <td className="px-4 py-2.5 text-xs">
+                    <CopyValue value={entry.mac} label="l'adresse MAC" />
+                  </td>
                   <td className="px-4 py-2.5">
                     {entry.deviceName ?? (
                       <span className="text-muted-foreground">Inconnu</span>

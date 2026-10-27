@@ -11,6 +11,7 @@ import { useId, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { toast } from "sonner";
 import { Time } from "@/components/time";
+import { CopyValue } from "@/components/copy-value";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -503,8 +504,8 @@ function MacTable<Row extends { mac: string }>({
                   aria-label={`Sélectionner ${row.mac}`}
                 />
               </td>
-              <td className="px-4 py-2 font-mono text-xs whitespace-nowrap">
-                {row.mac}
+              <td className="px-4 py-2 text-xs whitespace-nowrap">
+                <CopyValue value={row.mac} label="l'adresse MAC" />
               </td>
               <td className="max-w-64 px-4 py-2">{where(row)}</td>
               <td className="px-4 py-2 whitespace-nowrap">{when(row)}</td>

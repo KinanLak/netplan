@@ -2623,3 +2623,119 @@ Questions of 2026-10-21 and 2026-10-22, in the order they came up (ADR 0030, #91
 - B27 — fait #119
 - C5 — fait #102 (option a)
 - C8 — fait #121 (option a, ADR 0033)
+
+### U5 — Inventory and history
+
+Questions of 2026-10-21 to 2026-10-27, in the order they came up (#88, #97, #103, #110, #113, #120, #123, #128).
+
+#### Which zone does a displayed time use?
+
+- Context: A58. The audit proposed the site's zone with a note; the owner chose the browser's zone everywhere, 24-hour, with a minimal hover hint.
+- Decision: one helper (`src/lib/time.ts`) and `<Time>`; always the browser's zone, French, `hourCycle: "h23"`. The hint is the native `title` of a `<time>` element: `Europe/Paris • UTC+2`; for a relative age ("il y a 4 min"), the date and the zone.
+- Why: the owner asked for "hyper minimal"; `title` adds no chrome and is already the app's idiom for hover hints.
+- Who: owner (A58 choice), agent (judgement call on `title`)
+
+#### What keeps the site's zone?
+
+- Context: sites schedule business hours and the five daily snapshot slots in their own zone.
+- Decision: scheduling keeps the site's zone; display never does. A slot button shows its instant on the reader's clock (`slotInstant`); the day picker still picks the site's calendar day; copy no longer says "8 h, 12 h…".
+- Why: a slot is "the site's 08:00"; only a reader many hours away could see it fall on another date, rare enough not to complicate the picker.
+- Who: agent (judgement call)
+
+#### Do U4 and U5 overlap in the inventory?
+
+- Context: U4 adds a `placement` URL param (A99), a read-only device sheet on row click (A96) and a `stale` status (C7).
+- Decision: A62 keeps the param name `placement` (`all|placed|unplaced`); A63's "inert rows" are answered by U4's row click, so U5 adds hover and sorting only.
+- Why: one handler per row, one name per filter.
+- Who: agent (obvious), agreed with U4
+
+#### Why did the app keep signing me out in the preview?
+
+- Context: every few navigations bounced to `/login` on `127.0.0.1:<port>`.
+- Decision: cookies are scoped by host, not port, so parallel worktrees logging in through the shared preview browser replaced each other's session. `dev:agent` now serves, announces and trusts the app as `<worktree>-<hash>.localhost`; the skill says why (#103).
+- Why: fixes it for every lot at the source, not just in a note.
+- Who: agent (obvious)
+
+#### Banner or tab for unknown MACs (B16)?
+
+- Context: the recommended default was a compact banner « N adresses MAC inconnues — Traiter » opening a tab.
+- Decision: tabs only (« Équipements N » / « MAC inconnues N »), shown to an Éditeur on a site that has unknown or ignored MACs; the tab's count is the banner.
+- Why: the owner's standing rule, the smallest UI that says it; a banner and a tab would say the same thing twice.
+- Who: agent (judgement call)
+
+#### Who may a MAC become, and how many at once?
+
+- Context: B17/B18.
+- Decision: `pc` or `endpoint` only (an edge-port MAC is an end device), Terminal by default, Poste de travail first; bulk ignore/restore take up to 500 MACs, all or none; no bulk create, no OUI, no reason field (as decided).
+- Why: matches the server's model and the recommended default; 500 keeps one mutation within limits, and the UI caps selection there.
+- Who: agent (obvious)
+
+#### Why did an invalid URL filter still reach the page?
+
+- Context: zipzoup on #113: `/history?from=2026-13-01` crashed although the validator dropped it.
+- Decision: TanStack Router merges the root route's raw query under the child's validated search, so a key left out leaks through; validators now write every key, `undefined` when invalid (history and inventory).
+- Why: the only way to override the raw value.
+- Who: agent (obvious)
+
+#### Where does the « Vu le » column (A71) come from?
+
+- Context: no per-device last-seen value exists in the inventory query; U4's C7 adds `metadata.lastSeenAt`.
+- Decision: first wait for U4's field; once it landed (#115) it turned out to exist only for « Plus de nouvelles ». So `listForSite` returns `seenAt`, the latest sighting of any of the device's MACs, read from the site's `macSightings` in one query, shown in an optional « Vu le » column, on by default (#128).
+- Why: « Vu le » must answer for an online device too; one site-wide read keeps the list's cost flat.
+- Who: agent (judgement call)
+
+#### Merge when main moved by a disjoint PR?
+
+- Context: six lots merge to `main` several times an hour; each rebase restarts CI and zipzoup (which then reads « not since »), so a PR could chase `main` forever.
+- Decision: when the commits `main` gained touch none of the PR's files, merge the reviewed, green head after checking locally that the PR rebased on the new `main` passes `bun run check`; rebase and re-review whenever files overlap.
+- Why: the rule's intent is that what lands was tested together; a local check of the combined tree gives that without an endless loop.
+- Who: agent (judgement call)
+
+#### What did the local backend's « Failed to decrypt private key » mean?
+
+- Context: on 2026-10-27 every `/api/auth/convex/token` returned 500 on this worktree's backend: its JWKS row had been encrypted with another secret than the one in place. No commit changed the secret handling; `--reseed` was refused by the orchestrator.
+- Decision: delete only the JWKS rows (`adapter:deleteMany` on the `betterAuth` component); better-auth generates a fresh key on the next token request. Sessions and seed data stay.
+- Why: the documented fix for this error, and the least destructive one on a throwaway backend.
+- Who: agent (obvious)
+
+#### How was the browser pass done after the resume?
+
+- Context: the owner asked for every layer to be checked in a browser, through a GPT-6.1 Terra (high) subagent.
+- Decision: one subagent pass on the top of the stack (every layer's code is in it), then a second pass on what the first could not drive (1f, 1g, 4c, 5a, 5b) and on #120's later fixes (day pinned with the slot). The subagent only drives the browser; this thread keeps git, processes and fixes.
+- Why: a branch switch mid-pass would hot-reload the app under the tester; the stack is cumulative, so the top exercises every layer.
+- Who: owner (subagent), agent (judgement call on the order)
+
+#### Snapshot runs: what counts as « the same » snapshot (A61)?
+
+- Context: zipzoup on #120: a device's MACs arrive interleaved, and a renamed socket or floor kept the same ids.
+- Decision: one open run per MAC; a run breaks when the port, the socket or any captured name changes, so each run shows the names of its own time. The latest snapshot is searched past any number of failed captures; a picked slot writes its day to the URL.
+- Why: history must say what was true then; interleaving is the normal case for a device with two NICs.
+- Who: agent (obvious)
+
+#### Items
+
+- A41 — fait #128 (tableaux d'inventaire, MAC inconnues et relevés ; reliquat U4)
+- A52 — fait #97 (anneau de focus, « / ») et #110 (« / » suit l'onglet, MAC hors du flux principal)
+- A57 — fait #97 (conteneur à défilement, sélecteur de colonnes)
+- A58 — fait #88
+- A59 — fait #97
+- A60 — fait #123
+- A61 — fait #120
+- A62 — fait #103 (inventaire), #113 (événements) et #120 (relevés)
+- A63 — fait #97 (clic de ligne : fiche d'U4, #117)
+- A64 — fait #110
+- A65 — fait #120
+- A66 — fait #103
+- A67 — fait #113 (événements) et #120 (relevés)
+- A68 — fait #120
+- A69 — fait #113
+- A70 — fait #97
+- A71 — fait #97 (recherche par emplacement et type) et #128 (colonne « Vu le »)
+- A97 — fait #97
+- B16 — fait #110 (onglet seul, sans bandeau)
+- B17 — fait #110
+- B18 — fait #110
+- B19 — fait #110
+- B20 — fait #113
+- B21 — fait #113
+- B23 — fait #123

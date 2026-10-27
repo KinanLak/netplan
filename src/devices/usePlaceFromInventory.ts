@@ -2,8 +2,11 @@ import { useReactFlow, useStoreApi } from "@xyflow/react";
 import { useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { createDevicePlacement } from "@/devices/devicePlacement";
-import { placeAround, viewportCentre } from "@/devices/placeFromInventory";
-import { asDeviceId } from "@/lib/objectIds";
+import {
+  placeAround,
+  unplacedDeviceOf,
+  viewportCentre,
+} from "@/devices/placeFromInventory";
 import { useMapDocumentActions } from "@/map-session/useMapDocument";
 import { useCurrentSite } from "@/sites/useCurrentSite";
 import { useCurrentFloorId } from "@/store/selectors";
@@ -37,9 +40,8 @@ export const usePlaceFromInventory = () => {
     const row = devices?.find((device) => device.id === deviceId);
     if (!floorId || !row) return "Cet équipement n'est plus dans l'inventaire.";
     if (row.location) return "Cet équipement est déjà sur un plan.";
-    const { location: _location, ...identity } = row;
     const device = placeAround(
-      { ...identity, id: asDeviceId(row.id) },
+      unplacedDeviceOf(row),
       floorId,
       centre,
       createDevicePlacement({ checkCollision: commands.checkCollision }),
