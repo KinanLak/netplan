@@ -2909,3 +2909,73 @@ Questions of 2026-10-21 and 22, in the order they came up (#92, #96, #101, #108,
 - `CopyValue` (A41) was not wired into the inventory, unknown MACs and readings tables (U5's pages); U5 did it in #128.
 - Canvas cable menus (U3) called `portLabel` without the device type, so they still said « Arrière » on switches; U3 fixed it in #124.
 - No NetBox test object was created; NetBox and LibreNMS were only read.
+
+### U7 — Final sweep
+
+Questions of 2026-10-27, in the order they came up (#130, #131, #132).
+
+#### Is A104 still to do?
+
+- Context: A104 asked for « Mur refusé : il traverse un équipement. », « … à ajouter. » and « Salle refusée : elle chevauche un équipement. ».
+- Decision: already done by U3 (#94); the wall and room messages, the eraser's message and the server's wall refusals all read in French with accents. Nothing changed.
+- Why: checked in `src/walls/wallInteraction/messages.ts`, `gestures.ts` and `convex/mapOperations.ts`.
+- Who: agent (obvious)
+
+#### What does A54 put on the drawing tools?
+
+- Context: the audit asked for an `aria-label`, the app's tooltip with the name and key (« Mur · 1 »), and a wall icon that does not look like a separator.
+- Decision: the five icon-only tools (Mur, Salle, Pinceau, Gomme, Texte) get an `aria-label` that says the action (« Dessiner un mur »), `aria-pressed`, and the app tooltip « Mur · 1 » in place of the native `title`. The wall icon becomes a brick wall; the room icon the square the empty-floor card already uses. The eraser is « Gomme » and « Effacer des murs ».
+- Why: the tooltip carries the short name and the key a sighted user learns; the accessible name says what the button does. One tooltip, not two.
+- Who: agent (default recommended by the audit)
+
+#### « Votre appareil n'est plus connecté au réseau » on the offline error screen
+
+- Context: B29 says « équipement », never « appareil »; but here « appareil » is the user's own computer, not a network device.
+- Decision: « Ce navigateur n'est plus connecté au réseau. »
+- Why: « équipement » would read as a network device in this app; « navigateur » is what is actually offline.
+- Who: agent (judgement call)
+
+#### Sentences spliced with the site name (A106)
+
+- Context: « Les équipements de Site de démonstration » reads badly with a capitalised site name.
+- Decision: « Tous les équipements du site, sur le plan ou hors plan. » and « Il rejoint l'inventaire du site, hors plan. ». The site name is already in the header or the picker.
+- Who: agent (default recommended by the audit)
+
+#### A Lecteur's empty inventory mentioned editing
+
+- Context: « Un éditeur peut en créer ici ou les dessiner sur la carte. » was shown to a Lecteur; the owner's rule is that a Lecteur never sees an edit action, even in help text.
+- Decision: « Les équipements du site apparaîtront ici. » for a Lecteur; an Éditeur reads « … ou placez-le directement sur le plan. ».
+- Who: agent (owner's standing preference)
+
+#### How was the accessible-name sweep done?
+
+- Context: « every icon-only button has an accessible name in French », across the whole app.
+- Decision: a script run in the browser listed each visible control (buttons, links, menu items, tabs, inputs, comboboxes) with no accessible name, a name from `title` only, or an English name, on every page with the three roles, in view and edit mode, with the drawer, the ports dialog, the shortcuts dialog, the Placer and Calque panels, the floor and context menus open. It found the combobox's three icon buttons; the ports dialog's 37 identical « Câbler »/« Débrancher » buttons got the port in their name. « Shift » became « Maj » off macOS.
+- Why: a static grep misses names built at run time and composed components (`render` props).
+- Who: agent (judgement call)
+
+#### Which preferences go into CLAUDE.md?
+
+- Context: UX-PLAN asks for the owner's preferences only where they prevent repeated mistakes.
+- Decision: one « Interface » section: the vocabulary, the least UI that works (no legends), few toasts, Lecteur minimalism, the keyboard model (pointing at ADR 0030), times through `<Time>`/`src/lib/time.ts`, checkboxes not switches, French `aria-label` on icon-only buttons. Animations, device names and the brand logo per theme stay out: each was fixed once, in one place.
+- Who: agent (judgement call)
+
+#### Leftovers in the other journals
+
+- Context: the brief asks to finish anything marked « non fait » and still in scope.
+- Decision: none left. U1–U6 mark every item « fait » or « déjà fait »; A38 is obsolete (A29). U4's two leftovers were done by #124 and #128; U4's journal joined the decision log in #129; U1's Keycloak empty-mapping warning was checked in a browser (no defect).
+- Who: orchestrator (scope), agent (check)
+
+#### Items
+
+- A54 — fait #130
+- A55 — fait #130 (dialog and sheet already said « Fermer »; the sidebar rail and the command palette defaults were English)
+- A104 — déjà fait (#94)
+- A106 — fait #130
+- B29 — fait #130
+- Balayage vocabulaire et noms accessibles — fait #131
+- Règles de CLAUDE.md — fait #132
+
+#### Leftovers
+
+- No NetBox test object was created; NetBox and LibreNMS were not touched.
