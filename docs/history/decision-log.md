@@ -2739,3 +2739,173 @@ Questions of 2026-10-21 to 2026-10-27, in the order they came up (#88, #97, #103
 - B20 — fait #113
 - B21 — fait #113
 - B23 — fait #123
+
+### U4 — Sidebar and drawer
+
+Questions of 2026-10-21 and 22, in the order they came up (#92, #96, #101, #108, #115, #117).
+
+#### Where does the site's "Actualiser" go, and what confirms a success?
+
+- Context: A39 asks for the refresh button on the site name's line so the freshness text gets the full width; the owner wants few toasts and inline confirmation.
+- Decision: the map's sidebar puts "Actualiser" (and its Shift+R hint) at the end of the site name's line; the inventory and the site's admin page keep the button at the end of the freshness block. A success turns the button's icon into a check mark for 1.5 s instead of the « Données actualisées » toast; failures keep their toast.
+- Why: the freshness line already says the data is new, so the toast repeated what is visible; a failure is not otherwise visible to the person who pressed.
+- Who: agent (judgement call, owner's standing preference)
+
+#### How long does a failed refresh stay visible (A33)?
+
+- Context: after a failed cycle the sidebar went back to grey « Aucune donnée collectée », as if nothing had been tried.
+- Decision: while the last cycle failed after the last good one, the freshness block's second line reads « Dernière tentative en échec à HH:MM » in the failure colour, for every role, until a cycle succeeds. It replaces the next-run line meanwhile. The « déjà en cours » toast gets a fixed id per site.
+- Why: the failure is a fact about the data everyone reads, not only about who pressed; one line, no new element.
+- Who: agent (obvious)
+
+#### What does the freshness hover card show (B15)?
+
+- Context: one line mixed NetBox and LibreNMS.
+- Decision: hovering or focusing the freshness headline opens a small card with one line per enabled source: NetBox's last import age, LibreNMS's switches read in the last cycle (with how many carry a note) and its newest read age, and « échec à la dernière collecte » in red when that source failed. Admins get a « Voir la santé de la collecte » link. The data comes from `collection.freshness`, which gains `sources` and `switches`.
+- Why: the per-source age is the question a technician asks when the data looks old; the card costs no space until asked.
+- Who: agent (default recommended by the audit)
+
+#### Where does the « hors plan » count live, and where does it lead (A99)?
+
+- Context: the owner wants a small text line « X équipements hors plan », underlined on hover, leading to where those devices get placed.
+- Decision: a muted text line under the freshness block, shown only when the count is above zero, linking to `/inventory?site=…&placement=unplaced` (the inventory gains a `placement` search parameter). Every role sees it: it tells a Lecteur too that the map is not the whole site. Counted by a new `devices.unplacedCount` query, which replaces `devices.offlineForSite`.
+- Why: the inventory is where placing starts (C2, B23 are U3/U5's); the count is information, not an edit action.
+- Who: owner (A99 comment), details by agent
+
+#### What leaves the sidebar with the offline list (A29)?
+
+- Context: the owner: the offline list has nothing to do in the sidebar; keep Undo/Redo where it is; do the rest of the proposal.
+- Decision: removed the « Hors ligne » group and its query, the footer's building reminder and the « Site » label (the site's name heads its group); the header is 56 px. Undo/Redo stay above the account. The offline devices remain one filter away in the inventory (`?status=down`).
+- Why: as decided; A38 (offline rows naming only the floor) becomes moot.
+- Who: owner (A29)
+
+#### How do the « ⋯ » buttons and the presence avatars share a row (A31)?
+
+- Context: the owner: « ⋯ » only on hover of its row, win back space on the right, presence within about 10 s.
+- Decision: a row's « ⋯ » is invisible until the row is hovered, the button focused, or its menu open (always shown on touch screens, which cannot hover). On a floor row the avatars give way to the « ⋯ » while hovered. The floor list loses its right margin. Avatars leave out the signed-in user (the current floor is highlighted already), show two then « +N », name everyone in a tooltip, and use a lighter colour per user so two people tell apart. Truncated building and floor names carry a `title`.
+- Why: the row's own name gets the width; nothing is added.
+- Who: owner (A31 choice), details by agent
+
+#### How fast does presence follow a closed tab (A31)?
+
+- Context: the owner asked why 60 s and wanted about 10 s.
+- Decision: measured before changing anything: with a 2 s heartbeat and a 5 s staleness filter, a closed tab's avatar left the other tab 5.4 s after the close (dev:agent, two sessions). No change. The audit's 60 s matches an observer tab in the background, whose timers the browser throttles; the server-side 60 s only cleans rows up.
+- Why: the target was already met; changing the cadence would cost writes for nothing.
+- Who: agent (measured)
+
+#### What does the save indicator look like (A48)?
+
+- Context: the owner found the « Sauvegarde — Enregistrement en cours… » card far too present and wanted a small white circle with a spinner, then a quick tick, then nothing.
+- Decision: a 28 px circle next to the help button (it follows the drawer): spinner while saving or retrying, tick for 1 s, then a 300 ms fade. Loading the plan shows the spinner without a tick; a refused save shows no tick (zipzoup P2 on #96). The text stays for screen readers through `role="status"`.
+- Why: as asked; the refusal already has its toast.
+- Who: owner (A48 choice), details by agent
+
+#### How are a patch panel's connections listed (A36)?
+
+- Context: eleven 56 px cards in no order.
+- Decision: one line per cable sorted by the device's own port, « Avant 1 → Accès RDC Gi1/0/1 », the far port named only on switches and patch panels, folded after six behind « Voir tout (n) ». A far end not on the floor reads « → hors de cet étage » (it may be on another floor or on none; zipzoup P2).
+- Why: the floor document only knows the floor's devices; the port table names the rest.
+- Who: agent (audit's correction)
+
+#### Where do copy buttons go, and what confirms a copy (A41)?
+
+- Context: owner: an inline icon that becomes a check mark, no toast.
+- Decision: `CopyValue` in the drawer for hostname, IP, each MAC and the serial; the icon shows on hover or focus (always on touch screens) and turns into a check for 1.2 s. It falls back to a selection copy when the page is served over plain HTTP. The inventory, unknown MACs and readings are U5's pages; `CopyValue` is there for them.
+- Why: as asked; self-hosted installs may run without TLS.
+- Who: owner (A41 choice), details by agent
+
+#### How are ports named (A95)?
+
+- Context: NetBox models switch ports as rear ports, so every port read « Arrière GigabitEthernet1/0/1 ».
+- Decision: the side (Avant/Arrière) is said only on patch panels; interface names take Cisco's short forms (Gi, Te, Fa, Eth, Po…) with the full name in a tooltip. Canvas menus, U3's area, keep calling `portLabel` without the type, so they still say the side until U3 passes it.
+- Why: the side means something only where a panel has two.
+- Who: agent (audit's correction)
+
+#### What does « Vu » show in the port table (B28)?
+
+- Context: « Libre » on a port whose switch sees a PC behind it.
+- Decision: « Pas de câble documenté » instead of « Libre », and a « Vu » column: what the network saw on a switch port or behind a socket (its front port, or its only port when NetBox models a socket with a rear port alone), newest first with the time, in the foreground when the last read saw it. Below `sm` the column wraps under the line. A pc's table opens with where it was last seen.
+- Why: the documented cable and the observation are two facts and the table now shows both.
+- Who: agent (default recommended by the audit)
+
+#### Which NetBox interfaces are no ports (A101)?
+
+- Context: `vmbr0` and `vmbr0v12` showed as free ports; sw-core-01 said only « aucun port ». The owner wanted a few words saying the device is unusual.
+- Decision: the import leaves out interfaces typed virtual, bridge or LAG, and, because the real NetBox types `vmbr0` as `1000base-t`, those named as systems name virtual interfaces (vmbr, virbr, bond, team, veth, tap, tun, docker, vlan, vxlan, wg, br-N, Po/Port-channel, lo, sub-interfaces). Their MACs still identify the device. A sourced device without a physical port reads « NetBox ne décrit aucun port physique pour cet équipement, ce qui est inhabituel. »
+- Why: NetBox data is as entered by people; names are the only signal left. Verified on the real NetBox: proxmox02 keeps IDRac, eno1–4 and its two enp179 ports.
+- Who: owner (A101 comment), details by agent
+
+#### Where does an invalid IP get refused (A30)?
+
+- Context: « 999.1.1 » was saved.
+- Decision: `identityEditError`, shared by the forms and the server, accepts IPv4 and IPv6 without a prefix length; the URL parser checks IPv6 notations.
+- Why: one rule for every path that writes an identity.
+- Who: agent (obvious)
+
+#### Does saving an identity get a toast (A32)?
+
+- Context: A32's correction proposed « Identité enregistrée »; B14 (U3) proposes the same toast; the owner wants few toasts.
+- Decision: no toast here: the dialog closes and the drawer or the list shows the new values. Both dialogs keep title and buttons fixed and scroll their fields; Nom is first and focused.
+- Why: the result is visible; B14 is U3's call.
+- Who: agent (owner's standing preference)
+
+#### How is « Plus de nouvelles depuis … » modelled (C7)?
+
+- Context: option (b): a distinct status with the time, and « Vu sur le réseau » in the drawer; the recommendation added that every role sees the last observation (place and time, not the history).
+- Decision: a fourth `DeviceStatus`, `stale`, with `metadata.lastSeenAt` (ADR 0032). Where ADR 0025 removed an expired status, a device or switch the network did see turns `stale` since its newest sighting (pcs, endpoints) or its read (switches); « Inconnu » now means never seen. Online and offline are unchanged. Forgetting LibreNMS still clears everything. `devices.lastSeen` (reader) gives the newest sighting for the drawer and the sheet. On the map, `stale` is a hollow dot in the unknown colour; Santé counts a stale switch as unknown. The recommendation's extra reasons (« Jamais vu », « Aucune MAC ») were not added: the owner chose (b) alone.
+- Why: the smallest model that answers « where was it on Monday morning? » without exposing the history; writing the time only when it changes keeps the cycle from rewriting stale devices.
+- Who: owner (C7 choice), design by agent
+
+#### « Vu sur le réseau » says « à la dernière lecture »?
+
+- Context: a sighting with no misses is the newest the switch saw, but that read itself may have expired.
+- Decision: the section shows the time only; the status chip says whether a read still vouches.
+- Why: « dernière lecture » read as current on a stale device (seen in the browser on ordi-11).
+- Who: agent (obvious)
+
+#### How does a device off the map get a sheet (A96)?
+
+- Context: the drawer lives on the map; 444 of 447 real devices are off it, and inventory rows did nothing.
+- Decision: a read-only side sheet from the inventory row (row click or the name, a button), sharing the drawer's sections; « Câbles » for everyone (read-only for a Lecteur), « Historique » for Éditeurs and Admins, « Voir sur le plan » for a placed device. Clicks inside the row's portalled dialogs do not reopen it.
+- Why: the inventory is where unplaced devices are listed; reusing the sections keeps one presentation.
+- Who: agent (audit's correction)
+
+#### Whose is the shared date helper, and what meanwhile?
+
+- Context: U5 builds the helper (A58, #88), still open while U4's stack shipped.
+- Decision: a stopgap `src/devices/seenAt.ts` (reader's zone, 24 h) for the port table, the chip and « Vu sur le réseau »; the freshness lines keep their existing formatter. Swap to `@/lib/time` once #88 merges.
+- Why: not block four items on another lot's PR; one import to change.
+- Who: agent (judgement call)
+
+#### Items
+
+- A28 — fait #96
+- A29 — fait #92
+- A30 — fait #108
+- A31 — fait #92 (presence already disappears in about 5 s, measured; no cadence change)
+- A32 — fait #108 (no « Identité enregistrée » toast: B14 is U3's)
+- A33 — fait #92
+- A34 — fait #101
+- A35 — fait #101
+- A36 — fait #96
+- A38 — non fait : obsolète, la liste « Hors ligne » a quitté la sidebar (A29)
+- A39 — fait #92
+- A40 — fait #96
+- A41 — fait #96 pour le tiroir (et la fiche, #117) ; `CopyValue` est prêt pour l'inventaire, les MAC inconnues et les relevés, pages de U5, non câblées ici
+- A48 — fait #96
+- A95 — fait #101 (les menus de câblage du plan, zone U3, disent encore le côté sans le type)
+- A96 — fait #117
+- A99 — fait #92
+- A100 — fait #101
+- A101 — fait #108
+- B12 — fait #101
+- B15 — fait #92
+- B28 — fait #101
+- C7 — fait #115 (ADR 0032)
+- C9 — déjà fait : la présence reste par étage, comme décidé (aucun changement)
+
+#### Leftovers
+
+- `CopyValue` (A41) was not wired into the inventory, unknown MACs and readings tables (U5's pages); U5 did it in #128.
+- Canvas cable menus (U3) called `portLabel` without the device type, so they still said « Arrière » on switches; U3 fixed it in #124.
+- No NetBox test object was created; NetBox and LibreNMS were only read.
