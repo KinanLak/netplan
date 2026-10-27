@@ -27,12 +27,19 @@ import type { Alignment } from "@/canvas/arrangement";
 import { Button } from "@/components/ui/button";
 import { ShortcutHintAbsolute } from "@/components/ui/shortcut-hint";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   TOOLBAR_ICON_SIZE_CLASS,
   TOOLBAR_WALL_COLOR_SELECTION_ENABLED,
   UNDO_REDO_EVENT_NAME,
   UNDO_REDO_FLASH_DURATION_MS,
 } from "@/lib/constants";
 import { useShortcutIntentEffect } from "@/hooks/use-shortcuts";
+import { getShortcutDisplay } from "@/lib/shortcuts";
+import type { ShortcutAction } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
 import { WALL_COLOR_ORDER, WALL_COLOR_TONES } from "@/lib/walls";
 import {
@@ -150,13 +157,14 @@ export default function Toolbar() {
         size="sm"
         onClick={() => handleDrawToolClick(action.tool)}
         disabled={!currentFloorId || !isReady}
+        aria-pressed={isActive}
         className={cn(
           "flex h-auto flex-col items-center px-2 py-1.5 @max-[52rem]:px-1",
           isActive && !isEraseAction && "ring-2 ring-ring",
           isEraseAction && isActive && "text-destructive",
           isEraseAction && !isActive && "hover:text-destructive",
         )}
-        title={action.title}
+        aria-label={action.title}
       >
         {action.icon}
       </Button>
@@ -164,7 +172,9 @@ export default function Toolbar() {
 
     return (
       <div key={action.id} className="relative">
-        {button}
+        <ToolTooltip label={action.label} shortcut={action.shortcut}>
+          {button}
+        </ToolTooltip>
         <ShortcutHintAbsolute
           action={action.shortcut}
           position="bottom-center"
@@ -213,25 +223,26 @@ export default function Toolbar() {
         <div className="flex items-center gap-1">
           {drawToolbarActions.map((action) => renderToolbarAction(action))}
           <div className="relative">
-            <Button
-              variant={isLabelToolActive ? "secondary" : "ghost"}
-              size="sm"
-              onClick={toggleLabelTool}
-              disabled={!currentFloorId || !isReady}
-              aria-pressed={isLabelToolActive}
-              className={cn(
-                "flex h-auto flex-col items-center px-2 py-1.5",
-                isLabelToolActive && "ring-2 ring-ring",
-              )}
-              title="Poser une étiquette de texte"
-              aria-label="Poser une étiquette de texte"
-            >
-              <HugeiconsIcon
-                icon={TextIcon}
-                className={TOOLBAR_ICON_SIZE_CLASS}
-                strokeWidth={1.5}
-              />
-            </Button>
+            <ToolTooltip label="Texte" shortcut="tool-label">
+              <Button
+                variant={isLabelToolActive ? "secondary" : "ghost"}
+                size="sm"
+                onClick={toggleLabelTool}
+                disabled={!currentFloorId || !isReady}
+                aria-pressed={isLabelToolActive}
+                className={cn(
+                  "flex h-auto flex-col items-center px-2 py-1.5",
+                  isLabelToolActive && "ring-2 ring-ring",
+                )}
+                aria-label="Poser une étiquette de texte"
+              >
+                <HugeiconsIcon
+                  icon={TextIcon}
+                  className={TOOLBAR_ICON_SIZE_CLASS}
+                  strokeWidth={1.5}
+                />
+              </Button>
+            </ToolTooltip>
             <ShortcutHintAbsolute
               action="tool-label"
               position="bottom-center"
@@ -273,7 +284,8 @@ export default function Toolbar() {
                     backgroundColor: tone.fill,
                     borderColor: tone.stroke,
                   }}
-                  title={`Couleur mur: ${tone.label}`}
+                  aria-label={`Couleur du mur : ${tone.label}`}
+                  aria-pressed={isActive}
                 />
               );
             })}
@@ -321,6 +333,27 @@ export default function Toolbar() {
         </div>
       </div>
     </div>
+  );
+}
+
+/** An icon-only tool names itself and its key on hover or focus (A54). */
+function ToolTooltip({
+  label,
+  shortcut,
+  children,
+}: {
+  label: string;
+  shortcut: ShortcutAction;
+  children: React.ReactElement;
+}) {
+  const keys = getShortcutDisplay(shortcut)[0].join("+");
+  return (
+    <Tooltip>
+      <TooltipTrigger render={children} />
+      <TooltipContent side="bottom">
+        {label} · {keys}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 

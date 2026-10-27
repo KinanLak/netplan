@@ -224,7 +224,7 @@ function SiteInventory({ site }: { site: SiteSummary }) {
         <div>
           <h1 className="text-xl font-semibold">Inventaire</h1>
           <p className="text-sm text-muted-foreground">
-            Les équipements de {site.name}, sur le plan ou non.
+            Tous les équipements du site, sur le plan ou hors plan.
           </p>
           <CollectionFreshness
             siteId={site.id}
@@ -562,8 +562,8 @@ function InventoryEmpty({
       <h2 className="text-base font-semibold">Aucun équipement dans ce site</h2>
       <p className="max-w-md text-sm text-muted-foreground">
         {canEdit
-          ? "Créez-en un ici, hors plan, ou dessinez-le directement sur la carte."
-          : "Un éditeur peut en créer ici ou les dessiner sur la carte."}
+          ? "Créez-en un ici, hors plan, ou placez-le directement sur le plan."
+          : "Les équipements du site apparaîtront ici."}
       </p>
       {canEdit ? (
         <Button onClick={onCreate}>

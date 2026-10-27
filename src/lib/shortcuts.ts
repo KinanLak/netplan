@@ -350,7 +350,7 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
   "edit-device-identity": {
     keys: ["I"],
     label: "Identité",
-    description: "Modifier le nom, les adresses et les notes de l'appareil",
+    description: "Modifier le nom, les adresses et les notes de l'équipement",
     scope: "drawer",
     requiresEdit: true,
   },
@@ -358,7 +358,7 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
     keys: ["U"],
     label: "Retirer du plan",
     description:
-      "Retirer l'appareil du plan ; il reste dans l'inventaire du site",
+      "Retirer l'équipement du plan ; il reste dans l'inventaire du site",
     scope: "drawer",
     requiresEdit: true,
   },
@@ -372,7 +372,7 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
     keys: ["J"],
     label: "Historique",
     description:
-      "Voir où le réseau a vu l'appareil et quand il était en ligne, sur 30 jours",
+      "Voir où le réseau a vu l'équipement et quand il était en ligne, sur 30 jours",
     scope: "drawer",
     requiresEdit: true,
     byRoleOnly: true,

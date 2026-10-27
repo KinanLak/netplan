@@ -78,7 +78,7 @@ export function CreateDeviceDialog({
         <DialogHeader>
           <DialogTitle>Nouvel équipement</DialogTitle>
           <DialogDescription>
-            Il rejoint l'inventaire de {site.name}, hors plan.
+            Il rejoint l'inventaire du site, hors plan.
           </DialogDescription>
         </DialogHeader>
         {/* Mounted on open, so each new device starts from an empty form. */}

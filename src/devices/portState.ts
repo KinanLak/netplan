@@ -4,7 +4,7 @@ import type { DeviceType, Port, PortKind } from "@/types/map";
 export type PortState = "seen" | "up" | "down" | "unknown";
 
 export const PORT_STATE_LABELS: Record<PortState, string> = {
-  seen: "Appareil vu",
+  seen: "Équipement vu",
   up: "Lien actif",
   down: "Lien inactif",
   unknown: "Inconnu",

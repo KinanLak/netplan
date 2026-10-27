@@ -60,7 +60,7 @@ export const shortcutGroups: Array<ShortcutGroup> = [
   },
   {
     id: "build-tools",
-    title: "Outils - Construction",
+    title: "Outils de construction",
     orderPriority: 60,
     actions: [
       "tool-wall",

@@ -42,7 +42,7 @@ export function ErrorScreen({ error, reset }: ErrorComponentProps) {
     ? {
         title: "Pas de connexion",
         description:
-          "Votre appareil n'est plus connecté au réseau. La page se rechargera dès son retour.",
+          "Ce navigateur n'est plus connecté au réseau. La page se rechargera dès son retour.",
       }
     : isNetworkError(error)
       ? {

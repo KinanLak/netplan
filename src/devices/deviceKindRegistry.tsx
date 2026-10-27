@@ -22,14 +22,14 @@ export const deviceKindRegistry = {
   rack: {
     type: "rack",
     label: "Rack",
-    drawerLabel: "Rack Serveur",
+    drawerLabel: "Rack serveur",
     defaultSize: DEFAULT_DEVICE_SIZES.rack,
     nodeAdapter: RackNode,
   },
   switch: {
     type: "switch",
     label: "Switch",
-    drawerLabel: "Switch Réseau",
+    drawerLabel: "Switch réseau",
     defaultSize: DEFAULT_DEVICE_SIZES.switch,
     nodeAdapter: SwitchNode,
   },

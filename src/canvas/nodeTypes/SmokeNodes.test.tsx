@@ -78,7 +78,7 @@ describe("device node smoke renders", () => {
 
     expect(container.querySelectorAll('[title^="Gi1/0/"]').length).toBe(48);
     for (const title of [
-      "Gi1/0/1 : Appareil vu",
+      "Gi1/0/1 : Équipement vu",
       "Gi1/0/2 : Lien actif",
       "Gi1/0/3 : Lien inactif",
       "Gi1/0/4 : Inconnu",
