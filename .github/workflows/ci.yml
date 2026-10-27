@@ -121,10 +121,19 @@ jobs:
       # High and critical fail. Accepted advisories, each with its reason:
       # - GHSA-vfj7-8cjw-p6xm (braces): no fixed version is published; only
       #   reached through dev tooling (shadcn CLI, react-scan) on trusted input.
+      # - GHSA-965c-763c-88jm, GHSA-r4xp-prcw-77qf, GHSA-q84f-53jg-9ppm
+      #   (better-auth): fixed only in 1.7, which @convex-dev/better-auth does
+      #   not support yet (its latest, 0.12.6, wants <1.7.0). They need the
+      #   Magic Link, OAuth Proxy or device authorization plugins; convex/auth.ts
+      #   enables none and keeps OAuth state in the database. Drop them with
+      #   the move to 1.7.
       - name: No high or critical advisory
         run: >-
           bun audit --audit-level=high
           --ignore=GHSA-vfj7-8cjw-p6xm
+          --ignore=GHSA-965c-763c-88jm
+          --ignore=GHSA-r4xp-prcw-77qf
+          --ignore=GHSA-q84f-53jg-9ppm
 
   e2e:
     name: End-to-end
