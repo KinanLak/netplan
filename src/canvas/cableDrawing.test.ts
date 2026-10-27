@@ -50,12 +50,12 @@ describe("cableStart", () => {
     const unplug = {
       kind: "unplug",
       cable: floor.cables[0],
-      label: "« Accès » 1 ↔ « Prise 2 » Avant 1",
+      label: "« Accès » 1 ↔ « Prise 2 » 1",
     };
     expect(press("sw")).toEqual(unplug);
     expect(press("wall2")).toEqual({
       ...unplug,
-      label: "« Prise 2 » Avant 1 ↔ « Accès » 1",
+      label: "« Prise 2 » 1 ↔ « Accès » 1",
     });
   });
 
@@ -118,6 +118,31 @@ describe("cableDropResult", () => {
     expect(result.kind).toBe("pick");
     // 24 ports, one already cabled.
     expect(result.kind === "pick" && result.ports).toHaveLength(23);
+  });
+
+  it("names a switch's rear ports by their name alone, as the port table does", () => {
+    // A real NetBox models switch ports as rear ports.
+    const rear = ports.map((port) =>
+      port.deviceId === "sw" ? { ...port, kind: "rear" as const } : port,
+    );
+    const result = cableDropResult(
+      fromWall,
+      { deviceId: id("sw") },
+      {
+        ...floor,
+        ports: rear,
+      },
+    );
+    expect(result.kind === "pick" && result.deviceType).toBe("switch");
+    const refused = cableDropResult(
+      fromWall,
+      { deviceId: id("sw"), portId: portOf("sw").id },
+      { ...floor, ports: rear },
+    );
+    expect(refused).toEqual({
+      kind: "refused",
+      reason: "« Accès » 1 est déjà câblé.",
+    });
   });
 
   it("cables a device's only free port at once", () => {

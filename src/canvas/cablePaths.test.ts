@@ -188,7 +188,7 @@ describe("cablePathOf", () => {
     );
     expect(hops(path)).toEqual(["wall>p", "p>sw"]);
     expect(path.ends).toEqual([
-      { kind: "port", at: id("sw"), portName: "Arrière rear 7" },
+      { kind: "port", at: id("sw"), portName: "rear 7" },
     ]);
   });
 

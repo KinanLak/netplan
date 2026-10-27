@@ -242,7 +242,7 @@ const walk = (
       path.ends.push({
         kind: "port",
         at: far.deviceId,
-        portName: portLabel(far),
+        portName: portLabel(far, floor.devices.get(far.deviceId)?.type),
       });
       return far;
     }
@@ -262,7 +262,7 @@ const walk = (
         path.ends.push({
           kind: "shared",
           at: far.deviceId,
-          portName: portLabel(far),
+          portName: portLabel(far, floor.devices.get(far.deviceId)?.type),
         });
         return far;
       }
@@ -274,7 +274,7 @@ const walk = (
       path.ends.push({
         kind: "port",
         at: far.deviceId,
-        portName: portLabel(far),
+        portName: portLabel(far, floor.devices.get(far.deviceId)?.type),
       });
       return far;
     }
