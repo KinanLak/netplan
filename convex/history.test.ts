@@ -202,4 +202,96 @@ describe("history", () => {
     }));
     expect(left).toEqual({ slots: [kept], entries: 2 });
   });
+
+  it("searches a whole snapshot, past its first page, in any MAC notation", async () => {
+    const t = testBackend();
+    const at = Date.now() - DAY;
+    await t.run(async (ctx) => {
+      const slotId = await ctx.db.insert("historySlots", {
+        siteId: "site:a",
+        day: "2026-10-20",
+        time: "14:00",
+        at,
+        takenAt: at,
+        entries: 600,
+      });
+      for (let n = 0; n < 600; n += 1) {
+        const hex = n.toString(16).padStart(4, "0");
+        await ctx.db.insert("historySlotEntries", {
+          slotId,
+          siteId: "site:a",
+          slotAt: at,
+          mac: `02:6e:70:00:${hex.slice(0, 2)}:${hex.slice(2)}`,
+          ...(n === 599 && {
+            deviceId: "device:last",
+            deviceName: "Poste 599",
+          }),
+          place: {
+            switchId: "device:sw",
+            switchName: "sw",
+            portId: "port:1",
+            portName: "Gi1/0/1",
+          },
+        });
+      }
+    });
+    const editor = t.withIdentity(
+      (await createSignedInUser(t, "editor")).identity,
+    );
+    const search = async (text: string) => {
+      const found: Array<string> = [];
+      let cursor: string | null = null;
+      for (;;) {
+        const result: {
+          page: Array<{ mac: string }>;
+          isDone: boolean;
+          continueCursor: string;
+        } = await editor.query(api.history.slotEntries, {
+          siteId: "site:a",
+          day: "2026-10-20",
+          time: "14:00",
+          search: text,
+          paginationOpts: { numItems: 500, cursor },
+        });
+        found.push(...result.page.map(({ mac }) => mac));
+        if (result.isDone) return found;
+        cursor = result.continueCursor;
+      }
+    };
+    // Past the first 500 addresses, written without colons.
+    expect(await search("026e70000257")).toEqual(["02:6e:70:00:02:57"]);
+    expect(await search("poste 599")).toEqual(["02:6e:70:00:02:57"]);
+  });
+
+  it("opens on the latest complete snapshot, past any number of failed ones", async () => {
+    const t = testBackend();
+    await t.run(async (ctx) => {
+      const base = Date.parse("2026-10-01T06:00:00Z");
+      await ctx.db.insert("historySlots", {
+        siteId: "site:a",
+        day: "2026-10-01",
+        time: "08:00",
+        at: base,
+        takenAt: base,
+        entries: 3,
+      });
+      // Twenty-five later captures that never completed.
+      for (let n = 1; n <= 25; n += 1) {
+        const day = `2026-10-${String(1 + n).padStart(2, "0")}`;
+        await ctx.db.insert("historySlots", {
+          siteId: "site:a",
+          day,
+          time: "08:00",
+          at: base + n * DAY,
+          takenAt: base + n * DAY,
+        });
+      }
+    });
+    const editor = t.withIdentity(
+      (await createSignedInUser(t, "editor")).identity,
+    );
+    expect(
+      await editor.query(api.history.latestSlot, { siteId: "site:a" }),
+    ).toEqual({ day: "2026-10-01", time: "08:00" });
+  });
 });

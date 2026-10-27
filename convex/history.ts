@@ -385,6 +385,26 @@ export const captureSlot = internalMutation({
   },
 });
 
+/** The site's most recent complete snapshot, where the snapshots view opens. */
+export const latestSlot = editorQuery({
+  args: { siteId: v.string() },
+  returns: v.union(v.null(), v.object({ day: v.string(), time: v.string() })),
+  handler: async (ctx, { siteId }) => {
+    // A failed capture leaves a slot without entries: read past those, at
+    // most the 30 days of five slots retention keeps.
+    const slots = ctx.db
+      .query("historySlots")
+      .withIndex("by_site_day", (q) => q.eq("siteId", siteId))
+      .order("desc");
+    for await (const slot of slots) {
+      if (slot.entries !== undefined) {
+        return { day: slot.day, time: slot.time };
+      }
+    }
+    return null;
+  },
+});
+
 /** The snapshots a site took on one of its days, in time order. */
 export const slotsForDay = editorQuery({
   args: { siteId: v.string(), day: v.string() },
@@ -418,16 +438,22 @@ const toPublicEntry = ({
   place,
 });
 
-/** Where each MAC address was at one snapshot, in address order. */
+/**
+ * Where each MAC address was at one snapshot, in address order. `search`
+ * keeps the entries whose MAC (any notation), device or place holds every
+ * word, across the whole snapshot before pagination: a page may come back
+ * short, never missing a match.
+ */
 export const slotEntries = editorQuery({
   args: {
     siteId: v.string(),
     day: v.string(),
     time: v.string(),
+    search: v.optional(v.string()),
     paginationOpts: paginationOptsValidator,
   },
   returns: paginationResultValidator(publicSnapshotEntry),
-  handler: async (ctx, { siteId, day, time, paginationOpts }) => {
+  handler: async (ctx, { siteId, day, time, search, paginationOpts }) => {
     const slot = await ctx.db
       .query("historySlots")
       .withIndex("by_site_day", (q) =>
@@ -437,10 +463,28 @@ export const slotEntries = editorQuery({
     if (slot?.entries === undefined) {
       return { page: [], isDone: true, continueCursor: "" };
     }
-    const result = await ctx.db
+    const entries = ctx.db
       .query("historySlotEntries")
-      .withIndex("by_slot_mac", (q) => q.eq("slotId", slot._id))
-      .paginate(paginationOpts);
+      .withIndex("by_slot_mac", (q) => q.eq("slotId", slot._id));
+    const query = search?.trim() ?? "";
+    const result = await (
+      query === ""
+        ? entries
+        : filter(entries, (entry) =>
+            matchesSearch(
+              [
+                entry.deviceName,
+                entry.place.socketName,
+                entry.place.switchName,
+                entry.place.portName,
+                entry.place.floorName,
+                entry.place.buildingName,
+              ],
+              [entry.mac],
+              query,
+            ),
+          )
+    ).paginate(paginationOpts);
     return { ...result, page: result.page.map(toPublicEntry) };
   },
 });

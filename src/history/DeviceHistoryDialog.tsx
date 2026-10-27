@@ -1,7 +1,9 @@
 import { usePaginatedQuery } from "convex/react";
 import { useState } from "react";
 import { Time } from "@/components/time";
-import { Button } from "@/components/ui/button";
+import { UnderlineTabs } from "@/components/underline-tabs";
+import { snapshotRuns } from "@/history/snapshotRuns";
+import { timeline } from "@/history/timeline";
 import {
   Dialog,
   DialogContent,
@@ -37,7 +39,9 @@ export function DeviceHistoryDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
+      {/* Anchored at the top: switching views changes the height, and a
+          centred dialog would jump. */}
+      <DialogContent className="top-[8vh] translate-y-0 sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Historique de « {device.name} »</DialogTitle>
           <DialogDescription>
@@ -54,28 +58,16 @@ function DeviceHistoryBody({ deviceId }: { deviceId: string }) {
   const [view, setView] = useState<View>("events");
   return (
     <div className="space-y-3">
-      <div
-        role="group"
-        aria-label="Vue"
-        className="flex w-fit gap-1 rounded-lg border p-1"
-      >
-        <Button
-          size="sm"
-          variant={view === "events" ? "secondary" : "ghost"}
-          aria-pressed={view === "events"}
-          onClick={() => setView("events")}
-        >
-          Événements
-        </Button>
-        <Button
-          size="sm"
-          variant={view === "snapshots" ? "secondary" : "ghost"}
-          aria-pressed={view === "snapshots"}
-          onClick={() => setView("snapshots")}
-        >
-          Relevés
-        </Button>
-      </div>
+      <UnderlineTabs
+        label="Vue"
+        idPrefix={`device-history-${deviceId}`}
+        value={view}
+        onChange={setView}
+        tabs={[
+          { value: "events", label: "Événements" },
+          { value: "snapshots", label: "Relevés" },
+        ]}
+      />
       {view === "events" ? (
         <DeviceEvents deviceId={deviceId} />
       ) : (
@@ -104,17 +96,19 @@ function DeviceEvents({ deviceId }: { deviceId: string }) {
   return (
     <ScrollArea className="*:data-[slot=scroll-area-viewport]:max-h-[60vh]">
       <ul className="divide-y divide-border">
-        {results.map((event) => (
-          <li
-            key={`${event.at}-${event.kind}`}
-            className="grid grid-cols-[9rem_1fr] gap-3 py-2 text-sm"
-          >
-            <span className="text-muted-foreground tabular-nums">
-              <Time at={event.at} />
-            </span>
-            <EventSummary event={event} />
-          </li>
-        ))}
+        {timeline(results)
+          .flatMap((day) => day.rows)
+          .map(({ event, cameOnline }) => (
+            <li
+              key={`${event.at}-${event.kind}`}
+              className="grid grid-cols-[9rem_1fr] gap-3 py-2 text-sm"
+            >
+              <span className="text-muted-foreground tabular-nums">
+                <Time at={event.at} />
+              </span>
+              <EventSummary event={event} cameOnline={cameOnline} />
+            </li>
+          ))}
       </ul>
       <LoadMore status={status} onLoadMore={() => loadMore(30)} />
     </ScrollArea>
@@ -139,18 +133,37 @@ function DeviceSnapshots({ deviceId }: { deviceId: string }) {
       </p>
     );
   }
+  const manyMacs = new Set(results.map(({ mac }) => mac)).size > 1;
   return (
     <ScrollArea className="*:data-[slot=scroll-area-viewport]:max-h-[60vh]">
       <ul className="divide-y divide-border">
-        {results.map((entry) => (
+        {snapshotRuns(results).map(({ newest, oldestAt, count }) => (
           <li
-            key={`${entry.slotAt}-${entry.mac}`}
-            className="grid grid-cols-[9rem_1fr] gap-3 py-2 text-sm"
+            key={`${newest.slotAt}-${newest.mac}`}
+            className="grid grid-cols-[11rem_1fr] gap-3 py-2 text-sm"
           >
-            <span className="text-muted-foreground tabular-nums">
-              <Time at={entry.slotAt} />
+            <span className="flex flex-col text-muted-foreground tabular-nums">
+              {count === 1 ? (
+                <Time at={newest.slotAt} />
+              ) : (
+                <>
+                  <span>
+                    <Time at={oldestAt} /> →
+                  </span>
+                  <Time at={newest.slotAt} />
+                  <span className="text-xs">{count} relevés</span>
+                </>
+              )}
             </span>
-            <PlaceLabel place={entry.place} />
+            <span className="flex min-w-0 flex-col">
+              <PlaceLabel place={newest.place} />
+              {/* Two places at one time are two MACs, not a contradiction. */}
+              {manyMacs ? (
+                <span className="font-mono text-xs text-muted-foreground">
+                  {newest.mac}
+                </span>
+              ) : null}
+            </span>
           </li>
         ))}
       </ul>
