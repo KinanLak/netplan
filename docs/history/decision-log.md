@@ -2451,6 +2451,13 @@ Questions of 2026-10-21 and 2026-10-22, in the order they came up (ADR 0030, #91
 - Why: A23 asks for a lasso « sans changer de mode »; the room tool draws by dragging, and a selection box there would fight it.
 - Who: agent (judgement call)
 
+#### Tests that assumed the map opens in edit mode
+
+- Context: with B5 the store starts in view mode; two panel tests (calque, then U3's placing panel) passed in the full suite only because an earlier test left edit mode on.
+- Decision: each test seeds the edit mode it needs; every test file was run in isolation once to find others (none).
+- Why: a test must not depend on the order of the suite.
+- Who: agent (obvious)
+
 #### Screenshots in pull requests
 
 - Decision: uploaded to a gist (`KinanLak/5379e3c24ab1debd47d1eacd688cc53d`), as earlier lots did; never committed.
