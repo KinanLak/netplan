@@ -41,8 +41,19 @@ function PlaceDevicePanelContent() {
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   // The row the search field's arrows move and Enter places; a new device
-  // starts there.
-  const [activeId, setActiveId] = useState<string | null>(null);
+  // starts there, and so does the device the inventory sent here (B23).
+  const placeTargetId = useMapStore((s) => s.placeTargetId);
+  const [activeId, setActiveId] = useState<string | null>(placeTargetId);
+  // The panel may already be open when the inventory sends another device:
+  // the new target takes over, and a search that would hide it is cleared.
+  const [appliedTargetId, setAppliedTargetId] = useState(placeTargetId);
+  if (placeTargetId !== appliedTargetId) {
+    setAppliedTargetId(placeTargetId);
+    if (placeTargetId !== null) {
+      setActiveId(placeTargetId);
+      setQuery("");
+    }
+  }
 
   const unplaced = devices
     ?.filter((device) => !device.location)

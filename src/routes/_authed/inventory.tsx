@@ -2,6 +2,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { Add01Icon, Search01Icon } from "@hugeicons/core-free-icons";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
+import { toast } from "sonner";
 import { useEffect, useId, useState } from "react";
 import { ModeToggle } from "@/components/mode-toggle";
 import { ListSkeleton } from "@/components/loading-skeletons";
@@ -44,6 +45,7 @@ import type {
   Placement,
 } from "@/inventory/filters";
 import { ColumnPicker, InventoryTable } from "@/inventory/InventoryTable";
+import { openPlacement } from "@/inventory/showOnMap";
 import { useRestoredScroll } from "@/inventory/useRestoredScroll";
 import { ImportReviews } from "@/sites/ImportReviews";
 import { SiteSwitcher } from "@/sites/SiteSwitcher";
@@ -148,6 +150,8 @@ function SiteInventory({ site }: { site: SiteSummary }) {
   const filters = { ...fromUrl, query: draft ?? fromUrl.query };
   const sort = sortOf(search);
   const [creating, setCreating] = useState(false);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  const goTo = useNavigate();
   const [hidden, setHidden] = useState(readHiddenColumns);
   useSlashToSearch();
   useRestoredScroll("inventory-page", devices !== undefined);
@@ -402,6 +406,7 @@ function SiteInventory({ site }: { site: SiteSummary }) {
                   hidden={hidden}
                   sort={sort}
                   onSort={(next) => update({}, next)}
+                  highlightId={highlightId}
                 />
               )}
             </>
@@ -414,6 +419,29 @@ function SiteInventory({ site }: { site: SiteSummary }) {
           site={site}
           open={creating}
           onOpenChange={setCreating}
+          onCreated={(deviceId, name) => {
+            // The new row may hide behind a filter, and in a long list it is
+            // easy to miss: show it, light it, and say where it is (A60).
+            update(
+              { query: "", placement: "all", status: "all", type: "all" },
+              sort,
+            );
+            setHighlightId(deviceId);
+            window.setTimeout(
+              () =>
+                setHighlightId((current) =>
+                  current === deviceId ? null : current,
+                ),
+              2_500,
+            );
+            toast(`« ${name} » créé, hors plan`, {
+              action: {
+                label: "Placer sur le plan",
+                onClick: () => openPlacement(goTo, site.id, deviceId),
+              },
+              duration: 10_000,
+            });
+          }}
         />
       ) : null}
     </div>
@@ -472,7 +500,8 @@ function PlanCoverage({
         </h2>
         {canEdit ? (
           <p className="text-xs text-muted-foreground">
-            Un équipement hors plan se place depuis la carte, avec « Placer ».
+            Un équipement hors plan se place depuis son menu, « Placer sur le
+            plan… ».
           </p>
         ) : null}
       </div>
