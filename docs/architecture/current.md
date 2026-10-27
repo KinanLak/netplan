@@ -307,6 +307,13 @@ Built by lot 5 (ADR 0027).
   in its own mutation, then its action writes the MACs it saw to
   `historySlotEntries`, 500 per mutation, and marks the slot complete. An
   incomplete or missing slot reads "Pas de relevé"; nothing fills it later.
+- **Reading it.** `history.forSite` and `history.slotEntries` search before
+  paging (every word, any MAC notation, device and place names) and the page
+  reads on until it fills; dates narrow the index range. The page groups
+  events under the reader's days and merges an arrival's `located` and
+  `online` for display only (`src/history/timeline.ts`); a device's
+  snapshots fold into runs per MAC and place (`snapshotRuns`). View, filters,
+  day and slot live in the URL.
 - **Access and retention.** Every history query is an `editorQuery`; a
   Lecteur is refused by the server. A daily cron deletes events and slots
   older than 30 days in pages of 500.
