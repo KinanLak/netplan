@@ -23,10 +23,10 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "@convex-dev/better-auth": "^0.12.5",
+    "@convex-dev/better-auth": "^0.12.6",
     "better-auth": "1.6.33",
-    "convex": "^1.46.0",
-    "convex-helpers": "^0.1.128",
+    "convex": "^1.48.0",
+    "convex-helpers": "^0.1.129",
     "nodemailer": "^10.1.1",
     "undici": "^8.12.3"
   },
@@ -35,7 +35,7 @@
     "@base-ui/react": "^1.9.0",
     "@fontsource-variable/jetbrains-mono": "^5.3.0",
     "@fontsource-variable/plus-jakarta-sans": "^5.3.0",
-    "@happy-dom/global-registrator": "^21.0.1",
+    "@happy-dom/global-registrator": "^21.0.4",
     "@hugeicons/core-free-icons": "^4.3.5",
     "@hugeicons/react": "^1.1.10",
     "@playwright/test": "^1.64.1",
@@ -66,7 +66,7 @@
     "concurrently": "^10.0.6",
     "convex-test": "^0.0.62",
     "eslint-plugin-react-hooks": "^7.1.1",
-    "happy-dom": "^21.0.1",
+    "happy-dom": "^21.0.4",
     "mitata": "^1.0.34",
     "nitro": "3.0.260903-beta",
     "oxfmt": "^0.73.0",
@@ -76,7 +76,7 @@
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-scan": "^0.5.7",
-    "shadcn": "^4.21.5",
+    "shadcn": "^4.22.2",
     "sonner": "^2.0.8",
     "tailwind-merge": "^3.7.0",
     "tailwindcss": "^4.3.3",
@@ -85,5 +85,9 @@
     "vite": "^8.3.4",
     "zustand": "^5.0.15"
   },
-  "packageManager": "bun@1.4.2"
+  "packageManager": "bun@1.4.2",
+  "overrides": {
+    "zod": "^4.6.7",
+    "body-parser": "^2.4.0"
+  }
 }
