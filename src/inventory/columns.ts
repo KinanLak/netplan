@@ -16,6 +16,7 @@ export const OPTIONAL_COLUMNS = [
   { id: "macs", label: "Adresses MAC", width: "10rem" },
   { id: "ip", label: "Adresse IP", width: "8rem" },
   { id: "location", label: "Emplacement", width: "15rem" },
+  { id: "seen", label: "Vu le", width: "9rem" },
 ] as const;
 
 export type ColumnId = (typeof OPTIONAL_COLUMNS)[number]["id"];

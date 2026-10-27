@@ -351,6 +351,45 @@ describe("the site inventory", () => {
     );
   });
 
+  it("says when the network last saw each device, by its latest MAC", async () => {
+    const t = await signedInTest();
+    const { siteId } = await siteWithFloor(t);
+    const OTHER = "02:ab:cd:00:00:0a";
+    await t.mutation(api.devices.create, {
+      siteId,
+      deviceId: "device:seen",
+      type: "pc",
+      identity: identity("Vu", [MAC, OTHER]),
+    });
+    await t.mutation(api.devices.create, {
+      siteId,
+      deviceId: "device:never",
+      type: "pc",
+      identity: identity("Jamais vu"),
+    });
+    await t.run(async (ctx) => {
+      for (const [mac, seenAt] of [
+        [MAC, 1_000],
+        [OTHER, 5_000],
+      ] as const) {
+        await ctx.db.insert("macSightings", {
+          siteId,
+          mac,
+          switchId: "device:sw",
+          portId: "port:1",
+          seenAt,
+          misses: 0,
+        });
+      }
+    });
+
+    const list = await t.query(api.devices.listForSite, { siteId });
+    expect(list.find(({ id }) => id === "device:seen")?.seenAt).toBe(5_000);
+    expect(
+      list.find(({ id }) => id === "device:never")?.seenAt,
+    ).toBeUndefined();
+  });
+
   it("counts the site's devices that stand on no floor", async () => {
     const t = await signedInTest();
     const { siteId, floorId } = await siteWithFloor(t);

@@ -13,6 +13,8 @@ import type { ReactNode } from "react";
 import { toast } from "sonner";
 import { StatusDot } from "@/components/StatusDot";
 import { CopyValue } from "@/components/copy-value";
+import { Time } from "@/components/time";
+import { useNow } from "@/hooks/use-now";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -121,6 +123,7 @@ export function InventoryTable({
   /** A device just created: scrolled to and lit for a moment (A60). */
   highlightId?: string | null;
 }) {
+  const now = useNow(60_000);
   const columns = OPTIONAL_COLUMNS.filter(
     (column) => !hidden.includes(column.id),
   );
@@ -180,6 +183,7 @@ export function InventoryTable({
               site={site}
               canEdit={canEdit}
               shows={shows}
+              now={now}
               highlighted={device.id === highlightId}
             />
           ))}
@@ -238,12 +242,15 @@ function InventoryItem({
   site,
   canEdit,
   shows,
+  now,
   highlighted,
 }: {
   device: InventoryRow;
   site: SiteSummary;
   canEdit: boolean;
   shows: (id: ColumnId) => boolean;
+  /** Today, for « Vu le »: one clock for the whole table. */
+  now: number;
   highlighted: boolean;
 }) {
   const navigate = useNavigate();
@@ -398,6 +405,15 @@ function InventoryItem({
       {shows("location") ? (
         <td className={cn(CELL, "truncate")} title={place}>
           {place ?? <span className="text-muted-foreground">Hors plan</span>}
+        </td>
+      ) : null}
+      {shows("seen") ? (
+        <td className={cn(CELL, "whitespace-nowrap text-muted-foreground")}>
+          {device.seenAt === undefined ? (
+            "—"
+          ) : (
+            <Time at={device.seenAt} format="when" now={now} />
+          )}
         </td>
       ) : null}
       <td className="px-2 py-1.5 align-middle">
