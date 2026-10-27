@@ -2468,3 +2468,158 @@ Questions of 2026-10-21 and 2026-10-22, in the order they came up (ADR 0030, #91
 - Context: sessions dropped on full reloads at `127.0.0.1`.
 - Decision: open dev:agent as `u2.localhost:<port>` (shared preview cookies clash across worktrees).
 - Who: agent (obvious)
+
+### U6 — Admin
+
+#### What does « Enregistrer et tester » do when only « Utiliser … dans la collecte » changed?
+
+- Context: the owner wants « Enregistrer et tester » to save only after a successful test (A72). Applied literally, a source that is down could never be switched off.
+- Decision: when the address, token and certificate option are unchanged, the button reads « Enregistrer » and saves without testing; otherwise it tests first and saves only on success.
+- Why: a broken source must stay stoppable; the test guards what it can prove (the connection), not the collection switch.
+- Who: agent (judgement call)
+
+#### Does the owner's A72 choice override the L2 decision « the connection stays saved when the test fails »?
+
+- Context: decision-log L2 kept a failed connection saved so an unreachable LibreNMS stayed configurable.
+- Decision: yes; a failed test saves nothing and says « Rien n'a été enregistré ». The operations doc is updated; the frozen decision log is not.
+- Why: owner's explicit « Choix » on A72; the disable-without-test path above covers the unreachable case.
+- Who: owner (A72)
+
+#### How does the form confirm a save without a toast?
+
+- Context: owner prefers inline confirmation for small actions whose result is visible.
+- Decision: a shared `useFlash` hook; the save button reads « Enregistré » for 2 s.
+- Why: smallest visible confirmation; reused by every admin form in the lot (A79).
+- Who: agent (obvious)
+
+#### Can the NetBox push be turned on before an import is configured?
+
+- Context: A77; the push writes to devices imported from NetBox, which needs a NetBox site and at least one role.
+- Decision: no; the checkbox is disabled with a one-line reason, the server refuses it, and turning it on asks for confirmation with the number of imported devices. Turning it off stays immediate.
+- Why: turning it on without an import only looks like it works; off is the safe direction.
+- Who: agent (obvious)
+
+#### How do I verify integration forms without touching the real NetBox?
+
+- Context: the brief says real integrations stay untouched unless an item needs them.
+- Decision: a throwaway Bun server on the host (outside the repo) answering like NetBox after 2.5 s, reached by the backend container through its Docker bridge gateway.
+- Why: shows the pending state and both outcomes without any real request.
+- Who: agent (obvious)
+
+#### Toast or inline confirmation in the admin (A79)?
+
+- Context: the audit proposed a toast after every success; the owner prefers few toasts.
+- Decision: inline for results visible in place (a button reads « Enregistré », a row notice); a toast only when the result is out of sight: an invitation sent (the mail), a site deleted (the page leaves), an invitation cancelled (the row vanishes).
+- Why: owner's standing preference beats the audit's default.
+- Who: agent (judgement call)
+
+#### Who counts as « en ligne » on the users page (A87)?
+
+- Context: zipzoup asked to publish presence from admin pages too.
+- Decision: no; presence stays per floor (owner C9 option a). The line reads « Sur le plan » so it says what it measures; otherwise it shows the last sign-in, recorded by a better-auth session hook in a `signIns` table.
+- Why: C9 decided presence is the map's; adding admin presence is the rejected option.
+- Who: owner (C9)
+
+#### Can the admin copy an invitation link (B26)?
+
+- Context: B26 default: mail only, show expiry and send state.
+- Decision: kept the default. The row shows « Lien valable encore N j » or « Aucun lien valable : renvoyez l'invitation »; a link whose mail failed is deleted so it never reads as pending.
+- Why: a copyable link would let an admin set someone else's password.
+- Who: owner (B26 default)
+
+#### Which users can be deleted (C5)?
+
+- Decision: only an invitation never accepted (no credential or SSO account); the server refuses anything else, which stays « Désactiver ».
+- Who: owner (C5 option a)
+
+#### How does the site page guard unsaved changes (A81)?
+
+- Context: five independent forms on one page.
+- Decision: a page-level provider; each form reports dirty for its part; a dot in the sticky section bar marks the part; TanStack `useBlocker` with `beforeunload` asks before leaving. The section bar scrolls with buttons, not `#` links, since a hash change is a navigation the guard would stop. Deleting the site ignores the guard.
+- Why: one guard, one question naming the sections; no URL churn.
+- Who: agent (judgement call)
+
+#### When does « Mise en route » show (B24)?
+
+- Decision: while the site has no building, or while a connected site has steps open (connection, NetBox import, LibreNMS mapping, first collection). A hand-drawn plan with buildings never sees it.
+- Why: the demo-style hand-drawn site is complete without integrations; the card must not nag forever.
+- Who: agent (judgement call)
+
+#### LibreNMS suggestions (A89)?
+
+- Decision: a switch never configured starts empty; its suggestion shows under the field with « Utiliser », and « Appliquer les N suggestions » takes them all. A device chosen for several switches is noted as normal for a stack, not refused.
+- Why: a guess must not look saved; stacks share one LibreNMS device by design.
+- Who: agent (obvious)
+
+#### Sites list device count (A94)?
+
+- Context: counting devices per site read every device and reran at each move (self-review P1).
+- Decision: no device count; the row shows freshness, buildings and floors, tools, time zone.
+- Who: agent (judgement call)
+
+#### Partial collection headline (A74)?
+
+- Decision: before any full success, a cycle that read some sources reads « Collecte partielle il y a … : X en échec », amber. After a full success, the headline keeps its age from that success and the step lines carry the failure. The amber `--warning` token is new and also used for notes and the TLS warning (A98).
+- Who: agent (judgement call)
+
+#### Merging while other lots keep landing
+
+- Context: main moved several times an hour; rebasing restarted CI each time.
+- Decision: merge when GitHub reports CLEAN and CI passed on a head rebased minutes before, after checking the files main changed since do not overlap mine except trivially (a sorted policy table).
+- Why: the alternative was an endless chase; the overlap check keeps the risk visible.
+- Who: agent (judgement call)
+
+#### How is an archived site read only (C8)?
+
+- Context: owner chose option a: hidden from the picker, read only, no collection, reversible.
+- Decision: `sites.archivedAt`; `requireOpenSite` on every user write path, and `mapOperations.apply` rejects an archived site's operations (the seed and the collection call the engine directly); a layout-level `SiteArchivedContext` folds into `useCanEditSite`, so edit controls disappear as for a Lecteur, admins included. History stays readable by role (sidebar link, drawer, « J »). Archiving drops a running cycle's and push's lease; the cron, « Actualiser » and the NetBox push skip it; Santé hides it. Admin settings stay editable; deletion still needs an empty site. ADR 0033 (0032 was taken by U4).
+- Why: one guard on the server, one switch in the client; nothing deleted, so « Désarchiver » restores everything.
+- Who: owner (C8 option a), implementation by agent
+
+#### A 24-hour time field (A90)?
+
+- Decision: a plain text input (« HH:MM », numeric keyboard) instead of `type="time"`, tidied on blur (« 730 » → « 07:30 »), refused under the field otherwise.
+- Why: a native time field follows the browser's locale (AM/PM) and its icon vanishes in the dark theme; no picker is needed for two times of day.
+- Who: owner (A90 choice), field by agent
+
+#### The time zone picker (A91)?
+
+- Decision: alphabetical, the browser's zone first (« · ce navigateur »), each zone with its current offset.
+- Who: owner (A91 choice)
+
+#### How do I verify LibreNMS screens without the real one?
+
+- Decision: the same throwaway host server also answers like LibreNMS (system, devices, ports, FDB), with one device answering 404 to show the « n'existe plus » path.
+- Who: agent (obvious)
+
+#### Items
+
+- A72 — fait #90
+- A73 — fait #90
+- A74 — fait #119
+- A75 — fait #119
+- A76 — fait #90
+- A77 — fait #90
+- A78 — fait #102
+- A79 — fait #102 (utilisateurs) et #109 (sites)
+- A80 — fait #102
+- A81 — fait #109
+- A82 — fait #90 (intégrations), #102 (invitation), #109 (site)
+- A83 — fait #109
+- A84 — fait #109
+- A85 — fait #119
+- A86 — fait #102
+- A87 — fait #102 (« Sur le plan » : présence par étage, C9)
+- A88 — fait #102 (préremplissage via le paramètre `login` d'U1)
+- A89 — fait #109
+- A90 — fait #122
+- A91 — fait #122
+- A92 — fait #90
+- A93 — fait #90
+- A94 — fait #109
+- A98 — fait #119
+- B24 — fait #109
+- B26 — fait #102 (défaut : e-mail seul, validité affichée)
+- B27 — fait #119
+- C5 — fait #102 (option a)
+- C8 — fait #121 (option a, ADR 0033)
