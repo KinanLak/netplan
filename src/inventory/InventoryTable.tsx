@@ -12,6 +12,7 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
 import { StatusDot } from "@/components/StatusDot";
+import { CopyValue } from "@/components/copy-value";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -333,12 +334,11 @@ function InventoryItem({
           )}
         </div>
         {device.hostname ? (
-          <div
-            className="truncate font-mono text-xs text-muted-foreground"
-            title={device.hostname}
-          >
-            {device.hostname}
-          </div>
+          <CopyValue
+            value={device.hostname}
+            label="le hostname"
+            className="flex max-w-full text-xs text-muted-foreground"
+          />
         ) : null}
       </td>
       {shows("type") ? (
@@ -371,16 +371,28 @@ function InventoryItem({
           {device.macs.length === 0 ? (
             <span className="text-muted-foreground">—</span>
           ) : (
-            device.macs.map((mac) => <div key={mac}>{mac}</div>)
+            device.macs.map((mac) => (
+              <CopyValue
+                key={mac}
+                value={mac}
+                label="l'adresse MAC"
+                className="flex max-w-full"
+              />
+            ))
           )}
         </td>
       ) : null}
       {shows("ip") ? (
-        <td
-          className={cn(CELL, "truncate font-mono text-xs")}
-          title={device.ip}
-        >
-          {device.ip ?? <span className="text-muted-foreground">—</span>}
+        <td className={cn(CELL, "text-xs")}>
+          {device.ip ? (
+            <CopyValue
+              value={device.ip}
+              label="l'adresse IP"
+              className="flex max-w-full"
+            />
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          )}
         </td>
       ) : null}
       {shows("location") ? (
