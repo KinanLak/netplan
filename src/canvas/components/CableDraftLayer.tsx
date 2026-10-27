@@ -20,13 +20,22 @@ import { useCableCommands } from "@/devices/useCableCommands";
 import { createStandaloneObjectId } from "@/lib/identity";
 import { useMapDocumentActions } from "@/map-session/useMapDocument";
 import { useMapStore } from "@/store/useMapStore";
-import type { Cable, CableDraft, DeviceId, Port, Position } from "@/types/map";
+import type {
+  Cable,
+  CableDraft,
+  DeviceId,
+  DeviceType,
+  Port,
+  Position,
+} from "@/types/map";
 
 // One toast however often a refusal is said, as a mount effect may run twice.
 const REFUSAL_TOAST = "cable-draft-refusal";
 
 type PortPick = {
   deviceId: DeviceId;
+  /** Its type, which says how its ports are named. */
+  deviceType: DeviceType;
   ports: Array<Port>;
   /** Where the cable was dropped, on screen and on the plan. */
   client: Position;
@@ -184,7 +193,7 @@ function DrawingCable({ draft }: { draft: CableDraft }) {
         a: { deviceId: fromDevice.id, portId: fromPort.id },
         b: { deviceId: toDevice.id, portId: port.id },
       },
-      `${endLabel(fromDevice.name, fromPort)} ↔ ${endLabel(toDevice.name, port)}`,
+      `${endLabel(fromDevice.name, fromPort, fromDevice.type)} ↔ ${endLabel(toDevice.name, port, toDevice.type)}`,
     );
     if (refusal) {
       toast.error(refusal);
@@ -222,6 +231,7 @@ function DrawingCable({ draft }: { draft: CableDraft }) {
         if (!drop) return;
         setPick({
           deviceId: drop.deviceId,
+          deviceType: result.deviceType,
           ports: result.ports,
           client,
           flow: reactFlow.screenToFlowPosition(client),
@@ -298,10 +308,12 @@ function DrawingCable({ draft }: { draft: CableDraft }) {
                 {pick.ports.map((port) => (
                   <CommandItem
                     key={port.id}
-                    value={portLabel(port)}
+                    value={portLabel(port, pick.deviceType)}
                     onSelect={() => void connect(pick.deviceId, port)}
                   >
-                    <span className="font-mono">{portLabel(port)}</span>
+                    <span className="font-mono">
+                      {portLabel(port, pick.deviceType)}
+                    </span>
                   </CommandItem>
                 ))}
               </CommandList>

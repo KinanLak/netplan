@@ -8,6 +8,7 @@ import type {
   Cable,
   CableDraft,
   Device,
+  DeviceType,
   DeviceId,
   Port,
   PortId,
@@ -25,7 +26,7 @@ export type CableDrop = { deviceId: DeviceId; portId?: PortId };
 
 export type CableDropResult =
   | { kind: "connect"; port: Port }
-  | { kind: "pick"; ports: Array<Port> }
+  | { kind: "pick"; ports: Array<Port>; deviceType: DeviceType }
   | { kind: "refused"; reason: string }
   | { kind: "none" };
 
@@ -75,7 +76,7 @@ export const cableStart = (
   );
   if (!cable) return { kind: "draw" };
 
-  const near = endLabel(device.name, port);
+  const near = endLabel(device.name, port, device.type);
   if (cable.source) {
     return {
       kind: "refused",
@@ -94,7 +95,7 @@ export const cableStart = (
   return {
     kind: "unplug",
     cable,
-    label: `${near} ↔ ${endLabel(farDevice.name, farPort)}`,
+    label: `${near} ↔ ${endLabel(farDevice.name, farPort, farDevice.type)}`,
   };
 };
 
@@ -117,7 +118,7 @@ export const cableDropResult = (
     const port = free.find(({ id }) => id === drop.portId);
     if (port) return { kind: "connect", port };
     const cabled = floor.ports.find(({ id }) => id === drop.portId);
-    const name = cabled ? portLabel(cabled) : drop.portId;
+    const name = cabled ? portLabel(cabled, device.type) : drop.portId;
     return {
       kind: "refused",
       reason: `« ${device.name} » ${name} est déjà câblé.`,
@@ -131,5 +132,5 @@ export const cableDropResult = (
   }
   return free.length === 1
     ? { kind: "connect", port: free[0] }
-    : { kind: "pick", ports: free };
+    : { kind: "pick", ports: free, deviceType: device.type };
 };
