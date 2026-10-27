@@ -342,7 +342,12 @@ function PortTableLine({
         </div>
       ) : null}
       {editable && !cable ? (
-        <Button variant="outline" size="sm" onClick={onCable}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onCable}
+          aria-label={`Câbler ${label}`}
+        >
           Câbler
         </Button>
       ) : null}
@@ -353,6 +358,7 @@ function PortTableLine({
           onClick={() =>
             void unplug(cable.id, endLabel(deviceName, port, deviceType))
           }
+          aria-label={`Débrancher ${label}`}
         >
           Débrancher
         </Button>

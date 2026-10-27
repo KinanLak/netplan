@@ -110,7 +110,7 @@ export function WallDebugPanel({
     <div className="absolute top-24 right-4 z-20 w-[25rem] rounded-md border border-border bg-card px-3 py-2 text-[11px] shadow-md">
       <div className="mb-2 flex items-center justify-between">
         <p className="font-medium text-foreground">Debug outils peinture</p>
-        <Kbd>Shift + D</Kbd>
+        <Kbd>Maj + D</Kbd>
       </div>
 
       <div className="space-y-3 text-[11px]">

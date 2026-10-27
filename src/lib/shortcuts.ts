@@ -115,7 +115,7 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
       { key: "ArrowRight", shift: true, hiddenFromDisplay: true },
     ],
     label: "Décaler",
-    description: "Décaler la sélection d'une case (Shift : quatre)",
+    description: "Décaler la sélection d'une case (Maj : quatre)",
     scope: "global",
     requiresEdit: true,
   },
@@ -161,14 +161,14 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
   },
   "sidebar-toggle": {
     keys: ["Mod+B"],
-    label: "Sidebar",
+    label: "Panneau latéral",
     description: "Afficher/masquer le panneau latéral",
     scope: "global",
   },
   "toggle-wall-debug": {
     keys: [{ key: "D", shift: true }],
-    label: "Debug murs",
-    description: "Afficher/masquer le debug des murs",
+    label: "Débogage des murs",
+    description: "Afficher/masquer le débogage des murs",
     scope: "canvas",
     requiresEdit: true,
   },
@@ -408,7 +408,7 @@ function formatHotkeyPart(part: string): string {
     case "Alt":
       return isMac ? "⌥" : "Alt";
     case "Shift":
-      return isMac ? "⇧" : "Shift";
+      return isMac ? "⇧" : "Maj";
     case "Escape":
       return "Échap";
     case "Delete":

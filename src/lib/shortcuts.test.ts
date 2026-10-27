@@ -100,7 +100,7 @@ describe("shortcuts by role", () => {
   it("shows each binding of an action once, without wrapping alternates", () => {
     expect(getShortcutDisplay("zoom-in")).toEqual([["Ctrl", "+"]]);
     expect(getShortcutDisplay("wall-eraser-size-increase")).toEqual([
-      ["Shift", "+"],
+      ["Maj", "+"],
     ]);
   });
 });

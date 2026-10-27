@@ -134,7 +134,7 @@ function SidebarUndoRedo() {
           onClick={handleRedo}
           disabled={!isEditMode || !canRedo}
           className="group flex h-full flex-1 items-center justify-center text-xs text-sidebar-foreground transition-[background-color,color,box-shadow] hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-inset active:bg-sidebar-accent active:text-sidebar-accent-foreground active:shadow-[inset_0_1px_2px_var(--color-border)] disabled:pointer-events-none disabled:opacity-50"
-          title="Rétablir (Ctrl+Shift+Z)"
+          title="Rétablir (Ctrl+Maj+Z)"
         >
           <span className="flex items-center gap-1.5 transition-transform duration-75">
             Rétablir
