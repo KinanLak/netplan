@@ -519,7 +519,9 @@ function SiteSnapshots({ site }: { site: SiteSummary }) {
               now={now}
               loading={slots === undefined}
               active={time === slotTime}
-              onSelect={() => go({ slot: slotTime })}
+              // The day goes with the slot, so a new day of snapshots never
+              // moves what the reader picked.
+              onSelect={() => go({ day, slot: slotTime })}
             />
           ))}
         </div>

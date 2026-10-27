@@ -390,14 +390,18 @@ export const latestSlot = editorQuery({
   args: { siteId: v.string() },
   returns: v.union(v.null(), v.object({ day: v.string(), time: v.string() })),
   handler: async (ctx, { siteId }) => {
-    // A failed capture leaves a slot without entries; skip a few of those.
-    const recent = await ctx.db
+    // A failed capture leaves a slot without entries: read past those, at
+    // most the 30 days of five slots retention keeps.
+    const slots = ctx.db
       .query("historySlots")
       .withIndex("by_site_day", (q) => q.eq("siteId", siteId))
-      .order("desc")
-      .take(20);
-    const slot = recent.find(({ entries }) => entries !== undefined);
-    return slot ? { day: slot.day, time: slot.time } : null;
+      .order("desc");
+    for await (const slot of slots) {
+      if (slot.entries !== undefined) {
+        return { day: slot.day, time: slot.time };
+      }
+    }
+    return null;
   },
 });
 

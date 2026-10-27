@@ -42,4 +42,32 @@ describe("snapshotRuns", () => {
     ]);
     expect(runs).toHaveLength(2);
   });
+
+  it("folds each MAC of a device on its own, though they come interleaved", () => {
+    const a = "aa:aa:aa:aa:aa:01";
+    const b = "aa:aa:aa:aa:aa:02";
+    const runs = snapshotRuns([
+      entry(3, "port:1", a),
+      entry(3, "port:2", b),
+      entry(2, "port:1", a),
+      entry(2, "port:2", b),
+      entry(1, "port:1", a),
+    ]);
+    expect(runs.map(({ newest, count }) => [newest.mac, count])).toEqual([
+      [a, 3],
+      [b, 2],
+    ]);
+  });
+
+  it("starts a new run when the place's names changed, keeping each one's", () => {
+    const renamed = {
+      ...entry(2, "port:1"),
+      place: { ...entry(2, "port:1").place, socketName: "Prise B-06" },
+    };
+    const runs = snapshotRuns([renamed, entry(1, "port:1")]);
+    expect(runs.map(({ newest }) => newest.place.socketName)).toEqual([
+      "Prise B-06",
+      undefined,
+    ]);
+  });
 });

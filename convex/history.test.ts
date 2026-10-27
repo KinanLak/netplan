@@ -262,4 +262,36 @@ describe("history", () => {
     expect(await search("026e70000257")).toEqual(["02:6e:70:00:02:57"]);
     expect(await search("poste 599")).toEqual(["02:6e:70:00:02:57"]);
   });
+
+  it("opens on the latest complete snapshot, past any number of failed ones", async () => {
+    const t = testBackend();
+    await t.run(async (ctx) => {
+      const base = Date.parse("2026-10-01T06:00:00Z");
+      await ctx.db.insert("historySlots", {
+        siteId: "site:a",
+        day: "2026-10-01",
+        time: "08:00",
+        at: base,
+        takenAt: base,
+        entries: 3,
+      });
+      // Twenty-five later captures that never completed.
+      for (let n = 1; n <= 25; n += 1) {
+        const day = `2026-10-${String(1 + n).padStart(2, "0")}`;
+        await ctx.db.insert("historySlots", {
+          siteId: "site:a",
+          day,
+          time: "08:00",
+          at: base + n * DAY,
+          takenAt: base + n * DAY,
+        });
+      }
+    });
+    const editor = t.withIdentity(
+      (await createSignedInUser(t, "editor")).identity,
+    );
+    expect(
+      await editor.query(api.history.latestSlot, { siteId: "site:a" }),
+    ).toEqual({ day: "2026-10-01", time: "08:00" });
+  });
 });
