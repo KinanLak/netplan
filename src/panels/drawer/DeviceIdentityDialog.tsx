@@ -76,7 +76,7 @@ export function DeviceIdentityDialog({
           <DialogDescription>
             {device.source
               ? `Les champs grisés viennent de ${INTEGRATION_LABELS[device.source.integration]} et se modifient là-bas.`
-              : "Ce qui permet de reconnaître l'appareil sur le réseau."}
+              : "Ce qui permet de reconnaître l'équipement sur le réseau."}
           </DialogDescription>
         </DialogHeader>
         {/* Mounted on open, so the form starts from the device as it is now. */}

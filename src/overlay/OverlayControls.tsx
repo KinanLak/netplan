@@ -85,7 +85,7 @@ export function OverlayControls({ overlay, isReady }: OverlayControlsProps) {
           <label htmlFor={opacityId} className="text-muted-foreground">
             Opacité
           </label>
-          <span className="tabular-nums">{Math.round(opacity * 100)} %</span>
+          <span className="tabular-nums">{Math.round(opacity * 100)} %</span>
         </div>
         <input
           id={opacityId}

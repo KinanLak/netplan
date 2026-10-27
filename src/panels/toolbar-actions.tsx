@@ -1,9 +1,9 @@
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
-  DashedLine01Icon,
-  DashedLine02Icon,
+  BrickWallIcon,
   Eraser01Icon,
   PaintBrush03Icon,
+  SquareIcon,
 } from "@hugeicons/core-free-icons";
 import type { DrawTool } from "@/types/map";
 import type { ShortcutAction } from "@/lib/shortcuts";
@@ -27,7 +27,7 @@ export const drawToolbarActions: Array<DrawToolbarAction> = [
     title: "Dessiner un mur",
     icon: (
       <HugeiconsIcon
-        icon={DashedLine01Icon}
+        icon={BrickWallIcon}
         className={TOOLBAR_ICON_SIZE_CLASS}
         color="currentColor"
         strokeWidth={1.5}
@@ -42,7 +42,7 @@ export const drawToolbarActions: Array<DrawToolbarAction> = [
     title: "Dessiner une salle",
     icon: (
       <HugeiconsIcon
-        icon={DashedLine02Icon}
+        icon={SquareIcon}
         className={TOOLBAR_ICON_SIZE_CLASS}
         color="currentColor"
         strokeWidth={1.5}
@@ -67,9 +67,9 @@ export const drawToolbarActions: Array<DrawToolbarAction> = [
   {
     id: "wall-erase",
     tool: "wall-erase",
-    label: "Supprimer",
+    label: "Gomme",
     shortcut: "tool-wall-erase",
-    title: "Supprimer des murs",
+    title: "Effacer des murs",
     icon: (
       <HugeiconsIcon
         icon={Eraser01Icon}
