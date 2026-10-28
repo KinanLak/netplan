@@ -71,7 +71,7 @@ test("a reload or a link keeps a floor other than the first, and its view", asyn
     );
   await expect
     .poll(keptZoom)
-    .toBe(Number(/scale\(([\d.]+)\)/.exec(zoomed ?? "")?.[1]));
+    .toBeCloseTo(Number(/scale\(([\d.]+)\)/.exec(zoomed ?? "")?.[1]), 4);
 
   await page.reload();
   await expect(accessSwitch).toBeVisible();

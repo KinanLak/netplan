@@ -14,6 +14,7 @@ import FlowCanvas from "@/canvas/FlowCanvas";
 import { MapSkeleton } from "@/components/loading-skeletons";
 import AppSidebar from "@/panels/Sidebar";
 import { MapEmptyState } from "@/buildings/MapEmptyState";
+import { useFallbackFloor } from "@/buildings/useFallbackFloor";
 import { StructureDialog } from "@/buildings/StructureDialog";
 import Toolbar from "@/panels/Toolbar";
 import DeviceDrawer from "@/panels/DeviceDrawer";
@@ -81,9 +82,6 @@ function HomePage() {
   const currentBuildingId = useCurrentBuildingId();
   const currentFloorId = useCurrentFloorId();
 
-  const setCurrentBuilding = useMapStore((s) => s.setCurrentBuilding);
-  const setCurrentFloor = useMapStore((s) => s.setCurrentFloor);
-
   const floors = useQuery(
     api.floors.listForBuilding,
     currentBuildingId ? { buildingId: currentBuildingId } : "skip",
@@ -96,21 +94,6 @@ function HomePage() {
   }, [site, requestedSiteId, navigate]);
 
   useMapUrlSync();
-
-  // The fallbacks below read the store, not this render: the URL sync above
-  // may have just opened a floor in the same pass of effects (A7).
-  useEffect(() => {
-    if (!buildings) return;
-    const { currentBuildingId: current } = useMapStore.getState();
-    if (buildings.length === 0) {
-      if (current) setCurrentBuilding(null);
-      return;
-    }
-    if (current && buildings.some((building) => building.id === current)) {
-      return;
-    }
-    setCurrentBuilding(asBuildingId(buildings[0].id));
-  }, [buildings, currentBuildingId, setCurrentBuilding]);
 
   const sortedFloors: Array<Floor> = useMemo(
     () =>
@@ -126,22 +109,7 @@ function HomePage() {
     [floors],
   );
 
-  useEffect(() => {
-    if (!floors) return;
-    const { currentBuildingId: building, currentFloorId: current } =
-      useMapStore.getState();
-    // These floors belong to the building of this render; another building
-    // has opened since, and its floors are on their way.
-    if (building !== currentBuildingId) return;
-    if (current && floors.some((floor) => floor.id === current)) return;
-    setCurrentFloor(sortedFloors[0]?.id ?? null);
-  }, [
-    floors,
-    sortedFloors,
-    currentBuildingId,
-    currentFloorId,
-    setCurrentFloor,
-  ]);
+  useFallbackFloor(buildings, floors ? sortedFloors : undefined);
 
   // Only once loaded, so the map never flashes empty while it opens a floor.
   const currentBuilding =
