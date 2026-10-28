@@ -129,24 +129,25 @@ erreurs de certificat TLS" is for ([Integrations](integrations.md)).
 ## LibreNMS switches
 
 The list names LibreNMS devices, so one row may stand for several Netplan
-switches. A row without notes reads "Lu". A row turns red when its discovery
-or its read failed:
+switches. A row without notes reads "Lu". A row turns red when its read
+failed, amber when it was read with a remark:
 
 - **An error from the table above**: LibreNMS failed to answer for this
-  switch, before asking for its discovery or while reading the switch, its
-  ports or its forwarding table. A failed read leaves its statuses as they
-  were until they expire. An error from the discovery step alone does not:
-  the read that follows it still updates them.
+  switch while reading it, its ports or its forwarding table. A failed read
+  leaves its statuses as they were until they expire.
 - **"n'existe plus dans LibreNMS (404) : revoyez la correspondance des
   switchs."**: the device was deleted or renumbered in LibreNMS; pick its
   new device in the site's LibreNMS mapping.
-- **"Sa découverte n'a pas pu être lancée."**: the token may not ask for a
-  discovery; a 4xx means it surely did not start. The switch is still read
-  and its statuses updated, from a table that may be as old as its last
-  discovery.
-- **"Sa découverte n'a pas fini à temps."** (amber): `last_discovered` did
-  not change within 2 minutes. A slow poller, or a LibreNMS that does not
-  report it ([Integrations](integrations.md)).
+- **"Sa découverte n'a pas pu être lancée."** (amber): LibreNMS refused to
+  start one (a 4xx), typically a token that may not ask for a discovery. The
+  switch is still read and its statuses updated, from a table that may be as
+  old as its last discovery.
+
+A discovery LibreNMS was too busy to take (a 5xx, a timeout) or that did not
+finish within 2 minutes says nothing and fails nothing: the switch is read
+anyway and the next cycle asks again. If it keeps happening, the muted
+"Table MAC non rafraîchie" below shows it.
+
 - **"· Table MAC non rafraîchie"** (muted, after "lu"): the discovery
   moved nothing in the forwarding table, so none of its entries counts and
   the devices behind the switch go offline after two cycles. It clears by

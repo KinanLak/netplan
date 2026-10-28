@@ -889,13 +889,6 @@ type LibreNMSRead = (path: string) => ReturnType<typeof sourceGet>;
 type SwitchResult = Infer<typeof switchResult>;
 
 /**
- * Asks each device to rediscover and waits, up to two minutes, until
- * LibreNMS records a new discovery for each. LibreNMS clears a device's
- * `last_discovered` when asked and sets it once done. Returns why a device
- * could not be asked, the devices that did not finish in time, and those
- * that did.
- */
-/**
  * The note for a device LibreNMS answers 404 for: it was deleted there.
  * Santé puts the way out, a link to the switch mapping, under it.
  */
@@ -905,35 +898,43 @@ export const MISSING_NOTE = "n'existe plus dans LibreNMS (404).";
 const deviceFailure = (answer: { message: string; status?: number }) =>
   answer.status === 404 ? MISSING_NOTE : answer.message;
 
+/**
+ * Asks each device to rediscover and waits, up to two minutes, until
+ * LibreNMS records a new discovery for each. LibreNMS clears a device's
+ * `last_discovered` when asked and sets it once done. Returns the devices
+ * that finished, and why LibreNMS refused to start one.
+ *
+ * A busy LibreNMS (a 5xx, a timeout) or a discovery still running is
+ * ordinary noise: the tables are read anyway, the next cycle asks again, and
+ * a table left unrefreshed already says so quietly. Only a refusal, which
+ * lasts until an admin changes something, is worth a note; neither fails the
+ * collection, which the reads alone decide.
+ */
 const rediscover = async (
   readOnce: LibreNMSRead,
   trigger: LibreNMSRead,
   devices: ReadonlyArray<{ id: number; name: string }>,
 ): Promise<{
-  failures: Map<number, string>;
-  unfinished: Set<number>;
+  refusals: Map<number, string>;
   finished: Set<number>;
 }> => {
-  const failures = new Map<number, string>();
+  const refusals = new Map<number, string>();
   const before = new Map<number, string | null>();
   for (const device of devices) {
+    // A device that does not answer here is the reads' to report.
     const current = await readOnce(`/api/v0/devices/${device.id}`);
-    if (!current.ok) {
-      failures.set(device.id, deviceFailure(current));
-      continue;
-    }
+    if (!current.ok) continue;
     const asked = await trigger(`/api/v0/devices/${device.id}/discover`);
-    if (!asked.ok) {
-      failures.set(
+    // An answer other than a server error says the request did not start
+    // one; a timeout or a 5xx may have, and only waiting tells.
+    if (!asked.ok && asked.status !== undefined && asked.status < 500) {
+      refusals.set(
         device.id,
         `sa découverte n'a pas pu être lancée. ${asked.message}`,
       );
+      continue;
     }
-    // An answer other than a server error says the request did not start
-    // one; a timeout or a 5xx may have, and only waiting tells.
-    const refused =
-      !asked.ok && asked.status !== undefined && asked.status < 500;
-    if (!refused) before.set(device.id, readLastDiscovered(current.body));
+    before.set(device.id, readLastDiscovered(current.body));
   }
   const asked = new Set(before.keys());
   const deadline = Date.now() + DISCOVERY_WAIT_MS;
@@ -946,9 +947,8 @@ const rediscover = async (
     if (before.size === 0 || Date.now() + DISCOVERY_POLL_MS > deadline) break;
     await pause(DISCOVERY_POLL_MS);
   }
-  const unfinished = new Set(before.keys());
   const finished = new Set([...asked].filter((id) => !before.has(id)));
-  return { failures, unfinished, finished };
+  return { refusals, finished };
 };
 
 /** Reads the polled switches from LibreNMS and records what they saw. */
@@ -1013,12 +1013,8 @@ export const collectFromLibreNMS = async (
     }
     const discovery = await rediscover(readOnce, trigger, plan.devices);
     finished = discovery.finished;
-    for (const [deviceId, reason] of discovery.failures) {
-      failed.add(deviceId);
+    for (const [deviceId, reason] of discovery.refusals) {
       note(deviceId, reason);
-    }
-    for (const deviceId of discovery.unfinished) {
-      note(deviceId, "sa découverte n'a pas fini à temps.");
     }
   }
 

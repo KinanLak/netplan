@@ -1144,24 +1144,21 @@ describe("the LibreNMS step", () => {
     ]);
   });
 
-  it("asks once for a discovery and reports when it could not", async () => {
+  it("asks once for a discovery, quiet when LibreNMS is busy, noted when it refuses", async () => {
     const { admin, siteId } = await siteWithLibreNMS();
     librenms.state.fdb = [{ port_id: 101, mac_address: PC }];
     librenms.state.discoverStatus = 503;
-    const uncertain = await cycle(admin, siteId);
+    const busy = await cycle(admin, siteId);
     expect(
       fetchStub.calls.filter(([url]) => String(url).endsWith("/discover")),
     ).toHaveLength(1);
-    expect(uncertain.ok).toBe(false);
-    expect(uncertain.switches?.[0]?.notes).toContain(
-      "sa découverte n'a pas pu être lancée. LibreNMS a répondu 503.",
-    );
-    // It ran anyway, so the tables are read, and the freshness card counts
-    // the switch as read, with a note.
+    // Infrastructure noise the next cycle gets past: no failure, no note.
+    expect(busy.ok).toBe(true);
+    expect(busy.switches).toEqual([{ name: "pile", ok: true, notes: [] }]);
     expect(await statusOf(admin, "device:pc")).toBe("up");
     expect(
       (await admin.query(api.collection.freshness, { siteId }))?.switches,
-    ).toEqual({ read: 1, noted: 1 });
+    ).toEqual({ read: 1, noted: 0 });
 
     // Five minutes later.
     await admin.run(async (ctx) => {
@@ -1169,10 +1166,16 @@ describe("the LibreNMS step", () => {
       if (row) await ctx.db.patch(row._id, { librenmsDiscoveryAt: 0 });
     });
     librenms.state.discoverStatus = 403;
+    // A refusal lasts until an admin acts, so it is noted; the tables are
+    // still read, so the collection does not fail.
     const refused = await cycle(admin, siteId);
-    expect(refused.switches?.[0]?.notes).toContain(
-      "sa découverte n'a pas pu être lancée. LibreNMS refuse ce jeton (403).",
-    );
+    expect(refused.ok).toBe(true);
+    expect(refused.switches?.[0]).toMatchObject({
+      ok: true,
+      notes: [
+        "sa découverte n'a pas pu être lancée. LibreNMS refuse ce jeton (403).",
+      ],
+    });
     expect(librenms.state.discoveries).toBe(1);
   });
 
