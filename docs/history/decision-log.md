@@ -3696,3 +3696,57 @@ Questions of 2026-10-28.
 #### Leftovers
 
 - No NetBox or LibreNMS object was touched. The real Keycloak was never contacted: every check ran against a local Keycloak 26.8.1 container labelled `netplan.*`, removed at the end.
+
+### U14 — What the re-verification left
+
+#### How does a device-only link find its floor?
+
+- Context: `/?site=…&device=<id>` without `floor=` fell back to the ground floor and opened nothing (A7); the map only loads the current floor's devices.
+- Decision: a reader query `devices.floorOf({ siteId, deviceId })`; the URL sync waits for its answer before writing the URL back, then opens the device as a full link does. An unplaced, unknown or other site's device falls back as before.
+- Why: the smallest read that answers it, scoped to the URL's site; opening an unplaced device from the map would be a new feature.
+- Who: agent (obvious)
+
+#### What does a page show when its first data cannot arrive offline?
+
+- Context: a page first opened offline showed its filters over an empty area (A43); Convex answers a new query only once connected.
+- Decision: `Pending` stands where a page waits for its main data: the usual placeholder online, « Pas de connexion · Le contenu s'affichera dès son retour. » once the shell shows « Hors connexion » (`isMapFrozen`, ADR 0037). Historique (both tabs), Inventaire, Administration › Sites, the site page, Utilisateurs, Santé. Data the app already holds still shows offline.
+- Why: the shell's own signal, so the page and the bottom line agree; only the main data, so a page never shows it twice.
+- Who: agent (judgement call)
+
+#### Which discovery troubles stay quiet?
+
+- Context: the owner approved quieting a refused (503) and an unfinished LibreNMS discovery. The code failed the switch and the collection for any discovery trouble, and noted any 4xx.
+- Decision: a 5xx, a 429 or other passing 4xx, a timeout and an unfinished discovery add no remark and fail nothing. Only 401 or 403, a token without the right to ask, keeps its note, without failing. Whether a switch failed is decided by its reads alone. A switch whose last requested discovery did not finish shows the muted « Table MAC non rafraîchie »; the persisted FDB table carries it (`unrefreshed`) until a discovery finishes or the table moves.
+- Why: the standing principle keeps a message when someone must act. Without the muted line, a LibreNMS whose discoveries always fail would leave its old table counting with nothing said anywhere (self-review); keeping it between discoveries was a zipzoup P2 on #161.
+- Who: agent (judgement call, following the owner's principle)
+
+#### What is the site's time zone still for?
+
+- Decision: « Nouveau site » says « Son fuseau horaire fixe les heures de ses relevés et les jours de son historique. »
+- Why: U13 removed collection hours; the time zone serves the snapshots and the history only.
+- Who: agent (obvious)
+
+#### How were the NetBox and LibreNMS situations checked?
+
+- Context: the real NetBox stays untouched in this lot and the browser agent may not start processes.
+- Decision: one local process served two fake NetBox instances and a fake LibreNMS, reached from the backend container through the Docker gateway; the demo site was connected to them. A history slot was inserted into the local backend and filled through `history:captureSlot`, since no snapshot window was open. A server refusal of « Retirer » was simulated by answering the `integrations:remove` mutation with a failure on the Convex WebSocket, since losing the Admin role makes the page leave the administration first.
+- Why: every situation runs through the real import, cycle, Santé and dialog code; nothing real is touched.
+- Who: agent (judgement call)
+
+#### Was a group's way through a door seen in the browser?
+
+- Context: the seeded doors are two cells (40 units) wide and a PC is 80, so no seeded group fits; an attempt with a widened door failed on the browser tool, not on the app.
+- Decision: a map-engine test now shows a group refused straight through a wall, then accepted along it and through the door in two moves. In the browser, a blocked group held at the nearest spot, a two-step move, undo and redo were seen.
+- Who: agent (obvious)
+
+#### Items
+
+- A7 (device-only link): fait #159
+- A43 (unvisited page offline): fait #160
+- Quiet LibreNMS discovery: fait #161
+- « horaires de collecte » wording: fait #162
+- Browser check of what the re-verification could not observe: 4.1, A105 in Relevés, « Retirer » refused, the space before « Utiliser », the Santé 404 note, another NetBox instance with a present device, a role's name in « Rôles sans type », « câbles saisis à la main remplacés par NetBox »: verified, nothing broken. Group through a door: engine test #162.
+
+#### Leftovers
+
+- No NetBox or LibreNMS object was touched; the real tools were never contacted.

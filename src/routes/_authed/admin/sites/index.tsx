@@ -199,7 +199,8 @@ function CreateSiteDialog({
           <DialogHeader>
             <DialogTitle>Nouveau site</DialogTitle>
             <DialogDescription>
-              Ses horaires de collecte suivent son fuseau horaire.
+              Son fuseau horaire fixe les heures de ses relevés et les jours de
+              son historique.
             </DialogDescription>
           </DialogHeader>
           <FieldGroup className="py-4">

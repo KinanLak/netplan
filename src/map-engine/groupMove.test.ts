@@ -206,4 +206,32 @@ describe("validateGroupMove", () => {
   it("lets the members pass over each other's old spots", () => {
     expect(validateGroupMove(room, ids, { x: 0, y: -60 }).valid).toBe(true);
   });
+
+  it("goes out through a door in two straight moves, not one", () => {
+    // The wall at x = 200 has a door between y = 0 and y = 220; the PCs
+    // stand one above the other, beside the wall below the door.
+    const beside = snapshot(
+      [device("a", 100, 300), device("b", 100, 380)],
+      [wall(200, -400, -20), wall(200, 240, 600)],
+    );
+    expect(validateGroupMove(beside, ids, { x: 200, y: -260 }).error).toBe(
+      "wall-crossing",
+    );
+    // Along the wall until in line with the door, then straight through.
+    expect(validateGroupMove(beside, ids, { x: 0, y: -260 }).valid).toBe(true);
+    const inLine = applyOperation(
+      beside,
+      move(beside, ["a", "b"], { x: 0, y: -260 }),
+    ).snapshot;
+    expect(validateGroupMove(inLine, ids, { x: 200, y: 0 }).valid).toBe(true);
+    const through = applyOperation(
+      inLine,
+      move(inLine, ["a", "b"], { x: 200, y: 0 }, 2),
+    );
+    expect(through.applied).toBe(true);
+    expect(positions(through.snapshot)).toEqual({
+      a: { x: 300, y: 40 },
+      b: { x: 300, y: 120 },
+    });
+  });
 });
