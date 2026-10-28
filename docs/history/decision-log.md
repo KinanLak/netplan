@@ -3076,3 +3076,118 @@ Questions of 2026-10-27, in the order they came up (#130, #131, #132).
 
 - None in scope. Screenshots stayed local: `gh` cannot attach images to a pull request, and committing them is forbidden, so each PR carries the measurements in a verification comment.
 - No NetBox test object was created, and the real LibreNMS got no request.
+
+### U9 — The map
+
+#### How does the server tell a deformed or wall-crossing group move?
+
+- Context: a group drag sent one `device.patch` per member, and the server checked only where each landed. It could not refuse a deformed group, or a member that had jumped a wall.
+- Decision: a new durable operation, `devices.move`: the devices of one floor, each with the position it started from, and one offset for all.
+  - Deformation is impossible by construction.
+  - The server refuses a member that would land on a wall or on a device outside the group, and a member whose straight path from its spot to its landing touches a wall (ADR 0034).
+- Why: the owner's rule is "a group moves as a rigid whole, or it does not move". One offset makes rigidity a property of the data, and a straight path is the only path the server can know.
+- Who: agent (judgement call)
+
+#### May a group cross a wall when the cursor goes past it?
+
+- Context: a single dragged device follows the cursor to the nearest free spot, wherever that is.
+- Decision: no, a group never passes through a wall. Under a cursor it cannot follow, it waits at the nearest offset where every member fits. A group that must go round a wall, through a door, moves in two steps.
+- Why: the owner listed "a member can cross a wall or leave the building" as the defect.
+- Who: agent (judgement call)
+
+#### Does a group move say where its members started?
+
+- Context: zipzoup on #138.
+  - A relative move replayed over a server revision that already held it doubled the offset for a moment.
+  - A member moved by someone else during a drag changed the committed offset.
+- Decision: `devices.move` carries each member's start position (`from`).
+  - The engine skips a move that is already applied.
+  - The engine and the server refuse a move once a member is no longer at its start.
+  - The drag measures its offset from the positions it captured when it started.
+- Who: agent (obvious)
+
+#### Do arrow nudges and align/distribute change too?
+
+- Decision:
+  - Arrow nudges are translations, so they use `devices.move`; a held key sums its steps into one straight move.
+  - Align and distribute give each device its own spot, so they stay batches of `device.patch`.
+- Who: agent (obvious)
+
+#### A26: a lower fixed minimum zoom, or one computed from the floor?
+
+- Decision: from the floor. The view may zoom out until the whole floor fits with the fit's margin, and at least as far as the former limit of 0.3. Fitting a calque lowers React Flow's limit before it moves.
+- Why: a fixed 0.05 lets a small floor shrink to dots; a computed limit is always enough and never more.
+- Who: agent (judgement call)
+
+#### A7: why did a link or a reload lose its floor?
+
+- Decision: the building and floor fallbacks read the store when they run, not the values of their render. The URL sync may have opened a floor earlier in the same pass of effects, and a test reproduces that pass.
+- Who: agent (counter-verification's lead, confirmed)
+
+#### A14: where does the drawing help go?
+
+- Decision: under the map's top bar, on the left. It steps under the find bar while Ctrl+F shows it. The « Texte » tool's hint moves with it.
+- Why:
+  - The top bar may span the whole width, so nothing beside it is safe.
+  - The right side belongs to the drawer and the find bar.
+  - Choosing a drawing tool closes a device's drawer.
+- Who: agent (judgement call)
+
+#### A19: what counts as a refusal that flashes red?
+
+- Decision: a wall, room or brush gesture refused by a collision or an invalid shape.
+  - A brush stroke flashes once each time it reaches a device.
+  - Drawing over existing walls, or the eraser on empty ground, does not flash.
+- Who: agent (judgement call)
+
+#### The four wall blocks of a refused two-click wall
+
+- Context: observed once by the counter-verification, two blocks on each side of a PC.
+- Decision: the cause was found in the code.
+  - A press sets the anchor at the hovered cell. A click exactly on a cell's edge can snap to the next cell on release, so it drew a two-cell wall, once per click.
+  - A release less than half a cell from the press is now a click.
+- Who: agent (obvious)
+
+#### 4.1: where does « N câbles n'ont pas pu être rebranchés » come from?
+
+- Decision: the server counts the cables a `device.create` could not lay again and returns `droppedCables` with the result. `clientOperations` keeps the count for replays, and the client shows a warning toast on the acknowledgement.
+- Why:
+  - Only the server knows the far ends on other floors.
+  - The user lost something, which is the owner's case for a message.
+  - The plan's own undo order never drops a cable. It happens when the far end went another way: another tab or user, another floor, or the inventory.
+- Who: agent (obvious)
+
+#### 4.2 and 4.3: wording
+
+- Decision:
+  - The confirmation's title names the texts: « Supprimer l'étage « RDC » et 3 textes ? ». The same goes for a building. Texts never block.
+  - Ctrl+Z reads « Annuler la dernière modification du plan, ou le dernier câble ».
+  - Redo reads « Rétablir la modification du plan annulée », since redo does not reach cables.
+- Who: owner (2026-10-28, second round), agent for the exact words
+
+#### Who checks in the browser?
+
+- Context: owner's rule of 2026-10-28, given during this lot.
+- Decision:
+  - Every browser check goes to a codex `gpt-6.1-terra` delegate on this worktree's dev:agent. It uses the T3 Code browser by default, and Playwright only for the wheel, modifier keys during a drag, precise group drags and reload timing.
+  - The lot agent keeps git, processes, Docker and fixes, and checks positions against the Convex data itself.
+- Who: owner
+
+#### Items
+
+- Group drag against a wall (rigid, never through a wall, refused by the server too): fait #138
+- A7 (a reload or a `?floor=` / `?device=` link keeps its floor and view): fait #141
+- A26 (a floor wider than the screen can be fitted whole): fait #141
+- A14 (drawing help fully visible): fait #143
+- A19 (a wall or room refused locally flashes red): fait #143
+- A105 (« Prise » read once): fait #143
+- « Esc » becomes « Échap »: fait #143
+- Four wall blocks from a refused two-click wall: fait #143
+- 4.1 (undone deletion says how many cables did not come back): fait #147
+- 4.2 (an empty floor's removal names its texts): fait #147
+- 4.3 (the shortcuts help says what Ctrl+Z covers): fait #147
+
+#### Leftovers
+
+- 4.1 was shown by deleting the cable's far end from the plan in a second tab, outside the first tab's undo history.
+- No NetBox test object was created, and the real NetBox and LibreNMS got no request.
