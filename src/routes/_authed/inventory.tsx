@@ -239,6 +239,25 @@ function SiteInventory({ site }: { site: SiteSummary }) {
   const filtered = isFiltered(active);
   const reset = () =>
     update({ query: "", placement: "all", status: "all", type: "all" });
+  // From a toast, which outlives the render it was made in: the filters are
+  // cleared from the URL as it is then, keeping the reader's order, and the
+  // devices' tab comes back.
+  const showEveryDevice = () => {
+    setDraft(null);
+    void navigate({
+      search: (current) => ({
+        ...siteSearch(current),
+        mq: current.mq,
+        ignored: current.ignored,
+        ...toSearch(
+          { query: "", placement: "all", status: "all", type: "all" },
+          sortOf(current),
+        ),
+      }),
+      replace: true,
+      resetScroll: false,
+    });
+  };
 
   // A coverage count shows what is left to draw, so no other filter may hide it.
   const showUnplaced = (next: TypeFilter) => {
@@ -475,10 +494,7 @@ function SiteInventory({ site }: { site: SiteSummary }) {
           onCreated={(deviceId, name) => {
             // The new row may hide behind a filter, and in a long list it is
             // easy to miss: show it, light it, and say where it is (A60).
-            update(
-              { query: "", placement: "all", status: "all", type: "all" },
-              sort,
-            );
+            showEveryDevice();
             setHighlightId(deviceId);
             window.setTimeout(
               () =>
@@ -488,7 +504,14 @@ function SiteInventory({ site }: { site: SiteSummary }) {
               2_500,
             );
             toast(`« ${name} » créé, hors plan`, {
-              action: { label: "Voir", onClick: () => setSheetId(deviceId) },
+              // The row may have been filtered out since: show it again.
+              action: {
+                label: "Voir",
+                onClick: () => {
+                  showEveryDevice();
+                  setSheetId(deviceId);
+                },
+              },
               cancel: {
                 label: "Placer sur le plan",
                 onClick: () => openPlacement(goTo, site.id, deviceId),
