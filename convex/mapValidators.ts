@@ -50,6 +50,8 @@ export const deviceSource = v.object({
   missingSince: v.optional(v.number()),
   /** While absent: since when the purge has seen it on no floor. */
   offPlanSince: v.optional(v.number()),
+  /** Its `externalId` may name another device: only identity links it. */
+  staleId: v.optional(v.boolean()),
 });
 
 /** `SourceRef`: the object of an integration a port or cable comes from. */

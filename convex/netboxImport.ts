@@ -5,7 +5,7 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalMutation, internalQuery } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
-import type { ActionCtx, MutationCtx } from "./_generated/server";
+import type { ActionCtx, MutationCtx, QueryCtx } from "./_generated/server";
 import { cycleOf } from "./lib/cycles";
 import { deletePush, deletePushes } from "./netboxPush";
 import { SOURCE_RETRY } from "./lib/httpRetry";
@@ -212,6 +212,7 @@ export const apply = internalMutation({
         macs: device.macs,
         placed: device.placement !== undefined,
         missingSince: device.source?.missingSince,
+        staleId: device.source?.staleId,
       })),
     );
     const byId = new Map(inventory.map((device) => [device.objectId, device]));
@@ -397,13 +398,19 @@ export const purgeSite = internalMutation({
   },
 });
 
+type DeviceSourceRow = NonNullable<Doc<"devices">["source"]>;
+
 /**
- * Releases the devices, ports and cables bound to the site's NetBox, which
- * become manual, and drops its pending reviews: another NetBox reuses the
- * same ids for other devices, so a binding means nothing once the address
- * changes.
+ * Rewrites the binding of each device bound to the site's NetBox (`null`
+ * leaves it as it is), turns every NetBox port and cable of the site manual,
+ * and drops its reviews and push rows: they were about that NetBox.
  */
-export const releaseNetBox = async (ctx: MutationCtx, siteId: string) => {
+const releaseBindings = async (
+  ctx: MutationCtx,
+  siteId: string,
+  rebind: (source: DeviceSourceRow) => DeviceSourceRow | undefined | null,
+  stamp: Record<string, unknown> = {},
+) => {
   const bound = await ctx.db
     .query("devices")
     .withIndex("by_site_source", (q) =>
@@ -411,7 +418,10 @@ export const releaseNetBox = async (ctx: MutationCtx, siteId: string) => {
     )
     .collect();
   for (const device of bound) {
-    await ctx.db.patch(device._id, { source: undefined });
+    if (!device.source) continue;
+    const source = rebind(device.source);
+    if (source === null) continue;
+    await ctx.db.patch(device._id, { source, ...stamp });
     await unbindPorts(ctx, device.objectId);
   }
   const cables = await ctx.db
@@ -425,6 +435,54 @@ export const releaseNetBox = async (ctx: MutationCtx, siteId: string) => {
   }
   await deleteImportReviews(ctx, siteId);
   await deletePushes(ctx, siteId);
+};
+
+/**
+ * The site now reads another NetBox instance (ADR 0039): every device bound
+ * to the previous one becomes absent, its binding kept for its fields and
+ * date but marked `staleId`, never matched by id again, and its ports and
+ * NetBox cables become manual, since their ids mean nothing in the new
+ * NetBox.
+ */
+export const leaveNetBoxInstance = async (ctx: MutationCtx, siteId: string) => {
+  const now = Date.now();
+  await releaseBindings(
+    ctx,
+    siteId,
+    ({ url: _, ...source }) =>
+      source.staleId
+        ? null
+        : {
+            ...source,
+            missingSince: source.missingSince ?? now,
+            staleId: true,
+          },
+    { updatedAt: now, updatedBy: IMPORTED_BY },
+  );
+};
+
+/** The devices bound to the site's current NetBox, with their NetBox ids. */
+export const linkedToNetBox = async (ctx: QueryCtx, siteId: string) =>
+  (
+    await ctx.db
+      .query("devices")
+      .withIndex("by_site_source", (q) =>
+        q.eq("siteId", siteId).eq("source.integration", "netbox"),
+      )
+      .collect()
+  ).flatMap((device) =>
+    device.source && !device.source.staleId
+      ? [{ externalId: device.source.externalId, name: device.name }]
+      : [],
+  );
+
+/**
+ * Releases the devices, ports and cables bound to the site's NetBox, which
+ * become manual, and drops its pending reviews, when the site leaves NetBox
+ * (« Retirer »).
+ */
+export const releaseNetBox = async (ctx: MutationCtx, siteId: string) => {
+  await releaseBindings(ctx, siteId, () => undefined);
 };
 
 export const deleteImportReviews = async (ctx: MutationCtx, siteId: string) => {

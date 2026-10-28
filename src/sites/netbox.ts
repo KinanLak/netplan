@@ -31,6 +31,33 @@ export type NetBoxSettings = {
 
 export const EMPTY_NETBOX_SETTINGS: NetBoxSettings = { site: null, roles: [] };
 
+/** Whether a NetBox site answer is the chosen site under its id and name. */
+export const sameNetBoxSite = (
+  settings: NetBoxSettings,
+  site: { id?: unknown; name?: unknown } | null,
+): boolean =>
+  settings.site !== null &&
+  site?.id === settings.site.id &&
+  typeof site.name === "string" &&
+  site.name.trim() === settings.site.name.trim();
+
+/**
+ * Whether a NetBox at a new address is the one the settings were made with
+ * (ADR 0039): the chosen site answers under its id, and either keeps its
+ * name or most of the linked devices sampled answer under their ids with
+ * their names, so a site renamed in NetBox is still recognised. A NetBox
+ * without a chosen site cannot be recognised.
+ */
+export const sameNetBoxInstance = (
+  settings: NetBoxSettings,
+  site: { id?: unknown; name?: unknown } | null,
+  devices: { sampled: number; matched: number },
+): boolean =>
+  settings.site !== null &&
+  site?.id === settings.site.id &&
+  (sameNetBoxSite(settings, site) ||
+    (devices.sampled > 0 && devices.matched * 2 > devices.sampled));
+
 /** A NetBox role as the settings list it, under its parent. */
 export type NetBoxRole = { id: number; name: string; depth: number };
 

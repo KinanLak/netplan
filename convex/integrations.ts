@@ -15,19 +15,29 @@ import { adminMutation, adminQuery } from "./lib/functions";
 import { configuredKeys, decryptSecret, encryptSecret } from "./lib/secrets";
 import type { EncryptedSecret } from "./lib/secrets";
 import { defaultFetch } from "./lib/httpRetry";
-import { probeIntegration } from "./lib/integrationProbe";
+import {
+  PROBE_RETRY,
+  probeIntegration,
+  sourceGet,
+} from "./lib/integrationProbe";
+import { idOf, netboxList } from "./lib/netboxApi";
 import type {
   ConnectionCheck,
   Source,
   Transport,
 } from "./lib/integrationProbe";
 import { releaseLibreNMS } from "./librenmsCycle";
-import { releaseNetBox } from "./netboxImport";
+import {
+  leaveNetBoxInstance,
+  linkedToNetBox,
+  releaseNetBox,
+} from "./netboxImport";
 import { requireSite } from "./sites";
 import {
   connectionCheck,
   encryptedSecret,
   integrationKind,
+  netboxSettings,
 } from "./siteValidators";
 import {
   INTEGRATION_LABELS,
@@ -35,6 +45,8 @@ import {
   tokenError,
 } from "../src/sites/integrations";
 import type { IntegrationKind } from "../src/sites/integrations";
+import { sameNetBoxInstance, sameNetBoxSite } from "../src/sites/netbox";
+import { importedName } from "../src/sites/netboxImport";
 
 const integrationSummary = v.object({
   kind: integrationKind,
@@ -115,7 +127,21 @@ export const draftArgs = {
   token: v.optional(v.string()),
 };
 
-export const saveArgs = { ...draftArgs, enabled: v.boolean() };
+export const saveArgs = {
+  ...draftArgs,
+  enabled: v.boolean(),
+  /**
+   * The admin confirmed that the devices linked to NetBox become absent: the
+   * new address reaches another NetBox instance (ADR 0039).
+   */
+  confirmOtherInstance: v.optional(v.boolean()),
+};
+
+/** What saving answers: the test, or the devices a new NetBox would affect. */
+export type SaveResult = ConnectionCheck & {
+  /** Nothing was saved: another NetBox instance, with this many devices linked. */
+  confirmOtherInstance?: number;
+};
 
 type Draft = ObjectType<typeof draftArgs>;
 type Stored = NonNullable<
@@ -162,29 +188,85 @@ const resolveDraft = async (
   };
 };
 
-const probeDraft = async (
+/** The draft as a source to call, or `null` if its token cannot be read. */
+const draftSource = async (
   draft: Draft,
   resolved: { baseUrl: string; token: string | null; stored: Stored | null },
   transport: Transport,
-): Promise<ConnectionCheck> => {
+): Promise<Source | null> => {
   const token =
     resolved.token ??
     (resolved.stored
       ? await decryptStored(resolved.stored, resolved.stored.token)
       : null);
   return token
-    ? await probeIntegration(
-        sourceOf(
-          {
-            kind: draft.kind,
-            baseUrl: resolved.baseUrl,
-            ignoreCertificateErrors: draft.ignoreCertificateErrors,
-          },
-          token,
-          transport,
-        ),
+    ? sourceOf(
+        {
+          kind: draft.kind,
+          baseUrl: resolved.baseUrl,
+          ignoreCertificateErrors: draft.ignoreCertificateErrors,
+        },
+        token,
+        transport,
       )
-    : UNREADABLE_TOKEN;
+    : null;
+};
+
+/**
+ * Whether the NetBox at a new address is the instance the site's settings
+ * were made with (ADR 0039), with how many devices are linked to it, or why
+ * NetBox could not tell.
+ */
+const netboxInstance = async (
+  ctx: ActionCtx,
+  siteId: string,
+  source: Source,
+): Promise<{ same: boolean; linked: number } | { error: string }> => {
+  const { settings, linked, sample } = await ctx.runQuery(
+    internal.integrations.netboxBinding,
+    { siteId },
+  );
+  if (!settings?.site) return { same: false, linked };
+  const site = await sourceGet(
+    source,
+    `/api/dcim/sites/${settings.site.id}/`,
+    PROBE_RETRY,
+  );
+  // No such site: another NetBox, as far as it can be told.
+  if (!site.ok && site.status !== 404) return { error: site.message };
+  const body =
+    site.ok && typeof site.body === "object" && site.body !== null
+      ? (site.body as { id?: unknown; name?: unknown })
+      : null;
+  const none = { sampled: 0, matched: 0 };
+  if (body?.id !== settings.site.id || sameNetBoxSite(settings, body)) {
+    return { same: sameNetBoxInstance(settings, body, none), linked };
+  }
+  // The site was renamed, or another NetBox reuses its id: the devices say.
+  if (sample.length === 0) return { same: false, linked };
+  // Not `brief`: an unnamed device is named after its model, as the import
+  // named it.
+  const found = await netboxList(
+    source,
+    `/api/dcim/devices/?${sample.map((device) => `id=${device.externalId}`).join("&")}`,
+    PROBE_RETRY,
+  );
+  if (!found.ok) return { error: found.message };
+  const names = new Map(
+    found.items.map(
+      (item) => [String(idOf(item)), importedName(item)] as const,
+    ),
+  );
+  const matched = sample.filter(
+    (device) => names.get(device.externalId) === device.name,
+  ).length;
+  return {
+    same: sameNetBoxInstance(settings, body, {
+      sampled: sample.length,
+      matched,
+    }),
+    linked,
+  };
 };
 
 /**
@@ -196,7 +278,7 @@ export const saveConnection = async (
   ctx: ActionCtx,
   args: ObjectType<typeof saveArgs>,
   transport: Transport,
-): Promise<ConnectionCheck | null> => {
+): Promise<SaveResult | null> => {
   const resolved = await resolveDraft(ctx, args);
   const { baseUrl, stored } = resolved;
   const fields = {
@@ -216,8 +298,22 @@ export const saveConnection = async (
     });
     return null;
   }
-  const result = await probeDraft(args, resolved, transport);
+  const source = await draftSource(args, resolved, transport);
+  if (!source) return UNREADABLE_TOKEN;
+  const result = await probeIntegration(source);
   if (!result.ok) return result;
+  // A new address for NetBox keeps everything when it reaches the same
+  // instance; another instance makes the linked devices absent, once the
+  // admin has seen how many (ADR 0039).
+  let netbox: "same" | "other" | undefined;
+  if (args.kind === "netbox" && stored && stored.baseUrl !== baseUrl) {
+    const instance = await netboxInstance(ctx, args.siteId, source);
+    if ("error" in instance) return { ok: false, message: instance.error };
+    netbox = instance.same ? "same" : "other";
+    if (!instance.same && instance.linked > 0 && !args.confirmOtherInstance) {
+      return { ...result, confirmOtherInstance: instance.linked };
+    }
+  }
   const token =
     args.token === undefined
       ? undefined
@@ -231,6 +327,7 @@ export const saveConnection = async (
     token,
     lastCheck: { ...result, at: Date.now() },
     ...expectedVersion,
+    ...(netbox && { netboxInstance: netbox }),
   });
   return result;
 };
@@ -245,7 +342,8 @@ export const testConnection = async (
   transport: Transport,
 ): Promise<ConnectionCheck> => {
   const resolved = await resolveDraft(ctx, draft);
-  const result = await probeDraft(draft, resolved, transport);
+  const source = await draftSource(draft, resolved, transport);
+  const result = source ? await probeIntegration(source) : UNREADABLE_TOKEN;
   if (resolved.unchanged && resolved.stored) {
     await ctx.runMutation(internal.integrations.recordCheck, {
       siteId: draft.siteId,
@@ -330,6 +428,8 @@ export const store = internalMutation({
     lastCheck: v.optional(connectionCheck),
     /** The `updatedAt` the saved connection had when it was tested. */
     expectedVersion: v.optional(v.number()),
+    /** For a new NetBox address: whether it reaches the same instance. */
+    netboxInstance: v.optional(v.union(v.literal("same"), v.literal("other"))),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -372,8 +472,10 @@ export const store = internalMutation({
       token !== undefined ||
       existing.baseUrl !== baseUrl ||
       ignoreCertificateErrors !== (existing.ignoreCertificateErrors ?? false);
-    if (kind === "netbox" && existing.baseUrl !== baseUrl) {
-      await releaseNetBox(ctx, siteId);
+    const moved = existing.baseUrl !== baseUrl;
+    const sameNetBox = kind === "netbox" && args.netboxInstance === "same";
+    if (kind === "netbox" && moved && !sameNetBox) {
+      await leaveNetBoxInstance(ctx, siteId);
     }
     await ctx.db.patch(existing._id, {
       baseUrl,
@@ -384,7 +486,7 @@ export const store = internalMutation({
       ...(lastCheck ? { lastCheck } : changed ? { lastCheck: undefined } : {}),
       // Another NetBox has other sites and roles under the same ids, and
       // another LibreNMS other devices.
-      ...(existing.baseUrl !== baseUrl
+      ...(moved && !sameNetBox
         ? { netbox: undefined, librenms: undefined }
         : {}),
       // Strictly later, even within a millisecond: a test result is recorded
@@ -392,6 +494,32 @@ export const store = internalMutation({
       updatedAt: Math.max(updatedAt, existing.updatedAt + 1),
     });
     return null;
+  },
+});
+
+// Linked devices asked of a new NetBox address, when its site was renamed.
+const NETBOX_SAMPLE = 10;
+
+/** What a new NetBox address is compared with (ADR 0039). */
+export const netboxBinding = internalQuery({
+  args: { siteId: v.string() },
+  returns: v.object({
+    settings: v.union(v.null(), netboxSettings),
+    linked: v.number(),
+    /** A few linked devices, to recognise their NetBox at a new address. */
+    sample: v.array(v.object({ externalId: v.string(), name: v.string() })),
+  }),
+  handler: async (ctx, { siteId }) => {
+    const linked = await linkedToNetBox(ctx, siteId);
+    return {
+      settings: (await find(ctx, siteId, "netbox"))?.netbox ?? null,
+      linked: linked.length,
+      // NetBox ids are numbers; anything else could not be asked for.
+      sample: linked
+        .filter((device) => /^\d+$/.test(device.externalId))
+        .slice(0, NETBOX_SAMPLE)
+        .map(({ externalId, name }) => ({ externalId, name })),
+    };
   },
 });
 

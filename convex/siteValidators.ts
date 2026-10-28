@@ -19,6 +19,13 @@ export const connectionResult = v.object({
   message: v.string(),
 });
 
+/** `SaveResult` from `convex/integrations.ts`. */
+export const saveResult = v.object({
+  ok: v.boolean(),
+  message: v.string(),
+  confirmOtherInstance: v.optional(v.number()),
+});
+
 export const connectionCheck = v.object({
   ok: v.boolean(),
   message: v.string(),

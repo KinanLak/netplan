@@ -104,8 +104,11 @@ export const resolve = editorMutation({
           .eq("source.integration", "netbox")
           .eq("source.externalId", externalId),
       )
-      .first();
-    if (bound) throw new ConvexError("Ce rapprochement est déjà traité.");
+      .collect();
+    // A device of the NetBox used before may carry the same id.
+    if (bound.some((device) => !device.source?.staleId)) {
+      throw new ConvexError("Ce rapprochement est déjà traité.");
+    }
 
     let target = null;
     if (deviceId !== null) {

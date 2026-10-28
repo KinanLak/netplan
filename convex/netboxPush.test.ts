@@ -451,6 +451,7 @@ describe("the push to NetBox", () => {
         enabled: true,
         ignoreCertificateErrors: false,
         token: TOKEN,
+        confirmOtherInstance: true,
       });
       return 200;
     });
