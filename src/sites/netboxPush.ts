@@ -1,4 +1,4 @@
-// The location push to NetBox (ADR 0027, ADR 0035): the custom fields
+// The location push to NetBox (ADR 0027, ADR 0040): the custom fields
 // Netplan writes on a NetBox device, what they hold, and when a value is worth
 // a PATCH: only when the location changes.
 // Convex bundles this file, so relative imports only.
@@ -95,7 +95,7 @@ const sameLocation = (a: PushedValues, b: PushedValues) =>
 
 /**
  * Whether NetBox should be sent `values`: only a location it has not been
- * sent, so NetBox's changelog records moves and nothing else (ADR 0035).
+ * sent, so NetBox's changelog records moves and nothing else (ADR 0040).
  */
 export const pushDue = (
   values: PushedValues,

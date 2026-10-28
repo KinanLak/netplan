@@ -26,7 +26,7 @@ describe("planFields", () => {
       existing("netplan_site", "text"),
       existing("netplan_floor", "integer"),
       existing("netplan_socket", "text", ["dcim.interface"]),
-      // Written before ADR 0035: no longer the push's, and left as it is.
+      // Written before ADR 0040: no longer the push's, and left as it is.
       existing("netplan_last_seen", "datetime"),
     ]);
     expect(plan.ready).toEqual(["netplan_site"]);

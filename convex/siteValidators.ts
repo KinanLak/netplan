@@ -120,7 +120,7 @@ export const pushedValues = v.object({
   socket: v.union(v.null(), v.string()),
   switchPort: v.string(),
   /**
-   * In rows sent before ADR 0035 only, which wrote when the device was last
+   * In rows sent before ADR 0040 only, which wrote when the device was last
    * seen; never read or written now, kept so those rows still validate.
    */
   lastSeen: v.optional(v.number()),

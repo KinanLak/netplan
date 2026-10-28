@@ -98,7 +98,7 @@ default, day and night.
 ## Writing locations back to NetBox
 
 A site can write where the network last saw each device NetBox brought into
-five custom fields of that NetBox device (ADR 0027, ADR 0035):
+five custom fields of that NetBox device (ADR 0027, ADR 0040):
 `netplan_site`, `netplan_floor`, `netplan_socket`, `netplan_switch_port`
 (text) and `netplan_updated` (date and time, « Modifié par NetPlan le »: when
 NetPlan wrote them). It writes only when the place it shows changes, a move

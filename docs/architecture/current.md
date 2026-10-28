@@ -343,7 +343,7 @@ Built by lot 5 (ADR 0027).
   device's location with what `netboxPushes` says was last sent to that
   NetBox id and, only where the location differs, PATCHes the four
   location fields with `netplan_updated`, the time it sends them (ADR
-  0035), at most 100 per run. Each attempt first asks whether the push is
+  0040), at most 100 per run. Each attempt first asks whether the push is
   still on and the lease still held; moving to another NetBox instance or
   removing it forgets the
   rows and the lease, so nothing from the old NetBox is recorded. A refusal

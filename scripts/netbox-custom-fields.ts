@@ -8,7 +8,7 @@
 //
 // A field that exists with another type is reported and left as it is. It
 // never changes or deletes a field: `netplan_last_seen`, which the push wrote
-// before ADR 0035, stays in NetBox until someone removes it there.
+// before ADR 0040, stays in NetBox until someone removes it there.
 import { parseArgs } from "node:util";
 import {
   defaultFetch,
