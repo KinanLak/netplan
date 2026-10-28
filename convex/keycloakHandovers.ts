@@ -20,6 +20,34 @@ export const isPending = internalQuery({
   handler: async (ctx, { userId }) => (await handoverOf(ctx, userId)) !== null,
 });
 
+/**
+ * What the password and session guards need to know about an account, read
+ * in one transaction so that no handover step can fall between two reads.
+ */
+export const signInState = internalQuery({
+  args: { userId: v.string() },
+  returns: v.object({
+    awaitingKeycloak: v.boolean(),
+    hasKeycloak: v.boolean(),
+    hasPassword: v.boolean(),
+  }),
+  handler: async (ctx, { userId }) => {
+    const page = await ctx.runQuery(components.betterAuth.adapter.findMany, {
+      model: "account",
+      where: [{ field: "userId", value: userId }],
+      paginationOpts: { numItems: 10, cursor: null },
+    });
+    const providers = (page.page as Array<{ providerId: string }>).map(
+      (account) => account.providerId,
+    );
+    return {
+      awaitingKeycloak: (await handoverOf(ctx, userId)) !== null,
+      hasKeycloak: providers.includes("keycloak"),
+      hasPassword: providers.includes("credential"),
+    };
+  },
+});
+
 /** Marks an account as waiting for Keycloak, once. */
 export const start = internalMutation({
   args: { userId: v.string() },

@@ -141,8 +141,8 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
   // The email of the user a Keycloak sign-in is creating in this request:
   // its account is the one link that needs no handover.
   let signingUpEmail: string | null = null;
-  const awaitingKeycloak = (userId: string) =>
-    ctx.runQuery(internal.keycloakHandovers.isPending, { userId });
+  const signInState = (userId: string) =>
+    ctx.runQuery(internal.keycloakHandovers.signInState, { userId });
   return {
     baseURL: process.env.SITE_URL,
     // SITE_URL plus TRUSTED_ORIGINS (comma-separated), which dev:agent sets
@@ -240,19 +240,10 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
           // from a reset that was already under way at the handover.
           before: async (account) => {
             if (account.providerId === "credential") {
-              const keycloakAccount = await ctx.runQuery(
-                components.betterAuth.adapter.findOne,
-                {
-                  model: "account",
-                  where: [
-                    { field: "userId", value: account.userId },
-                    { field: "providerId", value: "keycloak" },
-                  ],
-                },
-              );
+              const state = await signInState(account.userId);
               // Nor to a Keycloak account, which a reset begun before its
               // handover completed would otherwise reach.
-              if (keycloakAccount || (await awaitingKeycloak(account.userId))) {
+              if (state.hasKeycloak || state.awaitingKeycloak) {
                 throw new APIError("FORBIDDEN", {
                   code: "AWAITING_KEYCLOAK",
                 });
@@ -319,8 +310,15 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
             // would otherwise open a session after they were all closed. A
             // Keycloak sign-in is the one the account waits for: the account
             // hook let it link.
-            const awaiting = await awaitingKeycloak(session.userId);
-            if (awaiting && !viaKeycloak) {
+            const state = await signInState(session.userId);
+            const awaiting = state.awaitingKeycloak;
+            // A password session needs the password to still exist: one
+            // checked before the handover deleted it opens nothing after.
+            const viaPassword = context?.path.startsWith("/sign-in/") === true;
+            if (
+              (awaiting && !viaKeycloak) ||
+              (viaPassword && !state.hasPassword)
+            ) {
               throw new APIError("FORBIDDEN", { code: "AWAITING_KEYCLOAK" });
             }
             // The Keycloak sign-in the account waited for: what slipped in
