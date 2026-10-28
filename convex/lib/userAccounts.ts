@@ -54,7 +54,7 @@ export function invitationProblem({
     return {
       field: "username",
       message:
-        "L'identifiant compte 3 à 30 caractères : lettres, chiffres, point ou tiret bas.",
+        "L'identifiant compte 3 à 30 lettres, chiffres, points ou tirets bas.",
     };
   }
   return null;
@@ -68,11 +68,14 @@ export function invitationError(fields: {
   return invitationProblem(fields)?.message ?? null;
 }
 
-/** The relay's reason, without the frame Convex adds to an action's error. */
+/**
+ * The relay's reason, without the frame Convex adds to an action's error nor
+ * a final period: it reads in parentheses after the refusal.
+ */
 export function mailFailure(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
-  const reason = (message.split("Uncaught Error: ").at(-1) ?? message)
+  return (message.split("Uncaught Error: ").at(-1) ?? message)
     .split("\n")[0]
-    .trim();
-  return reason.endsWith(".") ? reason : `${reason}.`;
+    .trim()
+    .replace(/\.$/, "");
 }

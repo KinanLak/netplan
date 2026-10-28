@@ -1,5 +1,7 @@
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
+  Alert02Icon,
+  LockIcon,
   MailSend01Icon,
   MoreHorizontalIcon,
   UserAdd01Icon,
@@ -27,7 +29,6 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -60,6 +61,8 @@ import {
 } from "@/components/ui/tooltip";
 import { NO_FILTER, describeUntil, matchesFilter } from "@/admin/users";
 import type { UserFilter, UserStatus } from "@/admin/users";
+import { CopyValue } from "@/components/copy-value";
+import { IconNote } from "@/components/icon-note";
 import { Time } from "@/components/time";
 import { failureMessage } from "@/lib/errors";
 import { ageHint } from "@/lib/time";
@@ -132,13 +135,10 @@ function UsersPage() {
               </span>
             ) : null}
           </h1>
-          <p className="text-sm text-muted-foreground">
-            Qui peut ouvrir NetPlan, et avec quel rôle.
-          </p>
         </div>
         <Button onClick={() => setInviting(true)}>
           <HugeiconsIcon icon={UserAdd01Icon} strokeWidth={2} />
-          Inviter
+          Inviter un utilisateur
         </Button>
       </header>
 
@@ -196,14 +196,13 @@ function UsersPage() {
             </Select>
           </div>
           {shown.length === 0 ? (
-            <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-              <p>Aucun utilisateur ne correspond.</p>
+            <div className="flex justify-center rounded-lg border border-dashed p-6">
               <Button
-                variant="link"
+                variant="outline"
                 size="sm"
                 onClick={() => setFilter(NO_FILTER)}
               >
-                Effacer les filtres
+                Réinitialiser les filtres
               </Button>
             </div>
           ) : (
@@ -252,13 +251,12 @@ function Activity({
     );
   }
   if (user.kind === "invited") {
-    if (user.disabled) {
-      return <span>Réactivez le compte pour renvoyer l'invitation.</span>;
-    }
+    // A disabled account's row offers « Réactiver », which comes first.
+    if (user.disabled) return null;
     // The query reruns when data changes, not when a link runs out.
     return user.invitationExpiresAt === null ||
       user.invitationExpiresAt <= now ? (
-      <span>Aucun lien valable : renvoyez l'invitation.</span>
+      <span>Aucun lien valable</span>
     ) : (
       <span>
         Lien valable encore{" "}
@@ -272,7 +270,7 @@ function Activity({
     );
   }
   if (user.kind === "awaiting-keycloak") {
-    return <span>En attente de sa première connexion avec Keycloak.</span>;
+    return <span>Première connexion Keycloak attendue</span>;
   }
   return user.lastSignInAt === null ? null : (
     <span>
@@ -333,9 +331,9 @@ function UserItem({
   const roleLock = isMe
     ? "Un autre administrateur doit changer votre rôle."
     : user.kind === "sso"
-      ? "Suit la correspondance des rôles Keycloak, relue à chaque connexion et toutes les heures."
+      ? "Suit la correspondance des rôles Keycloak."
       : user.kind === "awaiting-keycloak"
-        ? "Suivra la correspondance des rôles Keycloak dès sa première connexion."
+        ? "Suivra la correspondance des rôles Keycloak."
         : null;
 
   const roleSelect = (
@@ -371,7 +369,7 @@ function UserItem({
       : confirming === "disable"
         ? {
             title: `Désactiver « ${user.name} » ?`,
-            text: "Ses sessions se ferment tout de suite et le compte ne peut plus se connecter jusqu'à sa réactivation. Rien de ce qu'il a fait sur le plan ne disparaît.",
+            text: "Ses sessions se ferment et le compte ne peut plus se connecter.",
             action: "Désactiver",
             destructive: true,
             run: () =>
@@ -380,10 +378,7 @@ function UserItem({
         : confirming === "sign-out"
           ? {
               title: `Déconnecter « ${user.name} » partout ?`,
-              text:
-                user.kind === "sso"
-                  ? "Ses sessions se ferment tout de suite. Le compte reste actif : à sa prochaine connexion, Keycloak donne à nouveau son rôle."
-                  : "Ses sessions se ferment tout de suite. Le compte reste actif et peut se reconnecter aussitôt.",
+              text: undefined,
               action: "Déconnecter partout",
               destructive: false,
               run: () =>
@@ -399,7 +394,7 @@ function UserItem({
           : confirming === "hand-over"
             ? {
                 title: `Passer « ${user.name} » sur Keycloak ?`,
-                text: `Son mot de passe est supprimé et ses sessions se ferment. Sa prochaine connexion avec Keycloak sous ${user.email} retrouvera ce compte, son historique et ses actions ; son rôle suivra alors Keycloak.`,
+                text: "Son mot de passe est supprimé et ses sessions se ferment.",
                 action: "Passer sur Keycloak",
                 destructive: true,
                 run: () => void run(() => handOver({ userId: user.id })),
@@ -407,15 +402,11 @@ function UserItem({
             : confirming === "cancel"
               ? {
                   title: `Annuler l'invitation de « ${user.name} » ?`,
-                  text: "Le compte, qui n'a jamais servi, est supprimé et son lien ne fonctionne plus. Vous pourrez inviter cette adresse à nouveau.",
+                  text: "Le compte est supprimé et son lien ne fonctionne plus.",
                   action: "Annuler l'invitation",
                   destructive: true,
                   run: () =>
-                    void run(
-                      () => cancelInvitation({ userId: user.id }),
-                      () =>
-                        toast.success(`Invitation de ${user.email} annulée.`),
-                    ),
+                    void run(() => cancelInvitation({ userId: user.id })),
                 }
               : {
                   title:
@@ -424,8 +415,8 @@ function UserItem({
                       : `Retirer le rôle Admin à « ${user.name} » ?`,
                   text:
                     confirming.role === "admin"
-                      ? "Il pourra gérer les utilisateurs, les sites et leurs intégrations, et changer le rôle des autres administrateurs."
-                      : `Il devient ${ROLE_LABELS[confirming.role]} : il ne verra plus l'administration.`,
+                      ? "Il pourra gérer les utilisateurs, dont les autres administrateurs."
+                      : `Il devient ${ROLE_LABELS[confirming.role]}.`,
                   action:
                     confirming.role === "admin"
                       ? "Donner le rôle Admin"
@@ -474,11 +465,13 @@ function UserItem({
             <Badge variant="destructive">Désactivé</Badge>
           ) : null}
         </div>
-        <p className="truncate text-sm text-muted-foreground">
-          {user.email}
-          {user.username ? ` · ${user.username}` : null}
+        <p className="flex gap-3 text-sm text-muted-foreground">
+          <span className="truncate">{user.email}</span>
+          {user.username ? (
+            <span className="shrink-0">{user.username}</span>
+          ) : null}
         </p>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-muted-foreground empty:hidden">
           <Activity user={user} online={online} now={now} />
         </p>
         {notice ? (
@@ -498,10 +491,7 @@ function UserItem({
             size="sm"
             disabled={pending}
             onClick={() =>
-              void run(
-                () => resend({ userId: user.id }),
-                `Invitation renvoyée à ${user.email}.`,
-              )
+              void run(() => resend({ userId: user.id }), "Invitation renvoyée")
             }
           >
             Renvoyer l'invitation
@@ -584,9 +574,11 @@ function UserItem({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{confirmation?.title}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {confirmation?.text}
-            </AlertDialogDescription>
+            {confirmation?.text ? (
+              <AlertDialogDescription>
+                {confirmation.text}
+              </AlertDialogDescription>
+            ) : null}
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Retour</AlertDialogCancel>
@@ -624,16 +616,17 @@ function EmptyRoleMappingNotice() {
     return null;
   }
   return (
-    <p className="rounded-lg border p-3 text-sm">
-      Aucune correspondance de rôles Keycloak : tous les comptes Keycloak sont
-      Lecteurs.{" "}
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border p-3">
+      <IconNote icon={Alert02Icon} tone="warning">
+        Tous les comptes Keycloak sont Lecteurs
+      </IconNote>
       <a
         href="#keycloak"
-        className="underline underline-offset-2 hover:text-foreground"
+        className="text-sm underline underline-offset-2 hover:text-foreground"
       >
-        Choisir les rôles
+        Choisir les rôles Keycloak
       </a>
-    </p>
+    </div>
   );
 }
 
@@ -643,18 +636,35 @@ function KeycloakSettings() {
     <section id="keycloak" className="space-y-2 border-t pt-6">
       <h2 className="font-medium">Keycloak</h2>
       {settings === undefined ? null : settings.issuer === null ? (
-        <p className="text-sm text-muted-foreground">
-          La connexion avec Keycloak est désactivée. Pour l'activer, définissez
-          KEYCLOAK_ISSUER, KEYCLOAK_CLIENT_ID et KEYCLOAK_CLIENT_SECRET sur le
-          serveur.
-        </p>
+        // Only the server's environment turns it on: there is no control.
+        <IconNote icon={LockIcon}>
+          Définissez <code>KEYCLOAK_ISSUER</code>,{" "}
+          <code>KEYCLOAK_CLIENT_ID</code> et <code>KEYCLOAK_CLIENT_SECRET</code>{" "}
+          sur le serveur
+        </IconNote>
       ) : (
         <>
-          <p className="text-sm text-muted-foreground">
-            La page de connexion propose Keycloak ({settings.issuer}, client{" "}
-            {settings.clientId}). Adresse de redirection à déclarer sur le
-            client : <code className="break-all">{settings.redirectUri}</code>
-          </p>
+          <dl className="grid max-w-2xl grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-1 text-sm">
+            <dt className="text-muted-foreground">Émetteur</dt>
+            <dd className="min-w-0">
+              <CopyValue value={settings.issuer} label="l'émetteur" />
+            </dd>
+            {settings.clientId ? (
+              <>
+                <dt className="text-muted-foreground">Client</dt>
+                <dd className="min-w-0">
+                  <CopyValue value={settings.clientId} label="le client" />
+                </dd>
+              </>
+            ) : null}
+            <dt className="text-muted-foreground">Adresse de redirection</dt>
+            <dd className="min-w-0">
+              <CopyValue
+                value={settings.redirectUri}
+                label="l'adresse de redirection"
+              />
+            </dd>
+          </dl>
           <RoleMappingForm settings={settings} />
         </>
       )}
@@ -672,20 +682,18 @@ function RoleMappingForm({
   const [adminRole, setAdminRole] = useState(settings.adminRole ?? "");
   const [acceptGroups, setAcceptGroups] = useState(settings.acceptGroups);
   const [pending, setPending] = useState(false);
-  const [notice, setNotice] = useState<{ error: boolean; text: string }>();
+  const [error, setError] = useState<string>();
+  const [saved, flashSaved] = useFlash();
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setPending(true);
-    setNotice(undefined);
+    setError(undefined);
     try {
       await save({ editorRole, adminRole, acceptGroups });
-      setNotice({
-        error: false,
-        text: "Correspondance enregistrée. Chaque compte Keycloak la suit dans l'heure.",
-      });
+      flashSaved();
     } catch (failure) {
-      setNotice({ error: true, text: failureMessage(failure, "admin") });
+      setError(failureMessage(failure, "admin"));
     } finally {
       setPending(false);
     }
@@ -694,11 +702,6 @@ function RoleMappingForm({
   return (
     <form onSubmit={(event) => void submit(event)} className="max-w-md">
       <FieldGroup>
-        <FieldDescription>
-          Un compte Keycloak est Lecteur, sauf s'il porte l'un des rôles
-          ci-dessous, rôle du royaume ou du client ; Admin l'emporte. Son rôle
-          est relu à chaque connexion, puis toutes les heures.
-        </FieldDescription>
         <Field>
           <FieldLabel htmlFor="keycloak-editor-role">
             Rôle Keycloak des Éditeurs
@@ -731,19 +734,16 @@ function RoleMappingForm({
             Accepter aussi les groupes
           </FieldLabel>
         </Field>
-        {notice ? (
-          notice.error ? (
-            <FieldError>{notice.text}</FieldError>
-          ) : (
-            <p role="status" className="text-sm text-muted-foreground">
-              {notice.text}
-            </p>
-          )
-        ) : null}
-        <div>
+        {error ? <FieldError>{error}</FieldError> : null}
+        <div className="flex items-center gap-3">
           <Button type="submit" variant="outline" disabled={pending}>
             {pending ? "Enregistrement…" : "Enregistrer"}
           </Button>
+          {saved ? (
+            <span role="status" className="text-sm text-muted-foreground">
+              Enregistré
+            </span>
+          ) : null}
         </div>
       </FieldGroup>
     </form>
@@ -760,7 +760,7 @@ function TestMail() {
     setNotice(undefined);
     try {
       const to = await send({});
-      setNotice({ error: false, text: `E-mail de test envoyé à ${to}.` });
+      setNotice({ error: false, text: `Envoyé à ${to}` });
     } catch (failure) {
       setNotice({ error: true, text: failureMessage(failure, "admin") });
     } finally {
@@ -771,18 +771,13 @@ function TestMail() {
   return (
     <section className="space-y-2 border-t pt-6">
       <h2 className="font-medium">Messagerie</h2>
-      <p className="text-sm text-muted-foreground">
-        Invitations et mots de passe oubliés partent par le relais SMTP
-        configuré sur le serveur. Un e-mail de test vous est adressé pour le
-        vérifier.
-      </p>
       <Button
         variant="outline"
         disabled={pending}
         onClick={() => void submit()}
       >
         <HugeiconsIcon icon={MailSend01Icon} strokeWidth={2} />
-        {pending ? "Envoi…" : "Envoyer un e-mail de test"}
+        {pending ? "Envoi…" : "M'envoyer un e-mail de test"}
       </Button>
       {notice ? (
         notice.error ? (
@@ -902,9 +897,6 @@ function InviteDialog({
         <form noValidate onSubmit={(event) => void submit(event)}>
           <DialogHeader>
             <DialogTitle>Inviter un utilisateur</DialogTitle>
-            <DialogDescription>
-              Un lien valable sept jours lui permet de choisir son mot de passe.
-            </DialogDescription>
           </DialogHeader>
           <FieldGroup className="py-4">
             {field("name", "Nom", name, setName, { autoFocus: true })}
@@ -912,7 +904,7 @@ function InviteDialog({
               type: "email",
             })}
             {field("username", "Identifiant", username, setUsername, {
-              hint: "Facultatif : la personne pourra aussi se connecter avec son adresse e-mail.",
+              hint: "Facultatif",
             })}
             <Field>
               <FieldLabel htmlFor="invite-role">Rôle</FieldLabel>

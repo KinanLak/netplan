@@ -62,9 +62,7 @@ export const setKeycloakRoleMapping = adminMutation({
     const editorRole = roleNameOrNull(args.editorRole);
     const adminRole = roleNameOrNull(args.adminRole);
     if (editorRole !== null && editorRole === adminRole) {
-      throw new ConvexError(
-        "Choisissez deux rôles différents : Admin l'emporterait toujours.",
-      );
+      throw new ConvexError("Choisissez deux rôles différents.");
     }
     const settings = {
       keycloakEditorRole: editorRole,

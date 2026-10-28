@@ -403,7 +403,7 @@ async function sendInvitation(
       paginationOpts: { numItems: 10, cursor: null },
     });
     throw new ConvexError(
-      `Le compte existe, mais l'invitation n'est pas partie : ${mailFailure(error)} Renvoyez-la une fois la messagerie réparée.`,
+      `Le compte est créé, mais l'invitation n'est pas partie (${mailFailure(error)}).`,
     );
   }
 }
@@ -504,7 +504,7 @@ export const cancelInvitation = adminMutation({
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .first();
     if ((await kindOf(ctx, userId)) !== "invited" || signedIn) {
-      throw new ConvexError("Ce compte a déjà servi : désactivez-le plutôt.");
+      throw new ConvexError("Ce compte a déjà servi.");
     }
     for (const row of await findAll(ctx, "verification")) {
       if (String(row.value) !== userId) continue;
@@ -542,7 +542,9 @@ export const sendTestMail = adminAction({
         ...testMail({ name: ctx.user.name }),
       });
     } catch (error) {
-      throw new ConvexError(`L'e-mail n'est pas parti : ${mailFailure(error)}`);
+      throw new ConvexError(
+        `L'e-mail n'est pas parti (${mailFailure(error)}).`,
+      );
     }
     return ctx.user.email;
   },
