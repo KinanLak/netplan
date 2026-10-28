@@ -360,9 +360,7 @@ describe("mapOperations.apply", () => {
           },
         }),
       );
-      expect(result.error).toBe(
-        "Cet équipement a été déplacé depuis, par une autre personne ou par la collecte.",
-      );
+      expect(result.error).toBe("Cet équipement a été déplacé depuis.");
       expect(await positionsOf(t, floorId)).toMatchObject({
         "device:g1": { x: 100, y: 0 },
       });
@@ -401,9 +399,7 @@ describe("mapOperations.apply", () => {
     const document = await getFloorDocument(t, floorId);
 
     expect(result.status).toBe("rejected");
-    expect(result.error).toBe(
-      "Cet équipement a été déplacé depuis, par une autre personne ou par la collecte.",
-    );
+    expect(result.error).toBe("Cet équipement a été déplacé depuis.");
     expect(document.devices[0].position).toEqual({ x: 300, y: 0 });
   });
 
@@ -1459,8 +1455,7 @@ describe("mapOperations.apply on the site inventory", () => {
 
     expect(result).toMatchObject({
       status: "rejected",
-      error:
-        "Cet équipement vient d'une intégration : il ne peut pas être supprimé.",
+      error: "Cet équipement vient d'une intégration et ne se supprime pas.",
     });
   });
 
@@ -1667,8 +1662,7 @@ describe("mapOperations.apply on the site inventory", () => {
 
     expect(result).toMatchObject({
       status: "rejected",
-      error:
-        "Cet équipement a été déplacé depuis, par une autre personne ou par la collecte.",
+      error: "Cet équipement a été déplacé depuis.",
     });
     const document = await getFloorDocument(t, floorId);
     expect(document.devices.map((item) => item.id)).toEqual(["device:placed"]);

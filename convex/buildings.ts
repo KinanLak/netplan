@@ -137,7 +137,7 @@ export const remove = editorMutation({
       const content = describeContent(await floorContent(ctx, floor.objectId));
       if (content) {
         throw new ConvexError(
-          `Le bâtiment « ${building.name} » n'est pas vide : l'étage « ${floor.name} » porte encore ${content}.`,
+          `L'étage « ${floor.name} » porte encore ${content}.`,
         );
       }
     }

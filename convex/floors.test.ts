@@ -167,9 +167,7 @@ describe("floors", () => {
 
     await expect(
       t.mutation(api.floors.remove, { id: floorId }),
-    ).rejects.toThrow(
-      "L'étage « Floor » porte encore 1 équipement : videz-le avant de le supprimer.",
-    );
+    ).rejects.toThrow("L'étage « Floor » porte encore 1 équipement.");
     expect(await t.query(api.floors.content, { id: floorId })).toEqual({
       devices: 1,
       wallBlocks: 0,

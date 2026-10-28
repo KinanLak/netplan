@@ -1020,8 +1020,7 @@ const planCables = (
 };
 
 /** An undo or a redo finds the device moved by someone else (ADR 0025). */
-const MOVED_SINCE =
-  "Cet équipement a été déplacé depuis, par une autre personne ou par la collecte.";
+const MOVED_SINCE = "Cet équipement a été déplacé depuis.";
 
 const planDevicePatch = (
   state: PlanningState,
@@ -1195,7 +1194,7 @@ const planDeviceDelete = (
   if (!existing) return "Cet équipement n'existe plus.";
   // Its integration would bring it back at the next sync.
   if (!isDeletable(existing))
-    return "Cet équipement vient d'une intégration : il ne peut pas être supprimé.";
+    return "Cet équipement vient d'une intégration et ne se supprime pas.";
 
   planCablingDelete(state, operation.deviceId);
   state.devices.delete(operation.deviceId);
@@ -1571,7 +1570,7 @@ const planLabelPatch = (
   const current = state.labels.get(operation.labelId);
   if (!current) return "Cette étiquette n'existe plus.";
   if (!labelIsAsExpected(current, operation.expected)) {
-    return "L'étiquette a été modifiée depuis, par une autre personne.";
+    return "L'étiquette a été modifiée depuis.";
   }
   const next = {
     ...applyLabelPatch(current, operation.patch),
