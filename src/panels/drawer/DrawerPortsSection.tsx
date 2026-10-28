@@ -27,8 +27,6 @@ interface DrawerPortsSectionProps {
   onShowCables: (portId?: PortId) => void;
 }
 
-const LEGEND: ReadonlyArray<PortState> = ["seen", "up", "down", "unknown"];
-
 // The port number reads on the filled colours, and in the status colour on
 // the outlined ones.
 const ON_STATE: Record<PortState, string> = {
@@ -46,8 +44,7 @@ export function DrawerPortsSection({
 }: DrawerPortsSectionProps) {
   const shown = shownPorts(ports);
   if (shown.length === 0) return null;
-  const count = (state: PortState) =>
-    shown.filter((port) => portState(port) === state).length;
+  const states = shown.map(portState);
   const nameOf = (port: Port) =>
     deviceType === "patch-panel"
       ? portLabel(port, deviceType)
@@ -114,21 +111,28 @@ export function DrawerPortsSection({
               </Tooltip>
             ))}
           </div>
-          <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-            {LEGEND.filter((state) => count(state) > 0).map((state) => (
-              <span key={state} className="flex items-center gap-1">
-                <span
-                  className={cn(
-                    "h-2 w-2 rounded-sm",
-                    PORT_STATE_CLASSES[state],
-                  )}
-                />
-                {PORT_STATE_LABELS[state]} : {count(state)}
-              </span>
-            ))}
-          </div>
+          <ActiveLinks states={states} />
         </>
       )}
     </section>
+  );
+}
+
+/**
+ * How many links are up, and nothing else: the grid's colours say the rest
+ * (owner, 2026-10-28). A port with a device seen on it is up too. A device
+ * whose ports nobody observes, such as a patch panel, gets no line.
+ */
+function ActiveLinks({ states }: { states: ReadonlyArray<PortState> }) {
+  if (states.every((state) => state === "unknown")) return null;
+  const active = states.filter(
+    (state) => state === "seen" || state === "up",
+  ).length;
+  return (
+    <p className="mt-2 text-xs text-muted-foreground">
+      {active === 0
+        ? "Aucun lien actif"
+        : `${active} ${active === 1 ? "lien actif" : "liens actifs"}`}
+    </p>
   );
 }

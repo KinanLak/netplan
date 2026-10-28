@@ -13,7 +13,6 @@ import {
 import {
   Field,
   FieldDescription,
-  FieldError,
   FieldGroup,
   FieldLabel,
 } from "@/components/ui/field";
@@ -29,11 +28,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { deviceKinds } from "@/devices/deviceKindRegistry";
 import {
   IDENTITY_TEXT_LIMITS,
-  identityEditError,
+  identityEditProblem,
   namedAfterHostname,
   normalizeIdentityEdit,
 } from "@/devices/identity";
 import { parseMacList } from "@/devices/mac";
+import { useIdentityProblem } from "@/devices/useIdentityProblem";
 import { failureMessage } from "@/lib/errors";
 import { createStandaloneObjectId } from "@/lib/identity";
 import type { SiteSummary } from "@/sites/useCurrentSite";
@@ -119,7 +119,7 @@ function CreateDeviceForm({
   const [text, setText] = useState(EMPTY_TEXT);
   const [macs, setMacs] = useState("");
   const [notes, setNotes] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const problem = useIdentityProblem((field) => `${id}-${field}`);
   const [saving, setSaving] = useState(false);
 
   // A device with a hostname is named after it (B10, ADR 0029).
@@ -129,27 +129,30 @@ function CreateDeviceForm({
     event.preventDefault();
     const parsed = parseMacList(macs);
     if ("unreadable" in parsed) {
-      setError(`« ${parsed.unreadable} » n'est pas une adresse MAC.`);
+      problem.refuse(
+        "macs",
+        `« ${parsed.unreadable} » n'est pas une adresse MAC.`,
+      );
       return;
     }
     const identity = namedAfterHostname(
       normalizeIdentityEdit({ ...text, macs: parsed.macs, notes }),
       {},
     );
-    const invalid = identityEditError(identity);
+    const invalid = identityEditProblem(identity);
     if (invalid) {
-      setError(invalid);
+      problem.refuse(invalid.field, invalid.message);
       return;
     }
 
     setSaving(true);
-    setError(null);
+    problem.clear();
     try {
       await createDevice({ siteId: site.id, deviceId, type, identity });
       onCreated?.(deviceId, identity.name ?? "");
       onDone();
     } catch (caught) {
-      setError(failureMessage(caught, "editor"));
+      problem.refuse(null, failureMessage(caught, "editor"));
     } finally {
       setSaving(false);
     }
@@ -163,7 +166,7 @@ function CreateDeviceForm({
       <FieldGroup className="-mx-1 min-h-0 gap-4 overflow-y-auto px-1 pb-1">
         {TEXT_FIELDS.map(({ field, label, mono }) => (
           <Fragment key={field}>
-            <Field>
+            <Field data-invalid={problem.isInvalid(field)}>
               <FieldLabel htmlFor={`${id}-${field}`}>{label}</FieldLabel>
               <Input
                 id={`${id}-${field}`}
@@ -178,6 +181,7 @@ function CreateDeviceForm({
                 // The one required field comes first and takes the focus.
                 autoFocus={field === "name"}
                 className={mono ? "font-mono" : undefined}
+                {...problem.invalid(field)}
                 onChange={(event) =>
                   setText((current) => ({
                     ...current,
@@ -185,9 +189,10 @@ function CreateDeviceForm({
                   }))
                 }
               />
-              {field === "name" && followsHostname ? (
-                <FieldDescription>Le nom suit le hostname.</FieldDescription>
-              ) : null}
+              {problem.errorUnder(field) ??
+                (field === "name" && followsHostname ? (
+                  <FieldDescription>Le nom suit le hostname.</FieldDescription>
+                ) : null)}
             </Field>
             {field === "name" ? (
               <Field>
@@ -214,31 +219,36 @@ function CreateDeviceForm({
             ) : null}
           </Fragment>
         ))}
-        <Field>
+        <Field data-invalid={problem.isInvalid("macs")}>
           <FieldLabel htmlFor={`${id}-macs`}>Adresses MAC</FieldLabel>
           <Textarea
             id={`${id}-macs`}
             value={macs}
             rows={3}
             className="font-mono"
+            {...problem.invalid("macs")}
             onChange={(event) => setMacs(event.target.value)}
           />
-          <FieldDescription>
-            Une par ligne, dans n'importe quelle notation.
-          </FieldDescription>
+          {problem.errorUnder("macs") ?? (
+            <FieldDescription>
+              Une par ligne, dans n'importe quelle notation.
+            </FieldDescription>
+          )}
         </Field>
-        <Field>
+        <Field data-invalid={problem.isInvalid("notes")}>
           <FieldLabel htmlFor={`${id}-notes`}>Notes</FieldLabel>
           <Textarea
             id={`${id}-notes`}
             value={notes}
             maxLength={IDENTITY_TEXT_LIMITS.notes}
             rows={3}
+            {...problem.invalid("notes")}
             onChange={(event) => setNotes(event.target.value)}
           />
+          {problem.errorUnder("notes")}
         </Field>
       </FieldGroup>
-      {error ? <FieldError>{error}</FieldError> : null}
+      {problem.formError}
       <DialogFooter>
         <Button type="button" variant="outline" onClick={onDone}>
           Annuler

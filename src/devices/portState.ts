@@ -11,8 +11,8 @@ export const PORT_STATE_LABELS: Record<PortState, string> = {
 };
 
 /**
- * A port's colour on the map and in the drawer, and in their legends. An
- * unused port is normal, so an inactive link is quiet rather than red.
+ * A port's colour on the map and in the drawer. An unused port is normal,
+ * so an inactive link is quiet rather than red.
  */
 export const PORT_STATE_CLASSES: Record<PortState, string> = {
   seen: "bg-up",

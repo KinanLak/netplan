@@ -14,7 +14,6 @@ import {
 import {
   Field,
   FieldDescription,
-  FieldError,
   FieldGroup,
   FieldLabel,
 } from "@/components/ui/field";
@@ -22,13 +21,14 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   IDENTITY_TEXT_LIMITS,
-  identityEditError,
+  identityEditProblem,
   isSourceOwned,
   namedAfterHostname,
   normalizeIdentityEdit,
 } from "@/devices/identity";
 import type { IdentityEdit, IdentityField } from "@/devices/identity";
 import { parseMacList } from "@/devices/mac";
+import { useIdentityProblem } from "@/devices/useIdentityProblem";
 import { failureMessage } from "@/lib/errors";
 import { INTEGRATION_LABELS } from "@/sites/integrations";
 import { api } from "../../../convex/_generated/api";
@@ -113,7 +113,7 @@ function IdentityForm({
   const [text, setText] = useState(initial.text);
   const [macs, setMacs] = useState(initial.macs);
   const [notes, setNotes] = useState(initial.notes);
-  const [error, setError] = useState<string | null>(null);
+  const problem = useIdentityProblem((field) => `${id}-${field}`);
   const [saving, setSaving] = useState(false);
 
   const owned = (field: IdentityField) => isSourceOwned(device.source, field);
@@ -136,7 +136,10 @@ function IdentityForm({
     if (!owned("macs") && macs !== initial.macs) {
       const parsed = parseMacList(macs);
       if ("unreadable" in parsed) {
-        setError(`« ${parsed.unreadable} » n'est pas une adresse MAC.`);
+        problem.refuse(
+          "macs",
+          `« ${parsed.unreadable} » n'est pas une adresse MAC.`,
+        );
         return;
       }
       edit.macs = parsed.macs;
@@ -148,19 +151,19 @@ function IdentityForm({
     }
 
     const normalized = namedAfterHostname(normalizeIdentityEdit(edit), device);
-    const invalid = identityEditError(normalized);
+    const invalid = identityEditProblem(normalized);
     if (invalid) {
-      setError(invalid);
+      problem.refuse(invalid.field, invalid.message);
       return;
     }
 
     setSaving(true);
-    setError(null);
+    problem.clear();
     try {
       await updateIdentity({ deviceId: device.id, edit: normalized });
       onDone();
     } catch (caught) {
-      setError(failureMessage(caught, "editor"));
+      problem.refuse(null, failureMessage(caught, "editor"));
     } finally {
       setSaving(false);
     }
@@ -170,7 +173,7 @@ function IdentityForm({
     <form onSubmit={handleSubmit} className="flex min-h-0 flex-col gap-4">
       <FieldGroup className="-mx-1 min-h-0 gap-4 overflow-y-auto px-1 pb-1">
         {TEXT_FIELDS.map(({ field, label, mono }) => (
-          <Field key={field}>
+          <Field key={field} data-invalid={problem.isInvalid(field)}>
             <FieldLabel htmlFor={`${id}-${field}`}>{label}</FieldLabel>
             <Input
               id={`${id}-${field}`}
@@ -185,6 +188,7 @@ function IdentityForm({
               required={field === "name"}
               autoFocus={field === "name" && !owned(field)}
               className={mono ? "font-mono" : undefined}
+              {...problem.invalid(field)}
               onChange={(event) =>
                 setText((current) => ({
                   ...current,
@@ -192,14 +196,15 @@ function IdentityForm({
                 }))
               }
             />
-            {owned(field) ? (
-              <FieldDescription>Géré par {sourceLabel}.</FieldDescription>
-            ) : field === "name" && followsHostname ? (
-              <FieldDescription>Le nom suit le hostname.</FieldDescription>
-            ) : null}
+            {problem.errorUnder(field) ??
+              (owned(field) ? (
+                <FieldDescription>Géré par {sourceLabel}.</FieldDescription>
+              ) : field === "name" && followsHostname ? (
+                <FieldDescription>Le nom suit le hostname.</FieldDescription>
+              ) : null)}
           </Field>
         ))}
-        <Field>
+        <Field data-invalid={problem.isInvalid("macs")}>
           <FieldLabel htmlFor={`${id}-macs`}>Adresses MAC</FieldLabel>
           <Textarea
             id={`${id}-macs`}
@@ -207,27 +212,31 @@ function IdentityForm({
             disabled={owned("macs")}
             rows={3}
             className="font-mono"
+            {...problem.invalid("macs")}
             onChange={(event) => setMacs(event.target.value)}
           />
-          <FieldDescription>
-            {owned("macs")
-              ? `Géré par ${sourceLabel}.`
-              : "Une par ligne, dans n'importe quelle notation."}
-          </FieldDescription>
+          {problem.errorUnder("macs") ?? (
+            <FieldDescription>
+              {owned("macs")
+                ? `Géré par ${sourceLabel}.`
+                : "Une par ligne, dans n'importe quelle notation."}
+            </FieldDescription>
+          )}
         </Field>
-        <Field>
+        <Field data-invalid={problem.isInvalid("notes")}>
           <FieldLabel htmlFor={`${id}-notes`}>Notes</FieldLabel>
           <Textarea
             id={`${id}-notes`}
             value={notes}
             maxLength={IDENTITY_TEXT_LIMITS.notes}
             rows={3}
+            {...problem.invalid("notes")}
             onChange={(event) => setNotes(event.target.value)}
           />
+          {problem.errorUnder("notes")}
         </Field>
       </FieldGroup>
-      {/* Beside the buttons, so a refusal shows whatever the scroll. */}
-      {error ? <FieldError>{error}</FieldError> : null}
+      {problem.formError}
       <DialogFooter>
         <Button type="button" variant="outline" onClick={onDone}>
           Annuler
