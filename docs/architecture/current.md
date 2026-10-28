@@ -341,9 +341,11 @@ Built by lot 5 (ADR 0027).
 - **Push.** With the site's switch on, a cycle that ends schedules one push
   run under a lease on its `siteCycles` row. It compares each NetBox
   device's location with what `netboxPushes` says was last sent to that
-  NetBox id and PATCHes five `netplan_*` custom fields where they differ,
-  at most 100 per run. Each attempt first asks whether the push is still on
-  and the lease still held; changing or removing the NetBox forgets the
+  NetBox id and, only where the location differs, PATCHes the four
+  location fields with `netplan_updated`, the time it sends them (ADR
+  0035), at most 100 per run. Each attempt first asks whether the push is
+  still on and the lease still held; moving to another NetBox instance or
+  removing it forgets the
   rows and the lease, so nothing from the old NetBox is recorded. A refusal
   waits from one minute doubling to an hour; a network failure or 5xx ends
   the run. `health.overview` shows the last run and the devices still

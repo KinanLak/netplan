@@ -26,11 +26,13 @@ describe("planFields", () => {
       existing("netplan_site", "text"),
       existing("netplan_floor", "integer"),
       existing("netplan_socket", "text", ["dcim.interface"]),
+      // Written before ADR 0035: no longer the push's, and left as it is.
       existing("netplan_last_seen", "datetime"),
     ]);
-    expect(plan.ready).toEqual(["netplan_site", "netplan_last_seen"]);
+    expect(plan.ready).toEqual(["netplan_site"]);
     expect(plan.create.map((field) => field.name)).toEqual([
       "netplan_switch_port",
+      "netplan_updated",
     ]);
     expect(plan.wrong).toEqual([
       { name: "netplan_floor", problem: "is a integer field, not text" },
@@ -42,7 +44,8 @@ describe("planFields", () => {
 describe("fieldBody", () => {
   it("creates a device field people read but do not edit", () => {
     expect(fieldBody(PUSH_FIELDS[4])).toMatchObject({
-      name: "netplan_last_seen",
+      name: "netplan_updated",
+      label: "Modifié par NetPlan le",
       type: "datetime",
       object_types: ["dcim.device"],
       required: false,

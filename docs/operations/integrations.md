@@ -98,11 +98,15 @@ default, day and night.
 ## Writing locations back to NetBox
 
 A site can write where the network last saw each device NetBox brought into
-five custom fields of that NetBox device (ADR 0027): `netplan_site`,
-`netplan_floor`, `netplan_socket`, `netplan_switch_port` (text) and
-`netplan_last_seen` (date and time). It is off by default and one way:
-Netplan never reads these fields back, writes nothing else, and never clears
-what it wrote.
+five custom fields of that NetBox device (ADR 0027, ADR 0035):
+`netplan_site`, `netplan_floor`, `netplan_socket`, `netplan_switch_port`
+(text) and `netplan_updated` (date and time, « Modifié par NetPlan le »: when
+NetPlan wrote them). It writes only when a device's location changes, so
+NetBox's changelog records moves and nothing else. It is off by default and
+one way: Netplan never reads these fields back, writes nothing else, and
+never clears what it wrote. A NetBox that has the older `netplan_last_seen`
+keeps it, no longer written; remove it there if you want, the script never
+does.
 
 1. **Create the fields once per NetBox**, from a checkout, with a token
    allowed to add custom fields:
@@ -138,6 +142,5 @@ to an hour):
 - **NetBox unreachable or failing (5xx)**: the run stops at the first such
   answer and the next cycle's run tries again; the line shows the error.
 
-A run writes at most 100 devices; the rest follow on the next cycles. An online
-device's `netplan_last_seen` is rewritten every six hours, an offline one's
-once, with the time it was last seen.
+A run writes at most 100 devices; the rest follow on the next cycles. A device
+seen again where NetBox already shows it, or going offline, is not written.

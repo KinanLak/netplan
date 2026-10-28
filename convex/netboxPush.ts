@@ -166,20 +166,12 @@ export const due = internalQuery({
       if (!Number.isSafeInteger(netboxId)) continue;
       const sighting = await latestSighting(ctx, device);
       if (!sighting) continue;
-      const values = pushValues(
-        site.name,
-        await placeOf(sighting),
-        sighting.seenAt,
-      );
+      const values = pushValues(site.name, await placeOf(sighting));
       const row = await pushRowOf(ctx, device.objectId);
       if (row?.retryAt !== undefined && row.retryAt > now) continue;
       // Values sent to another NetBox device say nothing of this one.
-      const sent =
-        row?.sent && row.sentAt !== undefined && row.netboxId === netboxId
-          ? { values: row.sent, at: row.sentAt }
-          : null;
-      const offline = device.metadata.status === "down";
-      if (pushDue(values, sent, offline, now)) {
+      const sent = row?.sent && row.netboxId === netboxId ? row.sent : null;
+      if (pushDue(values, sent)) {
         devices.push({ deviceId: device.objectId, netboxId, values });
       }
     }
@@ -313,7 +305,7 @@ const pushDevices = async (
         answer = await netboxPatch(
           connection,
           `/api/dcim/devices/${device.netboxId}/`,
-          { custom_fields: customFields(device.values) },
+          { custom_fields: customFields(device.values, Date.now()) },
           retry,
         );
       } catch (error) {

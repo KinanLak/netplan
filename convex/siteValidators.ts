@@ -119,7 +119,6 @@ export const pushedValues = v.object({
   floor: v.union(v.null(), v.string()),
   socket: v.union(v.null(), v.string()),
   switchPort: v.string(),
-  lastSeen: v.number(),
 });
 
 /** How the last push run to NetBox ended. */

@@ -285,9 +285,10 @@ describe("the push to NetBox", () => {
           netplan_floor: "Bâtiment A · RDC",
           netplan_socket: "B-01",
           netplan_switch_port: "sw · Gi1/0/1",
-          netplan_last_seen: new Date(NOW)
-            .toISOString()
-            .replace(/\.\d{3}Z$/, "Z"),
+          // When NetPlan sent it, never when the network saw the device.
+          netplan_updated: expect.stringMatching(
+            /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/,
+          ),
         },
       },
     ]);
@@ -296,7 +297,8 @@ describe("the push to NetBox", () => {
       refused: 0,
     });
 
-    // Seen again at the same socket a cycle later: NetBox already shows it.
+    // Seen again at the same socket a cycle later: NetBox already shows it,
+    // and nothing is sent only to say so.
     await moveTo(admin, siteId, {
       portId: "port:sw:1",
       socketId: "device:B-01",
@@ -323,7 +325,7 @@ describe("the push to NetBox", () => {
     expect(await admin.query(api.netbox.importedCount, { siteId })).toBe(1);
   });
 
-  it("writes a move at once, and an offline device's last sighting", async () => {
+  it("writes a move at once, and nothing when only its status or sighting time changes", async () => {
     const { admin, siteId } = await pushingSite();
     await turnOn(admin, siteId);
     const patches = netboxAnswering(() => 200);
@@ -353,9 +355,9 @@ describe("the push to NetBox", () => {
       if (row) await ctx.db.patch(row._id, { metadata: { status: "down" } });
     });
     await push(admin, siteId);
-    expect(patches).toHaveLength(3);
-    expect(patches.at(-1)?.fields.netplan_last_seen).toBe(
-      new Date(NOW + 10 * 60_000).toISOString().replace(/\.\d{3}Z$/, "Z"),
+    expect(patches).toHaveLength(2);
+    expect(patches.some((patch) => "netplan_last_seen" in patch.fields)).toBe(
+      false,
     );
   });
 
