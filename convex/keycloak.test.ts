@@ -673,7 +673,23 @@ describe("handing a local account to Keycloak", () => {
     await t.finishAllScheduledFunctions(() => {});
     const [mail] = await outbox(t);
     const { token } = await tokenFromLink(t, mail);
+    // A session a sign-in opened while the handover committed.
+    expect((await signIn()).status).toBe(200);
+    const [session] = (
+      await t.run((ctx) =>
+        ctx.runQuery(components.betterAuth.adapter.findMany, {
+          model: "session",
+          where: [{ field: "userId", value: userId }],
+          paginationOpts: { numItems: 10, cursor: null },
+        }),
+      )
+    ).page as Array<{ _id: string }>;
     await t.mutation(internal.keycloakHandovers.start, { userId });
+    await expect(
+      t
+        .withIdentity({ subject: userId, sessionId: session._id })
+        .query(api.users.me, {}),
+    ).rejects.toThrow("unauthenticated");
 
     // A sign-in whose password was checked before the credential went.
     expect((await signIn()).status).toBe(403);
@@ -704,6 +720,47 @@ describe("handing a local account to Keycloak", () => {
       }),
     );
     expect(accounts.page).toEqual([]);
+  });
+
+  it("never gives a Keycloak account a password, even from a reset begun before", async () => {
+    const t = withMail();
+    await keycloakLogin(t, { ...camille, roles: [] });
+    const userId = (await userByEmail(t, camille.email))?._id ?? "";
+    const token = "reset-begun-before-the-handover";
+    await t.run((ctx) =>
+      ctx.runMutation(components.betterAuth.adapter.create, {
+        input: {
+          model: "verification",
+          data: {
+            identifier: `reset-password:${token}`,
+            value: userId,
+            expiresAt: Date.now() + 60_000,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          },
+        },
+      }),
+    );
+    expect(
+      (
+        await post(t, "/reset-password", {
+          token,
+          newPassword: "new-password-2",
+        })
+      ).ok,
+    ).toBe(false);
+    const accounts = await t.run((ctx) =>
+      ctx.runQuery(components.betterAuth.adapter.findMany, {
+        model: "account",
+        where: [{ field: "userId", value: userId }],
+        paginationOpts: { numItems: 10, cursor: null },
+      }),
+    );
+    expect(
+      (accounts.page as Array<{ providerId: string }>).map(
+        (account) => account.providerId,
+      ),
+    ).toEqual(["keycloak"]);
   });
 
   it("waits for a disabled account to be enabled again", async () => {

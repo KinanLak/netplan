@@ -240,7 +240,19 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
           // from a reset that was already under way at the handover.
           before: async (account) => {
             if (account.providerId === "credential") {
-              if (await awaitingKeycloak(account.userId)) {
+              const keycloakAccount = await ctx.runQuery(
+                components.betterAuth.adapter.findOne,
+                {
+                  model: "account",
+                  where: [
+                    { field: "userId", value: account.userId },
+                    { field: "providerId", value: "keycloak" },
+                  ],
+                },
+              );
+              // Nor to a Keycloak account, which a reset begun before its
+              // handover completed would otherwise reach.
+              if (keycloakAccount || (await awaitingKeycloak(account.userId))) {
                 throw new APIError("FORBIDDEN", {
                   code: "AWAITING_KEYCLOAK",
                 });
