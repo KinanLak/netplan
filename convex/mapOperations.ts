@@ -129,6 +129,8 @@ interface PlanningState {
   /** The free text labels of the loaded floors, and those the scope names. */
   labels: Map<string, PlannedLabel>;
   affectedFloorIds: Set<string>;
+  /** Cables an undone deletion could not lay again (`cablesToLay`). */
+  droppedCables: number;
   plan: WritePlan;
 }
 
@@ -745,6 +747,7 @@ const buildPlanningState = async (
         ]),
     ),
     affectedFloorIds: new Set(),
+    droppedCables: 0,
     plan: [],
   };
 };
@@ -992,6 +995,7 @@ const planCables = (
     cableExists: (cableId) => state.cables.has(cableId),
   });
   if ("error" in result) return "Les câbles de cet équipement sont invalides.";
+  state.droppedCables += cables.length - result.cables.length;
   for (const value of result.cables) {
     const row = cableRow(siteId, value, meta.createdAt, meta.clientId);
     state.cables.set(value.id, row);
@@ -1763,6 +1767,7 @@ const clientOperationResult = (operation: Doc<"clientOperations">) => ({
   appliedRevision: operation.appliedRevision,
   floorId: operation.floorId,
   error: operation.error,
+  droppedCables: operation.droppedCables,
 });
 
 export const observePending = readerQuery({
@@ -1807,6 +1812,7 @@ export const applyMapOperation = async (
       appliedRevision: existing.appliedRevision,
       floorId: existing.floorId,
       error: existing.error,
+      droppedCables: existing.droppedCables,
     };
   }
 
@@ -1835,6 +1841,9 @@ export const applyMapOperation = async (
     floorId = singleAffectedFloorId(state);
     appliedRevision = floorId ? revisions.get(floorId) : 0;
   }
+  // Said to the user, who may lay them again by hand (4.1).
+  const droppedCables =
+    !error && state.droppedCables > 0 ? state.droppedCables : undefined;
 
   await ctx.db.insert("clientOperations", {
     opId: operation.meta.opId,
@@ -1845,6 +1854,7 @@ export const applyMapOperation = async (
     status,
     error: error ?? undefined,
     appliedRevision,
+    droppedCables,
     createdAt: operation.meta.createdAt,
     appliedAt: now,
   });
@@ -1855,6 +1865,7 @@ export const applyMapOperation = async (
     appliedRevision,
     floorId,
     error: error ?? undefined,
+    droppedCables,
   };
 };
 

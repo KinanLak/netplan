@@ -646,6 +646,7 @@ describe("mapOperations.apply", () => {
       },
     });
     expect(undo.status).toBe("applied");
+    expect(undo.droppedCables).toBeUndefined();
     const restored = await getFloorDocument(t, floorId);
     expect(restored.ports.map((item) => item.id).sort()).toEqual(
       before.ports.map((item) => item.id).sort(),
@@ -682,17 +683,24 @@ describe("mapOperations.apply", () => {
     }
 
     // Undo on floor B, whose cable's far end left with `device:a`.
+    const undoOperation = {
+      kind: "device.create" as const,
+      meta: meta(44),
+      device: device("device:b", floorB, 0),
+      ports: before.ports.filter((item) => item.deviceId === "device:b"),
+      cables: before.cables.map(({ source: _, ...item }) => item),
+    };
     const undo = await t.mutation(api.mapOperations.apply, {
-      operation: {
-        kind: "device.create",
-        meta: meta(44),
-        device: device("device:b", floorB, 0),
-        ports: before.ports.filter((item) => item.deviceId === "device:b"),
-        cables: before.cables.map(({ source: _, ...item }) => item),
-      },
+      operation: undoOperation,
     });
 
     expect(undo.status).toBe("applied");
+    // The user hears how many cables did not come back (4.1), a replay too.
+    expect(undo.droppedCables).toBe(1);
+    const replay = await t.mutation(api.mapOperations.apply, {
+      operation: undoOperation,
+    });
+    expect(replay.droppedCables).toBe(1);
     const restored = await getFloorDocument(t, floorB);
     expect(restored.devices.map((item) => item.id)).toEqual(["device:b"]);
     expect(restored.ports.map((item) => item.id)).toEqual([portOf("device:b")]);

@@ -153,6 +153,16 @@ describe("floors", () => {
         activeAt: Date.now(),
         updatedAt: Date.now(),
       });
+      // A text does not keep a floor, but it is counted, so the confirmation
+      // names it (4.2).
+      await ctx.db.insert("mapLabels", {
+        objectId: "label:a",
+        floorId: emptyId,
+        text: "Salle serveur",
+        position: { x: 0, y: 0 },
+        updatedAt: 0,
+        updatedBy: "test",
+      });
     });
 
     await expect(
@@ -164,11 +174,19 @@ describe("floors", () => {
       devices: 1,
       wallBlocks: 0,
       overlays: 0,
+      labels: 0,
+    });
+    expect(await t.query(api.floors.content, { id: emptyId })).toEqual({
+      devices: 0,
+      wallBlocks: 0,
+      overlays: 0,
+      labels: 1,
     });
     expect(await t.query(api.buildings.content, { id: buildingId })).toEqual({
       devices: 1,
       wallBlocks: 0,
       overlays: 0,
+      labels: 1,
     });
     await t.mutation(api.floors.remove, { id: emptyId });
 
@@ -176,6 +194,7 @@ describe("floors", () => {
     expect(left.map((floor) => floor.id)).toEqual([floorId]);
     await t.run(async (ctx) => {
       expect(await ctx.db.query("presences").collect()).toHaveLength(0);
+      expect(await ctx.db.query("mapLabels").collect()).toHaveLength(0);
     });
   });
 

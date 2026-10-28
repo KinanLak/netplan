@@ -320,4 +320,6 @@ export const mapOperationResult = v.object({
   appliedRevision: v.optional(v.number()),
   floorId: v.optional(v.string()),
   error: v.optional(v.string()),
+  /** Cables an undone deletion could not lay again. */
+  droppedCables: v.optional(v.number()),
 });

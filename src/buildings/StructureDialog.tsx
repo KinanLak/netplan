@@ -34,7 +34,7 @@ import {
   structureNameError,
 } from "@/buildings/names";
 import type { StructureKind } from "@/buildings/names";
-import { describeContent } from "@/buildings/content";
+import { describeContent, describeLabels } from "@/buildings/content";
 import { failureMessage } from "@/lib/errors";
 import { createStandaloneObjectId } from "@/lib/identity";
 import { asBuildingId, asFloorId } from "@/lib/objectIds";
@@ -356,6 +356,9 @@ function RemoveDialog({
   // Live, so the button frees itself as soon as the last device leaves.
   const remaining = content ? describeContent(content) : null;
   const canRemove = content !== undefined && remaining === null;
+  // Texts do not keep a floor, but the user hears they go with it (4.2).
+  const labels = content && !remaining ? describeLabels(content) : null;
+  const along = labels ? ` et ${labels}` : "";
 
   const remove = async () => {
     onClose();
@@ -383,8 +386,8 @@ function RemoveDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>
             {building
-              ? `Supprimer le bâtiment « ${action.name} » ?`
-              : `Supprimer l'étage « ${action.name} » ?`}
+              ? `Supprimer le bâtiment « ${action.name} »${along} ?`
+              : `Supprimer l'étage « ${action.name} »${along} ?`}
           </AlertDialogTitle>
           <AlertDialogDescription>
             {remaining
