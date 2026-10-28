@@ -33,6 +33,16 @@ import type {
 // One toast however often a refusal is said, as a mount effect may run twice.
 const REFUSAL_TOAST = "cable-draft-refusal";
 
+/**
+ * Sonner merges a toast's options into the one already showing under its id,
+ * so `action` is always given: a refusal without one must not keep the
+ * previous refusal's button, which would open another device.
+ */
+const showRefusal = (
+  reason: string,
+  action?: { label: string; onClick: () => void },
+) => toast(reason, { id: REFUSAL_TOAST, action });
+
 type PortPick = {
   deviceId: DeviceId;
   /** Its type, which says how its ports are named. */
@@ -102,17 +112,12 @@ function RefusedStart({
   const refuse = useEffectEvent(() => {
     // The device's sheet holds its port table, which can do what the map
     // cannot.
-    toast(reason, {
-      id: REFUSAL_TOAST,
-      ...(deviceId
-        ? {
-            action: {
-              label: "Ouvrir la fiche",
-              onClick: () => selectDevice(deviceId),
-            },
-          }
-        : {}),
-    });
+    showRefusal(
+      reason,
+      deviceId
+        ? { label: "Ouvrir la fiche", onClick: () => selectDevice(deviceId) }
+        : undefined,
+    );
     setCableDraft(null);
   });
   useEffect(() => refuse(), []);
@@ -246,7 +251,7 @@ function DrawingCable({ draft }: { draft: CableDraft }) {
         setCableDraft(null);
         return;
       case "refused":
-        toast(result.reason, { id: REFUSAL_TOAST });
+        showRefusal(result.reason);
         setCableDraft(null);
         return;
       case "connect":
