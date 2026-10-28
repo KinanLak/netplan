@@ -3,6 +3,7 @@ import {
   absencePurgeDue,
   importedName,
   importSummary,
+  unmappedNetBoxRoles,
   isPhysicalInterface,
   planDevicePorts,
   planNetBoxImport,
@@ -319,9 +320,10 @@ describe("importSummary", () => {
         missing: 3,
         returned: 1,
         review: 2,
+        replacedCables: 2,
       }),
     ).toBe(
-      "Import : 463 équipements (12 nouveaux, 1 rattaché, 3 absents de NetBox, 1 de retour, 2 à vérifier).",
+      "Import : 463 équipements (12 nouveaux, 1 rattaché, 3 absents de NetBox, 1 de retour, 2 à vérifier). 2 câbles saisis à la main remplacés par NetBox.",
     );
     expect(
       importSummary({
@@ -331,8 +333,31 @@ describe("importSummary", () => {
         missing: 0,
         returned: 0,
         review: 0,
+        replacedCables: 1,
       }),
-    ).toBe("Import : 1 équipement.");
+    ).toBe(
+      "Import : 1 équipement. 1 câble saisi à la main remplacé par NetBox.",
+    );
+  });
+});
+
+describe("unmappedNetBoxRoles", () => {
+  it("counts the devices of each role that has no type, leaving out those without a role", () => {
+    expect(
+      unmappedNetBoxRoles(
+        [
+          { id: 1, role: { id: 4, name: "Workstation" } },
+          { id: 2, role: { id: 6, name: "Serveur" } },
+          { id: 3, role: { id: 6, name: "Serveur" } },
+          { id: 4, device_role: { id: 5, name: "Imprimante" } },
+          { id: 5, role: null },
+        ],
+        [{ id: 4, name: "Workstation", type: "pc" }],
+      ),
+    ).toEqual([
+      { id: 5, name: "Imprimante", devices: 1 },
+      { id: 6, name: "Serveur", devices: 2 },
+    ]);
   });
 });
 
@@ -386,6 +411,24 @@ describe("readNetBoxCabling", () => {
     ]) {
       expect(named(name)).toBe(true);
     }
+  });
+
+  it("keeps an interface named like a virtual one when NetBox has a cable on it", () => {
+    const cabled = (name: string) =>
+      isPhysicalInterface({
+        name,
+        type: { value: "1000base-t" },
+        cable: { id: 12 },
+      });
+    expect(cabled("vlan10-uplink")).toBe(true);
+    expect(cabled("Po1")).toBe(true);
+    expect(
+      isPhysicalInterface({
+        name: "br0",
+        type: { value: "bridge" },
+        cable: { id: 3 },
+      }),
+    ).toBe(false);
   });
 
   it("leaves out virtual, bridge and aggregate interfaces", () => {

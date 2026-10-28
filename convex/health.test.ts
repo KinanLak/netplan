@@ -39,6 +39,14 @@ describe("the admin health overview", () => {
       ignoreCertificateErrors: false,
       token: "a-token-for-tests", // gitleaks:allow
     });
+    await t.mutation(api.netbox.saveSettings, {
+      siteId: busy,
+      baseUrl: "https://netbox.test",
+      settings: {
+        site: { id: 7, name: "Siège" },
+        roles: [{ id: 4, name: "Workstation", type: "pc" }],
+      },
+    });
     const last = {
       startedAt: 1_000,
       finishedAt: 2_000,
@@ -71,6 +79,11 @@ describe("the admin health overview", () => {
         failures: 1,
         last,
         netboxImportedAt: 1_500,
+        netboxUnmappedRoles: {
+          baseUrl: "https://netbox.test",
+          netboxSiteId: 7,
+          roles: [{ id: 6, name: "Serveur", devices: 2 }],
+        },
       });
       const devices: Array<[DeviceType, DeviceStatus | undefined]> = [
         ["switch", "up"],
@@ -78,6 +91,7 @@ describe("the admin health overview", () => {
         ["switch", "down"],
         ["switch", undefined],
         ["pc", "down"],
+        ["pc", undefined],
       ];
       for (const [index, [type, status]] of devices.entries()) {
         await ctx.db.insert("devices", {
@@ -87,6 +101,15 @@ describe("the admin health overview", () => {
           name: `${type}-${index}`,
           macs: [],
           metadata: status ? { status } : {},
+          // The last one NetBox no longer returns.
+          ...(index === devices.length - 1 && {
+            source: {
+              integration: "netbox" as const,
+              externalId: "9",
+              syncedAt: 0,
+              missingSince: 1_000,
+            },
+          }),
           updatedAt: 0,
           updatedBy: "test",
         });
@@ -100,7 +123,11 @@ describe("the admin health overview", () => {
       name: "Site A",
       freshness: { hasSources: true, failures: 1, nextRunAt: 3_000 },
       last,
-      netbox: { importedAt: 1_500 },
+      netbox: {
+        importedAt: 1_500,
+        absent: 1,
+        unmappedRoles: [{ id: 6, name: "Serveur", devices: 2 }],
+      },
       switches: { up: 2, down: 1, unknown: 1 },
       // No switch is mapped to a LibreNMS device in this site's settings.
       switchReads: { read: 0, failed: 0, notPolled: 4, oldestReadAt: null },
@@ -113,6 +140,43 @@ describe("the admin health overview", () => {
       switches: { up: 0, down: 0, unknown: 0 },
       switchReads: null,
     });
+  });
+
+  it("lists no role counted in a NetBox site the settings no longer read", async () => {
+    const t = await admin();
+    const siteId = await createTestSite(t);
+    await t.action(api.sources.saveIntegration, {
+      siteId,
+      kind: "netbox",
+      baseUrl: "https://netbox.test",
+      enabled: true,
+      ignoreCertificateErrors: false,
+      token: "a-token-for-tests", // gitleaks:allow
+    });
+    await t.run(async (ctx) => {
+      await ctx.db.insert("siteCycles", {
+        siteId,
+        nextRunAt: 0,
+        failures: 0,
+        netboxImportedAt: 1,
+        netboxUnmappedRoles: {
+          baseUrl: "https://netbox.test",
+          netboxSiteId: 7,
+          roles: [{ id: 6, name: "Serveur", devices: 2 }],
+        },
+      });
+    });
+    const roles = async () =>
+      (await t.query(api.health.overview, {}))[0]?.netbox?.unmappedRoles;
+    // No NetBox site chosen, as after a change of instance.
+    expect(await roles()).toEqual([]);
+    // Another NetBox site chosen since the last import.
+    await t.mutation(api.netbox.saveSettings, {
+      siteId,
+      baseUrl: "https://netbox.test",
+      settings: { site: { id: 8, name: "Lyon" }, roles: [] },
+    });
+    expect(await roles()).toEqual([]);
   });
 
   it("names no NetBox import while NetBox is disabled", async () => {

@@ -8,7 +8,12 @@ import {
 import { cycleOf } from "./lib/cycles";
 import { adminQuery } from "./lib/functions";
 import type { QueryCtx } from "./_generated/server";
-import { cycleRun, integrationKind, pushRun } from "./siteValidators";
+import {
+  cycleRun,
+  integrationKind,
+  pushRun,
+  unmappedRole,
+} from "./siteValidators";
 
 /** Failing devices the page lists; past that it says how many more. */
 const FAILING_SHOWN = 20;
@@ -62,6 +67,10 @@ export const overview = adminQuery({
         v.null(),
         v.object({
           importedAt: v.union(v.null(), v.number()),
+          /** Devices NetBox no longer returns (ADR 0039). */
+          absent: v.number(),
+          /** The NetBox site's roles that still have no type. */
+          unmappedRoles: v.array(unmappedRole),
           /** `null` while the push to NetBox is off (ADR 0027). */
           push: v.union(
             v.null(),
@@ -171,6 +180,24 @@ export const overview = adminQuery({
           netbox: netbox?.enabled
             ? {
                 importedAt: cycle?.netboxImportedAt ?? null,
+                absent: devices.filter(
+                  (device) => device.source?.missingSince !== undefined,
+                ).length,
+                // Counted in the NetBox and site the settings read now: none
+                // after a change of site or instance, until the next import;
+                // a role mapped since is no longer listed.
+                unmappedRoles: (cycle?.netboxUnmappedRoles &&
+                cycle.netboxUnmappedRoles.baseUrl === netbox.baseUrl &&
+                cycle.netboxUnmappedRoles.netboxSiteId ===
+                  netbox.netbox?.site?.id
+                  ? cycle.netboxUnmappedRoles.roles
+                  : []
+                ).filter(
+                  (role) =>
+                    !(netbox.netbox?.roles ?? []).some(
+                      (typed) => typed.id === role.id,
+                    ),
+                ),
                 push: netbox.netbox?.push
                   ? {
                       last: cycle?.lastPush ?? null,

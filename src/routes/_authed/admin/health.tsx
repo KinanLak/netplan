@@ -160,7 +160,10 @@ function SiteCard({ site, now }: { site: SiteHealth; now: number }) {
           ) : netbox.importedAt === null ? (
             "Jamais"
           ) : (
-            <Time at={netbox.importedAt} now={now} format="age" />
+            <div className="space-y-0.5">
+              <Time at={netbox.importedAt} now={now} format="age" />
+              <NetBoxNotes siteId={site.id} netbox={netbox} />
+            </div>
           )}
         </Fact>
         <Fact label="Switchs">
@@ -252,6 +255,43 @@ function SiteCard({ site, now }: { site: SiteHealth; now: number }) {
 
       {netbox?.push ? <PushHealth push={netbox.push} now={now} /> : null}
     </li>
+  );
+}
+
+/**
+ * What NetBox no longer returns, and the roles it has that no type is chosen
+ * for (ADR 0039): two quiet lines, only when there is something to say.
+ */
+function NetBoxNotes({
+  siteId,
+  netbox,
+}: {
+  siteId: string;
+  netbox: NonNullable<SiteHealth["netbox"]>;
+}) {
+  const { absent, unmappedRoles } = netbox;
+  return (
+    <>
+      {absent > 0 ? (
+        <p className="text-xs text-muted-foreground">
+          <Link
+            to="/inventory"
+            search={{ site: siteId, absent: true }}
+            className="underline-offset-4 hover:text-foreground hover:underline"
+          >
+            {counted(absent, "absent de NetBox", "absents de NetBox")}
+          </Link>
+        </p>
+      ) : null}
+      {unmappedRoles.length > 0 ? (
+        <p className="text-xs text-muted-foreground">
+          {unmappedRoles.length > 1 ? "Rôles sans type" : "Rôle sans type"} :{" "}
+          {unmappedRoles
+            .map((role) => `${role.name} (${role.devices})`)
+            .join(", ")}
+        </p>
+      ) : null}
+    </>
   );
 }
 

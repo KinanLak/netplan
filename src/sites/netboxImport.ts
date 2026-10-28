@@ -112,6 +112,34 @@ export function readNetBoxDevices(
   });
 }
 
+/** A NetBox role no type is chosen for, with how many devices of the site have it. */
+export type UnmappedRole = { id: number; name: string; devices: number };
+
+/**
+ * The roles of the NetBox site's devices that no type is chosen for yet, for
+ * Santé (ADR 0039). Devices without a role are left out.
+ */
+export function unmappedNetBoxRoles(
+  devices: ReadonlyArray<Raw>,
+  roles: ReadonlyArray<NetBoxRoleMapping>,
+): Array<UnmappedRole> {
+  const mapped = new Set(roles.map((role) => role.id));
+  const found = new Map<number, UnmappedRole>();
+  for (const item of devices) {
+    const role = isObject(item.role) ? item.role : item.device_role;
+    const id = idOf(role);
+    if (id === undefined || mapped.has(id) || !isObject(role)) continue;
+    const entry = found.get(id) ?? {
+      id,
+      name: text(role.name) ?? text(role.display) ?? String(id),
+      devices: 0,
+    };
+    entry.devices += 1;
+    found.set(id, entry);
+  }
+  return [...found.values()].sort((a, b) => a.name.localeCompare(b.name, "fr"));
+}
+
 /** A device of the site as the merge sees it. */
 export type InventoryDevice = {
   id: string;
@@ -363,6 +391,8 @@ export type ImportCounts = {
   /** Absent devices NetBox returns again. */
   returned: number;
   review: number;
+  /** Manual cables a NetBox cable replaced. */
+  replacedCables: number;
 };
 
 const counted = (count: number, one: string, many: string) =>
@@ -380,9 +410,13 @@ export function importSummary(counts: ImportCounts): string {
     counts.review > 0 ? `${counts.review} à vérifier` : null,
   ].filter((part) => part !== null);
   const imported = `Import : ${counted(counts.imported, "équipement", "équipements")}`;
+  const cables =
+    counts.replacedCables > 0
+      ? ` ${counted(counts.replacedCables, "câble saisi à la main remplacé", "câbles saisis à la main remplacés")} par NetBox.`
+      : "";
   return changes.length > 0
-    ? `${imported} (${changes.join(", ")}).`
-    : `${imported}.`;
+    ? `${imported} (${changes.join(", ")}).${cables}`
+    : `${imported}.${cables}`;
 }
 
 /**
@@ -445,10 +479,15 @@ const VIRTUAL_NAMES: ReadonlyArray<RegExp> = [
   /\.\d+$/,
 ];
 
-/** Whether a NetBox interface is something a cable plugs into. */
+/**
+ * Whether a NetBox interface is something a cable plugs into. A name that
+ * looks virtual leaves out only an interface NetBox has no cable on: a cable
+ * says it is a real port, whatever it is called.
+ */
 export const isPhysicalInterface = (item: Raw): boolean => {
   const type = isObject(item.type) ? text(item.type.value) : undefined;
   if (type !== undefined && NOT_A_PORT.has(type)) return false;
+  if (isObject(item.cable)) return true;
   const name = text(item.name) ?? "";
   return !VIRTUAL_NAMES.some((pattern) => pattern.test(name));
 };

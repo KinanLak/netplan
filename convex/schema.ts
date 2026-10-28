@@ -26,6 +26,7 @@ import {
   runningCycle,
   runningPush,
   switchRead,
+  unmappedRole,
 } from "./siteValidators";
 
 export default defineSchema({
@@ -76,6 +77,17 @@ export default defineSchema({
     lastSuccessAt: v.optional(v.number()),
     /** NetBox changes slowly: it is imported every 15 minutes (ADR 0023). */
     netboxImportedAt: v.optional(v.number()),
+    /**
+     * The NetBox site's roles no type is chosen for, for Santé (ADR 0039),
+     * with the NetBox and site they were counted in.
+     */
+    netboxUnmappedRoles: v.optional(
+      v.object({
+        baseUrl: v.string(),
+        netboxSiteId: v.number(),
+        roles: v.array(unmappedRole),
+      }),
+    ),
     /** LibreNMS is asked to rediscover at most every 5 minutes (ADR 0023). */
     librenmsDiscoveryAt: v.optional(v.number()),
     /** What the last read of each LibreNMS device's forwarding table left. */
