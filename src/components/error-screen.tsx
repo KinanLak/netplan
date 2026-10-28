@@ -1,42 +1,74 @@
 import { Link, useRouter } from "@tanstack/react-router";
 import type { ErrorComponentProps } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { useOnline } from "@/hooks/use-online";
+import { BACKEND_UNREACHABLE } from "@/lib/health";
+import { untilServerAnswers } from "@/lib/server-return";
+import { waitOrOnline } from "@/lib/session-token";
 
 /**
  * A fetch that never reached a server: the browser is offline, or the app's
- * server is down or unreachable.
+ * server is down or unreachable. Chromium, Firefox and Safari each word a
+ * page's code that failed to load differently.
  */
 export function isNetworkError(error: unknown): boolean {
   return (
     error instanceof TypeError &&
-    /fetch|network|load failed/i.test(error.message)
+    /fetch|network|load failed|dynamically imported module|module script/i.test(
+      error.message,
+    )
   );
 }
 
+/** A failure that comes back on its own once the servers answer again. */
+export function isConnectionError(error: unknown): boolean {
+  return (
+    isNetworkError(error) ||
+    (error instanceof Error && error.message === BACKEND_UNREACHABLE)
+  );
+}
+
+const healthAnswers = () =>
+  fetch("/health", { cache: "no-store" }).then(
+    (response) => response.ok,
+    () => false,
+  );
+
 /**
  * What the router shows instead of a page that failed to load. A page fails
- * mostly when the app's server cannot be reached, so the network coming back
- * retries on its own.
+ * mostly when the app's server or Convex cannot be reached, so the screen
+ * says so and comes back by itself when they answer again.
  */
 export function ErrorScreen({ error, reset }: ErrorComponentProps) {
   const router = useRouter();
   const online = useOnline();
+  // A screen shown offline heals once the network returns, whatever error
+  // the missing network caused.
+  const [sawOffline, setSawOffline] = useState(!online);
+  if (!online && !sawOffline) setSawOffline(true);
+  const heals = sawOffline || isConnectionError(error);
 
   const retry = () => {
     reset();
     void router.invalidate();
   };
+  const retryOnReturn = useEffectEvent(retry);
 
   useEffect(() => {
-    const onOnline = () => {
-      reset();
-      void router.invalidate();
+    if (!heals) return;
+    let cancelled = false;
+    void untilServerAnswers({
+      probe: healthAnswers,
+      wait: waitOrOnline,
+      cancelled: () => cancelled,
+    }).then((back) => {
+      if (back) retryOnReturn();
+    });
+    return () => {
+      cancelled = true;
     };
-    window.addEventListener("online", onOnline);
-    return () => window.removeEventListener("online", onOnline);
-  }, [reset, router]);
+  }, [heals, error]);
 
   const { title, description } = !online
     ? {
@@ -44,11 +76,11 @@ export function ErrorScreen({ error, reset }: ErrorComponentProps) {
         description:
           "Ce navigateur n'est plus connecté au réseau. La page se rechargera dès son retour.",
       }
-    : isNetworkError(error)
+    : heals
       ? {
           title: "Serveur injoignable",
           description:
-            "Le serveur NetPlan ne répond pas. Réessayez dans un instant ; si cela dure, prévenez votre administrateur.",
+            "Le serveur NetPlan ne répond pas. La page se rechargera dès son retour ; si cela dure, prévenez votre administrateur.",
         }
       : {
           title: "Cette page n'a pas pu s'afficher",

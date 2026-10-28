@@ -16,7 +16,8 @@ description: The /health endpoint and the containers' own health checks.
   "status": "ok",
   "checks": [
     { "name": "config", "status": "ok" },
-    { "name": "convex", "status": "ok" }
+    { "name": "convex", "status": "ok" },
+    { "name": "convex-site", "status": "ok" }
   ]
 }
 ```
@@ -26,7 +27,8 @@ description: The /health endpoint and the containers' own health checks.
   "status": "ko",
   "checks": [
     { "name": "config", "status": "ok" },
-    { "name": "convex", "status": "ko", "detail": "backend answered 502" }
+    { "name": "convex", "status": "ko", "detail": "backend answered 502" },
+    { "name": "convex-site", "status": "ko", "detail": "backend answered 502" }
   ]
 }
 ```
@@ -34,6 +36,8 @@ description: The /health endpoint and the containers' own health checks.
 - `config`: `CONVEX_URL` and `CONVEX_SITE_URL` are set and valid.
 - `convex`: the backend answers `/version` at its public URL within three
   seconds, which also proves the edge routes it.
+- `convex-site`: the backend's HTTP actions answer at `CONVEX_SITE_URL`,
+  where the app's server reads sessions, within three seconds.
 
 Point Zabbix (web scenario, required status `200`) or Uptime Kuma (HTTP
 monitor) at it, every minute. The status code is the signal; `checks` is for

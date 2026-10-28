@@ -40,6 +40,18 @@ export async function requestFailure<E extends AuthFailure>(
   }
 }
 
+// An identifier in a format no account can have (a dash, too short, a
+// malformed email) is refused before any lookup; it reads like any wrong
+// identifier, not like a passing failure to retry.
+const WRONG_CREDENTIALS = new Set([
+  "INVALID_EMAIL_OR_PASSWORD",
+  "INVALID_USERNAME_OR_PASSWORD",
+  "INVALID_USERNAME",
+  "USERNAME_TOO_SHORT",
+  "USERNAME_TOO_LONG",
+  "INVALID_EMAIL",
+]);
+
 export function loginErrorMessage(error: {
   status?: number;
   code?: string;
@@ -51,10 +63,7 @@ export function loginErrorMessage(error: {
   if (error.code === "BANNED_USER") {
     return "Ce compte est désactivé. Contactez un administrateur.";
   }
-  if (
-    error.code === "INVALID_EMAIL_OR_PASSWORD" ||
-    error.code === "INVALID_USERNAME_OR_PASSWORD"
-  ) {
+  if (error.code !== undefined && WRONG_CREDENTIALS.has(error.code)) {
     return "Identifiant ou mot de passe incorrect.";
   }
   return "La connexion a échoué. Réessayez.";

@@ -144,6 +144,9 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
         "/get-session": false,
         // The app server asks on behalf of every visitor of the login page.
         "/sign-in-options": false,
+        // `/health` asks it on every probe, from monitoring and from error
+        // screens waiting for the backend; a 429 would read as an outage.
+        "/ok": false,
         // Only starts the redirect to Keycloak, which guards the password;
         // the strict sign-in rule would turn a team's morning logins away.
         "/sign-in/oauth2": { window: 10, max: 100 },
