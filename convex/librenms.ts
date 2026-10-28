@@ -6,8 +6,15 @@ import type { ActionCtx, QueryCtx } from "./_generated/server";
 import { openConnection } from "./integrations";
 import { PROBE_RETRY, sourceGet } from "./lib/integrationProbe";
 import type { Transport } from "./lib/integrationProbe";
-import { adminMutation, adminQuery } from "./lib/functions";
-import { requireSite } from "./sites";
+import {
+  adminMutation,
+  adminQuery,
+  editorMutation,
+  editorQuery,
+} from "./lib/functions";
+import { cycleOf } from "./lib/cycles";
+import { deviceOf as inventoryDevice, portNamesPlan } from "./librenmsCycle";
+import { requireOpenSite, requireSite } from "./sites";
 import { librenmsSettings } from "./siteValidators";
 import {
   EMPTY_LIBRENMS_SETTINGS,
@@ -176,3 +183,69 @@ export const listDevices = async (
       .sort((a, b) => a.name.localeCompare(b.name, "fr")),
   };
 };
+
+/** The names LibreNMS offers a switch, while it may still take them. */
+const offerFor = async (ctx: QueryCtx, deviceId: string) => {
+  const device = await inventoryDevice(ctx, deviceId);
+  if (device?.type !== "switch") return null;
+  const cycle = await cycleOf(ctx, device.siteId);
+  const offer = cycle?.portNameOffers?.find(
+    ({ switchId }) => switchId === deviceId,
+  );
+  if (!offer) return null;
+  const adoption = await portNamesPlan(ctx, device.siteId, offer);
+  return adoption ? { device, offer, ...adoption } : null;
+};
+
+/**
+ * How many port names LibreNMS offers a manual switch whose ports still
+ * carry their default names, for the drawer to propose (ADR 0038).
+ */
+export const portNameOffer = editorQuery({
+  args: { deviceId: v.string() },
+  returns: v.union(v.null(), v.object({ count: v.number() })),
+  handler: async (ctx, { deviceId }) => {
+    const found = await offerFor(ctx, deviceId);
+    return found ? { count: found.offer.names.length } : null;
+  },
+});
+
+/**
+ * Gives the switch LibreNMS's port names (ADR 0025's adoption): by
+ * position, so each port keeps its id and cable; ports LibreNMS has beyond
+ * are added, uncabled ones beyond its are removed.
+ */
+export const adoptPortNames = editorMutation({
+  args: { deviceId: v.string() },
+  returns: v.number(),
+  handler: async (ctx, { deviceId }) => {
+    const found = await offerFor(ctx, deviceId);
+    if (!found) {
+      throw new ConvexError(
+        "LibreNMS ne propose plus de noms pour les ports de ce switch.",
+      );
+    }
+    const { device, offer, plan, rows } = found;
+    await requireOpenSite(ctx, device.siteId);
+    const rowOf = new Map(rows.map((row) => [row.objectId, row]));
+    for (const { id, name } of plan.rename) {
+      const row = rowOf.get(id);
+      if (row) await ctx.db.patch(row._id, { name });
+    }
+    for (const id of plan.remove) {
+      const row = rowOf.get(id);
+      if (row) await ctx.db.delete(row._id);
+    }
+    for (const { id, name, order } of plan.add) {
+      await ctx.db.insert("ports", {
+        objectId: id,
+        siteId: device.siteId,
+        deviceId,
+        name,
+        kind: "interface",
+        order,
+      });
+    }
+    return offer.names.length;
+  },
+});

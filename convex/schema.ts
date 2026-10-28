@@ -21,6 +21,7 @@ import {
   integrationKind,
   librenmsSettings,
   netboxSettings,
+  portNameOffer,
   pushedValues,
   pushRun,
   runningCycle,
@@ -96,6 +97,11 @@ export default defineSchema({
     ),
     /** When each polled switch was last read; statuses rest on it (ADR 0025). */
     switchReads: v.optional(v.array(switchRead)),
+    /**
+     * The port names LibreNMS offers a switch whose ports still carry their
+     * default names, for an Éditeur to adopt (ADR 0038).
+     */
+    portNameOffers: v.optional(v.array(portNameOffer)),
     /** The push run to NetBox that follows a cycle (ADR 0027). */
     pushRunning: v.optional(runningPush),
     lastPush: v.optional(pushRun),
