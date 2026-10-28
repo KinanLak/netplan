@@ -55,8 +55,7 @@ export const restoredSource = <
   if (!source) return {};
   if (source.integration !== "netbox" || !isAbsentFromSource(source)) {
     return {
-      error:
-        "Cet équipement vient d'une intégration : il ne peut pas être créé.",
+      error: "Un équipement d'une intégration ne peut pas être créé.",
     };
   }
   return { source: { ...source, staleId: true } };
@@ -192,7 +191,7 @@ export function identityEditProblem(
     if (typeof value === "string" && value.length > limit) {
       return {
         field,
-        message: `Trop long : ${IDENTITY_FIELD_NAMES[field]} (${limit} caractères au plus).`,
+        message: `Le champ « ${IDENTITY_FIELD_NAMES[field]} » dépasse ${limit} caractères.`,
       };
     }
   }

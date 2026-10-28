@@ -137,17 +137,18 @@ export function LastSeenSection({ deviceId }: { deviceId: string }) {
           </span>
         </div>
         {place.socketName ? (
-          <div className="truncate text-muted-foreground">
-            {[place.socketName, ...where].join(" · ")}
+          <div className="flex min-w-0 gap-x-2 text-muted-foreground">
+            {[place.socketName, ...where].map((part, index) => (
+              // A building and its floor may share a name.
+              <span key={index} className="truncate">
+                {part}
+              </span>
+            ))}
           </div>
         ) : null}
-        {/* The time only: the status says whether a read still vouches.
-            How the port led to the device is said in passing (ADR 0038). */}
+        {/* The time only: the status says whether a read still vouches. */}
         <div className="text-xs text-muted-foreground">
           <Time at={at} format="when" now={now} />
-          {place.socketId
-            ? " · vu via un câble"
-            : " · vu sur un port non documenté"}
         </div>
       </div>
     </section>

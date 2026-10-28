@@ -1395,7 +1395,7 @@ describe("mapOperations.apply on the site inventory", () => {
       name: "x".repeat(254),
     });
 
-    expect(longName.error).toContain("Trop long");
+    expect(longName.error).toContain("« nom »");
   });
 
   it("frees the MAC addresses of a deleted device, within one batch too", async () => {

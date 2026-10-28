@@ -310,13 +310,11 @@ export const remove = editorMutation({
     await requireOpenSite(ctx, device.siteId);
     if (device.source && !isDeletable(device)) {
       throw new ConvexError(
-        `Cet équipement vient de ${INTEGRATION_LABELS[device.source.integration]} : il ne se supprime pas dans NetPlan.`,
+        `Un équipement de ${INTEGRATION_LABELS[device.source.integration]} ne se supprime pas dans NetPlan.`,
       );
     }
     if (device.placement) {
-      throw new ConvexError(
-        "Cet équipement est sur le plan : supprimez-le depuis le plan.",
-      );
+      throw new ConvexError("Un équipement placé se supprime depuis le plan.");
     }
     const macs = await ctx.db
       .query("deviceMacs")
@@ -374,7 +372,7 @@ export const updateIdentity = editorMutation({
       if (JSON.stringify(device[field]) === JSON.stringify(next)) continue;
       if (device.source && isSourceOwned(device.source, field)) {
         throw new ConvexError(
-          `Le champ « ${IDENTITY_FIELD_NAMES[field]} » vient de ${INTEGRATION_LABELS[device.source.integration]} et ne se modifie pas dans NetPlan.`,
+          `Le champ « ${IDENTITY_FIELD_NAMES[field]} » se modifie dans ${INTEGRATION_LABELS[device.source.integration]}.`,
         );
       }
       Object.assign(patch, { [field]: next });

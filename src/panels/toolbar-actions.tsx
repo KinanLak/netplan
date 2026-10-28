@@ -11,9 +11,9 @@ import { TOOLBAR_ICON_SIZE_CLASS } from "@/lib/constants";
 
 export interface DrawToolbarAction {
   id: string;
-  label: string;
   icon: React.ReactNode;
   shortcut: ShortcutAction;
+  /** What the tool does, named on hover and to a screen reader. */
   title: string;
   tool: Extract<DrawTool, "wall" | "wall-brush" | "wall-erase" | "room">;
 }
@@ -22,7 +22,6 @@ export const drawToolbarActions: Array<DrawToolbarAction> = [
   {
     id: "wall",
     tool: "wall",
-    label: "Mur",
     shortcut: "tool-wall",
     title: "Dessiner un mur",
     icon: (
@@ -37,7 +36,6 @@ export const drawToolbarActions: Array<DrawToolbarAction> = [
   {
     id: "room",
     tool: "room",
-    label: "Salle",
     shortcut: "tool-room",
     title: "Dessiner une salle",
     icon: (
@@ -52,7 +50,6 @@ export const drawToolbarActions: Array<DrawToolbarAction> = [
   {
     id: "wall-brush",
     tool: "wall-brush",
-    label: "Pinceau",
     shortcut: "tool-wall-brush",
     title: "Peindre des murs",
     icon: (
@@ -67,7 +64,6 @@ export const drawToolbarActions: Array<DrawToolbarAction> = [
   {
     id: "wall-erase",
     tool: "wall-erase",
-    label: "Gomme",
     shortcut: "tool-wall-erase",
     title: "Effacer des murs",
     icon: (

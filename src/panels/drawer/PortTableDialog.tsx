@@ -10,13 +10,14 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import { Alert02Icon } from "@hugeicons/core-free-icons";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { IconNote } from "@/components/icon-note";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { getDeviceKindLabel } from "@/devices/deviceKindRegistry";
 import { matchesDeviceSearch } from "@/devices/search";
@@ -26,7 +27,6 @@ import type { IntegrationKind } from "@/sites/integrations";
 import { endLabel, portLabel, shortPortName } from "@/devices/portState";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { formatDateTime, timeZoneHint } from "@/lib/time";
 import { Time } from "@/components/time";
 import type { DeviceType } from "@/types/map";
 import { useCableCommands } from "@/devices/useCableCommands";
@@ -84,10 +84,6 @@ export function PortTableDialog({
       <DialogContent className="top-[8vh] max-h-[84vh] translate-y-0 grid-rows-[auto_minmax(0,1fr)] sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Câbles de « {device.name} »</DialogTitle>
-          <DialogDescription>
-            Chaque port, ce qu'il relie et où mène le câble au-delà des panneaux
-            de brassage.
-          </DialogDescription>
         </DialogHeader>
         {/* Mounted on open, so a half-chosen cable starts over. */}
         {open ? (
@@ -103,17 +99,24 @@ export function PortTableDialog({
 }
 
 /**
- * Why a device shows no port. One its source brings without a physical port
- * is out of the ordinary (a core switch whose interfaces NetBox only models
- * as virtual ones), and the message says so; a rack has none by nature.
+ * A device its source brings without a physical port is out of the ordinary
+ * (a core switch whose interfaces NetBox only models as virtual ones), so it
+ * is pointed out; any other device without ports shows an empty table.
  */
-const noPortMessage = (
-  type: DeviceType,
-  source: IntegrationKind | undefined,
-): string => {
-  if (!source || type === "rack") return "Cet équipement n'a aucun port.";
-  return `${INTEGRATION_LABELS[source]} ne décrit aucun port physique pour cet équipement, ce qui est inhabituel.`;
-};
+function NoPhysicalPort({
+  type,
+  source,
+}: {
+  type: DeviceType;
+  source: IntegrationKind | undefined;
+}) {
+  if (!source || type === "rack") return null;
+  return (
+    <IconNote icon={Alert02Icon} tone="warning">
+      Aucun port physique dans {INTEGRATION_LABELS[source]}
+    </IconNote>
+  );
+}
 
 type PortFilter = "all" | "cabled" | "free";
 
@@ -152,11 +155,7 @@ function PortTableBody({
     );
   }
   if (table.ports.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        {noPortMessage(table.deviceType, table.source)}
-      </p>
-    );
+    return <NoPhysicalPort type={table.deviceType} source={table.source} />;
   }
   if (cablingFrom) {
     return (
@@ -190,11 +189,7 @@ function PortTableBody({
 
   return (
     <div className="flex min-h-0 flex-col gap-3">
-      {table.lastSeen ? (
-        <p className="text-sm text-muted-foreground">
-          Vu sur le réseau : <LastSeen lastSeen={table.lastSeen} />
-        </p>
-      ) : null}
+      {table.lastSeen ? <LastSeen lastSeen={table.lastSeen} /> : null}
       {table.ports.length > SEARCHABLE_FROM ? (
         <div className="flex flex-wrap items-center gap-2">
           <Input
@@ -224,26 +219,20 @@ function PortTableBody({
         </div>
       ) : null}
       <ScrollArea className="min-h-0">
-        {shown.length === 0 ? (
-          <p className="py-2 text-sm text-muted-foreground">
-            Aucun port ne correspond.
-          </p>
-        ) : (
-          <ul className="divide-y divide-border">
-            {shown.map((port) => (
-              <PortTableLine
-                key={port.id}
-                port={port}
-                deviceName={device.name}
-                deviceType={table.deviceType}
-                editable={editable}
-                withObserved={withObserved}
-                focused={port.id === focusPortId}
-                onCable={() => setCablingFrom(port)}
-              />
-            ))}
-          </ul>
-        )}
+        <ul className="divide-y divide-border">
+          {shown.map((port) => (
+            <PortTableLine
+              key={port.id}
+              port={port}
+              deviceName={device.name}
+              deviceType={table.deviceType}
+              editable={editable}
+              withObserved={withObserved}
+              focused={port.id === focusPortId}
+              onCable={() => setCablingFrom(port)}
+            />
+          ))}
+        </ul>
       </ScrollArea>
     </div>
   );
@@ -256,13 +245,15 @@ function LastSeen({
 }) {
   const { place, at } = lastSeen;
   return (
-    <>
-      <span className="text-foreground">{place.switchName}</span>{" "}
+    <p className="flex flex-wrap items-baseline gap-x-2 text-sm text-muted-foreground">
+      <span>Vu sur le réseau</span>
+      <span className="text-foreground">{place.switchName}</span>
       <span className="font-mono" title={place.portName}>
         {shortPortName(place.portName)}
       </span>
-      {place.socketName ? <> · {place.socketName}</> : null} · <Time at={at} />
-    </>
+      {place.socketName ? <span>{place.socketName}</span> : null}
+      <Time at={at} />
+    </p>
   );
 }
 
@@ -320,23 +311,33 @@ function PortTableLine({
               </div>
             ) : null}
           </>
-        ) : (
-          <span className="text-muted-foreground">Pas de câble documenté</span>
-        )}
+        ) : null}
       </div>
       {withObserved ? (
         // Its own column where there is room, under the line otherwise.
-        <div className="order-last basis-full pl-[calc(4rem+0.75rem)] text-xs sm:order-none sm:w-36 sm:shrink-0 sm:basis-auto sm:pl-0">
+        <div className="order-last basis-full space-y-1 pl-[calc(4rem+0.75rem)] text-xs sm:order-none sm:w-36 sm:shrink-0 sm:basis-auto sm:pl-0">
           {port.observed.map((seen) => (
+            // Still there at the last read in full colour, gone since muted.
+            // The time takes its own line so the name keeps the width.
             <div
               key={`${seen.name}-${seen.at}`}
               className={cn(
-                "truncate",
+                "flex min-w-0 flex-col",
                 seen.current ? "text-foreground" : "text-muted-foreground",
               )}
-              title={`Vu ${seen.current ? "à la dernière lecture" : "pour la dernière fois"} le ${formatDateTime(seen.at)} · ${timeZoneHint(seen.at)}`}
             >
-              {seen.name} · <Time at={seen.at} />
+              <span
+                className="truncate"
+                title={
+                  seen.current ? seen.name : `${seen.name}, plus vu sur ce port`
+                }
+              >
+                {seen.name}
+                {seen.current ? null : (
+                  <span className="sr-only">, plus vu sur ce port</span>
+                )}
+              </span>
+              <Time at={seen.at} className="text-muted-foreground" />
             </div>
           ))}
         </div>
@@ -376,7 +377,7 @@ function PortEndLabel({ end }: { end: PortEnd }) {
       <span className="font-medium text-foreground">{end.deviceName}</span>
       {NAMES_ITS_PORTS.has(end.deviceType) ? (
         <>
-          {" · "}
+          {" "}
           <span className="font-mono" title={end.portName}>
             {end.deviceType === "patch-panel"
               ? portLabel(
@@ -472,15 +473,14 @@ function DeviceList({
       <CommandInput
         value={query}
         onValueChange={setQuery}
-        placeholder="Équipement : nom, hostname, MAC, IP…"
+        placeholder="Nom, hostname, MAC, IP…"
+        aria-label="Chercher un équipement"
         autoFocus
       />
       <CommandList className="max-h-[50vh]">
-        <CommandEmpty>
-          {devices === undefined
-            ? "Chargement…"
-            : "Aucun équipement ne correspond."}
-        </CommandEmpty>
+        {devices === undefined ? (
+          <CommandEmpty>Chargement…</CommandEmpty>
+        ) : null}
         {shown?.map((device) => (
           <CommandItem
             key={device.id}
@@ -489,13 +489,18 @@ function DeviceList({
           >
             <div className="flex min-w-0 flex-col">
               <span className="truncate">{device.name}</span>
-              <span className="truncate text-xs text-muted-foreground">
+              <span className="flex min-w-0 gap-x-2 text-xs text-muted-foreground">
                 {[
                   getDeviceKindLabel(device.type),
-                  device.location
-                    ? `${device.location.buildingName} · ${device.location.floorName}`
-                    : "Hors plan",
-                ].join(" · ")}
+                  ...(device.location
+                    ? [device.location.buildingName, device.location.floorName]
+                    : ["Hors plan"]),
+                ].map((part, index) => (
+                  // A building and its floor may share a name.
+                  <span key={index} className="truncate">
+                    {part}
+                  </span>
+                ))}
               </span>
             </div>
           </CommandItem>
@@ -526,7 +531,7 @@ function FreePortList({
         a: { deviceId: from.deviceId, portId: from.port.id },
         b: { deviceId: target.id, portId: port.id },
       },
-      `${endLabel(from.deviceName, from.port, from.deviceType)} ↔ ${endLabel(target.name, port, target.type)}`,
+      `${endLabel(from.deviceName, from.port, from.deviceType)} à ${endLabel(target.name, port, target.type)}`,
     );
     if (refusal) setError(refusal);
     else onDone();
@@ -537,9 +542,7 @@ function FreePortList({
       <CommandInput placeholder="Port libre…" autoFocus />
       <CommandList className="max-h-[50vh]">
         <CommandEmpty>
-          {table === undefined
-            ? "Chargement…"
-            : "Aucun port libre sur cet équipement."}
+          {table === undefined ? "Chargement…" : "Aucun port libre"}
         </CommandEmpty>
         {free?.map((port) => (
           <CommandItem

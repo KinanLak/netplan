@@ -2,11 +2,13 @@ import { useOnlineMutation } from "@/hooks/use-online-mutation";
 import { useId, useState } from "react";
 import type { FormEvent } from "react";
 import type { Device } from "@/types/map";
-import { Button } from "@/components/ui/button";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { LinkSquare02Icon, SquareLock02Icon } from "@hugeicons/core-free-icons";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { IconNote } from "@/components/icon-note";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -73,11 +75,6 @@ export function DeviceIdentityDialog({
       <DialogContent className="max-h-[85vh] grid-rows-[auto_minmax(0,1fr)] sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Identité de {device.name}</DialogTitle>
-          <DialogDescription>
-            {device.source
-              ? `Les champs grisés viennent de ${INTEGRATION_LABELS[device.source.integration]} et se modifient là-bas.`
-              : "Ce qui permet de reconnaître l'équipement sur le réseau."}
-          </DialogDescription>
         </DialogHeader>
         {/* Mounted on open, so the form starts from the device as it is now. */}
         {open ? (
@@ -117,9 +114,6 @@ function IdentityForm({
   const [saving, setSaving] = useState(false);
 
   const owned = (field: IdentityField) => isSourceOwned(device.source, field);
-  const sourceLabel = device.source
-    ? INTEGRATION_LABELS[device.source.integration]
-    : null;
 
   // A device with a hostname is named after it (B10, ADR 0029).
   const followsHostname = !owned("name") && text.hostname.trim() !== "";
@@ -172,6 +166,7 @@ function IdentityForm({
   return (
     <form onSubmit={handleSubmit} className="flex min-h-0 flex-col gap-4">
       <FieldGroup className="-mx-1 min-h-0 gap-4 overflow-y-auto px-1 pb-1">
+        {device.source ? <SourceOwned source={device.source} /> : null}
         {TEXT_FIELDS.map(({ field, label, mono }) => (
           <Field key={field} data-invalid={problem.isInvalid(field)}>
             <FieldLabel htmlFor={`${id}-${field}`}>{label}</FieldLabel>
@@ -197,9 +192,7 @@ function IdentityForm({
               }
             />
             {problem.errorUnder(field) ??
-              (owned(field) ? (
-                <FieldDescription>Géré par {sourceLabel}.</FieldDescription>
-              ) : field === "name" && followsHostname ? (
+              (field === "name" && followsHostname ? (
                 <FieldDescription>Le nom suit le hostname.</FieldDescription>
               ) : null)}
           </Field>
@@ -215,13 +208,7 @@ function IdentityForm({
             {...problem.invalid("macs")}
             onChange={(event) => setMacs(event.target.value)}
           />
-          {problem.errorUnder("macs") ?? (
-            <FieldDescription>
-              {owned("macs")
-                ? `Géré par ${sourceLabel}.`
-                : "Une par ligne, dans n'importe quelle notation."}
-            </FieldDescription>
-          )}
+          {problem.errorUnder("macs")}
         </Field>
         <Field data-invalid={problem.isInvalid("notes")}>
           <FieldLabel htmlFor={`${id}-notes`}>Notes</FieldLabel>
@@ -246,5 +233,35 @@ function IdentityForm({
         </Button>
       </DialogFooter>
     </form>
+  );
+}
+
+/**
+ * Why some fields are greyed, as the way to change them: the device in its
+ * source, or, without a link, the source named.
+ */
+function SourceOwned({ source }: { source: NonNullable<Device["source"]> }) {
+  const label = INTEGRATION_LABELS[source.integration];
+  if (!source.url) {
+    return (
+      <IconNote icon={SquareLock02Icon}>
+        Champs grisés gérés par {label}
+      </IconNote>
+    );
+  }
+  return (
+    <a
+      href={source.url}
+      target="_blank"
+      rel="noreferrer"
+      className={buttonVariants({
+        variant: "outline",
+        size: "sm",
+        className: "w-fit gap-1.5",
+      })}
+    >
+      Modifier dans {label}
+      <HugeiconsIcon icon={LinkSquare02Icon} strokeWidth={1.5} />
+    </a>
   );
 }

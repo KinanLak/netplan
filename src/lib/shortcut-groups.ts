@@ -86,7 +86,7 @@ export const shortcutGroups: Array<ShortcutGroup> = [
   },
   {
     id: "floor-navigation",
-    title: "Navigation étages",
+    title: "Étages",
     orderPriority: 50,
     actions: ["floor-up", "floor-down"],
   },

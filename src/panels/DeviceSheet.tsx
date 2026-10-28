@@ -54,11 +54,11 @@ export function DeviceSheet({
                 <SheetTitle className="truncate text-lg" title={device.name}>
                   {device.name}
                 </SheetTitle>
-                <SheetDescription>
-                  {getDeviceKindLabel(device.type)}
-                  {device.source
-                    ? ` · ${INTEGRATION_LABELS[device.source.integration]}`
-                    : ""}
+                <SheetDescription className="flex flex-wrap gap-x-2">
+                  <span>{getDeviceKindLabel(device.type)}</span>
+                  {device.source ? (
+                    <span>{INTEGRATION_LABELS[device.source.integration]}</span>
+                  ) : null}
                 </SheetDescription>
                 <AbsenceNote source={device.source} />
               </div>
@@ -66,16 +66,24 @@ export function DeviceSheet({
                 status={device.metadata.status ?? "unknown"}
                 lastSeenAt={device.metadata.lastSeenAt}
               />
-              <p className="text-sm text-muted-foreground">
-                {device.location
-                  ? `${device.location.buildingName} · ${device.location.floorName}`
-                  : "Hors plan"}
+              <p className="flex flex-wrap gap-x-2 text-sm text-muted-foreground">
+                {device.location ? (
+                  <>
+                    <span>{device.location.buildingName}</span>
+                    <span>{device.location.floorName}</span>
+                  </>
+                ) : (
+                  "Hors plan"
+                )}
               </p>
               <div className="flex flex-wrap gap-2">
-                <Button variant="outline" size="sm" onClick={onShowCables}>
-                  <HugeiconsIcon icon={PlugSocketIcon} strokeWidth={1.5} />
-                  Câbles
-                </Button>
+                {/* A rack has no port to cable. */}
+                {device.type === "rack" ? null : (
+                  <Button variant="outline" size="sm" onClick={onShowCables}>
+                    <HugeiconsIcon icon={PlugSocketIcon} strokeWidth={1.5} />
+                    Ports et câbles
+                  </Button>
+                )}
                 {onShowHistory ? (
                   <Button variant="outline" size="sm" onClick={onShowHistory}>
                     <HugeiconsIcon icon={WorkHistoryIcon} strokeWidth={1.5} />
