@@ -11,6 +11,9 @@ export const getRouter = () => {
     scrollRestoration: true,
     defaultPreloadStaleTime: 0,
     defaultErrorComponent: ErrorScreen,
+    // A page's frame, rendered by the server, would otherwise stay at least
+    // half a second after its code runs.
+    defaultPendingMinMs: 0,
   });
 
   return router;

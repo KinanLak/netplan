@@ -18,7 +18,6 @@ export const Route = createFileRoute("/_authed/admin")({
   ssr: false,
   // Rendered by the server, so a slow link shows the frame at once.
   pendingComponent: AdminSkeleton,
-  pendingMinMs: 0,
   head: () => ({ meta: [{ title: "Administration" }] }),
   component: AdminShell,
 });

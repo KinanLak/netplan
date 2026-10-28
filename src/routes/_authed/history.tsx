@@ -94,7 +94,6 @@ export const Route = createFileRoute("/_authed/history")({
   ssr: false,
   // Rendered by the server, so a slow link shows the frame at once.
   pendingComponent: ListPageSkeleton,
-  pendingMinMs: 0,
   validateSearch: historySearch,
   head: () => ({ meta: [{ title: "Historique" }] }),
   component: HistoryPage,
@@ -331,7 +330,7 @@ function SiteEvents({ site }: { site: SiteSummary }) {
           options={KIND_FILTERS}
         />
       </div>
-      {status === "LoadingFirstPage" ? null : results.length === 0 ? (
+      {results.length === 0 ? (
         status === "Exhausted" ? (
           filtered ? (
             <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
@@ -352,7 +351,7 @@ function SiteEvents({ site }: { site: SiteSummary }) {
           )
         ) : null
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-6" aria-busy={status === "LoadingFirstPage"}>
           {timeline(results).map((day) => (
             <section key={day.day} aria-label={formatDay(day.at, now)}>
               <h2 className="mb-2 text-sm font-medium">
@@ -657,14 +656,17 @@ function SlotEntries({ site, slot }: { site: SiteSummary; slot: Slot }) {
           className="pl-8"
         />
       </div>
-      {status === "LoadingFirstPage" ? null : shown.length === 0 ? (
+      {shown.length === 0 ? (
         status === "Exhausted" ? (
           <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
             Aucune adresse ne correspond.
           </p>
         ) : null
       ) : (
-        <div className="overflow-x-auto rounded-lg border">
+        <div
+          className="overflow-x-auto rounded-lg border"
+          aria-busy={status === "LoadingFirstPage"}
+        >
           <table className="w-full text-sm">
             <thead className="border-b bg-muted text-left text-xs text-muted-foreground">
               <tr>

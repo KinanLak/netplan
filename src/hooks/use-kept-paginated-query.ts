@@ -7,9 +7,22 @@ import type {
 } from "convex/react";
 
 /**
- * `usePaginatedQuery` that keeps showing the last answer while new
- * arguments load: each keystroke of a search starts a new first page, and
- * the list would otherwise empty and refill under the user's eyes.
+ * While a new first page loads, the last rows stay, under the true status:
+ * the caller shows them, marked busy, but neither an empty message nor a
+ * « more » button from the previous answer.
+ */
+export function keptPage<
+  Answer extends { status: string; results: ReadonlyArray<unknown> },
+>(kept: Answer, current: Answer): Answer {
+  return current.status === "LoadingFirstPage"
+    ? { ...current, results: kept.results }
+    : current;
+}
+
+/**
+ * `usePaginatedQuery` that keeps showing the last rows while new arguments
+ * load: each keystroke of a search starts a new first page, and the list
+ * would otherwise empty and refill under the user's eyes.
  */
 export function useKeptPaginatedQuery<Query extends PaginatedQueryReference>(
   query: Query,
@@ -22,13 +35,9 @@ export function useKeptPaginatedQuery<Query extends PaginatedQueryReference>(
   // previous render; `results` keeps its identity until the pages change.
   if (
     current.status !== "LoadingFirstPage" &&
-    (kept.results !== current.results || kept.status !== current.status)
+    kept.results !== current.results
   ) {
     setKept(current);
   }
-  // The kept `loadMore` would page the new query from the old cursor; the
-  // current one does nothing until the first page arrives.
-  return current.status === "LoadingFirstPage"
-    ? { ...kept, loadMore: current.loadMore }
-    : current;
+  return keptPage(kept, current);
 }

@@ -69,7 +69,6 @@ export const Route = createFileRoute("/_authed/")({
   ssr: false,
   // Rendered by the server, so a slow link shows the frame at once.
   pendingComponent: MapSkeleton,
-  pendingMinMs: 0,
   validateSearch: mapSearch,
   component: HomePage,
 });

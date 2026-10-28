@@ -89,7 +89,6 @@ export const Route = createFileRoute("/_authed/inventory")({
   ssr: false,
   // Rendered by the server, so a slow link shows the frame at once.
   pendingComponent: ListPageSkeleton,
-  pendingMinMs: 0,
   validateSearch: inventorySearch,
   head: () => ({ meta: [{ title: "Inventaire" }] }),
   component: InventoryPage,
