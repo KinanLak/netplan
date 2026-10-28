@@ -50,3 +50,4 @@ record's Source section points to its questions in the
 - **[0038 — A site is collected at one interval day and night, its readings expire after two intervals and the lease, and the collection says its doubts quietly](0038-one-cadence-and-quiet-collection.md)** (supersedes 0010)
 - **[0039 — A device NetBox stops returning becomes absent, is kept while on a plan, purged after 30 days off it, and linked again when NetBox returns it; a new NetBox address keeps everything when it reaches the same instance](0039-netbox-absence.md)**
 - **[0040 — The push to NetBox writes only when a device's location changes, stamped with « Modifié par NetPlan le », and no longer writes when it was last seen](0040-netbox-push-on-move.md)**
+- **[0041 — The interface shows what the user can do and does not explain itself](0041-interface-shows-actions.md)** (supersedes the « Empty states » paragraph of 0026)
