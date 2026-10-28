@@ -31,6 +31,7 @@ import { describeFreshness } from "@/sites/freshness";
 import { INTEGRATION_LABELS } from "@/sites/integrations";
 import { TimeZoneField } from "@/admin/TimeZoneField";
 import { DEFAULT_TIMEZONE, siteNameError } from "@/sites/settings";
+import { Pending } from "@/components/pending";
 import { api } from "../../../../../convex/_generated/api";
 
 export const Route = createFileRoute("/_authed/admin/sites/")({
@@ -124,7 +125,9 @@ function SitesPage() {
         </Button>
       </header>
 
-      {sites === undefined ? null : sites.length === 0 ? (
+      {sites === undefined ? (
+        <Pending />
+      ) : sites.length === 0 ? (
         <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
           Aucun site. Créez-en un pour commencer son plan.
         </p>

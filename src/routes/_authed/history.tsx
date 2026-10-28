@@ -12,6 +12,7 @@ import type { FunctionReturnType } from "convex/server";
 import { useEffect, useState } from "react";
 import { ModeToggle } from "@/components/mode-toggle";
 import { ListPageSkeleton, ListSkeleton } from "@/components/loading-skeletons";
+import { Pending } from "@/components/pending";
 import { AppNavLinks, UserMenu } from "@/components/app-nav";
 import { NetplanLogo } from "@/components/netplan-logo";
 import { Segmented } from "@/components/segmented";
@@ -128,7 +129,9 @@ function HistoryPage() {
               L'historique est réservé aux éditeurs et aux administrateurs.
             </p>
           ) : site === undefined ? (
-            <ListSkeleton />
+            <Pending>
+              <ListSkeleton />
+            </Pending>
           ) : site === null ? (
             <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
               {sites && sites.length > 0
@@ -349,7 +352,9 @@ function SiteEvents({ site }: { site: SiteSummary }) {
               remplit à chaque collecte LibreNMS.
             </p>
           )
-        ) : null
+        ) : (
+          <Pending />
+        )
       ) : (
         <div className="space-y-6" aria-busy={status === "LoadingFirstPage"}>
           {timeline(results).map((day) => (
@@ -472,7 +477,7 @@ function SiteSnapshots({ site }: { site: SiteSummary }) {
       replace: true,
     });
 
-  if (day === undefined) return null;
+  if (day === undefined) return <Pending />;
   return (
     <section className="space-y-4">
       <div className="flex flex-wrap items-end gap-3">
@@ -535,7 +540,9 @@ function SiteSnapshots({ site }: { site: SiteSummary }) {
           ))}
         </div>
       </div>
-      {slots === undefined ? null : chosen?.entries !== undefined ? (
+      {slots === undefined ? (
+        <Pending />
+      ) : chosen?.entries !== undefined ? (
         <SlotEntries key={`${day}-${time}`} site={site} slot={chosen} />
       ) : (
         <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
@@ -661,7 +668,9 @@ function SlotEntries({ site, slot }: { site: SiteSummary; slot: Slot }) {
           <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
             Aucune adresse ne correspond.
           </p>
-        ) : null
+        ) : (
+          <Pending />
+        )
       ) : (
         <div
           className="overflow-x-auto rounded-lg border"

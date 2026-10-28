@@ -68,6 +68,7 @@ import { useFlash } from "@/hooks/use-flash";
 import { useNow } from "@/hooks/use-now";
 import { PRESENCE_STALE_AFTER_MS, activePresences } from "@/lib/presence";
 import { ROLE_LABELS } from "@/lib/roles";
+import { Pending } from "@/components/pending";
 import { api } from "../../../../convex/_generated/api";
 import { ROLES } from "../../../../convex/lib/roles";
 import type { Role } from "../../../../convex/lib/roles";
@@ -143,7 +144,9 @@ function UsersPage() {
 
       <EmptyRoleMappingNotice />
 
-      {users === undefined || shown === undefined ? null : (
+      {users === undefined || shown === undefined ? (
+        <Pending />
+      ) : (
         <div className="space-y-3">
           <div className="flex flex-wrap gap-2">
             <Input
