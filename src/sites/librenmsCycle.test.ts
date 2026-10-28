@@ -453,6 +453,20 @@ describe("presence", () => {
     ).toEqual([["pc", "socket-a"]]);
     // Seen for the first time: a person's place stays.
     expect(moves([{ mac: "mac-a", socketId: "socket-a" }], [])).toEqual([]);
+    // The place follows what the cycle decided, not what the row saw.
+    expect(
+      moves(
+        [{ mac: "mac-a", socketId: "socket-a" }],
+        [
+          {
+            ownerId: "pc",
+            socketId: "socket-a",
+            decided: { socketId: "socket-b" },
+            seenAt: 1,
+          },
+        ],
+      ),
+    ).toEqual([["pc", "socket-a"]]);
   });
 
   it("moves a device seen at several new sockets to the one clearly refreshed last, else holds it", () => {
@@ -462,9 +476,12 @@ describe("presence", () => {
     ]);
     const atOld = [{ ownerId: "pc", socketId: "socket-old", seenAt: 1 }];
     const minute = 60_000;
-    const decide = (seen: Parameters<typeof socketMoves>[0]) => {
-      const { moves, held } = socketMoves(seen, owners, atOld);
-      return { moves: [...moves], held: [...held] };
+    const decide = (
+      seen: Parameters<typeof socketMoves>[0],
+      history: Parameters<typeof socketMoves>[2] = atOld,
+    ) => {
+      const { moves, kept, held } = socketMoves(seen, owners, history);
+      return { moves: [...moves], kept: [...kept], held: [...held] };
     };
     // Three minutes apart: more than one cycle's discoveries.
     expect(
@@ -472,34 +489,34 @@ describe("presence", () => {
         { mac: "mac-a", socketId: "socket-b", updatedAt: 10 * minute },
         { mac: "mac-b", socketId: "socket-c", updatedAt: 13 * minute },
       ]),
-    ).toEqual({ moves: [["pc", "socket-c"]], held: [] });
+    ).toEqual({ moves: [["pc", "socket-c"]], kept: [], held: [] });
     // One MAC behind two sockets, the same way.
     expect(
       decide([
         { mac: "mac-a", socketId: "socket-b", updatedAt: 13 * minute },
         { mac: "mac-a", socketId: "socket-c", updatedAt: 10 * minute },
       ]),
-    ).toEqual({ moves: [["pc", "socket-b"]], held: [] });
+    ).toEqual({ moves: [["pc", "socket-b"]], kept: [], held: [] });
     // About as recent, or undated: it stays where it is.
     expect(
       decide([
         { mac: "mac-a", socketId: "socket-b", updatedAt: 10 * minute },
         { mac: "mac-b", socketId: "socket-c", updatedAt: 11 * minute },
       ]),
-    ).toEqual({ moves: [], held: ["pc"] });
+    ).toEqual({ moves: [], kept: [], held: ["pc"] });
     expect(
       decide([
         { mac: "mac-a", socketId: "socket-b" },
         { mac: "mac-b", socketId: "socket-c", updatedAt: 11 * minute },
       ]),
-    ).toEqual({ moves: [], held: ["pc"] });
-    // One of them is where it was last seen: nothing to decide.
+    ).toEqual({ moves: [], kept: [], held: ["pc"] });
+    // One of them is where its place follows: nothing to decide.
     expect(
       decide([
         { mac: "mac-a", socketId: "socket-old", updatedAt: 10 * minute },
         { mac: "mac-b", socketId: "socket-c", updatedAt: 13 * minute },
       ]),
-    ).toEqual({ moves: [], held: [] });
+    ).toEqual({ moves: [], kept: [["pc", "socket-old"]], held: [] });
   });
 
   it("places an unplaced device at a socket it was seen at before, else by the same rule", () => {
@@ -519,8 +536,16 @@ describe("presence", () => {
     // Never seen, at two undated sockets: it stays off the plan.
     expect(socketMoves(seen, owners, [])).toEqual({
       moves: new Map(),
+      kept: new Map(),
       held: new Set(["pc"]),
     });
+    // Held before, with no place decided: the socket it was seen at then is
+    // not a known one.
+    expect(
+      socketMoves(seen, owners, [
+        { ownerId: "pc", socketId: "socket-a", decided: {}, seenAt: 1 },
+      ]).held,
+    ).toEqual(new Set(["pc"]));
     expect([
       ...socketMoves([{ mac: "mac-b", socketId: "socket-b" }], owners, [])
         .moves,

@@ -590,14 +590,25 @@ export function clearlyNewest(
 }
 
 /**
- * The socket each device is to be placed next to, and the devices `held`
- * where they are (ADR 0038).
+ * Where a sighting row says its device's place follows: the socket it saw
+ * the MAC at, unless the cycle decided otherwise (`decided`).
+ */
+export const placeSocketOf = (row: {
+  socketId?: string;
+  decided?: { socketId?: string };
+}): string | undefined => (row.decided ? row.decided.socketId : row.socketId);
+
+/**
+ * Where each device seen at a socket goes (ADR 0038): `moves`, the socket to
+ * place it next to; `kept`, the socket its place already follows; `held`,
+ * the devices left where they are because their new sockets are about as
+ * recent.
  *
- * A device seen at a socket its latest sighting saw it at stays, and one on
- * no floor goes there; a device the network sees for the first time keeps a
- * place a person gave it. Otherwise a device goes to the one new socket it
- * is seen at, or to the one LibreNMS refreshed clearly last; when several are
- * about as recent it is held: it stays, and a later cycle decides.
+ * A device seen at a socket its place follows stays, and one on no floor
+ * goes there; a device the network sees for the first time keeps a place a
+ * person gave it. Otherwise a device goes to the one new socket it is seen
+ * at, or to the one LibreNMS refreshed clearly last; when several are about
+ * as recent it is held, and a later cycle decides.
  */
 export function socketMoves(
   sightings: ReadonlyArray<SocketSighting>,
@@ -605,9 +616,14 @@ export function socketMoves(
   history: ReadonlyArray<{
     ownerId?: string;
     socketId?: string;
+    decided?: { socketId?: string };
     seenAt: number;
   }>,
-): { moves: Map<string, string>; held: Set<string> } {
+): {
+  moves: Map<string, string>;
+  kept: Map<string, string>;
+  held: Set<string>;
+} {
   const current = new Map<
     string,
     { placed: boolean; sockets: Map<string, number | null> }
@@ -630,14 +646,15 @@ export function socketMoves(
     );
     current.set(owner.id, seen);
   }
-  const latest = latestSeen(history, current, ({ socketId }) => socketId);
+  const latest = latestSeen(history, current, placeSocketOf);
   const moves = new Map<string, string>();
+  const kept = new Map<string, string>();
   const held = new Set<string>();
   for (const [id, { placed, sockets }] of current) {
     const last = latest.get(id);
     const known = [...sockets.keys()].find((socket) => last?.has(socket));
     if (known !== undefined) {
-      if (!placed) moves.set(id, known);
+      (placed ? kept : moves).set(id, known);
       continue;
     }
     if (placed && last === undefined) continue;
@@ -645,7 +662,7 @@ export function socketMoves(
     if (target === null) held.add(id);
     else moves.set(id, target);
   }
-  return { moves, held };
+  return { moves, kept, held };
 }
 
 /**

@@ -55,6 +55,7 @@ import {
   readLibreNMSDeviceStatus,
   readLibreNMSFdb,
   readLibreNMSPorts,
+  placeSocketOf,
   sightingSummary,
   socketMoves,
   socketSightings,
@@ -515,8 +516,8 @@ export const adoptPortNames = internalMutation({
  * deleted, is settled too. A device seen at another socket than the last
  * time, or while on no floor, is placed next to the socket; where a person
  * put it is kept while the socket stays the same. One seen at several new
- * sockets about as recent is held: it stays, and so does where its MACs were
- * last seen, for a later cycle to decide (ADR 0038).
+ * sockets about as recent is held: it stays, its MACs' rows say so
+ * (`decided`), and a later cycle decides (ADR 0038).
  */
 export const recordSightings = internalMutation({
   args: {
@@ -651,13 +652,11 @@ export const recordSightings = internalMutation({
         });
       }
     }
-    const { moves, held } = socketMoves(seenAtSockets, presentOwners, rows);
-    const socketsOf = new Map<string, Set<string>>();
-    for (const { mac, socketId } of seenAtSockets) {
-      socketsOf.set(mac, (socketsOf.get(mac) ?? new Set()).add(socketId));
-    }
-    // The MACs whose sighting keeps the place it had, with that place.
-    const kept = new Map<string, Doc<"macSightings">>();
+    const { moves, kept, held } = socketMoves(
+      seenAtSockets,
+      presentOwners,
+      rows,
+    );
     const ignored = await ignoredMacsOf(ctx, siteId);
     let unknown = 0;
     for (const [mac, missed] of misses) {
@@ -673,27 +672,28 @@ export const recordSightings = internalMutation({
         if (row) await ctx.db.delete(row._id);
         continue;
       }
-      // A MAC still behind the socket it was last seen at stays there, so a
-      // second socket seen at once moves nothing; a held device's MACs keep
-      // their place while where it is stays undecided.
-      const placeKept =
-        seen !== undefined &&
-        row !== undefined &&
-        (held.has(owner?.objectId ?? "") ||
-          (row.socketId !== undefined &&
-            seen.socketId !== row.socketId &&
-            (socketsOf.get(mac)?.has(row.socketId) ?? false)));
-      if (placeKept) kept.set(mac, row);
+      // A row says what was seen; when the device's place follows another
+      // socket, or none yet while it is held, it says that too.
+      const id = owner?.objectId;
+      const placeSocket =
+        id === undefined ? undefined : (moves.get(id) ?? kept.get(id));
+      let decided: { socketId?: string } | undefined;
+      if (id !== undefined && held.has(id)) {
+        const before = row ? placeSocketOf(row) : undefined;
+        decided = before === undefined ? {} : { socketId: before };
+      } else if (placeSocket !== undefined && seen?.socketId !== placeSocket) {
+        decided = { socketId: placeSocket };
+      }
       const fields = {
         misses: missed,
         ownerId: owner?.objectId,
-        ...(seen && { seenAt: now }),
-        ...(seen &&
-          !placeKept && {
-            switchId: seen.switchId,
-            portId: seen.portId,
-            socketId: seen.socketId,
-          }),
+        ...(seen && {
+          switchId: seen.switchId,
+          portId: seen.portId,
+          socketId: seen.socketId,
+          decided,
+          seenAt: now,
+        }),
       };
       if (!row && seen) {
         await ctx.db.insert("macSightings", {
@@ -741,35 +741,15 @@ export const recordSightings = internalMutation({
       const device = owners.get(deviceId);
       if (device && (await placeNextTo(ctx, device, socketId))) placed += 1;
     }
-    // The history follows the map: nothing for a held device, and a device
-    // placed at a socket is located on the port it was seen at there.
-    const ownerIdOf = (mac: string) => presentOwners.get(mac)?.id;
-    const atTarget = ({
-      mac,
-      socketId,
-    }: {
-      mac: string;
-      socketId?: string;
-    }) => {
-      const id = ownerIdOf(mac);
-      return (
-        id !== undefined && socketId !== undefined && moves.get(id) === socketId
-      );
-    };
-    const located = sightings
-      .filter(({ mac }) => !held.has(ownerIdOf(mac) ?? ""))
-      .map((one) => {
-        const row = kept.get(one.mac);
-        return row
-          ? {
-              mac: one.mac,
-              portId: row.portId,
-              switchId: row.switchId,
-              ...(row.socketId !== undefined && { socketId: row.socketId }),
-            }
-          : one;
-      })
-      .toSorted((a, b) => Number(atTarget(b)) - Number(atTarget(a)));
+    // The history follows the map: a device seen at a socket is located
+    // only where it moved, on the port it was seen at there.
+    const located = sightings.filter(({ mac, socketId }) => {
+      const id = presentOwners.get(mac)?.id;
+      if (id === undefined) return true;
+      if (held.has(id) || kept.has(id)) return false;
+      const target = moves.get(id);
+      return target === undefined || socketId === target;
+    });
     const placeOf = placeNamer(ctx);
     for (const [deviceId, { seen, first }] of portMoves(
       located,

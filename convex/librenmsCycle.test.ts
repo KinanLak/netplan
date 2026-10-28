@@ -529,8 +529,9 @@ describe("the LibreNMS step", () => {
       "device:pc",
     ]);
 
-    // Seen through two MACs on both ports, then only the other, then back:
-    // the way back is a move, though its last `located` event names it.
+    // Seen through two MACs on both ports: placed beside the socket, so
+    // located there as on the map; then only the other, then back: the way
+    // back is a move.
     await admin.mutation(api.devices.updateIdentity, {
       deviceId: "device:printer",
       edit: { macs: [PRINTER, macOf(4)] },
@@ -548,7 +549,7 @@ describe("the LibreNMS step", () => {
       (await history("device:printer"))
         .filter(({ kind }) => kind === "located")
         .map(({ place }) => place),
-    ).toEqual([onFreePort, onFreePort]);
+    ).toEqual([onFreePort, atSocket, onFreePort]);
   });
 
   it("takes each daily snapshot from the first cycle in its window", async () => {
@@ -1401,6 +1402,10 @@ describe("the LibreNMS step", () => {
     );
     expect(await statusOf(admin, "device:pc")).toBe("up");
     expect(await placementOf("device:pc")).toBeNull();
+    // Again: the first undecided cycle did not make either socket known.
+    await discoverAgain();
+    await cycle(admin, siteId);
+    expect(await placementOf("device:pc")).toBeNull();
 
     // Behind one only: it goes there.
     librenms.state.fdb = [{ port_id: 102, mac_address: PC }];
@@ -1411,7 +1416,8 @@ describe("the LibreNMS step", () => {
     const placed = await placementOf("device:pc");
     expect(placed?.position.x).toBeGreaterThan(1800);
 
-    // Then behind both again: it stays, and so does where it was seen.
+    // Then behind both again: it stays. The row says what was seen, and
+    // that the place follows socket 2.
     librenms.state.fdb = [
       { port_id: 101, mac_address: PC },
       { port_id: 102, mac_address: PC },
@@ -1419,10 +1425,23 @@ describe("the LibreNMS step", () => {
     await discoverAgain();
     await cycle(admin, siteId);
     expect(await placementOf("device:pc")).toEqual(placed);
-    expect((await sightings(admin))[0]).toMatchObject({
-      mac: PC,
-      socketId: "device:socket-2",
+    const row = await admin.run(
+      async (ctx) => await ctx.db.query("macSightings").first(),
+    );
+    expect(row).toMatchObject({
+      switchId: "device:sw",
+      socketId: "device:socket",
+      decided: { socketId: "device:socket-2" },
     });
+    expect(await statusOf(admin, "device:pc")).toBe("up");
+
+    // Behind the other one only: it moved there.
+    librenms.state.fdb = [{ port_id: 101, mac_address: PC }];
+    await discoverAgain();
+    expect((await cycle(admin, siteId)).message).toContain(
+      "1 placé près de sa prise",
+    );
+    expect((await placementOf("device:pc"))?.position.x).toBeLessThan(600);
   });
 
   it("lists unknown MACs and makes an endpoint of one, next to its socket", async () => {
