@@ -75,17 +75,28 @@ const plural = (count: number, one: string, many: string) =>
  * Éditeur to turn into equipment (ADR 0022) or ignore (ADR 0026), one by one
  * or by selection.
  */
-export function UnknownMacs({ siteId }: { siteId: string }) {
+export function UnknownMacs({
+  siteId,
+  query,
+  onQueryChange,
+  showIgnored,
+  onShowIgnoredChange,
+}: {
+  siteId: string;
+  /** The search and the ignored list's state live in the URL (A62). */
+  query: string;
+  onQueryChange: (query: string) => void;
+  showIgnored: boolean;
+  onShowIgnoredChange: (shown: boolean) => void;
+}) {
   const unknown = useQuery(api.unknownMacs.listForSite, { siteId });
   const ignored = useQuery(api.unknownMacs.listIgnored, { siteId });
   const ignoreMacs = useMutation(api.unknownMacs.ignore);
   const restoreMacs = useMutation(api.unknownMacs.restore);
-  const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [chosenIgnored, setChosenIgnored] = useState<ReadonlySet<string>>(
     new Set(),
   );
-  const [showIgnored, setShowIgnored] = useState(false);
   const [creating, setCreating] = useState<UnknownMac | null>(null);
   if (!unknown || !ignored) return null;
 
@@ -166,7 +177,7 @@ export function UnknownMacs({ siteId }: { siteId: string }) {
         <Input
           type="search"
           value={query}
-          onChange={(event) => setQuery(event.target.value)}
+          onChange={(event) => onQueryChange(event.target.value)}
           placeholder="MAC, prise, switch, port…"
           aria-label="Rechercher une adresse MAC"
           className="pl-8"
@@ -201,7 +212,7 @@ export function UnknownMacs({ siteId }: { siteId: string }) {
             </Button>
           </SelectionBar>
           {shown.length === 0 ? (
-            <NoMatch onReset={() => setQuery("")} />
+            <NoMatch onReset={() => onQueryChange("")} />
           ) : (
             <MacTable
               rows={shown}
@@ -253,7 +264,7 @@ export function UnknownMacs({ siteId }: { siteId: string }) {
             size="sm"
             variant="ghost"
             aria-expanded={showIgnored}
-            onClick={() => setShowIgnored(!showIgnored)}
+            onClick={() => onShowIgnoredChange(!showIgnored)}
             className="-ml-2"
           >
             <HugeiconsIcon
@@ -288,7 +299,7 @@ export function UnknownMacs({ siteId }: { siteId: string }) {
                 </Button>
               </SelectionBar>
               {shownIgnored.length === 0 ? (
-                <NoMatch onReset={() => setQuery("")} />
+                <NoMatch onReset={() => onQueryChange("")} />
               ) : (
                 <MacTable
                   rows={shownIgnored}

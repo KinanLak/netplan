@@ -113,6 +113,8 @@ export function InventoryTable({
   sort,
   onSort,
   highlightId,
+  sheetId,
+  onSheetChange,
 }: {
   rows: ReadonlyArray<InventoryRow>;
   site: SiteSummary;
@@ -122,6 +124,9 @@ export function InventoryTable({
   onSort: (sort: Sort) => void;
   /** A device just created: scrolled to and lit for a moment (A60). */
   highlightId?: string | null;
+  /** The device whose sheet is open: the page's, so its toasts can open one. */
+  sheetId: string | null;
+  onSheetChange: (deviceId: string | null) => void;
 }) {
   const now = useNow(60_000);
   const columns = OPTIONAL_COLUMNS.filter(
@@ -134,9 +139,11 @@ export function InventoryTable({
   const shows = (id: ColumnId) => columns.some((column) => column.id === id);
 
   return (
+    // Short enough that, scrolled into view, it clears the page's sticky
+    // filters (A63).
     <div
       data-scroll-restoration-id="inventory-table"
-      className="max-h-[calc(100svh-8rem)] overflow-auto rounded-lg border"
+      className="max-h-[calc(100svh-13rem)] overflow-auto rounded-lg border"
     >
       <table
         className="w-full table-fixed border-separate border-spacing-0 text-sm"
@@ -185,6 +192,8 @@ export function InventoryTable({
               shows={shows}
               now={now}
               highlighted={device.id === highlightId}
+              showingSheet={device.id === sheetId}
+              setShowingSheet={(open) => onSheetChange(open ? device.id : null)}
             />
           ))}
         </tbody>
@@ -244,6 +253,8 @@ function InventoryItem({
   shows,
   now,
   highlighted,
+  showingSheet,
+  setShowingSheet,
 }: {
   device: InventoryRow;
   site: SiteSummary;
@@ -252,6 +263,8 @@ function InventoryItem({
   /** Today, for « Vu le »: one clock for the whole table. */
   now: number;
   highlighted: boolean;
+  showingSheet: boolean;
+  setShowingSheet: (open: boolean) => void;
 }) {
   const navigate = useNavigate();
   const createDevice = useMutation(api.devices.create);
@@ -259,7 +272,6 @@ function InventoryItem({
   const [editing, setEditing] = useState(false);
   const [showingCables, setShowingCables] = useState(false);
   const [showingHistory, setShowingHistory] = useState(false);
-  const [showingSheet, setShowingSheet] = useState(false);
   // History is read by role, archived site or not (ADR 0033).
   const canReadHistory = useCanEdit();
   const hasHistory = canReadHistory && HAS_HISTORY.has(device.type);
