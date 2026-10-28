@@ -267,7 +267,9 @@ Built by lot 3b (ADR 0025) and redrawn by the UX lot U3 (ADR 0029).
   `convex/lib/statuses.ts` derives the same from the sightings for what an
   undo or a create brings back. `devices.lastSeen` gives every role the
   newest sighting, the drawer's « Vu sur le réseau ». A manual
-  switch whose ports still carry their default names takes LibreNMS's.
+  switch whose ports still carry their default names is offered LibreNMS's
+  (`siteCycles.portNameOffers`); the drawer proposes them to an Éditeur in
+  edit mode, and until then those ports match nothing LibreNMS reads.
 - **Ports and dots.** Switches and patch panels draw their real ports, coloured
   by `src/devices/portState.ts`. Every device with a status carries a dot.
 - **Paths.** `src/canvas/cablePaths.ts` traces, in the browser and from the

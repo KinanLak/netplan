@@ -36,7 +36,7 @@ import { PROBE_RETRY, sourceGet } from "./lib/integrationProbe";
 import type { Source } from "./lib/integrationProbe";
 import { cableRowAt, portRowsOf, traceRows } from "./lib/ports";
 import type { switchResult } from "./siteValidators";
-import { fdbTable } from "./siteValidators";
+import { fdbTable, portNameOffer } from "./siteValidators";
 import { DEFAULT_DEVICE_SIZES } from "../src/devices/deviceSizes";
 import { EMPTY_LIBRENMS_SETTINGS, polledSwitches } from "../src/sites/librenms";
 import { spotNextToSocket } from "../src/sites/socketPlacement";
@@ -443,67 +443,85 @@ const heldCycle = async (
   return integration?.baseUrl === baseUrl ? { cycle, integration } : null;
 };
 
+type PortNameOffer = Infer<typeof portNameOffer>;
+
 /**
- * Gives a switch whose ports still carry their default names those of the
- * LibreNMS device it alone stands for (`adoptedPorts`); whether its ports
- * changed.
+ * How a switch would take the names LibreNMS offers it (`adoptedPorts`), as
+ * long as the offer comes from the LibreNMS the site reads and its device
+ * stands for the switch alone; `null` once it does not, once a person or a
+ * source named its ports, or when the names would change nothing.
  */
-export const adoptPortNames = internalMutation({
+export const portNamesPlan = async (
+  ctx: QueryCtx,
+  siteId: string,
+  offer: PortNameOffer,
+) => {
+  const integration = await ctx.db
+    .query("integrations")
+    .withIndex("by_site_kind", (q) =>
+      q.eq("siteId", siteId).eq("kind", "librenms"),
+    )
+    .unique();
+  // A device id means nothing on another LibreNMS.
+  if (integration?.baseUrl !== offer.baseUrl) return null;
+  // An admin may have mapped the switch elsewhere since.
+  const mapped = polledSwitches(
+    integration.librenms ?? EMPTY_LIBRENMS_SETTINGS,
+  ).filter(({ device }) => device.id === offer.librenmsDeviceId);
+  if (mapped.length !== 1 || mapped[0]?.switchId !== offer.switchId) {
+    return null;
+  }
+  const device = await deviceOf(ctx, offer.switchId);
+  if (device?.siteId !== siteId || device.type !== "switch") return null;
+  const rows = await portRowsOf(ctx, offer.switchId);
+  const own = await Promise.all(
+    rows.map(async (row) => ({
+      id: row.objectId,
+      name: row.name,
+      kind: row.kind,
+      order: row.order,
+      cabled: (await cableRowAt(ctx, row.objectId)) !== null,
+      sourced: row.source !== undefined,
+    })),
+  );
+  const plan = adoptedPorts(offer.switchId, own, offer.names);
+  const changes = plan
+    ? plan.rename.length + plan.add.length + plan.remove.length
+    : 0;
+  return plan && changes > 0 ? { plan, rows } : null;
+};
+
+/**
+ * Keeps what LibreNMS offers the switches this cycle read: a sole switch
+ * whose ports still carry their default names may take LibreNMS's, once an
+ * Éditeur says so (ADR 0038). A switch it did not read keeps its offer.
+ */
+export const offerPortNames = internalMutation({
   args: {
     siteId: v.string(),
     cycleId: v.string(),
     baseUrl: v.string(),
-    switchId: v.string(),
-    librenmsDeviceId: v.number(),
-    names: v.array(v.string()),
+    readSwitchIds: v.array(v.string()),
+    offers: v.array(portNameOffer),
   },
-  returns: v.boolean(),
-  handler: async (
-    ctx,
-    { siteId, cycleId, baseUrl, switchId, librenmsDeviceId, names },
-  ) => {
-    const held = await heldCycle(ctx, siteId, cycleId, baseUrl);
-    if (!held) return false;
-    // An admin may have mapped the switch elsewhere while it was read.
-    const mapped = polledSwitches(
-      held.integration.librenms ?? EMPTY_LIBRENMS_SETTINGS,
-    ).filter(({ device }) => device.id === librenmsDeviceId);
-    if (mapped.length !== 1 || mapped[0]?.switchId !== switchId) return false;
-    const device = await deviceOf(ctx, switchId);
-    if (device?.siteId !== siteId || device.type !== "switch") return false;
-    const rows = await portRowsOf(ctx, switchId);
-    const own = await Promise.all(
-      rows.map(async (row) => ({
-        id: row.objectId,
-        name: row.name,
-        kind: row.kind,
-        order: row.order,
-        cabled: (await cableRowAt(ctx, row.objectId)) !== null,
-        sourced: row.source !== undefined,
-      })),
+  returns: v.null(),
+  handler: async (ctx, { siteId, cycleId, baseUrl, readSwitchIds, offers }) => {
+    const holding = await heldCycle(ctx, siteId, cycleId, baseUrl);
+    if (!holding) return null;
+    const read = new Set(readSwitchIds);
+    const kept = (holding.cycle.portNameOffers ?? []).filter(
+      ({ switchId }) => !read.has(switchId),
     );
-    const plan = adoptedPorts(switchId, own, names);
-    if (!plan) return false;
-    const rowOf = new Map(rows.map((row) => [row.objectId, row]));
-    for (const { id, name } of plan.rename) {
-      const row = rowOf.get(id);
-      if (row) await ctx.db.patch(row._id, { name });
+    for (const offer of offers) {
+      if (await portNamesPlan(ctx, siteId, offer)) kept.push(offer);
     }
-    for (const id of plan.remove) {
-      const row = rowOf.get(id);
-      if (row) await ctx.db.delete(row._id);
-    }
-    for (const { id, name, order } of plan.add) {
-      await ctx.db.insert("ports", {
-        objectId: id,
-        siteId,
-        deviceId: switchId,
-        name,
-        kind: "interface",
-        order,
+    const before = holding.cycle.portNameOffers ?? [];
+    if (JSON.stringify(before) !== JSON.stringify(kept)) {
+      await ctx.db.patch(holding.cycle._id, {
+        portNameOffers: kept.length > 0 ? kept : undefined,
       });
     }
-    return plan.rename.length + plan.add.length + plan.remove.length > 0;
+    return null;
   },
 });
 
@@ -843,6 +861,9 @@ export const releaseLibreNMS = async (ctx: MutationCtx, siteId: string) => {
   }
   const cycle = await cycleOf(ctx, siteId);
   if (!cycle) return;
+  if (cycle.portNameOffers) {
+    await ctx.db.patch(cycle._id, { portNameOffers: undefined });
+  }
   for (const { switchId } of cycle.switchReads ?? []) {
     const device = await deviceOf(ctx, switchId);
     if (device) await setStatus(ctx, device, undefined);
@@ -1007,6 +1028,7 @@ export const collectFromLibreNMS = async (
   const matched = new Map<number, string>();
   const links: Array<{ portId: string; link: "up" | "down" }> = [];
   const ports: Array<SwitchPort> = [];
+  const offers: Array<PortNameOffer> = [];
   let readCount = 0;
   for (const device of plan.devices) {
     const [state, portList, fdbList] = await Promise.all([
@@ -1029,30 +1051,26 @@ export const collectFromLibreNMS = async (
       readSwitches.push({ switchId, ...(status && { status }) });
     }
     const { switchIds } = device;
-    let own = await ctx.runQuery(internal.librenmsCycle.switchPorts, {
+    const own = await ctx.runQuery(internal.librenmsCycle.switchPorts, {
       switchIds,
     });
     const librenmsPorts = readLibreNMSPorts(portList.body);
     const names = ethernetNames(librenmsPorts);
     // A LibreNMS device standing for several switches does not say which of
-    // its ports is whose.
+    // its ports is whose. Until an Éditeur adopts the names, default names
+    // match none of LibreNMS's ports.
     const sole = switchIds.length === 1 ? switchIds[0] : undefined;
     if (
       sole !== undefined &&
       names.length > 0 &&
       own.length > 0 &&
-      own.every(({ name }) => /^\d+$/.test(name)) &&
-      (await ctx.runMutation(internal.librenmsCycle.adoptPortNames, {
-        siteId,
-        cycleId,
+      own.every(({ name }) => /^\d+$/.test(name))
+    ) {
+      offers.push({
         baseUrl: connection.baseUrl,
         switchId: sole,
         librenmsDeviceId: device.id,
         names,
-      }))
-    ) {
-      own = await ctx.runQuery(internal.librenmsCycle.switchPorts, {
-        switchIds,
       });
     }
     const linkOf = new Map(librenmsPorts.map(({ id, link }) => [id, link]));
@@ -1080,6 +1098,13 @@ export const collectFromLibreNMS = async (
     readCount += 1;
   }
 
+  await ctx.runMutation(internal.librenmsCycle.offerPortNames, {
+    siteId,
+    cycleId,
+    baseUrl: connection.baseUrl,
+    readSwitchIds: readSwitches.map(({ switchId }) => switchId),
+    offers,
+  });
   const sightings = edgeSightings(fdb, matched, ports);
   const recorded = await ctx.runMutation(
     internal.librenmsCycle.recordSightings,

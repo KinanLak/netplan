@@ -225,7 +225,9 @@ async function siteWithLibreNMS({ defaultPorts = false } = {}) {
       ],
     },
   });
-  return { admin, siteId, signIn };
+  const as = async (role: "reader" | "editor") =>
+    t.withIdentity((await createSignedInUser(t, role)).identity);
+  return { admin, siteId, signIn, as };
 }
 
 const cycle = async (admin: TestClient, siteId: string) => {
@@ -691,8 +693,10 @@ describe("the LibreNMS step", () => {
     );
   });
 
-  it("names a manual switch's ports after LibreNMS's, keeping their ids and cables", async () => {
-    const { admin, siteId } = await siteWithLibreNMS({ defaultPorts: true });
+  it("offers a manual switch LibreNMS's port names, which an éditeur adopts keeping ids and cables", async () => {
+    const { admin, siteId, as } = await siteWithLibreNMS({
+      defaultPorts: true,
+    });
     const ports = async () =>
       await admin.run(async (ctx) =>
         (
@@ -713,16 +717,42 @@ describe("the LibreNMS step", () => {
     expect(await ports()).toHaveLength(24);
     librenms.state.fdb = [{ port_id: 101, mac_address: PC }];
 
+    // The cycle renames nothing: default names match none of LibreNMS's.
+    await cycle(admin, siteId);
+    expect(await ports()).toHaveLength(24);
+    expect((await ports())[0]).toEqual(["1", "1"]);
+    expect(await statusOf(admin, "device:pc")).toBeNull();
+
+    // An éditeur is offered the three Ethernet names; a lecteur is not.
+    const editor = await as("editor");
+    const offer = { deviceId: "device:sw" };
+    expect(await editor.query(api.librenms.portNameOffer, offer)).toEqual({
+      count: 3,
+    });
+    const reader = await as("reader");
+    await expect(
+      reader.query(api.librenms.portNameOffer, offer),
+    ).rejects.toThrow();
+    await expect(
+      reader.mutation(api.librenms.adoptPortNames, offer),
+    ).rejects.toThrow();
+
     // The VLAN interface is not a port; the 21 uncabled ports LibreNMS does
     // not have go.
-    await cycle(admin, siteId);
+    expect(await editor.mutation(api.librenms.adoptPortNames, offer)).toBe(3);
     expect(await ports()).toEqual([
       ["1", "Gi1/0/1"],
       ["2", "Gi1/0/2"],
       ["3", "Gi1/0/3"],
     ]);
     expect(await cables()).toEqual(["cable:desk", "cable:uplink"]);
-    // The read matches the names it just gave.
+    expect(await editor.query(api.librenms.portNameOffer, offer)).toBeNull();
+    await expect(
+      editor.mutation(api.librenms.adoptPortNames, offer),
+    ).rejects.toThrow("ne propose plus");
+
+    // The next read matches the names.
+    await cycle(admin, siteId);
     expect(await portFacts(admin)).toEqual([
       { status: "up", seen: true },
       { status: "down", seen: undefined },
@@ -1702,50 +1732,56 @@ describe("the LibreNMS step", () => {
     expect(await ignored()).toEqual([]);
   });
 
-  it("names no port of a switch mapped elsewhere during the read", async () => {
+  it("names no port of a switch mapped elsewhere since the offer", async () => {
     const { admin, siteId } = await siteWithLibreNMS({ defaultPorts: true });
-    await admin.mutation(api.collection.refresh, { siteId });
-    const cycleId = await admin.run(
-      async (ctx) =>
-        (await ctx.db.query("siteCycles").first())?.running?.cycleId,
-    );
-    if (!cycleId) throw new Error("expected a running cycle");
-    const adopt = async () =>
-      await admin.mutation(internal.librenmsCycle.adoptPortNames, {
-        siteId,
-        cycleId,
-        baseUrl: LIBRENMS,
-        switchId: "device:sw",
-        librenmsDeviceId: STACK,
-        names: ["Gi1/0/1"],
-      });
-    const remap = async (switchIds: Array<string>) =>
+    await cycle(admin, siteId);
+    const offer = { deviceId: "device:sw" };
+    const remap = async (switchIds: Array<string>, id = STACK) =>
       await admin.mutation(api.librenms.saveSettings, {
         siteId,
         baseUrl: LIBRENMS,
         settings: {
           switches: switchIds.map((switchId) => ({
             switchId,
-            device: { id: STACK, name: "pile" },
+            device: { id, name: "pile" },
           })),
         },
       });
 
-    await admin.mutation(api.librenms.saveSettings, {
-      siteId,
-      baseUrl: LIBRENMS,
-      settings: {
-        switches: [
-          { switchId: "device:sw", device: { id: STACK + 1, name: "autre" } },
-        ],
-      },
-    });
-    expect(await adopt()).toBe(false);
+    await remap(["device:sw"], STACK + 1);
+    expect(await admin.query(api.librenms.portNameOffer, offer)).toBeNull();
+    await expect(
+      admin.mutation(api.librenms.adoptPortNames, offer),
+    ).rejects.toThrow("ne propose plus");
     // Nor one that now shares its LibreNMS device with another.
     await remap(["device:sw", "device:core"]);
-    expect(await adopt()).toBe(false);
+    expect(await admin.query(api.librenms.portNameOffer, offer)).toBeNull();
     await remap(["device:sw"]);
-    expect(await adopt()).toBe(true);
+    // Nor one offered by another LibreNMS than the site reads now.
+    const moveLibreNMS = async (baseUrl: string) =>
+      await admin.run(async (ctx) => {
+        const row = await ctx.db.query("integrations").first();
+        if (row) await ctx.db.patch(row._id, { baseUrl });
+      });
+    await moveLibreNMS("https://other-librenms.test");
+    expect(await admin.query(api.librenms.portNameOffer, offer)).toBeNull();
+    await moveLibreNMS(LIBRENMS);
+    expect(await admin.mutation(api.librenms.adoptPortNames, offer)).toBe(3);
+  });
+
+  it("offers nothing when LibreNMS's names are the default ones", async () => {
+    const { admin, siteId } = await siteWithLibreNMS({ defaultPorts: true });
+    // As many Ethernet ports as the switch has, named as its own.
+    librenms.state.ports = Array.from({ length: 24 }, (_, i) => ({
+      port_id: 201 + i,
+      ifIndex: 1 + i,
+      ifName: String(i + 1),
+      ifType: "ethernetCsmacd",
+    }));
+    await cycle(admin, siteId);
+    expect(
+      await admin.query(api.librenms.portNameOffer, { deviceId: "device:sw" }),
+    ).toBeNull();
   });
 
   it("records nothing once LibreNMS was removed during the read", async () => {

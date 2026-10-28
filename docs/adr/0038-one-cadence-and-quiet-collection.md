@@ -88,7 +88,8 @@ would rename every port, cables included, without anyone seeing it. The
 drawer proposes it instead, to an Éditeur only, for example « Adopter les
 52 noms de LibreNMS », from the names the last read saw. The adoption itself
 keeps ADR 0025's rule: by position, ports beyond added, uncabled ones beyond
-removed.
+removed. Until it is adopted, the default names match none of LibreNMS's
+ports, so nothing is seen behind them: the button is the way out.
 
 ## Consequences
 

@@ -50,6 +50,8 @@ const POLICY: Record<string, Role> = {
   "importReviews:resolve": "editor",
   "integrations:listForSite": "admin",
   "integrations:remove": "admin",
+  "librenms:adoptPortNames": "editor",
+  "librenms:portNameOffer": "editor",
   "librenms:saveSettings": "admin",
   "librenms:settings": "admin",
   "mapDocument:getFloorCables": "reader",

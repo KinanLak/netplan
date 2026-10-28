@@ -33,6 +33,7 @@ import {
 } from "@/panels/drawer/DeviceDetails";
 import { DrawerConnectionsSection } from "@/panels/drawer/DrawerConnectionsSection";
 import { DrawerPortsSection } from "@/panels/drawer/DrawerPortsSection";
+import { PortNamesOffer } from "@/panels/drawer/PortNamesOffer";
 import { DeviceIdentityDialog } from "@/panels/drawer/DeviceIdentityDialog";
 import { PortTableDialog } from "@/panels/drawer/PortTableDialog";
 import {
@@ -227,6 +228,13 @@ export default function DeviceDrawer() {
             farEnds={farEnds}
             onShowCables={(portId) => showPortCables(device.id, portId)}
           />
+          {isEditMode && device.type === "switch" ? (
+            <PortNamesOffer
+              // Its own key: a sibling is keyed by the device too.
+              key={`port-names:${device.id}`}
+              deviceId={device.id}
+            />
+          ) : null}
         </div>
       </ScrollArea>
 
