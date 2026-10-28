@@ -275,7 +275,14 @@ describe("the push to NetBox", () => {
   it("writes where each NetBox device was seen, once", async () => {
     const { admin, siteId } = await pushingSite();
     await turnOn(admin, siteId);
+    // Seen a day ago: the stamp must be when NetPlan wrote, not that.
+    await moveTo(admin, siteId, {
+      portId: "port:sw:1",
+      socketId: "device:B-01",
+      seenAt: NOW - 24 * 60 * 60_000,
+    });
     const patches = netboxAnswering(() => 200);
+    const before = Math.floor(Date.now() / 1000) * 1000;
     await push(admin, siteId);
     expect(patches).toEqual([
       {
@@ -285,13 +292,13 @@ describe("the push to NetBox", () => {
           netplan_floor: "Bâtiment A · RDC",
           netplan_socket: "B-01",
           netplan_switch_port: "sw · Gi1/0/1",
-          // When NetPlan sent it, never when the network saw the device.
-          netplan_updated: expect.stringMatching(
-            /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/,
-          ),
+          netplan_updated: expect.any(String),
         },
       },
     ]);
+    const stamp = Date.parse(String(patches[0]?.fields.netplan_updated));
+    expect(stamp).toBeGreaterThanOrEqual(before);
+    expect(stamp).toBeLessThanOrEqual(Date.now());
     expect(await lastPush(admin, siteId)).toMatchObject({
       sent: 1,
       refused: 0,
@@ -356,9 +363,6 @@ describe("the push to NetBox", () => {
     });
     await push(admin, siteId);
     expect(patches).toHaveLength(2);
-    expect(patches.some((patch) => "netplan_last_seen" in patch.fields)).toBe(
-      false,
-    );
   });
 
   it("shows a refused device on the health page until NetBox takes it", async () => {

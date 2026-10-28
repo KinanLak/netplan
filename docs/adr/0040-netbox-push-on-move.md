@@ -21,10 +21,12 @@ round of 2026-10-28, 5.2).
 
 ## Decision
 
-- **A write is a move.** A run sends a device's `PATCH` only when its site,
-  floor, socket or switch port differs from what was last sent to that NetBox
-  device, or nothing was. A newer sighting at the same place, or a device going
-  offline, sends nothing.
+- **A write is a change of place.** A run sends a device's `PATCH` only when
+  the site, floor, socket or switch port it would show differs from what was
+  last sent to that NetBox device, or nothing was: a move, or a place renamed
+  in NetPlan, whose old name NetBox would otherwise keep. A newer sighting at
+  the same place, or a device going offline, sends nothing. A field edited on
+  NetBox's side is no longer put back by a periodic rewrite.
 - **`netplan_updated`**, a date and time field labelled « Modifié par NetPlan
   le », takes the place of `netplan_last_seen` among the five fields. It holds
   when the `PATCH` was sent, and travels only inside a `PATCH` a move already
@@ -36,10 +38,9 @@ round of 2026-10-28, 5.2).
 
 ## Consequences
 
-- `netboxPushes.sent` no longer holds a sighting time, so its rows are
-  compared on the place alone; rows written before this change must be
-  cleared (or the backend reseeded) for the schema to deploy, after which each
-  device is sent once more.
+- `netboxPushes.sent` no longer holds a sighting time and is compared on the
+  place alone; the `lastSeen` of rows sent before stays optional in the schema
+  so they deploy as they are, and is never read.
 - A NetBox without `netplan_updated` refuses the `PATCH` (400), which Santé
   shows with NetBox's detail until the field exists, as for any missing field.
 

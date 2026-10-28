@@ -172,7 +172,7 @@ function PushSetting({
         {!push && !ready
           ? "Choisissez d'abord le site NetBox et au moins un rôle à importer. "
           : null}
-        Quand un équipement importé de NetBox change de lieu, NetPlan écrit sa
+        Quand le lieu d'un équipement importé de NetBox change, NetPlan écrit sa
         prise, son étage, son port de switch et l'heure de l'écriture dans ses
         champs personnalisés{" "}
         {PUSH_FIELDS.map((field, index) => (

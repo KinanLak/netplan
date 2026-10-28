@@ -101,8 +101,8 @@ A site can write where the network last saw each device NetBox brought into
 five custom fields of that NetBox device (ADR 0027, ADR 0035):
 `netplan_site`, `netplan_floor`, `netplan_socket`, `netplan_switch_port`
 (text) and `netplan_updated` (date and time, « Modifié par NetPlan le »: when
-NetPlan wrote them). It writes only when a device's location changes, so
-NetBox's changelog records moves and nothing else. It is off by default and
+NetPlan wrote them). It writes only when the place it shows changes, a move
+or a place renamed in NetPlan, so NetBox's changelog records nothing else. It is off by default and
 one way: Netplan never reads these fields back, writes nothing else, and
 never clears what it wrote. A NetBox that has the older `netplan_last_seen`
 keeps it, no longer written; remove it there if you want, the script never
