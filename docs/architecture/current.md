@@ -120,11 +120,12 @@ then maps the
 NetBox site and the Netplan type of each NetBox role, and each Netplan switch
 to its LibreNMS device. Settings are keyed by the source's ids, so changing
 a LibreNMS address forgets its mapping. A new NetBox address is first asked
-for the configured site and roles by id (ADR 0034): the same instance keeps
-everything; another one, once the admin confirms how many devices are
-linked, forgets the site and roles and makes those devices absent, bound
-to the former instance so that only MAC, serial or hostname can link them
-again, with their ports and NetBox cables turned manual. [`docs/operations/integrations.md`](../operations/integrations.md)
+for the configured site by id, and when its name changed, for a sample of
+the linked devices (ADR 0034): the same instance keeps everything; another
+one, once the admin confirms how many devices are linked, forgets the site
+and roles and makes those devices absent with a `staleId` binding, which
+only MAC, serial or hostname can link again, their ports and NetBox cables
+turned manual. [`docs/operations/integrations.md`](../operations/integrations.md)
 says how to check a real LibreNMS.
 
 ## Inventory, ports and cables

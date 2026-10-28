@@ -212,7 +212,7 @@ export const apply = internalMutation({
         macs: device.macs,
         placed: device.placement !== undefined,
         missingSince: device.source?.missingSince,
-        formerInstance: device.source?.formerInstance,
+        staleId: device.source?.staleId,
       })),
     );
     const byId = new Map(inventory.map((device) => [device.objectId, device]));
@@ -398,15 +398,19 @@ export const purgeSite = internalMutation({
   },
 });
 
+type DeviceSourceRow = NonNullable<Doc<"devices">["source"]>;
+
 /**
- * The site now reads another NetBox instance (ADR 0034): every device bound
- * to the previous one becomes absent, its binding kept for its fields and
- * date but never matched by id again, and its ports and NetBox cables become
- * manual, since their ids mean nothing in the new NetBox. Reviews and push
- * rows were about the previous instance.
+ * Rewrites the binding of each device bound to the site's NetBox (`null`
+ * leaves it as it is), turns every NetBox port and cable of the site manual,
+ * and drops its reviews and push rows: they were about that NetBox.
  */
-export const leaveNetBoxInstance = async (ctx: MutationCtx, siteId: string) => {
-  const now = Date.now();
+const releaseBindings = async (
+  ctx: MutationCtx,
+  siteId: string,
+  rebind: (source: DeviceSourceRow) => DeviceSourceRow | undefined | null,
+  stamp: Record<string, unknown> = {},
+) => {
   const bound = await ctx.db
     .query("devices")
     .withIndex("by_site_source", (q) =>
@@ -414,17 +418,10 @@ export const leaveNetBoxInstance = async (ctx: MutationCtx, siteId: string) => {
     )
     .collect();
   for (const device of bound) {
-    if (!device.source || device.source.formerInstance) continue;
-    const { url: _, ...source } = device.source;
-    await ctx.db.patch(device._id, {
-      source: {
-        ...source,
-        missingSince: source.missingSince ?? now,
-        formerInstance: true,
-      },
-      updatedAt: now,
-      updatedBy: IMPORTED_BY,
-    });
+    if (!device.source) continue;
+    const source = rebind(device.source);
+    if (source === null) continue;
+    await ctx.db.patch(device._id, { source, ...stamp });
     await unbindPorts(ctx, device.objectId);
   }
   const cables = await ctx.db
@@ -440,7 +437,31 @@ export const leaveNetBoxInstance = async (ctx: MutationCtx, siteId: string) => {
   await deletePushes(ctx, siteId);
 };
 
-/** How many devices are bound to the site's current NetBox instance. */
+/**
+ * The site now reads another NetBox instance (ADR 0034): every device bound
+ * to the previous one becomes absent, its binding kept for its fields and
+ * date but marked `staleId`, never matched by id again, and its ports and
+ * NetBox cables become manual, since their ids mean nothing in the new
+ * NetBox.
+ */
+export const leaveNetBoxInstance = async (ctx: MutationCtx, siteId: string) => {
+  const now = Date.now();
+  await releaseBindings(
+    ctx,
+    siteId,
+    ({ url: _, ...source }) =>
+      source.staleId
+        ? null
+        : {
+            ...source,
+            missingSince: source.missingSince ?? now,
+            staleId: true,
+          },
+    { updatedAt: now, updatedBy: IMPORTED_BY },
+  );
+};
+
+/** The devices bound to the site's current NetBox, with their NetBox ids. */
 export const linkedToNetBox = async (ctx: QueryCtx, siteId: string) =>
   (
     await ctx.db
@@ -449,36 +470,19 @@ export const linkedToNetBox = async (ctx: QueryCtx, siteId: string) =>
         q.eq("siteId", siteId).eq("source.integration", "netbox"),
       )
       .collect()
-  ).filter((device) => !device.source?.formerInstance).length;
+  ).flatMap((device) =>
+    device.source && !device.source.staleId
+      ? [{ externalId: device.source.externalId, name: device.name }]
+      : [],
+  );
 
 /**
  * Releases the devices, ports and cables bound to the site's NetBox, which
- * become manual, and drops its pending reviews: another NetBox reuses the
- * same ids for other devices, so a binding means nothing once the address
- * changes.
+ * become manual, and drops its pending reviews, when the site leaves NetBox
+ * (« Retirer »).
  */
 export const releaseNetBox = async (ctx: MutationCtx, siteId: string) => {
-  const bound = await ctx.db
-    .query("devices")
-    .withIndex("by_site_source", (q) =>
-      q.eq("siteId", siteId).eq("source.integration", "netbox"),
-    )
-    .collect();
-  for (const device of bound) {
-    await ctx.db.patch(device._id, { source: undefined });
-    await unbindPorts(ctx, device.objectId);
-  }
-  const cables = await ctx.db
-    .query("cables")
-    .withIndex("by_site_source", (q) =>
-      q.eq("siteId", siteId).eq("source.integration", "netbox"),
-    )
-    .collect();
-  for (const cable of cables) {
-    await ctx.db.patch(cable._id, { source: undefined });
-  }
-  await deleteImportReviews(ctx, siteId);
-  await deletePushes(ctx, siteId);
+  await releaseBindings(ctx, siteId, () => undefined);
 };
 
 export const deleteImportReviews = async (ctx: MutationCtx, siteId: string) => {

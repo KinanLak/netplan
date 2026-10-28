@@ -20,7 +20,7 @@ import {
   probeIntegration,
   sourceGet,
 } from "./lib/integrationProbe";
-import { idOf, netboxList } from "./lib/netboxApi";
+import { idOf, nameOf, netboxList } from "./lib/netboxApi";
 import type {
   ConnectionCheck,
   Source,
@@ -45,7 +45,7 @@ import {
   tokenError,
 } from "../src/sites/integrations";
 import type { IntegrationKind } from "../src/sites/integrations";
-import { sameNetBoxInstance } from "../src/sites/netbox";
+import { sameNetBoxInstance, sameNetBoxSite } from "../src/sites/netbox";
 
 const integrationSummary = v.object({
   kind: integrationKind,
@@ -221,7 +221,7 @@ const netboxInstance = async (
   siteId: string,
   source: Source,
 ): Promise<{ same: boolean; linked: number } | { error: string }> => {
-  const { settings, linked } = await ctx.runQuery(
+  const { settings, linked, sample } = await ctx.runQuery(
     internal.integrations.netboxBinding,
     { siteId },
   );
@@ -237,20 +237,31 @@ const netboxInstance = async (
     site.ok && typeof site.body === "object" && site.body !== null
       ? (site.body as { id?: unknown; name?: unknown })
       : null;
-  if (!sameNetBoxInstance(settings, body, null)) return { same: false, linked };
-  const roles = await netboxList(
+  const none = { sampled: 0, matched: 0 };
+  if (body?.id !== settings.site.id || sameNetBoxSite(settings, body)) {
+    return { same: sameNetBoxInstance(settings, body, none), linked };
+  }
+  // The site was renamed, or another NetBox reuses its id: the devices say.
+  if (sample.length === 0) return { same: false, linked };
+  const found = await netboxList(
     source,
-    "/api/dcim/device-roles/?brief=1",
+    `/api/dcim/devices/?brief=1${sample.map((device) => `&id=${device.externalId}`).join("")}`,
     PROBE_RETRY,
   );
-  if (!roles.ok) return { error: roles.message };
-  const roleIds = new Set(
-    roles.items.flatMap((item) => {
-      const id = idOf(item);
-      return id === null ? [] : [id];
-    }),
+  if (!found.ok) return { error: found.message };
+  const names = new Map(
+    found.items.map((item) => [String(idOf(item)), nameOf(item)] as const),
   );
-  return { same: sameNetBoxInstance(settings, body, roleIds), linked };
+  const matched = sample.filter(
+    (device) => names.get(device.externalId) === device.name,
+  ).length;
+  return {
+    same: sameNetBoxInstance(settings, body, {
+      sampled: sample.length,
+      matched,
+    }),
+    linked,
+  };
 };
 
 /**
@@ -481,17 +492,30 @@ export const store = internalMutation({
   },
 });
 
+// Linked devices asked of a new NetBox address, when its site was renamed.
+const NETBOX_SAMPLE = 10;
+
 /** What a new NetBox address is compared with (ADR 0034). */
 export const netboxBinding = internalQuery({
   args: { siteId: v.string() },
   returns: v.object({
     settings: v.union(v.null(), netboxSettings),
     linked: v.number(),
+    /** A few linked devices, to recognise their NetBox at a new address. */
+    sample: v.array(v.object({ externalId: v.string(), name: v.string() })),
   }),
-  handler: async (ctx, { siteId }) => ({
-    settings: (await find(ctx, siteId, "netbox"))?.netbox ?? null,
-    linked: await linkedToNetBox(ctx, siteId),
-  }),
+  handler: async (ctx, { siteId }) => {
+    const linked = await linkedToNetBox(ctx, siteId);
+    return {
+      settings: (await find(ctx, siteId, "netbox"))?.netbox ?? null,
+      linked: linked.length,
+      // NetBox ids are numbers; anything else could not be asked for.
+      sample: linked
+        .filter((device) => /^\d+$/.test(device.externalId))
+        .slice(0, NETBOX_SAMPLE)
+        .map(({ externalId, name }) => ({ externalId, name })),
+    };
+  },
 });
 
 /** The connection with its encrypted token, for actions only. */

@@ -44,9 +44,15 @@ const netboxServing = (lists: Lists) => {
     // Site 7 and roles 4 and 5 are this NetBox's, wherever it is reached;
     // `other-netbox.test` is another instance, without that site.
     if (pathname === "/api/dcim/sites/7/") {
-      return new URL(url).host === "other-netbox.test"
-        ? Response.json({ detail: "Not found." }, { status: 404 })
-        : Response.json({ id: 7, name: "Siège" });
+      const { host } = new URL(url);
+      if (host === "other-netbox.test") {
+        return Response.json({ detail: "Not found." }, { status: 404 });
+      }
+      // The same NetBox, whose site was renamed since it was chosen.
+      return Response.json({
+        id: 7,
+        name: host === "renamed-netbox.test" ? "Siège social" : "Siège",
+      });
     }
     if (pathname === "/api/dcim/device-roles/") {
       const results = [{ id: 4 }, { id: 5 }];
@@ -336,6 +342,21 @@ describe("NetBox import", () => {
     expect(
       (await inventory(editor, siteId)).map((d) => d.source?.missingSince),
     ).toEqual([undefined, undefined]);
+
+    // Its site renamed in NetBox: the linked devices it still has say so.
+    expect(
+      await admin.action(api.sources.saveIntegration, {
+        siteId,
+        kind: "netbox",
+        baseUrl: "https://renamed-netbox.test",
+        enabled: true,
+        ignoreCertificateErrors: false,
+        token: TOKEN,
+      }),
+    ).toEqual({ ok: true, message: "Connexion réussie : NetBox 4.6.10." });
+    expect(await admin.query(api.netbox.settings, { siteId })).toMatchObject({
+      site: { id: 7 },
+    });
   });
 
   it("asks before another NetBox makes the linked devices absent, then links them by identity only", async () => {
@@ -374,7 +395,7 @@ describe("NetBox import", () => {
     const [absent] = await inventory(editor, siteId);
     expect(absent.source).toMatchObject({
       externalId: "12",
-      formerInstance: true,
+      staleId: true,
     });
     expect(absent.source?.missingSince).toBeNumber();
 

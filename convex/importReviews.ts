@@ -106,7 +106,7 @@ export const resolve = editorMutation({
       )
       .collect();
     // A device of the NetBox used before may carry the same id.
-    if (bound.some((device) => !device.source?.formerInstance)) {
+    if (bound.some((device) => !device.source?.staleId)) {
       throw new ConvexError("Ce rapprochement est déjà traité.");
     }
 

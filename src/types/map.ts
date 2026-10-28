@@ -83,10 +83,12 @@ export interface DeviceSource {
    * taken off a plan gets its 30 days from then (ADR 0039).
    */
   offPlanSince?: number;
-   * Its `externalId` names a device of the NetBox the site used before: only
-   * the identity rules can link it again (ADR 0034).
+  /**
+   * Its `externalId` may name another device, or none: it came from the
+   * NetBox the site used before, or a person brought it back by undo. Only
+   * the identity rules link it again (ADR 0034).
    */
-  formerInstance?: boolean;
+  staleId?: boolean;
 }
 
 // ── Domain documents ─────────────────────────────────────────────────────────

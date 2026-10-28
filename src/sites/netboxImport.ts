@@ -115,8 +115,8 @@ export type InventoryDevice = {
   placed: boolean;
   /** Since when NetBox no longer returns it (ADR 0039). */
   missingSince?: number;
-  /** Bound to the NetBox the site used before, whose ids mean nothing now. */
-  formerInstance?: boolean;
+  /** Its NetBox id is not trusted: only the identity rules link it again. */
+  staleId?: boolean;
 };
 
 export type ImportPlan = {
@@ -173,7 +173,7 @@ export function planNetBoxImport(
   };
   const bound = new Map(
     inventory.flatMap((device) =>
-      device.netboxId && !device.formerInstance
+      device.netboxId && !device.staleId
         ? [[device.netboxId, device] as const]
         : [],
     ),
@@ -185,7 +185,7 @@ export function planNetBoxImport(
     (device) =>
       device.netboxId === undefined ||
       (device.netboxId !== null &&
-        (device.formerInstance === true || !listed.has(device.netboxId))),
+        (device.staleId === true || !listed.has(device.netboxId))),
   );
 
   // An identifier several imported devices share identifies none of them.
