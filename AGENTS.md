@@ -128,6 +128,9 @@ The owner's standing preferences; each was broken more than once.
   « NetPlan ». Device types in sentence case (« Switch réseau »), a narrow
   no-break space (U+202F) before « % », and no « Tracer ».
 - Add the least UI that works: no legends, no element for its own sake.
+  No sentence that explains a screen, a backend detail or what is missing
+  (ADR 0041): name the action, keep one consequence, icon-led lines
+  (`IconNote`) for what must stay.
 - Few toasts. A small action confirms in place (a copy icon becomes a check,
   a label changes briefly); toasts are for errors and for results the user
   cannot see.
