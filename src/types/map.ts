@@ -86,7 +86,7 @@ export interface DeviceSource {
   /**
    * Its `externalId` may name another device, or none: it came from the
    * NetBox the site used before, or a person brought it back by undo. Only
-   * the identity rules link it again (ADR 0034).
+   * the identity rules link it again (ADR 0039).
    */
   staleId?: boolean;
 }

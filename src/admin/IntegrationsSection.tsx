@@ -108,7 +108,7 @@ function IntegrationForm({
   );
   const [saved, flashSaved] = useFlash();
   // Linked devices that a new NetBox address, reaching another instance,
-  // would make absent: the admin confirms first (ADR 0034).
+  // would make absent: the admin confirms first (ADR 0039).
   const [otherInstance, setOtherInstance] = useState<number | null>(null);
   const [pending, setPending] = useState<"save" | "test" | null>(null);
   const id = (field: string) => `integration-${kind}-${field}`;
@@ -367,7 +367,7 @@ function IntegrationForm({
 
 /**
  * Asks before a new NetBox address that reaches another instance makes the
- * linked devices absent (ADR 0034).
+ * linked devices absent (ADR 0039).
  */
 function OtherNetBoxInstance({
   devices,

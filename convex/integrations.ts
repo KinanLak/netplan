@@ -131,7 +131,7 @@ export const saveArgs = {
   enabled: v.boolean(),
   /**
    * The admin confirmed that the devices linked to NetBox become absent: the
-   * new address reaches another NetBox instance (ADR 0034).
+   * new address reaches another NetBox instance (ADR 0039).
    */
   confirmOtherInstance: v.optional(v.boolean()),
 };
@@ -213,7 +213,7 @@ const draftSource = async (
 
 /**
  * Whether the NetBox at a new address is the instance the site's settings
- * were made with (ADR 0034), with how many devices are linked to it, or why
+ * were made with (ADR 0039), with how many devices are linked to it, or why
  * NetBox could not tell.
  */
 const netboxInstance = async (
@@ -299,7 +299,7 @@ export const saveConnection = async (
   if (!result.ok) return result;
   // A new address for NetBox keeps everything when it reaches the same
   // instance; another instance makes the linked devices absent, once the
-  // admin has seen how many (ADR 0034).
+  // admin has seen how many (ADR 0039).
   let netbox: "same" | "other" | undefined;
   if (args.kind === "netbox" && stored && stored.baseUrl !== baseUrl) {
     const instance = await netboxInstance(ctx, args.siteId, source);
@@ -495,7 +495,7 @@ export const store = internalMutation({
 // Linked devices asked of a new NetBox address, when its site was renamed.
 const NETBOX_SAMPLE = 10;
 
-/** What a new NetBox address is compared with (ADR 0034). */
+/** What a new NetBox address is compared with (ADR 0039). */
 export const netboxBinding = internalQuery({
   args: { siteId: v.string() },
   returns: v.object({

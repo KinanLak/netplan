@@ -438,7 +438,7 @@ const releaseBindings = async (
 };
 
 /**
- * The site now reads another NetBox instance (ADR 0034): every device bound
+ * The site now reads another NetBox instance (ADR 0039): every device bound
  * to the previous one becomes absent, its binding kept for its fields and
  * date but marked `staleId`, never matched by id again, and its ports and
  * NetBox cables become manual, since their ids mean nothing in the new

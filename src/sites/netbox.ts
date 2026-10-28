@@ -43,7 +43,7 @@ export const sameNetBoxSite = (
 
 /**
  * Whether a NetBox at a new address is the one the settings were made with
- * (ADR 0034): the chosen site answers under its id, and either keeps its
+ * (ADR 0039): the chosen site answers under its id, and either keeps its
  * name or most of the linked devices sampled answer under their ids with
  * their names, so a site renamed in NetBox is still recognised. A NetBox
  * without a chosen site cannot be recognised.
