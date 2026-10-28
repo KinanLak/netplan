@@ -2,9 +2,8 @@
 // browser's locale, on a 24-hour clock, with the zone one hover away (owner,
 // 2026-10-28): an en-US browser reads « Wed, Oct 21, 14:05 ». Relative words
 // (« il y a 3 min », « Aujourd'hui ») stay French with the interface. Sites
-// keep their own zone for what they schedule (business hours, snapshot
-// slots), never for display. `timeZone` is a parameter only so tests can pin
-// it.
+// keep their own zone for their history's snapshot slots and days, never for
+// display. `timeZone` is a parameter only so tests can pin it.
 
 const MINUTE = 60_000;
 
