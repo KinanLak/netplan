@@ -5,7 +5,7 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalMutation, internalQuery } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
-import type { ActionCtx, MutationCtx } from "./_generated/server";
+import type { ActionCtx, MutationCtx, QueryCtx } from "./_generated/server";
 import { cycleOf } from "./lib/cycles";
 import { deletePush, deletePushes } from "./netboxPush";
 import { SOURCE_RETRY } from "./lib/httpRetry";
@@ -212,6 +212,7 @@ export const apply = internalMutation({
         macs: device.macs,
         placed: device.placement !== undefined,
         missingSince: device.source?.missingSince,
+        formerInstance: device.source?.formerInstance,
       })),
     );
     const byId = new Map(inventory.map((device) => [device.objectId, device]));
@@ -396,6 +397,59 @@ export const purgeSite = internalMutation({
     return Math.min(due.length, PURGE_BATCH);
   },
 });
+
+/**
+ * The site now reads another NetBox instance (ADR 0034): every device bound
+ * to the previous one becomes absent, its binding kept for its fields and
+ * date but never matched by id again, and its ports and NetBox cables become
+ * manual, since their ids mean nothing in the new NetBox. Reviews and push
+ * rows were about the previous instance.
+ */
+export const leaveNetBoxInstance = async (ctx: MutationCtx, siteId: string) => {
+  const now = Date.now();
+  const bound = await ctx.db
+    .query("devices")
+    .withIndex("by_site_source", (q) =>
+      q.eq("siteId", siteId).eq("source.integration", "netbox"),
+    )
+    .collect();
+  for (const device of bound) {
+    if (!device.source || device.source.formerInstance) continue;
+    const { url: _, ...source } = device.source;
+    await ctx.db.patch(device._id, {
+      source: {
+        ...source,
+        missingSince: source.missingSince ?? now,
+        formerInstance: true,
+      },
+      updatedAt: now,
+      updatedBy: IMPORTED_BY,
+    });
+    await unbindPorts(ctx, device.objectId);
+  }
+  const cables = await ctx.db
+    .query("cables")
+    .withIndex("by_site_source", (q) =>
+      q.eq("siteId", siteId).eq("source.integration", "netbox"),
+    )
+    .collect();
+  for (const cable of cables) {
+    await ctx.db.patch(cable._id, { source: undefined });
+  }
+  await deleteImportReviews(ctx, siteId);
+  await deletePushes(ctx, siteId);
+};
+
+/** How many devices are bound to the site's current NetBox instance. */
+export const linkedToNetBox = async (ctx: QueryCtx, siteId: string) =>
+  (
+    await ctx.db
+      .query("devices")
+      .withIndex("by_site_source", (q) =>
+        q.eq("siteId", siteId).eq("source.integration", "netbox"),
+      )
+      .collect()
+  ).filter((device) => !device.source?.formerInstance).length;
 
 /**
  * Releases the devices, ports and cables bound to the site's NetBox, which

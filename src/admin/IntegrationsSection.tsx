@@ -107,6 +107,9 @@ function IntegrationForm({
     null,
   );
   const [saved, flashSaved] = useFlash();
+  // Linked devices that a new NetBox address, reaching another instance,
+  // would make absent: the admin confirms first (ADR 0034).
+  const [otherInstance, setOtherInstance] = useState<number | null>(null);
   const [pending, setPending] = useState<"save" | "test" | null>(null);
   const id = (field: string) => `integration-${kind}-${field}`;
 
@@ -153,18 +156,30 @@ function IntegrationForm({
     token: token === "" ? undefined : token,
   });
 
-  const submit = async (event: FormEvent<HTMLFormElement>) => {
+  const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const invalid = draftError();
     if (invalid) {
       setError(invalid);
       return;
     }
+    void send(false);
+  };
+
+  const send = async (confirmOtherInstance: boolean) => {
     setPending(connectionChanged ? "test" : "save");
     setError(null);
     setResult(null);
     try {
-      const check = await save({ ...draft(), enabled });
+      const check = await save({
+        ...draft(),
+        enabled,
+        ...(confirmOtherInstance && { confirmOtherInstance }),
+      });
+      if (check?.confirmOtherInstance !== undefined) {
+        setOtherInstance(check.confirmOtherInstance);
+        return;
+      }
       if (check === null || check.ok) {
         setToken("");
         if ("url" in normalized) setBaseUrl(normalized.url);
@@ -211,7 +226,7 @@ function IntegrationForm({
   return (
     <form
       noValidate
-      onSubmit={(event) => void submit(event)}
+      onSubmit={submit}
       className="space-y-4 rounded-lg border p-4"
     >
       {/* The answer belongs to the draft that was sent, so it stays put. */}
@@ -338,7 +353,61 @@ function IntegrationForm({
         </Button>
         {error?.field === null ? <FieldError>{error.text}</FieldError> : null}
       </div>
+      <OtherNetBoxInstance
+        devices={otherInstance}
+        onCancel={() => setOtherInstance(null)}
+        onConfirm={() => {
+          setOtherInstance(null);
+          void send(true);
+        }}
+      />
     </form>
+  );
+}
+
+/**
+ * Asks before a new NetBox address that reaches another instance makes the
+ * linked devices absent (ADR 0034).
+ */
+function OtherNetBoxInstance({
+  devices,
+  onCancel,
+  onConfirm,
+}: {
+  devices: number | null;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const many = (devices ?? 0) > 1;
+  return (
+    <AlertDialog
+      open={devices !== null}
+      onOpenChange={(open) => {
+        if (!open) onCancel();
+      }}
+    >
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Changer d'instance NetBox ?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Cette adresse ne mène pas au NetBox enregistré : le site NetBox ou
+            les rôles choisis n'y sont pas. {devices}{" "}
+            {many
+              ? "équipements liés à NetBox deviendront absents de NetBox"
+              : "équipement lié à NetBox deviendra absent de NetBox"}{" "}
+            : hors plan, {many ? "ils seront supprimés" : "il sera supprimé"}{" "}
+            après 30 jours si le nouveau NetBox ne {many ? "les" : "le"} renvoie
+            pas. Le site NetBox et les rôles choisis sont oubliés.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Annuler</AlertDialogCancel>
+          <AlertDialogAction onClick={onConfirm}>
+            Changer d'instance
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 

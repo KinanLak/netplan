@@ -14,13 +14,14 @@ import {
   saveConnection,
   testConnection,
 } from "./integrations";
+import type { SaveResult } from "./integrations";
 import { adminAction } from "./lib/functions";
 import type { Fetch } from "./lib/httpRetry";
 import type { ConnectionCheck, Transport } from "./lib/integrationProbe";
 import { devicesResult, listDevices } from "./librenms";
 import { choicesResult, listChoices } from "./netbox";
 import { runPush } from "./netboxPush";
-import { connectionResult } from "./siteValidators";
+import { connectionResult, saveResult } from "./siteValidators";
 
 // Node's own fetch refuses a dispatcher from a newer undici, so the lenient
 // requests use undici's fetch with its own Agent.
@@ -36,8 +37,8 @@ const transport: Transport = { lenient };
 
 export const saveIntegration = adminAction({
   args: saveArgs,
-  returns: v.union(v.null(), connectionResult),
-  handler: async (ctx, args): Promise<ConnectionCheck | null> =>
+  returns: v.union(v.null(), saveResult),
+  handler: async (ctx, args): Promise<SaveResult | null> =>
     await saveConnection(ctx, args, transport),
 });
 

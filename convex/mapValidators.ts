@@ -50,6 +50,8 @@ export const deviceSource = v.object({
   missingSince: v.optional(v.number()),
   /** While absent: since when the purge has seen it on no floor. */
   offPlanSince: v.optional(v.number()),
+  /** Its `externalId` names a device of the NetBox used before. */
+  formerInstance: v.optional(v.boolean()),
 });
 
 /** `SourceRef`: the object of an integration a port or cable comes from. */

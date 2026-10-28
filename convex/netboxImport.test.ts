@@ -41,6 +41,17 @@ const netboxServing = (lists: Lists) => {
     if (pathname === "/api/status/") {
       return Response.json({ "netbox-version": "4.6.10" });
     }
+    // Site 7 and roles 4 and 5 are this NetBox's, wherever it is reached;
+    // `other-netbox.test` is another instance, without that site.
+    if (pathname === "/api/dcim/sites/7/") {
+      return new URL(url).host === "other-netbox.test"
+        ? Response.json({ detail: "Not found." }, { status: 404 })
+        : Response.json({ id: 7, name: "Siège" });
+    }
+    if (pathname === "/api/dcim/device-roles/") {
+      const results = [{ id: 4 }, { id: 5 }];
+      return Response.json({ count: results.length, results });
+    }
     const name = LIST_OF[pathname];
     const results = (name && lists[name]) ?? [];
     return Response.json({ count: results.length, results });
@@ -290,7 +301,7 @@ describe("NetBox import", () => {
     );
   });
 
-  it("releases NetBox's devices when the site leaves that NetBox", async () => {
+  it("keeps every link when a new address reaches the same NetBox", async () => {
     const source = netbox([device(12, "pc-0012"), device(13, "PC-0013")], []);
     const { t, admin, editor, siteId } = await importingSite(source);
     await editor.mutation(api.devices.create, {
@@ -300,27 +311,93 @@ describe("NetBox import", () => {
       identity: { name: "Accueil", hostname: "pc-0013", macs: [] },
     });
     await refresh(editor, siteId);
-    const reviews = async () =>
-      await t.run(async (ctx) => await ctx.db.query("importReviews").collect());
-    expect(await reviews()).toHaveLength(1);
+    const before = await inventory(editor, siteId);
 
-    // Another NetBox has another device under id 12.
-    await admin.action(api.sources.saveIntegration, {
+    expect(
+      await admin.action(api.sources.saveIntegration, {
+        siteId,
+        kind: "netbox",
+        baseUrl: "https://netbox-https.test",
+        enabled: true,
+        ignoreCertificateErrors: false,
+        token: TOKEN,
+      }),
+    ).toMatchObject({ ok: true });
+
+    expect(await inventory(editor, siteId)).toEqual(before);
+    expect(
+      await t.run(async (ctx) => await ctx.db.query("importReviews").collect()),
+    ).toHaveLength(1);
+    expect(await admin.query(api.netbox.settings, { siteId })).toMatchObject({
+      site: { id: 7 },
+      roles: [{ id: 4 }, { id: 5 }],
+    });
+    await refresh(editor, siteId);
+    expect(
+      (await inventory(editor, siteId)).map((d) => d.source?.missingSince),
+    ).toEqual([undefined, undefined]);
+  });
+
+  it("asks before another NetBox makes the linked devices absent, then links them by identity only", async () => {
+    const devices = [device(12, "pc-0012")];
+    const source = netbox(devices, [iface(12, MAC_A)]);
+    const { admin, editor, siteId } = await importingSite(source);
+    await refresh(editor, siteId);
+    const [old] = await inventory(editor, siteId);
+    const other = {
       siteId,
-      kind: "netbox",
+      kind: "netbox" as const,
       baseUrl: "https://other-netbox.test",
       enabled: true,
       ignoreCertificateErrors: false,
       token: TOKEN,
-    });
+    };
 
+    expect(await admin.action(api.sources.saveIntegration, other)).toEqual({
+      ok: true,
+      message: "Connexion réussie : NetBox 4.6.10.",
+      confirmOtherInstance: 1,
+    });
+    // Nothing was saved before the confirmation.
     expect(
-      (await inventory(editor, siteId)).map((d) => [d.name, d.source ?? null]),
+      (await admin.query(api.integrations.listForSite, { siteId }))[0]?.baseUrl,
+    ).toBe(NETBOX);
+
+    await admin.action(api.sources.saveIntegration, {
+      ...other,
+      confirmOtherInstance: true,
+    });
+    expect(await admin.query(api.netbox.settings, { siteId })).toEqual({
+      site: null,
+      roles: [],
+    });
+    const [absent] = await inventory(editor, siteId);
+    expect(absent.source).toMatchObject({
+      externalId: "12",
+      formerInstance: true,
+    });
+    expect(absent.source?.missingSince).toBeNumber();
+
+    // The other NetBox has its own device 12, and the old one under 30.
+    devices.splice(0, 1, device(12, "autre-12"), device(30, "pc-0012"));
+    source.lists.interfaces = [iface(30, MAC_A)];
+    await admin.mutation(api.netbox.saveSettings, {
+      siteId,
+      baseUrl: other.baseUrl,
+      settings: {
+        site: { id: 7, name: "Siège" },
+        roles: [{ id: 4, name: "Workstation", type: "pc" }],
+      },
+    });
+    await refresh(editor, siteId);
+    const after = await inventory(editor, siteId);
+    expect(
+      after.map((d) => [d.id === old.id, d.name, d.source?.externalId]),
     ).toEqual([
-      ["pc-0012", null],
-      ["pc-0013", null],
+      [false, "autre-12", "12"],
+      [true, "pc-0012", "30"],
     ]);
-    expect(await reviews()).toEqual([]);
+    expect(after.every((d) => d.source?.missingSince === undefined)).toBe(true);
   });
 
   it("brings NetBox's ports and cables, keeping the manual ports it names alike", async () => {
@@ -409,7 +486,8 @@ describe("NetBox import", () => {
     await refresh(editor, siteId);
     expect(await cables()).toEqual([]);
 
-    // Leaving that NetBox leaves its cabling in place, as manual.
+    // Leaving that NetBox for another leaves its cabling in place, as
+    // manual.
     if (laid) lists.cables.push(laid);
     await refresh(editor, siteId);
     await admin.action(api.sources.saveIntegration, {
@@ -419,6 +497,7 @@ describe("NetBox import", () => {
       enabled: true,
       ignoreCertificateErrors: false,
       token: TOKEN,
+      confirmOtherInstance: true,
     });
     expect((await cables()).map((cable) => cable.source ?? null)).toEqual([
       null,
