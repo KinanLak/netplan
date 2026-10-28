@@ -112,11 +112,10 @@ export const saveSettings = adminMutation({
   handler: async (ctx, args) => {
     await requireSite(ctx, args.siteId);
     const row = await librenmsRow(ctx, args.siteId);
-    if (!row)
-      throw new ConvexError("Configurez d'abord la connexion à LibreNMS.");
+    if (!row) throw new ConvexError("Connectez d'abord LibreNMS.");
     if (row.baseUrl !== args.baseUrl) {
       throw new ConvexError(
-        "L'adresse de LibreNMS a changé : rouvrez ce formulaire.",
+        "L'adresse de LibreNMS a changé, rouvrez ce formulaire.",
       );
     }
     const refused = librenmsSettingsError(args.settings);

@@ -1,6 +1,7 @@
 import { useAction, useQuery } from "convex/react";
 import { useOnlineMutation } from "@/hooks/use-online-mutation";
-import { useState } from "react";
+import { Link } from "@tanstack/react-router";
+import { Fragment, useState } from "react";
 import type { FunctionReturnType } from "convex/server";
 import { Button } from "@/components/ui/button";
 import {
@@ -55,15 +56,17 @@ export function LibreNMSSettingsSection({ siteId }: { siteId: string }) {
 
   return (
     <section className="space-y-4 border-t pt-6">
-      <div className="space-y-1">
-        <h2 className="font-medium">Switchs LibreNMS</h2>
-        <p className="text-sm text-muted-foreground">
-          NetPlan interroge dans LibreNMS l'équipement choisi pour chaque switch
-          ; plusieurs switchs d'une pile partagent le même. Un switch sans
-          équipement n'est pas interrogé.
-        </p>
-      </div>
-      {options ? (
+      <h2 className="font-medium">Switchs LibreNMS</h2>
+      {saved.switches.length === 0 ? (
+        // Nothing to pair until the site has a switch.
+        <Link
+          to="/inventory"
+          search={{ site: siteId }}
+          className="text-sm text-primary underline-offset-4 hover:underline"
+        >
+          Ouvrir l'inventaire
+        </Link>
+      ) : options ? (
         <SettingsForm
           siteId={siteId}
           saved={saved}
@@ -77,10 +80,14 @@ export function LibreNMSSettingsSection({ siteId }: { siteId: string }) {
             <Button
               type="button"
               variant="outline"
-              disabled={loading || saved.switches.length === 0}
+              disabled={loading}
               onClick={() => void load()}
             >
-              {loading ? "Lecture de LibreNMS…" : "Modifier"}
+              {loading
+                ? "Lecture de LibreNMS…"
+                : polledSwitches(saved.settings).length === 0
+                  ? "Associer les switchs"
+                  : "Modifier les associations"}
             </Button>
             {error ? <FieldError>{error}</FieldError> : null}
           </div>
@@ -90,46 +97,30 @@ export function LibreNMSSettingsSection({ siteId }: { siteId: string }) {
   );
 }
 
+/** Each switch and its LibreNMS device, once one is associated. */
 function Summary({ saved }: { saved: Saved }) {
-  if (saved.switches.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        Aucun switch dans l'inventaire de ce site.
-      </p>
-    );
-  }
   const deviceOf = new Map(
     polledSwitches(saved.settings).map(({ switchId, device }) => [
       switchId,
       device,
     ]),
   );
-  const polled = saved.switches.filter((device) => deviceOf.has(device.id));
-  if (polled.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        Aucun switch n'a d'équipement LibreNMS : rien n'est interrogé.
-      </p>
-    );
-  }
-  const left = saved.switches.length - polled.length;
+  if (deviceOf.size === 0) return null;
   return (
-    <div className="space-y-1 text-sm">
-      <ul className="space-y-0.5 text-muted-foreground">
-        {polled.map((device) => (
-          <li key={device.id}>
-            {device.name} → {deviceOf.get(device.id)?.name}
-          </li>
-        ))}
-      </ul>
-      {left > 0 ? (
-        <p className="text-muted-foreground">
-          {left === 1
-            ? "1 switch n'est pas interrogé."
-            : `${left} switchs ne sont pas interrogés.`}
-        </p>
-      ) : null}
-    </div>
+    <dl className="grid max-w-md grid-cols-2 gap-x-6 gap-y-1 text-sm">
+      {saved.switches.map((device) => (
+        <Fragment key={device.id}>
+          <dt className="text-muted-foreground">{device.name}</dt>
+          <dd
+            className={
+              deviceOf.has(device.id) ? undefined : "text-muted-foreground"
+            }
+          >
+            {deviceOf.get(device.id)?.name ?? "Non interrogé"}
+          </dd>
+        </Fragment>
+      ))}
+    </dl>
   );
 }
 
@@ -297,29 +288,24 @@ function SettingsForm({
                   </ComboboxContent>
                 </Combobox>
                 {suggestion && id !== suggestion.id ? (
-                  <p className="text-xs text-muted-foreground">
-                    Suggéré : {suggestion.name}{" "}
-                    {/* Spaced and underlined, so it reads as a link apart
-                        from the name. */}
-                    <button
-                      type="button"
-                      className="ml-1.5 font-medium text-foreground underline underline-offset-4 hover:text-primary"
-                      onClick={() =>
-                        setChosen((all) => ({
-                          ...all,
-                          [device.id]: suggestion.id,
-                        }))
-                      }
-                    >
-                      Utiliser
-                    </button>
-                  </p>
+                  <button
+                    type="button"
+                    className="text-xs text-primary underline-offset-4 hover:underline"
+                    onClick={() =>
+                      setChosen((all) => ({
+                        ...all,
+                        [device.id]: suggestion.id,
+                      }))
+                    }
+                  >
+                    Utiliser {suggestion.name}
+                  </button>
                 ) : null}
+                {/* Normal for a stack, a slip otherwise. */}
                 {others.length > 0 ? (
                   <p className="text-xs text-muted-foreground">
                     Aussi choisi pour{" "}
-                    {others.map((other) => other.name).join(", ")} : normal pour
-                    une pile.
+                    {others.map((other) => other.name).join(", ")}
                   </p>
                 ) : null}
                 {gone && !listed.has(gone.id) && id === gone.id ? (

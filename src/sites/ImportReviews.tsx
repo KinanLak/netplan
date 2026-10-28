@@ -3,6 +3,8 @@ import { useOnlineMutation } from "@/hooks/use-online-mutation";
 import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
 import { toast } from "sonner";
+import { LockIcon } from "@hugeicons/core-free-icons";
+import { IconNote } from "@/components/icon-note";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -31,15 +33,9 @@ export function ImportReviews({ siteId }: { siteId: string }) {
       aria-labelledby="import-reviews"
       className="space-y-3 rounded-lg border p-4"
     >
-      <div className="space-y-1">
-        <h2 id="import-reviews" className="font-medium">
-          À vérifier après l'import NetBox ({reviews.length})
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          Ces équipements NetBox ressemblent à des équipements saisis à la main.
-          Les rattacher garde leur emplacement, leurs notes et leurs câbles.
-        </p>
-      </div>
+      <h2 id="import-reviews" className="font-medium">
+        À vérifier après l'import NetBox ({reviews.length})
+      </h2>
       <ul className="divide-y">
         {reviews.map((review) => (
           <ReviewItem
@@ -154,13 +150,11 @@ function ReviewItem({ siteId, review }: { siteId: string; review: Review }) {
           >
             {review.kind === "suggestion"
               ? "Garder séparés"
-              : "Nouvel équipement"}
+              : "Importer séparément"}
           </Button>
         </div>
       ) : (
-        <p className="text-sm text-muted-foreground">
-          Un administrateur doit trancher.
-        </p>
+        <IconNote icon={LockIcon}>Réservé aux administrateurs</IconNote>
       )}
     </li>
   );

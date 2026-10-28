@@ -17,12 +17,7 @@ export function CollectionSection({ siteId }: { siteId: string }) {
 
   return (
     <section className="space-y-4 border-t pt-6">
-      <div className="space-y-1">
-        <h2 className="font-medium">Dernières collectes</h2>
-        <p className="text-sm text-muted-foreground">
-          Chaque collecte interroge les intégrations actives, NetBox d'abord.
-        </p>
-      </div>
+      <h2 className="font-medium">Dernières collectes</h2>
       <CollectionFreshness
         siteId={siteId}
         linkToSettings={false}
@@ -30,23 +25,24 @@ export function CollectionSection({ siteId }: { siteId: string }) {
       />
       <div className="space-y-2 text-sm">
         {status.running ? (
-          <p>
-            Collecte {origin(status.running.manual)} en cours depuis{" "}
-            <Time at={status.running.startedAt} />.
+          <p className="flex flex-wrap gap-x-2">
+            <span>Collecte {origin(status.running.manual)} en cours</span>
+            <span className="text-muted-foreground">
+              depuis <Time at={status.running.startedAt} />
+            </span>
           </p>
         ) : null}
         {status.last ? (
           <div className="space-y-1">
-            <p>
-              Dernière collecte {origin(status.last.manual)} :{" "}
-              <Time at={status.last.startedAt} />.
+            <p className="flex flex-wrap gap-x-2">
+              <span>Dernière collecte {origin(status.last.manual)}</span>
+              <span className="text-muted-foreground">
+                <Time at={status.last.startedAt} />
+              </span>
             </p>
             <ul className="space-y-1">
               {status.last.steps.map((step) => (
-                <li
-                  key={step.source}
-                  className="flex items-baseline gap-2 text-muted-foreground"
-                >
+                <li key={step.source} className="flex items-baseline gap-2">
                   <span
                     aria-hidden
                     className={cn(
@@ -54,8 +50,13 @@ export function CollectionSection({ siteId }: { siteId: string }) {
                       step.ok ? "bg-up" : "bg-down",
                     )}
                   />
-                  <span>
-                    {INTEGRATION_LABELS[step.source]} : {step.message}
+                  <span className="min-w-0">
+                    <span className="font-medium">
+                      {INTEGRATION_LABELS[step.source]}
+                    </span>
+                    <span className="ms-2 text-muted-foreground">
+                      {step.message}
+                    </span>
                     {/* The step counts; each switch in trouble says why. */}
                     {(step.switches ?? [])
                       .filter((entry) => !entry.ok || entry.notes.length > 0)
@@ -64,7 +65,10 @@ export function CollectionSection({ siteId }: { siteId: string }) {
                           key={`${entry.name}-${index}`}
                           className="block ps-4"
                         >
-                          {entry.name} : {entry.notes.join(" ")}
+                          {entry.name}
+                          <span className="ms-2 text-muted-foreground">
+                            {entry.notes.join(" ")}
+                          </span>
                         </span>
                       ))}
                   </span>
@@ -72,15 +76,9 @@ export function CollectionSection({ siteId }: { siteId: string }) {
               ))}
             </ul>
           </div>
-        ) : (
-          <p className="text-muted-foreground">
-            Aucune collecte pour l'instant.
-          </p>
-        )}
+        ) : null}
         {status.failures > 1 ? (
-          <p className="text-muted-foreground">
-            {status.failures} échecs de suite : les essais s'espacent.
-          </p>
+          <p className="text-down">{status.failures} échecs de suite</p>
         ) : null}
       </div>
     </section>

@@ -9,7 +9,7 @@ import { useOnlineMutation } from "@/hooks/use-online-mutation";
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import type { FunctionReturnType } from "convex/server";
-import { toast } from "sonner";
+import { Archive02Icon, LockIcon } from "@hugeicons/core-free-icons";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,9 +22,9 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { IconNote } from "@/components/icon-note";
 import {
   Field,
-  FieldDescription,
   FieldError,
   FieldGroup,
   FieldLabel,
@@ -48,7 +48,6 @@ import { Time } from "@/components/time";
 import {
   MAX_INTERVAL_MINUTES,
   MIN_INTERVAL_MINUTES,
-  INTERVAL_RANGE,
   SITE_NAME_TAKEN,
   siteSettingsProblem,
 } from "@/sites/settings";
@@ -72,9 +71,6 @@ function SitePage() {
     return (
       <div className="space-y-3">
         <h1 className="text-xl font-semibold">Site introuvable</h1>
-        <p className="text-sm text-muted-foreground">
-          Ce site n'existe pas ou a été supprimé.
-        </p>
         <Link
           to="/admin/sites"
           className="text-sm text-primary underline underline-offset-4"
@@ -153,9 +149,8 @@ function SiteContent({ site }: { site: Site }) {
       <div id="collections" className="scroll-mt-14">
         <CollectionSection siteId={site.id} />
       </div>
-      <div id="danger" className="scroll-mt-14 space-y-8">
-        <ArchiveSite site={site} />
-        <DeleteSite site={site} />
+      <div id="danger" className="scroll-mt-14">
+        <DangerZone site={site} />
       </div>
     </div>
   );
@@ -303,9 +298,6 @@ function SiteSettingsForm({ site }: { site: Site }) {
 
       <FieldSet disabled={pending}>
         <FieldLegend>Collecte</FieldLegend>
-        <FieldDescription>
-          NetPlan interroge les intégrations du site à ce rythme, jour et nuit.
-        </FieldDescription>
         <FieldGroup>
           <Field orientation="horizontal">
             <Checkbox
@@ -328,7 +320,7 @@ function SiteSettingsForm({ site }: { site: Site }) {
               onCheckedChange={(checked) => change({ manualRefresh: checked })}
             />
             <FieldLabel htmlFor="site-manual">
-              Les éditeurs peuvent lancer une actualisation
+              Autoriser les éditeurs à actualiser
             </FieldLabel>
           </Field>
 
@@ -350,12 +342,7 @@ function SiteSettingsForm({ site }: { site: Site }) {
                 change({ intervalMinutes: event.target.value })
               }
             />
-            {error("intervalMinutes", "site-interval") ?? (
-              <FieldDescription>
-                {INTERVAL_RANGE.charAt(0).toUpperCase()}
-                {INTERVAL_RANGE.slice(1)}.
-              </FieldDescription>
-            )}
+            {error("intervalMinutes", "site-interval")}
           </Field>
         </FieldGroup>
       </FieldSet>
@@ -376,20 +363,19 @@ function SiteSettingsForm({ site }: { site: Site }) {
   );
 }
 
-/** What an archived site is, at the top of its page, with the way back. */
+/** An archived site, at the top of its page, with the way back. */
 function ArchivedNotice({ site }: { site: Site }) {
   const now = useNow(60_000);
   return (
-    <p className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-warning bg-warning-background p-3 text-sm">
-      <span>
+    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-warning bg-warning-background p-3">
+      <IconNote icon={Archive02Icon} className="text-foreground">
         Site archivé{" "}
         {site.archivedAt === null ? null : (
           <Time at={site.archivedAt} now={now} format="age" />
-        )}{" "}
-        : absent du sélecteur, en lecture seule et sans collecte.
-      </span>
+        )}
+      </IconNote>
       <SetArchivedButton site={site} archived={false} />
-    </p>
+    </div>
   );
 }
 
@@ -425,7 +411,7 @@ function SetArchivedButton({
         disabled={pending}
         onClick={() => (archived ? setConfirming(true) : void run())}
       >
-        {archived ? "Archiver le site" : "Désarchiver"}
+        {archived ? "Archiver le site" : "Désarchiver le site"}
       </Button>
       {error ? <FieldError>{error}</FieldError> : null}
       <AlertDialog open={confirming} onOpenChange={setConfirming}>
@@ -433,10 +419,7 @@ function SetArchivedButton({
           <AlertDialogHeader>
             <AlertDialogTitle>Archiver « {site.name} » ?</AlertDialogTitle>
             <AlertDialogDescription>
-              Le site disparaît du sélecteur de tous les utilisateurs. Son plan
-              et son inventaire restent consultables par leur lien, mais plus
-              personne ne peut les modifier, et la collecte s'arrête. Rien n'est
-              effacé : le désarchiver le rend tel quel.
+              Plus personne ne peut modifier son plan.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -447,7 +430,7 @@ function SetArchivedButton({
                 void run();
               }}
             >
-              Archiver
+              Archiver le site
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -456,17 +439,35 @@ function SetArchivedButton({
   );
 }
 
-/** Archiving keeps a site that is no longer used, plan and all (C8). */
-function ArchiveSite({ site }: { site: Site }) {
-  if (site.archived) return null;
+/**
+ * Archiving keeps a site that is no longer used, plan and all (C8); deleting
+ * waits for its buildings to be gone.
+ */
+function DangerZone({ site }: { site: Site }) {
   return (
-    <section className="space-y-2 border-t pt-6">
-      <h2 className="font-medium">Archiver le site</h2>
-      <p className="text-sm text-muted-foreground">
-        Pour un site qui ne sert plus : il sort du sélecteur, son plan passe en
-        lecture seule et la collecte s'arrête. Réversible, sans rien effacer.
-      </p>
-      <SetArchivedButton site={site} archived />
+    <section
+      aria-label="Archivage et suppression"
+      className="space-y-3 border-t pt-6"
+    >
+      <div className="flex flex-wrap items-center gap-3">
+        {site.archived ? null : <SetArchivedButton site={site} archived />}
+        <DeleteSite site={site} />
+      </div>
+      {site.buildingCount > 0 ? (
+        <IconNote icon={LockIcon}>
+          Supprimez d'abord{" "}
+          {site.buildingCount === 1
+            ? "son bâtiment"
+            : `ses ${site.buildingCount} bâtiments`}{" "}
+          <Link
+            to="/"
+            search={{ site: site.id }}
+            className="ms-1 text-primary underline-offset-4 hover:underline"
+          >
+            Ouvrir le plan
+          </Link>
+        </IconNote>
+      ) : null}
     </section>
   );
 }
@@ -476,7 +477,6 @@ function DeleteSite({ site }: { site: Site }) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const blocked = site.buildingCount > 0;
 
   const confirm = async () => {
     setError(null);
@@ -485,40 +485,16 @@ function DeleteSite({ site }: { site: Site }) {
       setOpen(false);
       // The page it leaves is gone: nothing unsaved is left to warn about.
       await navigate({ to: "/admin/sites", ignoreBlocker: true });
-      // The list it lands on no longer names it.
-      toast.success(`Site « ${site.name} » supprimé.`);
     } catch (failure) {
       setError(failureMessage(failure, "admin"));
     }
   };
 
   return (
-    <section className="space-y-2 border-t pt-6">
-      <h2 className="font-medium">Supprimer le site</h2>
-      {blocked ? (
-        <p className="text-sm text-muted-foreground">
-          Ce site a encore{" "}
-          {site.buildingCount === 1
-            ? "un bâtiment, listé plus haut. Supprimez-le"
-            : `${site.buildingCount} bâtiments, listés plus haut. Supprimez-les`}{" "}
-          d'abord{" "}
-          <Link
-            to="/"
-            search={{ site: site.id }}
-            className="underline underline-offset-4 hover:text-foreground"
-          >
-            sur le plan
-          </Link>{" "}
-          : un site ne part jamais avec son plan.
-        </p>
-      ) : (
-        <p className="text-sm text-muted-foreground">
-          Le site n'a aucun bâtiment ; le supprimer ne retire rien du plan.
-        </p>
-      )}
+    <>
       <Button
         variant="destructive"
-        disabled={blocked}
+        disabled={site.buildingCount > 0}
         onClick={() => setOpen(true)}
       >
         Supprimer le site
@@ -534,8 +510,7 @@ function DeleteSite({ site }: { site: Site }) {
           <AlertDialogHeader>
             <AlertDialogTitle>Supprimer « {site.name} » ?</AlertDialogTitle>
             <AlertDialogDescription>
-              Le site disparaît du sélecteur de tous les utilisateurs, avec ses
-              intégrations.
+              Le site et ses intégrations sont définitivement supprimés.
             </AlertDialogDescription>
           </AlertDialogHeader>
           {/* In the dialog, which a refusal keeps open. */}
@@ -546,11 +521,11 @@ function DeleteSite({ site }: { site: Site }) {
               variant="destructive"
               onClick={() => void confirm()}
             >
-              Supprimer
+              Supprimer le site
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </section>
+    </>
   );
 }

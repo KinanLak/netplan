@@ -1,6 +1,6 @@
 // How fresh a site's data is and when it is next collected (ADR 0026),
 // computed against the page's clock so it ages without the query re-running.
-import { formatAge, formatWhen } from "../lib/time";
+import { formatAge, formatTime, formatWhen } from "../lib/time";
 import { nextRunAt } from "./cadence";
 import { INTEGRATION_LABELS } from "./integrations";
 import type { IntegrationKind } from "./integrations";
@@ -74,7 +74,10 @@ export const nextRun = (freshness: SiteFreshness, now: number): NextRun => {
   return now - due < DUE_GRACE_MS ? { kind: "imminent" } : { kind: "waiting" };
 };
 
-/** `timeZone` is the reader's, pinned only by tests. */
+/**
+ * `timeZone` is the reader's, pinned only by tests. Empty when the headline
+ * already says it: a plan drawn by hand is never collected.
+ */
 export const describeNextRun = (
   next: NextRun,
   now: number,
@@ -84,15 +87,20 @@ export const describeNextRun = (
     case "running":
       return "Collecte en cours…";
     case "paused":
-      return "Collecte suspendue sur le serveur";
+      return "Collecte suspendue";
     case "archived":
       return "Plan en lecture seule";
     case "no-source":
-      return "Aucune intégration active";
+      return "";
     case "manual-only":
       return "Collecte automatique désactivée";
-    case "at":
-      return `Prochaine collecte : ${formatWhen(next.at, now, timeZone)}`;
+    case "at": {
+      const when = formatWhen(next.at, now, timeZone);
+      // `14:05` today, `jeu. 22 oct., 14:05` another day.
+      return when === formatTime(next.at, timeZone)
+        ? `Prochaine collecte à ${when}`
+        : `Prochaine collecte le ${when}`;
+    }
     case "imminent":
       return "Prochaine collecte imminente";
     case "waiting":
@@ -112,9 +120,7 @@ export const describeFreshness = (
   timeZone?: string,
 ): { headline: string; tone: FreshnessTone } => {
   const { lastSuccessAt } = freshness;
-  if (freshness.archived) {
-    return { headline: "Site archivé : aucune collecte", tone: "none" };
-  }
+  if (freshness.archived) return { headline: "Site archivé", tone: "none" };
   if (!freshness.hasSources) {
     return { headline: "Plan dessiné à la main", tone: "none" };
   }
@@ -126,13 +132,13 @@ export const describeFreshness = (
     if (last && last.succeeded.length > 0 && last.failed.length === 0) {
       const age = formatAge(last.finishedAt, now, timeZone);
       return late
-        ? { headline: `Données en retard : ${age}`, tone: "late" }
+        ? { headline: `Données en retard, collectées ${age}`, tone: "late" }
         : { headline: `Données collectées ${age}`, tone: "fresh" };
     }
     // A cycle with one source read did bring data, only not all of it.
     if (last && last.succeeded.length > 0) {
       return {
-        headline: `Collecte partielle ${formatAge(last.finishedAt, now, timeZone)} : ${listSources(last.failed)} en échec`,
+        headline: `Collecte partielle ${formatAge(last.finishedAt, now, timeZone)}, ${listSources(last.failed)} en échec`,
         tone: late ? "late" : "partial",
       };
     }
@@ -143,7 +149,7 @@ export const describeFreshness = (
   }
   const age = formatAge(lastSuccessAt, now, timeZone);
   return late
-    ? { headline: `Données en retard : ${age}`, tone: "late" }
+    ? { headline: `Données en retard, collectées ${age}`, tone: "late" }
     : { headline: `Données collectées ${age}`, tone: "fresh" };
 };
 

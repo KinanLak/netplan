@@ -72,7 +72,7 @@ export const importSettings = internalQuery({
     if (!row?.netbox?.site) {
       return {
         due: false as const,
-        skip: "Aucun site NetBox choisi : rien n'est importé.",
+        skip: "Aucun site NetBox choisi.",
       };
     }
     const since = Date.now() - (cycle.netboxImportedAt ?? 0);
@@ -152,7 +152,7 @@ export const importFromNetBox = async (
   if (noRole && counts.missing === 0) {
     return {
       ok: true,
-      message: "Aucun rôle NetBox n'a de type : rien n'est importé.",
+      message: "Aucun rôle NetBox à importer.",
     };
   }
   return { ok: true, message: importSummary(counts) };

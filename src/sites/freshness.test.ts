@@ -93,11 +93,11 @@ describe("descriptions", () => {
   it("shows the time, and its day when it is not today", () => {
     const now = WEDNESDAY_10H;
     expect(describeNextRun({ kind: "at", at: now + 5 * MINUTE }, now, TZ)).toBe(
-      "Prochaine collecte : 10:05",
+      "Prochaine collecte à 10:05",
     );
     expect(
       describeNextRun({ kind: "at", at: now + 24 * 60 * MINUTE }, now, TZ),
-    ).toMatch(/^Prochaine collecte : jeu\. 15 oct\.,? 10:00$/);
+    ).toMatch(/^Prochaine collecte le jeu\. 15 oct\.,? 10:00$/);
   });
 });
 
@@ -108,7 +108,7 @@ describe("describeFreshness", () => {
       tone: "fresh",
     });
     expect(describeFreshness(site({ failures: 2 }), WEDNESDAY_10H)).toEqual({
-      headline: "Données en retard : à l'instant",
+      headline: "Données en retard, collectées à l'instant",
       tone: "late",
     });
   });
@@ -150,7 +150,7 @@ describe("describeFreshness", () => {
       },
     });
     expect(describeFreshness(archived, WEDNESDAY_10H)).toEqual({
-      headline: "Site archivé : aucune collecte",
+      headline: "Site archivé",
       tone: "none",
     });
     expect(failedAttemptAt(archived)).toBeNull();
@@ -171,7 +171,7 @@ describe("describeFreshness", () => {
         WEDNESDAY_10H + 5 * MINUTE,
       ),
     ).toEqual({
-      headline: "Collecte partielle il y a 5 min : LibreNMS en échec",
+      headline: "Collecte partielle il y a 5 min, LibreNMS en échec",
       tone: "partial",
     });
   });

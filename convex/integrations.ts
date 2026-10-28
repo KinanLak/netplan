@@ -42,6 +42,7 @@ import {
 import {
   INTEGRATION_LABELS,
   normalizeBaseUrl,
+  TOKEN_FOR_NEW_ADDRESS,
   tokenError,
 } from "../src/sites/integrations";
 import type { IntegrationKind } from "../src/sites/integrations";
@@ -72,7 +73,7 @@ const keys = async () => {
     return await configuredKeys();
   } catch {
     throw new ConvexError(
-      "Le serveur n'a pas de clé de chiffrement valide (NETPLAN_SECRET_KEY) : voir la documentation d'exploitation.",
+      "La clé de chiffrement du serveur (NETPLAN_SECRET_KEY) est invalide.",
     );
   }
 };
@@ -95,8 +96,7 @@ const decryptStored = async (
 
 const UNREADABLE_TOKEN: ConnectionCheck = {
   ok: false,
-  message:
-    "Le jeton enregistré ne peut plus être déchiffré : saisissez-le à nouveau.",
+  message: "Le jeton enregistré est illisible.",
 };
 
 export const listForSite = adminQuery({
@@ -174,11 +174,7 @@ const resolveDraft = async (
     return { baseUrl, token: draft.token.trim(), stored, unchanged: false };
   }
   if (!stored) throw new ConvexError("Saisissez le jeton.");
-  if (stored.baseUrl !== baseUrl) {
-    throw new ConvexError(
-      "Saisissez à nouveau le jeton : il n'est envoyé qu'à l'adresse pour laquelle il a été saisi.",
-    );
-  }
+  if (stored.baseUrl !== baseUrl) throw new ConvexError(TOKEN_FOR_NEW_ADDRESS);
   return {
     baseUrl,
     // Read only for a test: switching a source off needs no key.
@@ -460,13 +456,11 @@ export const store = internalMutation({
       existing.updatedAt !== args.expectedVersion
     ) {
       throw new ConvexError(
-        "Cette connexion a été modifiée entre-temps : rechargez la page.",
+        "Cette connexion a changé entre-temps, rechargez la page.",
       );
     }
     if (!token && existing.baseUrl !== baseUrl) {
-      throw new ConvexError(
-        "Saisissez à nouveau le jeton : il n'est envoyé qu'à l'adresse pour laquelle il a été saisi.",
-      );
+      throw new ConvexError(TOKEN_FOR_NEW_ADDRESS);
     }
     const changed =
       token !== undefined ||

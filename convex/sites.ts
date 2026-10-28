@@ -353,9 +353,7 @@ export const remove = adminMutation({
   handler: async (ctx, { siteId }) => {
     const site = await requireSite(ctx, siteId);
     if ((await countBuildings(ctx, siteId)) > 0) {
-      throw new ConvexError(
-        "Ce site a encore des bâtiments : supprimez-les d'abord.",
-      );
+      throw new ConvexError("Supprimez d'abord les bâtiments de ce site.");
     }
     const integrations = await ctx.db
       .query("integrations")

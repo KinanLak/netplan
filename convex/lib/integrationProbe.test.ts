@@ -40,7 +40,7 @@ describe("probeIntegration", () => {
     const calls = answer(json({ "netbox-version": "4.6.10" }));
     expect(await probeIntegration(source("netbox", NB), noWait)).toEqual({
       ok: true,
-      message: "Connexion réussie : NetBox 4.6.10.",
+      message: "Connecté à NetBox 4.6.10.",
     });
 
     const [url, init] = calls[0] ?? [];
@@ -67,7 +67,7 @@ describe("probeIntegration", () => {
     );
     expect(await probeIntegration(source("librenms", NMS), noWait)).toEqual({
       ok: true,
-      message: "Connexion réussie : LibreNMS 25.9.1.",
+      message: "Connecté à LibreNMS 25.9.1.",
     });
     const [url, init] = calls[0] ?? [];
     expect(url).toBe("https://nms.test/api/v0/system");
@@ -124,7 +124,7 @@ describe("probeIntegration", () => {
     expect(
       (await probeIntegration(source("librenms", NMS), noWait)).message,
     ).toBe(
-      "Le certificat TLS de LibreNMS est refusé (ERR_TLS_CERT_ALTNAME_INVALID) : corrigez-le, ou cochez « Ignorer les erreurs de certificat TLS » dans la connexion.",
+      "Le certificat TLS de LibreNMS est refusé (ERR_TLS_CERT_ALTNAME_INVALID).",
     );
 
     const timeout = new DOMException("timed out", "TimeoutError");

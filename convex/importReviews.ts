@@ -117,7 +117,7 @@ export const resolve = editorMutation({
       }
       target = await deviceRow(ctx, deviceId);
       if (target?.siteId !== siteId || !reviewable(target)) {
-        throw new ConvexError("Cet équipement a changé : rechargez la page.");
+        throw new ConvexError("Cet équipement a changé entre-temps.");
       }
     }
 

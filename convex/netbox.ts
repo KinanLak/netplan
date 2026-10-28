@@ -44,11 +44,10 @@ export const saveSettings = adminMutation({
   handler: async (ctx, args) => {
     await requireSite(ctx, args.siteId);
     const row = await netboxRow(ctx, args.siteId);
-    if (!row)
-      throw new ConvexError("Configurez d'abord la connexion à NetBox.");
+    if (!row) throw new ConvexError("Connectez d'abord NetBox.");
     if (row.baseUrl !== args.baseUrl) {
       throw new ConvexError(
-        "L'adresse de NetBox a changé : rouvrez ce formulaire.",
+        "L'adresse de NetBox a changé, rouvrez ce formulaire.",
       );
     }
     const refused = netboxSettingsError(args.settings);
@@ -75,8 +74,7 @@ export const setPush = adminMutation({
   handler: async (ctx, { siteId, push }) => {
     await requireSite(ctx, siteId);
     const row = await netboxRow(ctx, siteId);
-    if (!row)
-      throw new ConvexError("Configurez d'abord la connexion à NetBox.");
+    if (!row) throw new ConvexError("Connectez d'abord NetBox.");
     const current = row.netbox ?? EMPTY_NETBOX_SETTINGS;
     // Without a site and a role nothing is imported, so nothing would be
     // written: turning it on would only look like it works.

@@ -213,7 +213,7 @@ const collectFrom = async (
       source === "netbox"
         ? await importFromNetBox(ctx, siteId, cycleId, connection)
         : await collectFromLibreNMS(ctx, siteId, cycleId, connection);
-    // « Connexion réussie » says nothing once the step reports what it read.
+    // « Connecté à … » says nothing once the step reports what it read.
     return {
       ...collected,
       source,

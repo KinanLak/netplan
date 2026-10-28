@@ -27,27 +27,23 @@ export function BuildingsSection({ siteId }: { siteId: string }) {
           search={{ site: siteId }}
           className="text-sm text-primary underline-offset-4 hover:underline"
         >
-          Ouvrir sur le plan
+          {buildings.length === 0
+            ? "Créer un bâtiment sur le plan"
+            : "Ouvrir sur le plan"}
         </Link>
       </div>
-      {buildings.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          Aucun bâtiment. Les bâtiments et leurs étages se créent sur le plan.
-        </p>
-      ) : (
+      {buildings.length === 0 ? null : (
         <ul className="divide-y rounded-lg border text-sm">
           {buildings.map((building) => (
             <li key={building.id} className="space-y-1 px-4 py-3">
               <p className="font-medium">{building.name}</p>
-              <p className="text-muted-foreground">
-                {building.floors.length === 0
-                  ? "Aucun étage"
-                  : building.floors
-                      .map(
-                        (floor) => `${floor.name} (${devices(floor.devices)})`,
-                      )
-                      .join(" · ")}
-              </p>
+              {building.floors.length > 0 ? (
+                <p className="text-muted-foreground">
+                  {building.floors
+                    .map((floor) => `${floor.name} (${devices(floor.devices)})`)
+                    .join(" · ")}
+                </p>
+              ) : null}
             </li>
           ))}
         </ul>

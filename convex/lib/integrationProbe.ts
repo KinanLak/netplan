@@ -73,7 +73,7 @@ const failureMessage = (label: string, status: number): string => {
   }
   if (status === 404) return `Aucune API ${label} à cette adresse (404).`;
   if (status >= 300 && status < 400) {
-    return `L'adresse redirige (${status}) : saisissez l'adresse finale de ${label}.`;
+    return `L'adresse redirige ailleurs (${status}).`;
   }
   return `${label} a répondu ${status}.`;
 };
@@ -89,7 +89,7 @@ export const unansweredMessage = (
   }
   const refusal = certificateRefusal(error);
   if (refusal !== null) {
-    return `Le certificat TLS de ${label} est refusé (${refusal}) : corrigez-le, ou cochez « Ignorer les erreurs de certificat TLS » dans la connexion.`;
+    return `Le certificat TLS de ${label} est refusé (${refusal}).`;
   }
   return `${label} est injoignable à cette adresse.`;
 };
@@ -150,5 +150,5 @@ export async function probeIntegration(
       message: `Cette adresse ne répond pas comme ${label}.`,
     };
   }
-  return { ok: true, message: `Connexion réussie : ${label} ${version}.` };
+  return { ok: true, message: `Connecté à ${label} ${version}.` };
 }

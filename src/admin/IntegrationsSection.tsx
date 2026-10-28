@@ -16,9 +16,10 @@ import {
 import { Time } from "@/components/time";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Alert02Icon } from "@hugeicons/core-free-icons";
+import { IconNote } from "@/components/icon-note";
 import {
   Field,
-  FieldDescription,
   FieldError,
   FieldGroup,
   FieldLabel,
@@ -34,6 +35,7 @@ import {
   INTEGRATION_KINDS,
   INTEGRATION_LABELS,
   normalizeBaseUrl,
+  TOKEN_FOR_NEW_ADDRESS,
   tokenError,
 } from "@/sites/integrations";
 import type { IntegrationKind } from "@/sites/integrations";
@@ -54,12 +56,7 @@ export function IntegrationsSection({ siteId }: { siteId: string }) {
   if (integrations === undefined) return null;
   return (
     <section className="space-y-6 border-t pt-6">
-      <div className="space-y-1">
-        <h2 className="font-medium">Intégrations</h2>
-        <p className="text-sm text-muted-foreground">
-          Les jetons sont chiffrés sur le serveur et ne sont jamais réaffichés.
-        </p>
-      </div>
+      <h2 className="font-medium">Intégrations</h2>
       {INTEGRATION_KINDS.map((kind) => {
         const integration = integrations.find((row) => row.kind === kind);
         return (
@@ -140,10 +137,7 @@ function IntegrationForm({
     } else if (integration === null) {
       return { field: "token", text: "Saisissez le jeton." };
     } else if (normalized.url !== integration.baseUrl) {
-      return {
-        field: "token",
-        text: "Saisissez à nouveau le jeton : il n'est envoyé qu'à l'adresse pour laquelle il a été saisi.",
-      };
+      return { field: "token", text: TOKEN_FOR_NEW_ADDRESS };
     }
     return null;
   };
@@ -185,11 +179,9 @@ function IntegrationForm({
         if ("url" in normalized) setBaseUrl(normalized.url);
         flashSaved();
       }
+      // A refused test leaves the form as typed, which reads as saved.
       setResult(
-        check && {
-          ...check,
-          ...(!check.ok && { note: "Rien n'a été enregistré." }),
-        },
+        check && { ...check, ...(!check.ok && { note: "Non enregistré." }) },
       );
     } catch (failure) {
       setError({ field: null, text: failureMessage(failure, "admin") });
@@ -208,11 +200,7 @@ function IntegrationForm({
     setError(null);
     setResult(null);
     try {
-      const check = await test(draft());
-      setResult({
-        ...check,
-        ...(connectionChanged && { note: "Pas encore enregistré." }),
-      });
+      setResult(await test(draft()));
     } catch (failure) {
       setError({ field: null, text: failureMessage(failure, "admin") });
     } finally {
@@ -234,7 +222,21 @@ function IntegrationForm({
         <div className="flex items-center justify-between gap-4">
           <FieldLegend>{label}</FieldLegend>
           {integration ? (
-            <RemoveIntegration siteId={siteId} kind={kind} />
+            <RemoveIntegration
+              siteId={siteId}
+              integration={integration}
+              onSuspend={async () => {
+                // The saved connection as it is, collection off: no test.
+                await save({
+                  siteId,
+                  kind,
+                  baseUrl: integration.baseUrl,
+                  ignoreCertificateErrors: integration.ignoreCertificateErrors,
+                  enabled: false,
+                });
+                setEnabled(false);
+              }}
+            />
           ) : null}
         </div>
         <ConnectionStatus
@@ -268,11 +270,7 @@ function IntegrationForm({
               id={id("token")}
               type="password"
               autoComplete="off"
-              placeholder={
-                integration
-                  ? "Jeton enregistré : laissez vide pour le garder"
-                  : undefined
-              }
+              placeholder={integration ? "Jeton enregistré" : undefined}
               value={token}
               aria-invalid={fieldError("token") !== null}
               aria-describedby={
@@ -287,10 +285,6 @@ function IntegrationForm({
               <FieldError id={id("token-error")}>
                 {fieldError("token")}
               </FieldError>
-            ) : kind === "netbox" ? (
-              <FieldDescription>
-                Un jeton en lecture seule suffit.
-              </FieldDescription>
             ) : null}
           </Field>
           <Field orientation="horizontal">
@@ -304,7 +298,7 @@ function IntegrationForm({
               }}
             />
             <FieldLabel htmlFor={id("enabled")}>
-              Utiliser {label} dans la collecte
+              Collecter depuis {label}
             </FieldLabel>
           </Field>
           <Field orientation="horizontal">
@@ -322,14 +316,9 @@ function IntegrationForm({
             </FieldLabel>
           </Field>
           {ignoreCertificateErrors ? (
-            <p
-              role="note"
-              className="rounded-lg border border-warning bg-warning-background p-3 text-sm"
-            >
-              Rien ne prouve plus que le serveur qui répond à cette adresse est
-              bien {label} : le jeton lui est envoyé quand même. À réserver à un
-              réseau de confiance, le temps de corriger le certificat.
-            </p>
+            <IconNote icon={Alert02Icon} tone="warning">
+              Le jeton peut partir vers un autre serveur que {label}
+            </IconNote>
           ) : null}
         </FieldGroup>
       </FieldSet>
@@ -349,7 +338,7 @@ function IntegrationForm({
           disabled={pending !== null || baseUrl.trim() === ""}
           onClick={() => void runTest()}
         >
-          Tester
+          Tester la connexion
         </Button>
         {error?.field === null ? <FieldError>{error.text}</FieldError> : null}
       </div>
@@ -390,14 +379,10 @@ function OtherNetBoxInstance({
         <AlertDialogHeader>
           <AlertDialogTitle>Changer d'instance NetBox ?</AlertDialogTitle>
           <AlertDialogDescription>
-            Cette adresse ne mène pas au NetBox enregistré : le site NetBox ou
-            les rôles choisis n'y sont pas. {devices}{" "}
+            {/* The purge spares a device on a floor (ADR 0039). */}
             {many
-              ? "équipements liés à NetBox deviendront absents de NetBox"
-              : "équipement lié à NetBox deviendra absent de NetBox"}{" "}
-            : hors plan, {many ? "ils seront supprimés" : "il sera supprimé"}{" "}
-            après 30 jours si le nouveau NetBox ne {many ? "les" : "le"} renvoie
-            pas. Le site NetBox et les rôles choisis sont oubliés.
+              ? `Hors plan, les ${devices} équipements liés à NetBox seront supprimés dans 30 jours si ce NetBox ne les renvoie pas.`
+              : "Hors plan, l'équipement lié à NetBox sera supprimé dans 30 jours si ce NetBox ne le renvoie pas."}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -435,17 +420,8 @@ function ConnectionStatus({
   }
   const lastCheck = connectionChanged ? null : (integration?.lastCheck ?? null);
   const shown = result ?? lastCheck;
-  if (!shown) {
-    return (
-      <FieldDescription>
-        {integration === null
-          ? "Non configuré."
-          : connectionChanged
-            ? "Connexion modifiée, pas encore testée."
-            : "Connexion pas encore testée."}
-      </FieldDescription>
-    );
-  }
+  // An empty form, or « Enregistrer et tester », already says it is untested.
+  if (!shown) return null;
   return (
     <p
       role="status"
@@ -472,35 +448,38 @@ function ConnectionStatus({
   );
 }
 
-// What removing a connection erases, beyond its address and token
-// (`releaseNetBox` and `releaseLibreNMS`).
+// The most critical loss of removing a connection (`releaseNetBox` and
+// `releaseLibreNMS` say all of it).
 const LOSSES: Record<IntegrationKind, string> = {
-  netbox:
-    "NetPlan oublie l'adresse, le jeton, le site NetBox et les rôles choisis. Les équipements et les câbles importés restent dans NetPlan, mais ne sont plus liés à NetBox : leurs champs redeviennent modifiables, les imports à revoir sont effacés et l'écriture dans NetBox s'arrête.",
+  netbox: "Les équipements importés perdent leur lien avec NetBox.",
   librenms:
-    "NetPlan oublie l'adresse, le jeton et l'équipement LibreNMS de chaque switch. Ce que le réseau a observé est effacé : où chaque adresse MAC a été vue, les statuts en ligne et hors ligne, l'état des ports.",
+    "Les adresses MAC vues, les statuts et l'état des ports sont effacés.",
 };
 
 function RemoveIntegration({
   siteId,
-  kind,
+  integration,
+  onSuspend,
 }: {
   siteId: string;
-  kind: IntegrationKind;
+  integration: Integration;
+  /** Turns collection off instead, the way that keeps everything. */
+  onSuspend: () => Promise<void>;
 }) {
   const remove = useOnlineMutation(api.integrations.remove);
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { kind } = integration;
   const label = INTEGRATION_LABELS[kind];
 
   // A refusal keeps the dialog open and says why (A79); success unmounts it
   // with the card's « Retirer ».
-  const confirm = async () => {
+  const run = async (action: () => Promise<unknown>) => {
     setPending(true);
     setError(null);
     try {
-      await remove({ siteId, kind });
+      await action();
       setOpen(false);
     } catch (failure) {
       setError(failureMessage(failure, "admin"));
@@ -517,7 +496,7 @@ function RemoveIntegration({
         variant="ghost"
         onClick={() => setOpen(true)}
       >
-        Retirer
+        Retirer {label}
       </Button>
       <AlertDialog
         open={open}
@@ -529,24 +508,27 @@ function RemoveIntegration({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Retirer {label} de ce site ?</AlertDialogTitle>
-            {/* One description: the dialog announces only one. */}
-            <AlertDialogDescription>
-              {LOSSES[kind]}
-              <span className="mt-2 block">
-                Pour seulement suspendre la collecte, décochez plutôt « Utiliser{" "}
-                {label} dans la collecte » et enregistrez.
-              </span>
-            </AlertDialogDescription>
+            <AlertDialogDescription>{LOSSES[kind]}</AlertDialogDescription>
           </AlertDialogHeader>
           {error ? <FieldError>{error}</FieldError> : null}
           <AlertDialogFooter>
             <AlertDialogCancel>Annuler</AlertDialogCancel>
+            {integration.enabled ? (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={pending}
+                onClick={() => void run(onSuspend)}
+              >
+                Suspendre la collecte
+              </Button>
+            ) : null}
             <AlertDialogAction
               variant="destructive"
               disabled={pending}
-              onClick={() => void confirm()}
+              onClick={() => void run(() => remove({ siteId, kind }))}
             >
-              Retirer
+              Retirer {label}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

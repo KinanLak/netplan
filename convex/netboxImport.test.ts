@@ -160,7 +160,7 @@ describe("NetBox import", () => {
       {
         source: "netbox",
         ok: true,
-        message: "Import : 2 équipements (1 nouveau, 1 rattaché).",
+        message: "2 équipements importés (1 nouveau, 1 rattaché).",
       },
     ]);
     const [merged, created] = await inventory(editor, siteId);
@@ -365,7 +365,7 @@ describe("NetBox import", () => {
         ignoreCertificateErrors: false,
         token: TOKEN,
       }),
-    ).toEqual({ ok: true, message: "Connexion réussie : NetBox 4.6.10." });
+    ).toEqual({ ok: true, message: "Connecté à NetBox 4.6.10." });
     expect(await admin.query(api.netbox.settings, { siteId })).toMatchObject({
       site: { id: 7 },
     });
@@ -388,7 +388,7 @@ describe("NetBox import", () => {
 
     expect(await admin.action(api.sources.saveIntegration, other)).toEqual({
       ok: true,
-      message: "Connexion réussie : NetBox 4.6.10.",
+      message: "Connecté à NetBox 4.6.10.",
       confirmOtherInstance: 1,
     });
     // Nothing was saved before the confirmation.

@@ -409,7 +409,11 @@ export function importSummary(counts: ImportCounts): string {
     counts.returned > 0 ? `${counts.returned} de retour` : null,
     counts.review > 0 ? `${counts.review} à vérifier` : null,
   ].filter((part) => part !== null);
-  const imported = `Import : ${counted(counts.imported, "équipement", "équipements")}`;
+  const imported = counted(
+    counts.imported,
+    "équipement importé",
+    "équipements importés",
+  );
   const cables =
     counts.replacedCables > 0
       ? ` ${counted(counts.replacedCables, "câble saisi à la main remplacé", "câbles saisis à la main remplacés")} par NetBox.`

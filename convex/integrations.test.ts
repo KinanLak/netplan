@@ -70,7 +70,7 @@ describe("integrations", () => {
 
     expect(await saveNetBox(admin, siteId)).toEqual({
       ok: true,
-      message: "Connexion réussie : NetBox 4.6.10.",
+      message: "Connecté à NetBox 4.6.10.",
     });
 
     const [row] = await stored(admin);
@@ -90,7 +90,7 @@ describe("integrations", () => {
         ignoreCertificateErrors: false,
         lastCheck: {
           ok: true,
-          message: "Connexion réussie : NetBox 4.6.10.",
+          message: "Connecté à NetBox 4.6.10.",
           at: expect.any(Number),
         },
       },
@@ -361,8 +361,7 @@ describe("integrations", () => {
       }),
     ).toEqual({
       ok: false,
-      message:
-        "Le jeton enregistré ne peut plus être déchiffré : saisissez-le à nouveau.",
+      message: "Le jeton enregistré est illisible.",
     });
   });
 
@@ -477,7 +476,7 @@ describe("integrations", () => {
     });
 
     const [row] = await stored(admin);
-    expect(row.lastCheck?.message).toBe("Connexion réussie : NetBox 4.6.10.");
+    expect(row.lastCheck?.message).toBe("Connecté à NetBox 4.6.10.");
   });
 
   it("removes a site's integrations with the site", async () => {

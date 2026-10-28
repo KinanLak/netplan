@@ -1,7 +1,9 @@
 import { useAction, useQuery } from "convex/react";
 import { useOnlineMutation } from "@/hooks/use-online-mutation";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import type { FunctionReturnType } from "convex/server";
+import { Alert02Icon, Key01Icon, TextIcon } from "@hugeicons/core-free-icons";
+import { IconNote, IconNotes } from "@/components/icon-note";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -14,12 +16,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Field,
-  FieldDescription,
-  FieldError,
-  FieldLabel,
-} from "@/components/ui/field";
+import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import {
   Select,
   SelectContent,
@@ -81,13 +78,7 @@ export function NetBoxSettingsSection({ siteId }: { siteId: string }) {
 
   return (
     <section className="space-y-4 border-t pt-6">
-      <div className="space-y-1">
-        <h2 className="font-medium">Import NetBox</h2>
-        <p className="text-sm text-muted-foreground">
-          NetPlan importe les équipements du site NetBox choisi dont le rôle a
-          un type ; les autres rôles sont ignorés.
-        </p>
-      </div>
+      <h2 className="font-medium">Import NetBox</h2>
       {options ? (
         <SettingsForm
           siteId={siteId}
@@ -105,7 +96,13 @@ export function NetBoxSettingsSection({ siteId }: { siteId: string }) {
               disabled={loading}
               onClick={() => void load()}
             >
-              {loading ? "Lecture de NetBox…" : "Modifier"}
+              {loading
+                ? "Lecture de NetBox…"
+                : settings.site === null
+                  ? "Choisir le site NetBox"
+                  : settings.roles.length === 0
+                    ? "Choisir les rôles à importer"
+                    : "Modifier l'import"}
             </Button>
             {error ? <FieldError>{error}</FieldError> : null}
           </div>
@@ -152,13 +149,17 @@ function PushSetting({
     }
   };
 
+  // Nothing is imported yet, so nothing could be written: the import's own
+  // button above is the way in.
+  if (!push && !ready) return null;
+
   return (
     <div className="space-y-2 border-t pt-4">
       <Field orientation="horizontal">
         <Checkbox
           id="netbox-push"
           checked={push}
-          disabled={pending || (!push && !ready)}
+          disabled={pending}
           onCheckedChange={(checked) => {
             if (checked) setConfirming(true);
             else void change(false);
@@ -168,23 +169,6 @@ function PushSetting({
           Écrire dans NetBox où le réseau voit chaque équipement
         </FieldLabel>
       </Field>
-      <FieldDescription>
-        {!push && !ready
-          ? "Choisissez d'abord le site NetBox et au moins un rôle à importer. "
-          : null}
-        Quand le lieu d'un équipement importé de NetBox change, NetPlan écrit sa
-        prise, son étage, son port de switch et l'heure de l'écriture dans ses
-        champs personnalisés{" "}
-        {PUSH_FIELDS.map((field, index) => (
-          <span key={field.name}>
-            {index > 0 ? ", " : null}
-            <code className="font-mono text-xs">{field.name}</code>
-          </span>
-        ))}
-        . Ces champs doivent exister et le jeton doit pouvoir modifier les
-        équipements. NetPlan n'écrit rien d'autre et n'efface jamais ce qu'il a
-        écrit.
-      </FieldDescription>
       {error ? <FieldError>{error}</FieldError> : null}
       <AlertDialog open={confirming} onOpenChange={setConfirming}>
         <AlertDialogContent>
@@ -192,16 +176,27 @@ function PushSetting({
             <AlertDialogTitle>Écrire dans NetBox ?</AlertDialogTitle>
             <AlertDialogDescription>
               {imported === undefined || imported === 0
-                ? "NetPlan modifiera les équipements importés de NetBox"
-                : `NetPlan modifiera ${
-                    imported === 1
-                      ? "l'équipement importé"
-                      : `les ${imported} équipements importés`
-                  } de NetBox`}{" "}
-              après chaque collecte, dans leurs champs personnalisés seulement.
-              Ce qu'il écrit reste dans NetBox si vous décochez la case.
+                ? "NetPlan modifiera les équipements importés de NetBox."
+                : imported === 1
+                  ? "NetPlan modifiera l'équipement importé de NetBox."
+                  : `NetPlan modifiera les ${imported} équipements importés de NetBox.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {/* Without them every write is refused. */}
+          <IconNotes>
+            <IconNote icon={Key01Icon}>
+              Requiert un jeton qui peut modifier les équipements
+            </IconNote>
+            <IconNote icon={TextIcon}>
+              Requiert les champs personnalisés{" "}
+              {PUSH_FIELDS.map((field, index) => (
+                <Fragment key={field.name}>
+                  {index > 0 ? ", " : null}
+                  <code className="font-mono text-xs">{field.name}</code>
+                </Fragment>
+              ))}
+            </IconNote>
+          </IconNotes>
           <AlertDialogFooter>
             <AlertDialogCancel>Annuler</AlertDialogCancel>
             <AlertDialogAction
@@ -219,31 +214,20 @@ function PushSetting({
   );
 }
 
+/** What is imported; the button under it says what is missing. */
 function Summary({ settings }: { settings: NetBoxSettings }) {
-  if (!settings.site) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        Aucun site NetBox choisi : rien n'est importé.
-      </p>
-    );
-  }
+  if (!settings.site) return null;
   return (
-    <div className="space-y-1 text-sm">
-      <p>Site NetBox : {settings.site.name}</p>
-      {settings.roles.length === 0 ? (
-        <p className="text-muted-foreground">
-          Aucun rôle n'a de type : rien n'est importé.
-        </p>
-      ) : (
-        <ul className="space-y-0.5 text-muted-foreground">
-          {settings.roles.map((role) => (
-            <li key={role.id}>
-              {role.name} → {getDeviceKindLabel(role.type)}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
+    <dl className="grid max-w-md grid-cols-2 gap-x-6 gap-y-1 text-sm">
+      <dt className="text-muted-foreground">Site NetBox</dt>
+      <dd>{settings.site.name}</dd>
+      {settings.roles.map((role) => (
+        <Fragment key={role.id}>
+          <dt className="text-muted-foreground">{role.name}</dt>
+          <dd>{getDeviceKindLabel(role.type)}</dd>
+        </Fragment>
+      ))}
+    </dl>
   );
 }
 
@@ -353,18 +337,13 @@ function SettingsForm({
           </SelectContent>
         </Select>
         {siteGone ? (
-          <p className="text-sm text-destructive">
-            Le site « {settings.site?.name} » n'existe plus dans NetBox.
-          </p>
+          <IconNote icon={Alert02Icon} tone="destructive">
+            « {settings.site?.name} » n'existe plus dans NetBox
+          </IconNote>
         ) : null}
       </Field>
       <fieldset className="space-y-2">
         <legend className="mb-2 text-sm font-medium">Rôles NetBox</legend>
-        {options.roles.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            NetBox ne liste aucun rôle d'équipement.
-          </p>
-        ) : null}
         {options.roles.map((role) => (
           <div
             key={role.id}
@@ -399,11 +378,14 @@ function SettingsForm({
             </Select>
           </div>
         ))}
+        {/* Saving drops them: a mapping lost without a word. */}
         {gone.length > 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Plus dans NetBox, retirés à l'enregistrement :{" "}
-            {gone.map((role) => role.name).join(", ")}.
-          </p>
+          <IconNote icon={Alert02Icon} tone="warning">
+            {gone.map((role) => `« ${role.name} »`).join(", ")}{" "}
+            {gone.length > 1
+              ? "n'existent plus dans NetBox"
+              : "n'existe plus dans NetBox"}
+          </IconNote>
         ) : null}
       </fieldset>
       <div className="flex flex-wrap items-center gap-3">

@@ -34,7 +34,7 @@ const APP_LINKS = [
 function AdminShell() {
   const me = useCurrentUser();
   if (me === undefined) return <AdminSkeleton />;
-  if (!isAdmin(me.role)) return <AdminOnly sso={me.sso} />;
+  if (!isAdmin(me.role)) return <AdminOnly />;
 
   return (
     // On a narrow screen the navigation becomes a row above the content.
@@ -89,16 +89,10 @@ function AdminShell() {
   );
 }
 
-function AdminOnly({ sso }: { sso: boolean }) {
+function AdminOnly() {
   return (
     <main className="flex h-svh flex-col items-center justify-center gap-3 bg-background p-6 text-center">
-      <h1 className="text-lg font-semibold">Accès réservé</h1>
-      <p className="max-w-sm text-sm text-muted-foreground">
-        L'administration est réservée aux administrateurs.
-        {sso
-          ? " Votre rôle vient de Keycloak : demandez à un administrateur de vous en donner un autre."
-          : null}
-      </p>
+      <h1 className="text-lg font-semibold">Réservé aux administrateurs</h1>
       <Link to="/" className={buttonVariants({ variant: "outline" })}>
         Retour au plan
       </Link>

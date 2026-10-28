@@ -34,7 +34,7 @@ describe("site settings", () => {
     expect(siteSettingsProblem({ ...settings, name: "" })?.field).toBe("name");
     expect(siteSettingsProblem({ ...settings, intervalMinutes: 2 })).toEqual({
       field: "intervalMinutes",
-      message: "L'intervalle va de 5 à 1\u202f440 minutes (24 heures).",
+      message: "L'intervalle va de 5 à 1\u202f440 minutes.",
     });
   });
 
