@@ -3544,7 +3544,7 @@ Questions of 2026-10-28.
 #### ADR number
 
 - Context: U8, U9 and U11 each opened an ADR 0034 at the same time.
-- Decision: U13 takes 0038. U8 (two records), U9 and U11 fill 0034 to 0037.
+- Decision: U13 took 0038 early and kept it. The parallel lots chose their own numbers (0034, 0037, 0039), so the sequence has gaps.
 - Why: avoids a clash and a renumbering while the lots merge.
 - Who: agent (obvious)
 
