@@ -229,7 +229,11 @@ export default function DeviceDrawer() {
             onShowCables={(portId) => showPortCables(device.id, portId)}
           />
           {isEditMode && device.type === "switch" ? (
-            <PortNamesOffer key={device.id} deviceId={device.id} />
+            <PortNamesOffer
+              // Its own key: a sibling is keyed by the device too.
+              key={`port-names:${device.id}`}
+              deviceId={device.id}
+            />
           ) : null}
         </div>
       </ScrollArea>
