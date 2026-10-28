@@ -129,26 +129,33 @@ test("an edit in flight when the backend drops lands on its return, and the map 
 
   backend.deafen();
   await page.keyboard.press("ArrowDown");
-  const moved = await position(page);
-  expect(moved).not.toBe(before);
-  await backend.cut();
-
-  await expect(edit).toBeDisabled();
-  await expect(offlineLine(page)).toContainText("1 modification en attente");
-
-  backend.restore();
-  // Convex reconnects on its own backoff, which grew during the outage.
-  await expect(offlineLine(page)).toBeHidden({ timeout: 20_000 });
-  await expect(edit).toBeEnabled();
-
   const other = await page.context().newPage();
   try {
+    const moved = await position(page);
+    expect(moved).not.toBe(before);
+    await backend.cut();
+
+    await expect(edit).toBeDisabled();
+    await expect(offlineLine(page)).toContainText("1 modification en attente");
+
+    backend.restore();
+    // Convex reconnects on its own backoff, which grew during the outage.
+    await expect(offlineLine(page)).toBeHidden({ timeout: 20_000 });
+    await expect(edit).toBeEnabled();
+
+    // Another page reads what the server holds.
     await other.goto(page.url());
     await expect.poll(() => position(other)).toBe(moved);
   } finally {
-    // The seed is shared with the next run and the developer's instance.
-    await switchNode(page).click();
-    await page.keyboard.press("Control+z");
-    await expect.poll(() => position(other)).toBe(before);
+    // The seed is shared with the next run and the developer's instance,
+    // so the move is undone whatever failed above.
+    backend.restore();
+    await expect(edit).toBeEnabled({ timeout: 20_000 });
+    await other.goto(page.url());
+    if ((await position(other)) !== before) {
+      await switchNode(page).click();
+      await page.keyboard.press("Control+z");
+      await expect.poll(() => position(other)).toBe(before);
+    }
   }
 });
