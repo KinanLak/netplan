@@ -47,6 +47,7 @@ import type {
 import { ColumnPicker, InventoryTable } from "@/inventory/InventoryTable";
 import { openPlacement } from "@/inventory/showOnMap";
 import { useRestoredScroll } from "@/inventory/useRestoredScroll";
+import { useTableRoom } from "@/inventory/useTableRoom";
 import { ImportReviews } from "@/sites/ImportReviews";
 import { SiteSwitcher } from "@/sites/SiteSwitcher";
 import { UnknownMacs } from "@/sites/UnknownMacs";
@@ -65,13 +66,23 @@ import { api } from "../../../convex/_generated/api";
 type StatusFilter = "all" | DeviceStatus;
 type TypeFilter = "all" | DeviceType;
 
-/** Filters and order live in the URL (A62); the map's links open it filtered. */
+/**
+ * Filters and order live in the URL (A62), and so do the unknown MACs'
+ * search and their ignored list's state; the map's links open it filtered.
+ */
 const inventorySearch = (
   search: Record<string, unknown>,
-): InventorySearch & { site?: string; view?: "unknown" } => ({
+): InventorySearch & {
+  site?: string;
+  view?: "unknown";
+  mq?: string;
+  ignored?: true;
+} => ({
   ...siteSearch(search),
   ...parseInventorySearch(search),
   view: search.view === "unknown" ? ("unknown" as const) : undefined,
+  mq: typeof search.mq === "string" && search.mq !== "" ? search.mq : undefined,
+  ignored: search.ignored === true || search.ignored === "1" ? true : undefined,
 });
 
 export const Route = createFileRoute("/_authed/inventory")({
@@ -151,6 +162,9 @@ function SiteInventory({ site }: { site: SiteSummary }) {
   const sort = sortOf(search);
   const [creating, setCreating] = useState(false);
   const [highlightId, setHighlightId] = useState<string | null>(null);
+  const [sheetId, setSheetId] = useState<string | null>(null);
+  const [macDraft, setMacDraft] = useState<string | null>(null);
+  const { measureFilters, room: tableHeight } = useTableRoom();
   const goTo = useNavigate();
   const [hidden, setHidden] = useState(readHiddenColumns);
   useSlashToSearch();
@@ -161,9 +175,15 @@ function SiteInventory({ site }: { site: SiteSummary }) {
     navigate({
       search: (current) => ({
         ...siteSearch(current),
+        mq: current.mq,
+        ignored: current.ignored,
         ...toSearch({ ...filters, ...next }, nextSort),
       }),
       replace: true,
+      // A filter changes the rows, not where the reader is; the router would
+      // otherwise put back the table's old scroll over a row just scrolled to
+      // (A60).
+      resetScroll: false,
     });
   const update = (next: Partial<InventoryFilters>, nextSort = sort) => {
     if (next.query !== undefined) setDraft(null);
@@ -173,6 +193,19 @@ function SiteInventory({ site }: { site: SiteSummary }) {
     setDraft(query);
     void navigateTo({ query }, sort).then(() =>
       setDraft((current) => (current === query ? null : current)),
+    );
+  };
+
+  const setMacSearch = (next: { mq?: string; ignored?: true }) =>
+    navigate({
+      search: (current) => ({ ...current, ...next }),
+      replace: true,
+      resetScroll: false,
+    });
+  const typeMacQuery = (query: string) => {
+    setMacDraft(query);
+    void setMacSearch({ mq: query || undefined }).then(() =>
+      setMacDraft((current) => (current === query ? null : current)),
     );
   };
 
@@ -206,6 +239,25 @@ function SiteInventory({ site }: { site: SiteSummary }) {
   const filtered = isFiltered(active);
   const reset = () =>
     update({ query: "", placement: "all", status: "all", type: "all" });
+  // From a toast, which outlives the render it was made in: the filters are
+  // cleared from the URL as it is then, keeping the reader's order, and the
+  // devices' tab comes back.
+  const showEveryDevice = () => {
+    setDraft(null);
+    void navigate({
+      search: (current) => ({
+        ...siteSearch(current),
+        mq: current.mq,
+        ignored: current.ignored,
+        ...toSearch(
+          { query: "", placement: "all", status: "all", type: "all" },
+          sortOf(current),
+        ),
+      }),
+      replace: true,
+      resetScroll: false,
+    });
+  };
 
   // A coverage count shows what is left to draw, so no other filter may hide it.
   const showUnplaced = (next: TypeFilter) => {
@@ -273,7 +325,15 @@ function SiteInventory({ site }: { site: SiteSummary }) {
           role="tabpanel"
           aria-labelledby="inventory-tab-unknown"
         >
-          <UnknownMacs siteId={site.id} />
+          <UnknownMacs
+            siteId={site.id}
+            query={macDraft ?? search.mq ?? ""}
+            onQueryChange={typeMacQuery}
+            showIgnored={search.ignored === true}
+            onShowIgnoredChange={(open) =>
+              void setMacSearch({ ignored: open ? true : undefined })
+            }
+          />
         </div>
       ) : (
         <div
@@ -300,95 +360,104 @@ function SiteInventory({ site }: { site: SiteSummary }) {
             />
           ) : (
             <>
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="relative min-w-60 flex-1">
-                  <HugeiconsIcon
-                    icon={Search01Icon}
-                    size={16}
-                    strokeWidth={1.5}
-                    className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-muted-foreground"
+              {/* The filters stay in reach while the page scrolls (A63). */}
+              <div
+                ref={measureFilters}
+                className="sticky top-0 z-20 -mx-1 space-y-3 bg-background px-1 pt-2 pb-3"
+              >
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="relative min-w-60 flex-1">
+                    <HugeiconsIcon
+                      icon={Search01Icon}
+                      size={16}
+                      strokeWidth={1.5}
+                      className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-muted-foreground"
+                    />
+                    <Input
+                      type="search"
+                      value={filters.query}
+                      onChange={(event) => typeQuery(event.target.value)}
+                      placeholder="Nom, hostname, MAC, IP, emplacement…"
+                      aria-label="Rechercher un équipement"
+                      aria-keyshortcuts="/"
+                      className="pr-9 pl-8"
+                    />
+                    {filters.query ? null : (
+                      <Kbd className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2">
+                        /
+                      </Kbd>
+                    )}
+                  </div>
+                  <Segmented
+                    label="Emplacement"
+                    value={filters.placement}
+                    onChange={(placement) => update({ placement })}
+                    options={PLACEMENT_FILTERS.map(({ value, label }) => ({
+                      value,
+                      label,
+                      count: counts.placement[value],
+                    }))}
                   />
-                  <Input
-                    type="search"
-                    value={filters.query}
-                    onChange={(event) => typeQuery(event.target.value)}
-                    placeholder="Nom, hostname, MAC, IP, emplacement…"
-                    aria-label="Rechercher un équipement"
-                    aria-keyshortcuts="/"
-                    className="pr-9 pl-8"
+                  <Segmented
+                    label="État"
+                    value={filters.status}
+                    onChange={(status) => update({ status })}
+                    options={STATUS_FILTERS.map(({ value, label }) => ({
+                      value,
+                      label,
+                      count: counts.status[value],
+                    }))}
                   />
-                  {filters.query ? null : (
-                    <Kbd className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2">
-                      /
-                    </Kbd>
-                  )}
+                  <Select
+                    items={typeFilters}
+                    value={type}
+                    onValueChange={(value) => {
+                      if (value) update({ type: value });
+                    }}
+                  >
+                    <SelectTrigger aria-label="Type" className="w-48">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {typeFilters.map(({ value, label }) => (
+                        <SelectItem key={value} value={value}>
+                          {label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <Segmented
-                  label="Emplacement"
-                  value={filters.placement}
-                  onChange={(placement) => update({ placement })}
-                  options={PLACEMENT_FILTERS.map(({ value, label }) => ({
-                    value,
-                    label,
-                    count: counts.placement[value],
-                  }))}
-                />
-                <Segmented
-                  label="État"
-                  value={filters.status}
-                  onChange={(status) => update({ status })}
-                  options={STATUS_FILTERS.map(({ value, label }) => ({
-                    value,
-                    label,
-                    count: counts.status[value],
-                  }))}
-                />
-                <Select
-                  items={typeFilters}
-                  value={type}
-                  onValueChange={(value) => {
-                    if (value) update({ type: value });
-                  }}
-                >
-                  <SelectTrigger aria-label="Type" className="w-48">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {typeFilters.map(({ value, label }) => (
-                      <SelectItem key={value} value={value}>
-                        {label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
 
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-sm text-muted-foreground" aria-live="polite">
-                  {filtered
-                    ? `${shown.length} sur ${all.length} équipement${all.length > 1 ? "s" : ""}`
-                    : `${all.length} équipement${all.length > 1 ? "s" : ""}`}
-                  {/* An empty list offers the same button in its message. */}
-                  {filtered && shown.length > 0 ? (
-                    <>
-                      {" · "}
-                      <button
-                        type="button"
-                        onClick={reset}
-                        className="rounded-sm underline-offset-2 outline-none hover:text-foreground hover:underline focus-visible:ring-[3px] focus-visible:ring-ring"
-                      >
-                        Réinitialiser les filtres
-                      </button>
-                    </>
-                  ) : null}
-                </p>
-                <ColumnPicker
-                  hidden={hidden}
-                  onChange={(next) => {
-                    setHidden(next);
-                    writeHiddenColumns(next);
-                  }}
-                />
+                <div className="flex items-center justify-between gap-3">
+                  <p
+                    className="text-sm text-muted-foreground"
+                    aria-live="polite"
+                  >
+                    {filtered
+                      ? `${shown.length} sur ${all.length} équipement${all.length > 1 ? "s" : ""}`
+                      : `${all.length} équipement${all.length > 1 ? "s" : ""}`}
+                    {/* An empty list offers the same button in its message. */}
+                    {filtered && shown.length > 0 ? (
+                      <>
+                        {" · "}
+                        <button
+                          type="button"
+                          onClick={reset}
+                          className="rounded-sm underline-offset-2 outline-none hover:text-foreground hover:underline focus-visible:ring-[3px] focus-visible:ring-ring"
+                        >
+                          Réinitialiser les filtres
+                        </button>
+                      </>
+                    ) : null}
+                  </p>
+                  <ColumnPicker
+                    hidden={hidden}
+                    onChange={(next) => {
+                      setHidden(next);
+                      writeHiddenColumns(next);
+                    }}
+                  />
+                </div>
               </div>
 
               {shown.length === 0 ? (
@@ -407,6 +476,9 @@ function SiteInventory({ site }: { site: SiteSummary }) {
                   sort={sort}
                   onSort={(next) => update({}, next)}
                   highlightId={highlightId}
+                  sheetId={sheetId}
+                  onSheetChange={setSheetId}
+                  maxHeight={tableHeight}
                 />
               )}
             </>
@@ -422,10 +494,7 @@ function SiteInventory({ site }: { site: SiteSummary }) {
           onCreated={(deviceId, name) => {
             // The new row may hide behind a filter, and in a long list it is
             // easy to miss: show it, light it, and say where it is (A60).
-            update(
-              { query: "", placement: "all", status: "all", type: "all" },
-              sort,
-            );
+            showEveryDevice();
             setHighlightId(deviceId);
             window.setTimeout(
               () =>
@@ -435,7 +504,15 @@ function SiteInventory({ site }: { site: SiteSummary }) {
               2_500,
             );
             toast(`« ${name} » créé, hors plan`, {
+              // The row may have been filtered out since: show it again.
               action: {
+                label: "Voir",
+                onClick: () => {
+                  showEveryDevice();
+                  setSheetId(deviceId);
+                },
+              },
+              cancel: {
                 label: "Placer sur le plan",
                 onClick: () => openPlacement(goTo, site.id, deviceId),
               },

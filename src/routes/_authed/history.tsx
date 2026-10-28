@@ -61,6 +61,8 @@ type HistorySearch = {
   /** The site's calendar day of the snapshots shown. */
   day?: string;
   slot?: string;
+  /** The search within the snapshot shown (A62). */
+  sq?: string;
 };
 
 /**
@@ -84,6 +86,7 @@ const historySearch = (search: Record<string, unknown>): HistorySearch => ({
     typeof search.slot === "string" && SNAPSHOT_TIMES.includes(search.slot)
       ? search.slot
       : undefined,
+  sq: typeof search.sq === "string" && search.sq !== "" ? search.sq : undefined,
 });
 
 export const Route = createFileRoute("/_authed/history")({
@@ -166,9 +169,11 @@ function SiteHistory({ site }: { site: SiteSummary }) {
         value={view}
         onChange={(next) =>
           void navigate({
+            // Each view keeps its own search and filters, so a round trip
+            // between them finds both as they were (A62).
             search: (current) => ({
-              site: current.site,
-              ...(next === "snapshots" && { view: "snapshots" as const }),
+              ...current,
+              view: next === "snapshots" ? ("snapshots" as const) : undefined,
             }),
             replace: true,
           })
@@ -591,7 +596,20 @@ function SlotButton({
 const ENTRY_PAGE = 500;
 
 function SlotEntries({ site, slot }: { site: SiteSummary; slot: Slot }) {
-  const [query, setQuery] = useState("");
+  const search = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
+  // In the URL, so a reload or a trip to the events keeps it (A62); typing
+  // runs ahead of the URL, as the events' search does.
+  const [draft, setDraft] = useState<string | null>(null);
+  const query = draft ?? search.sq ?? "";
+  const typeQuery = (text: string) => {
+    setDraft(text);
+    void navigate({
+      search: (current) => ({ ...current, sq: text || undefined }),
+      replace: true,
+      resetScroll: false,
+    }).then(() => setDraft((current) => (current === text ? null : current)));
+  };
   const {
     results: shown,
     status,
@@ -629,7 +647,7 @@ function SlotEntries({ site, slot }: { site: SiteSummary; slot: Slot }) {
         <Input
           type="search"
           value={query}
-          onChange={(event) => setQuery(event.target.value)}
+          onChange={(event) => typeQuery(event.target.value)}
           placeholder="MAC, équipement, prise, switch…"
           aria-label="Rechercher dans le relevé"
           className="pl-8"

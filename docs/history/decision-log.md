@@ -2979,3 +2979,100 @@ Questions of 2026-10-27, in the order they came up (#130, #131, #132).
 #### Leftovers
 
 - No NetBox test object was created; NetBox and LibreNMS were not touched.
+
+### U10 — Drawer, inventory, history and administration
+
+#### Where does an identity refusal show?
+
+- Context: A30 asks for the error under the IP field, with `aria-invalid` and focus; `identityEditError` returned only a string, which the server also throws.
+- Decision: `identityEditProblem` returns `{ field, message }`; `identityEditError` wraps it for the server. Both dialogs show a field's refusal under it, mark it `aria-invalid`/`aria-describedby` and focus it. The server's refusals name no field and stay beside the buttons.
+- Why: same model as the admin forms (`site-business-hours`), one rule for both dialogs.
+- Who: agent (counter-verification's hint)
+
+#### What counts as an active link under the port grid?
+
+- Context: the owner keeps only « N liens actifs ». The grid's states are « Équipement vu », « Lien actif », « Lien inactif » and « Inconnu ».
+- Decision: a port with a device seen on it is up too, so it counts. « 1 lien actif », « N liens actifs », « Aucun lien actif ». A device whose ports are all « Inconnu » (a patch panel, a switch never read) gets no line, rather than a misleading « Aucun lien actif ».
+- Why: a seen device implies an up link; nothing observed is not « zero active links ».
+- Who: agent (judgement call)
+
+#### Is the zone hint's offset a date to localise?
+
+- Context: FIX-PLAN names `src/lib/time.ts:81` and `TimeZoneField.tsx:21`, the offsets. In en-US, `shortOffset` reads « GMT+2 » where fr-FR reads « UTC+2 ».
+- Decision: they follow the browser's locale too: « Europe/Paris • GMT+2 » in en-US.
+- Why: the owner's rule is « every date or time the app formats itself »; the plan names those lines.
+- Who: agent (obvious from the plan)
+
+#### How do tests read dates now that they follow the browser?
+
+- Context: Bun's default locale follows the host's `LANG`, so French expectations would break on an en-US machine or in CI.
+- Decision: `displayLocale.current` (`undefined` in the app, so the browser's locale) is pinned to `fr-FR` by a test preload, `test/setup-locale.ts`. New cases switch to en-US explicitly. `check` was run under `LANG=en_US.UTF-8` and `bun test` under `LANG=C`.
+- Who: agent (judgement call)
+
+#### What does the refresh-failure toast tell an Admin?
+
+- Context: « Un administrateur en voit le détail » was shown to the Admin who sees the detail.
+- Decision: an Admin reads « Échec côté LibreNMS. ». Off Santé, the toast has a « Voir le détail » action to Santé; on Santé, it has none. Other roles keep the current text. A Lecteur never presses « Actualiser » anyway.
+- Who: agent (counter-verification's two hints, combined)
+
+#### Where does « Voir » lead in the creation toast, and which button leads?
+
+- Context: A60 asks for « Voir » beside « Placer sur le plan ». Sonner has one action and one cancel button. The device's sheet was each row's own state.
+- Decision: « Voir » is the action and opens the new device's sheet; « Placer sur le plan » is the second button. The sheet's open state moved up to the page (`sheetId`), so the toast can open it with the row's cables and history dialogs intact.
+- Who: agent (judgement call)
+
+#### Why did the new row not come into view?
+
+- Context: confirmed in the code. The creation resets the filters with a `replace` navigation; on render, the router's scroll restoration (`resetScroll` defaults to true) wrote back the table's cached scroll after the row's `scrollIntoView`.
+- Decision: every inventory filter navigation passes `resetScroll: false`. A filter changes the rows, not where the reader is. The same applies to the new MAC and snapshot searches.
+- Who: agent (obvious once confirmed)
+
+#### Which keys hold the new searches?
+
+- Decision: `/inventory?mq=…&ignored=true` for the unknown MACs, `/history?sq=…` for the snapshot. The device filters keep `mq`/`ignored`. The history tabs now keep every key (they used to keep only `site`), so each view finds its own search after a round trip. Same draft-then-`replace` pattern as `q`.
+- Who: agent (counter-verification's hint)
+
+#### How do the inventory filters stay in view?
+
+- Context: the page scrolls in `<main>`, and the table is its own scroll box of `100svh − 8rem`.
+- Decision: the search, the filters and the count line (with « Colonnes ») sit in one `sticky top-0` block on `bg-background`. The table's maximum height is measured (`useTableRoom`): the page's height less that block and the bottom padding. Once in view, the table then starts below the block instead of under it.
+- Why: a first fixed `100svh − 13rem` still hid the table's header by 32 px at 1280×800 and 1920×1080, where the filters wrap onto two lines. Checked after the fix at 1024×768, 1280×720, 1280×800 and 1920×1080.
+- Who: agent (counter-verification's first hint, then measured)
+
+#### Did « Supprimer le site » have the same gap as « Retirer »?
+
+- Context: while fixing A79, its error rendered after the button, behind the dialog it keeps open.
+- Decision: the error moves into the dialog, and closing the dialog clears it. Same change as « Retirer ».
+- Who: agent (obvious, same item)
+
+#### How was A79 checked without a real failure?
+
+- Context: `integrations.remove` only fails on authorization, and the real NetBox and LibreNMS must not be used for this.
+- Decision: a local fake NetBox/LibreNMS on port 18931, reached from the Convex container at 172.17.0.1, on the demo site of this worktree's own backend. The verifier provoked the refusal by intercepting the mutation's answer in Playwright. A fake device that answers 404 gave the Santé note and a failed refresh. No real NetBox or LibreNMS object was created or changed.
+- Who: agent
+
+#### Who checks in the browser?
+
+- Context: owner's rule of 2026-10-28, given during this lot.
+- Decision: every browser check goes to a codex `gpt-6.1-terra` delegate (`isolation: shared`) on this worktree's dev:agent, with the counter-verification's situations, en-US and fr-FR contexts for dates. The lot agent keeps git, processes, Docker and fixes.
+- Who: owner
+
+#### Items
+
+- A30 (invalid IP under its field, aria-invalid, focus; identity and « Nouvel équipement »): fait #134
+- A34 (« Câbler » picker fits its dialog, both steps): fait #134
+- Port counter « N liens actifs » (owner, 2026-10-28): fait #134
+- A79 (« Retirer » an integration shows its error, keeps the dialog open): fait #135
+- Agreement « un bâtiment, listé plus haut. Supprimez-le »: fait #135
+- Space between a LibreNMS suggestion's name and « Utiliser »: fait #135
+- Refresh-failure toast for an Admin: fait #135
+- Santé 404 note repeating its link: fait #135
+- Dates follow the browser's locale (owner, 2026-10-28): fait #137
+- A60 (« Voir » in the creation toast; new row scrolled to when the table had scrolled): fait #140
+- A62 (unknown-MAC search, snapshot search and « Ignorées » in the URL): fait #140
+- A63 (inventory filters stay visible while the table scrolls): fait #140
+
+#### Leftovers
+
+- None in scope. Screenshots stayed local: `gh` cannot attach images to a pull request, and committing them is forbidden, so each PR carries the measurements in a verification comment.
+- No NetBox test object was created, and the real LibreNMS got no request.
