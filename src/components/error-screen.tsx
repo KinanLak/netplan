@@ -70,23 +70,11 @@ export function ErrorScreen({ error, reset }: ErrorComponentProps) {
     };
   }, [heals, error]);
 
-  const { title, description } = !online
-    ? {
-        title: "Pas de connexion",
-        description:
-          "Ce navigateur n'est plus connecté au réseau. La page se rechargera dès son retour.",
-      }
+  const title = !online
+    ? "Pas de connexion"
     : heals
-      ? {
-          title: "Serveur injoignable",
-          description:
-            "Le serveur NetPlan ne répond pas. La page se rechargera dès son retour ; si cela dure, prévenez votre administrateur.",
-        }
-      : {
-          title: "Cette page n'a pas pu s'afficher",
-          description:
-            "Une erreur inattendue s'est produite. Réessayez ; si cela se reproduit, prévenez votre administrateur.",
-        };
+      ? "Serveur injoignable"
+      : "Cette page n'a pas pu s'afficher";
 
   return (
     <main
@@ -94,7 +82,6 @@ export function ErrorScreen({ error, reset }: ErrorComponentProps) {
       className="flex min-h-svh flex-col items-center justify-center gap-3 bg-background p-6 text-center"
     >
       <h1 className="text-lg font-semibold">{title}</h1>
-      <p className="max-w-sm text-sm text-muted-foreground">{description}</p>
       <div className="flex flex-wrap justify-center gap-2">
         <Button onClick={retry}>Réessayer</Button>
         <Link to="/" className={buttonVariants({ variant: "outline" })}>

@@ -63,15 +63,15 @@ function waitText(retryAfter: number | undefined): string {
 
 export function loginErrorMessage(error: AuthFailure): string {
   if (error.status === 429) {
-    return `Trop de tentatives. Réessayez ${waitText(error.retryAfter)}.`;
+    return `Trop de tentatives, réessayez ${waitText(error.retryAfter)}.`;
   }
   if (error.code === "BANNED_USER") {
-    return "Ce compte est désactivé. Contactez un administrateur.";
+    return "Ce compte est désactivé.";
   }
   if (error.code !== undefined && WRONG_CREDENTIALS.has(error.code)) {
     return "Identifiant ou mot de passe incorrect.";
   }
-  return "La connexion a échoué. Réessayez.";
+  return "La connexion a échoué.";
 }
 
 /**
@@ -82,7 +82,8 @@ export function keycloakErrorMessage(code: string): string {
   // better-auth says `unable_to_link_account` when the account hook refuses
   // the link (ADR 0036), `account_not_linked` when linking is off.
   if (code === "unable_to_link_account" || code === "account_not_linked") {
-    return "Un compte NetPlan utilise déjà l'adresse e-mail de ce compte Keycloak. Connectez-vous avec son mot de passe, ou demandez à un administrateur de le passer sur Keycloak.";
+    // The password form is right there: it is the way in.
+    return "Cette adresse e-mail a déjà un compte NetPlan.";
   }
   if (code === "BANNED_USER") {
     return loginErrorMessage({ code });
@@ -90,7 +91,7 @@ export function keycloakErrorMessage(code: string): string {
   if (code === "access_denied") {
     return "La connexion avec Keycloak a été annulée.";
   }
-  return "La connexion avec Keycloak a échoué. Réessayez ou contactez un administrateur.";
+  return "La connexion avec Keycloak a échoué.";
 }
 
 /** better-auth's default, which Netplan keeps. */
@@ -98,9 +99,9 @@ export const MIN_PASSWORD_LENGTH = 8;
 
 export function forgotPasswordErrorMessage(error: AuthFailure): string {
   if (error.status === 429) {
-    return `Trop de demandes. Réessayez ${waitText(error.retryAfter)}.`;
+    return `Trop de demandes, réessayez ${waitText(error.retryAfter)}.`;
   }
-  return "La demande a échoué. Réessayez.";
+  return "La demande a échoué.";
 }
 
 export function resetPasswordErrorMessage(error: {
@@ -108,7 +109,7 @@ export function resetPasswordErrorMessage(error: {
   code?: string;
 }): string {
   if (error.status === 429) {
-    return "Trop de tentatives. Réessayez dans un instant.";
+    return "Trop de tentatives, réessayez dans un instant.";
   }
   if (error.code === "PASSWORD_TOO_SHORT") {
     return `Le mot de passe doit compter au moins ${MIN_PASSWORD_LENGTH} caractères.`;
@@ -116,7 +117,7 @@ export function resetPasswordErrorMessage(error: {
   if (error.code === "PASSWORD_TOO_LONG") {
     return "Ce mot de passe est trop long.";
   }
-  return "Le mot de passe n'a pas pu être enregistré. Réessayez.";
+  return "Le mot de passe n'a pas pu être enregistré.";
 }
 
 /**
@@ -140,8 +141,8 @@ export function sessionLostReason(error: unknown): SessionLostReason {
 
 /** What the sign-in page says above the form after a session ended. */
 export const SESSION_LOST_MESSAGES: Record<SessionLostReason, string> = {
-  expired: "Votre session a pris fin. Reconnectez-vous pour continuer.",
-  disabled: "Ce compte a été désactivé. Contactez un administrateur.",
+  expired: "Votre session a pris fin",
+  disabled: "Ce compte a été désactivé",
 };
 
 export const isSessionLostReason = (

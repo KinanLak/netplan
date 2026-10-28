@@ -89,7 +89,7 @@ export const formatAge = (
 };
 
 /**
- * `Europe/Paris • UTC+2` (`GMT+2` in en-US): the zone a time is shown in,
+ * `Europe/Paris (UTC+2)` (`GMT+2` in en-US): the zone a time is shown in,
  * and its offset then.
  */
 export const timeZoneHint = (at: number, timeZone?: string): string => {
@@ -101,16 +101,19 @@ export const timeZoneHint = (at: number, timeZone?: string): string => {
     .formatToParts(at)
     .find((part) => part.type === "timeZoneName")?.value;
   if (zone === "UTC" || zone === "Etc/UTC" || !offset) return zone;
-  return `${zone} • ${offset}`;
+  return `${zone} (${offset})`;
 };
 
-/** The hover hint of a relative time: when it was, and in which zone. */
+/**
+ * The hover hint of a relative time: when it was, and in which zone, one per
+ * line.
+ */
 export const ageHint = (
   at: number,
   now: number = Date.now(),
   timeZone?: string,
 ): string =>
-  `${formatDateTime(at, now, timeZone)} · ${timeZoneHint(at, timeZone)}`;
+  `${formatDateTime(at, now, timeZone)}\n${timeZoneHint(at, timeZone)}`;
 
 /**
  * The reader's calendar day, `YYYY-MM-DD`: what groups a list by day and

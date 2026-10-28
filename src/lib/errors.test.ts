@@ -15,6 +15,6 @@ describe("failureMessage", () => {
     ).toBe("Action réservée aux éditeurs.");
     expect(
       failureMessage(new Error("[CONVEX M(sites:update)] boom"), "editor"),
-    ).toBe("La modification a échoué. Réessayez.");
+    ).toBe("La modification a échoué.");
   });
 });

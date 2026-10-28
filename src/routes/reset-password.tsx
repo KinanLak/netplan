@@ -1,7 +1,9 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
+import { Logout01Icon } from "@hugeicons/core-free-icons";
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { AuthCard } from "@/components/auth-card";
+import { IconNote } from "@/components/icon-note";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Field,
@@ -51,9 +53,10 @@ function ResetPasswordPage() {
       <AuthCard
         title="Lien expiré"
         description={
+          // Only an admin sends an invitation again: there is no button.
           invitation
-            ? "Ce lien d'invitation n'est plus valable : demandez à un administrateur de vous renvoyer l'invitation."
-            : "Ce lien n'est plus valable : il a déjà servi ou a expiré."
+            ? "Demandez à un administrateur de vous renvoyer l'invitation."
+            : undefined
         }
       >
         {invitation ? null : (
@@ -72,12 +75,12 @@ function ResetPasswordPage() {
     return (
       <AuthCard
         title={invitation ? "Votre compte est prêt" : "Mot de passe enregistré"}
-        description={
-          invitation
-            ? "Connectez-vous avec le mot de passe que vous venez de choisir."
-            : "Connectez-vous avec votre nouveau mot de passe. Vos autres sessions ont été fermées."
-        }
       >
+        {invitation ? null : (
+          <IconNote icon={Logout01Icon} className="mb-4">
+            Vos autres sessions sont fermées
+          </IconNote>
+        )}
         <Link
           to="/login"
           search={login ? { login } : {}}
@@ -115,12 +118,7 @@ function ResetPasswordPage() {
   };
 
   return (
-    <AuthCard
-      title={invitation ? "Bienvenue sur NetPlan" : "Choisir un mot de passe"}
-      description={
-        invitation ? "Choisissez le mot de passe de votre compte." : undefined
-      }
-    >
+    <AuthCard title="Choisir un mot de passe">
       <form method="post" onSubmit={(event) => void submit(event)}>
         {/* Tells a password manager which account the new password is for. */}
         <input

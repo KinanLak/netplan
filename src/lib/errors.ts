@@ -19,5 +19,5 @@ export function failureMessage(
   if (error instanceof ConvexError && typeof error.data === "string") {
     return error.data;
   }
-  return "La modification a échoué. Réessayez.";
+  return "La modification a échoué.";
 }

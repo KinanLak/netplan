@@ -1,8 +1,10 @@
 import { Link, createFileRoute, redirect } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
+import { Logout01Icon } from "@hugeicons/core-free-icons";
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { AuthCard } from "@/components/auth-card";
+import { IconNote } from "@/components/icon-note";
 import { Button } from "@/components/ui/button";
 import {
   Field,
@@ -114,18 +116,17 @@ function LoginPage() {
   };
 
   return (
-    <AuthCard
-      title="Connexion à NetPlan"
-      description="Utilisez le compte que votre administrateur vous a créé."
-    >
+    <AuthCard title="Connexion à NetPlan">
       {/* POST, so a submission before hydration never puts the password in
           the address. */}
       <form method="post" onSubmit={(event) => void submit(event)}>
         <FieldGroup>
           {reason ? (
-            <p role="status" className="rounded-md border p-3 text-sm">
-              {SESSION_LOST_MESSAGES[reason]}
-            </p>
+            <div role="status">
+              <IconNote icon={Logout01Icon} tone="warning">
+                {SESSION_LOST_MESSAGES[reason]}
+              </IconNote>
+            </div>
           ) : null}
           <Field>
             <FieldLabel htmlFor="identifier">Identifiant ou e-mail</FieldLabel>
