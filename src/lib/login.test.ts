@@ -47,6 +47,19 @@ describe("login", () => {
     );
   });
 
+  it("reads an identifier no account can have as a wrong one", () => {
+    const wrong = loginErrorMessage({ code: "INVALID_USERNAME_OR_PASSWORD" });
+    for (const code of [
+      "INVALID_USERNAME",
+      "USERNAME_TOO_SHORT",
+      "USERNAME_TOO_LONG",
+      "INVALID_EMAIL",
+    ]) {
+      expect(loginErrorMessage({ status: 422, code })).toBe(wrong);
+    }
+    expect(loginErrorMessage({ status: 0 })).toContain("Réessayez");
+  });
+
   it("explains a disabled account and rate limiting", () => {
     expect(loginErrorMessage({ code: "BANNED_USER" })).toContain("désactivé");
     expect(loginErrorMessage({ status: 429 })).toContain("Trop de tentatives");
