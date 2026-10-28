@@ -17,7 +17,7 @@ export function Pending({ children = null }: { children?: ReactNode }) {
     >
       <p className="font-medium">Pas de connexion</p>
       <p className="mt-1 text-muted-foreground">
-        Cette page s'affichera dès son retour.
+        Le contenu s'affichera dès son retour.
       </p>
     </div>
   );
