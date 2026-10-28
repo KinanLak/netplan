@@ -92,7 +92,10 @@ export const setPush = adminMutation({
   },
 });
 
-/** How many of the site's devices come from NetBox, which the push writes to. */
+/**
+ * How many of the site's devices NetBox returns, which the push writes to;
+ * an absent one is not written to (ADR 0039).
+ */
 export const importedCount = adminQuery({
   args: { siteId: v.string() },
   returns: v.number(),
@@ -104,7 +107,7 @@ export const importedCount = adminQuery({
           q.eq("siteId", siteId).eq("source.integration", "netbox"),
         )
         .collect()
-    ).length,
+    ).filter((device) => device.source?.missingSince === undefined).length,
 });
 
 const choice = v.object({ id: v.number(), name: v.string() });

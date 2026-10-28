@@ -1714,4 +1714,47 @@ describe("mapOperations.apply on the site inventory", () => {
     expect(row?.placement).toBeUndefined();
     expect(row?.source?.externalId).toBe("8");
   });
+
+  it("starts an absent device's 30 days when it leaves the plan, and stops them when it is placed", async () => {
+    const t = await signedInTest();
+    const siteId = await createTestSite(t);
+    const floorId = await freshFloor(t, siteId);
+    const placement = {
+      floorId,
+      position: { x: 0, y: 0 },
+      size: { width: 80, height: 80 },
+    };
+    await t.run(async (ctx) => {
+      await ctx.db.insert("devices", {
+        objectId: "device:absent-off",
+        siteId,
+        type: "pc",
+        name: "pc-9",
+        macs: [],
+        placement,
+        source: {
+          integration: "netbox",
+          externalId: "9",
+          syncedAt: 1,
+          missingSince: 1,
+          // Left by an earlier time off the plan: it must not count.
+          offPlanSince: 1,
+        },
+        metadata: {},
+        updatedAt: 1,
+        updatedBy: "netbox",
+      });
+    });
+    const before = Date.now();
+
+    expect((await unplace(t, 1, "device:absent-off")).status).toBe("applied");
+    const off = await deviceRow(t, "device:absent-off");
+    expect(off?.source?.offPlanSince).toBeGreaterThanOrEqual(before);
+
+    const back = { ...device("device:absent-off", floorId, 0), name: "pc-9" };
+    expect((await place(t, 2, back)).status).toBe("applied");
+    expect(
+      (await deviceRow(t, "device:absent-off"))?.source?.offPlanSince,
+    ).toBeUndefined();
+  });
 });

@@ -3,6 +3,7 @@
 // at once, so the next import updates the device like any other; its ports
 // and cables come with that import.
 import { ConvexError, v } from "convex/values";
+import type { Doc } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { editorMutation, editorQuery } from "./lib/functions";
 import { requireOpenSite } from "./sites";
@@ -17,7 +18,14 @@ const deviceRow = async (ctx: QueryCtx, deviceId: string) =>
     .withIndex("by_object_id", (q) => q.eq("objectId", deviceId))
     .unique();
 
-/** The site's pending reviews, each with the manual devices it could be. */
+/**
+ * Whether a device may still become the NetBox device of a review: a manual
+ * one, or one NetBox no longer returns (ADR 0039).
+ */
+const reviewable = (device: Doc<"devices">) =>
+  device.source === undefined || device.source.missingSince !== undefined;
+
+/** The site's pending reviews, each with the devices it could be. */
 export const listForSite = editorQuery({
   args: { siteId: v.string() },
   returns: v.array(
@@ -46,7 +54,7 @@ export const listForSite = editorQuery({
           device: row.device,
           // A candidate bound since, or gone, is no longer a choice.
           candidates: devices.flatMap((device) =>
-            device?.siteId === siteId && !device.source
+            device?.siteId === siteId && reviewable(device)
               ? [
                   {
                     id: device.objectId,
@@ -105,7 +113,7 @@ export const resolve = editorMutation({
         throw new ConvexError("Cet équipement n'est pas proposé.");
       }
       target = await deviceRow(ctx, deviceId);
-      if (target?.siteId !== siteId || target.source) {
+      if (target?.siteId !== siteId || !reviewable(target)) {
         throw new ConvexError("Cet équipement a changé : rechargez la page.");
       }
     }

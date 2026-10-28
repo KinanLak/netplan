@@ -161,7 +161,10 @@ stops every cycle on a server.
   contradiction binds a manual device; a hostname-only match waits as an
   Éditeur suggestion, an ambiguous one as an admin conflict
   (`importReviews`), both settled from the inventory page. A device NetBox
-  drops is deleted if unplaced, made manual otherwise.
+  no longer lists stays bound, absent since `source.missingSince` (ADR
+  0039): NetBox returning it, under its id or by MAC or serial, clears it;
+  a daily job purges one that has been absent, and on no floor, for 30
+  days, measured up to the last import. The push skips absent devices.
 - **LibreNMS** (`convex/librenmsCycle.ts`, the pure rules in
   `src/sites/librenmsCycle.ts`): at most every 5 minutes the cycle asks each
   polled switch to rediscover, then reads its ports and forwarding table.

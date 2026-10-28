@@ -76,6 +76,13 @@ export interface DeviceSource {
   url?: string;
   /** When the source last changed what it owns, not when it was last read. */
   syncedAt: number;
+  /** Since when NetBox no longer returns the device (ADR 0039). */
+  missingSince?: number;
+  /**
+   * While absent: since when the purge has seen it on no floor, so a device
+   * taken off a plan gets its 30 days from then (ADR 0039).
+   */
+  offPlanSince?: number;
 }
 
 // ── Domain documents ─────────────────────────────────────────────────────────

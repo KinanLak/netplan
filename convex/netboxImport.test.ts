@@ -170,7 +170,7 @@ describe("NetBox import", () => {
     expect(source.reads).toContain("/api/dcim/interfaces/");
   });
 
-  it("imports at most every 15 minutes outside a manual refresh, and drops what NetBox dropped", async () => {
+  it("imports at most every 15 minutes outside a manual refresh, and marks absent what NetBox dropped", async () => {
     const devices = [device(12, "pc-0012"), device(13, "pc-0013")];
     const source = netbox(devices, []);
     const { t, admin, editor, siteId } = await importingSite(source);
@@ -206,11 +206,17 @@ describe("NetBox import", () => {
       }
     });
     await runAutomatic();
-    expect((await inventory(editor, siteId)).map((d) => d.name)).toEqual([
-      "pc-0012",
+    expect(
+      (await inventory(editor, siteId)).map((d) => [
+        d.name,
+        d.source?.missingSince !== undefined,
+      ]),
+    ).toEqual([
+      ["pc-0012", false],
+      ["pc-0013", true],
     ]);
     expect((await lastSteps(admin, siteId))?.[0]?.message).toContain(
-      "(1 retiré)",
+      "(1 absent de NetBox)",
     );
   });
 
@@ -245,7 +251,7 @@ describe("NetBox import", () => {
     ).toEqual([]);
   });
 
-  it("retires what NetBox brought once no role has a type, without reading NetBox", async () => {
+  it("marks absent what NetBox brought once no role has a type, without reading NetBox", async () => {
     const source = netbox([device(12, "pc-0012"), device(13, "PC-0013")], []);
     const { t, admin, editor, siteId } = await importingSite(source);
     await editor.mutation(api.devices.create, {
@@ -267,13 +273,20 @@ describe("NetBox import", () => {
 
     expect(source.reads).toEqual(["/api/status/"]);
     expect(
-      (await inventory(editor, siteId)).map((d) => [d.name, d.source ?? null]),
-    ).toEqual([["pc-0013", null]]);
+      (await inventory(editor, siteId)).map((d) => [
+        d.name,
+        d.source?.externalId ?? null,
+        d.source?.missingSince !== undefined,
+      ]),
+    ).toEqual([
+      ["pc-0012", "12", true],
+      ["pc-0013", null, false],
+    ]);
     expect(
       await t.run(async (ctx) => await ctx.db.query("importReviews").collect()),
     ).toEqual([]);
     expect((await lastSteps(admin, siteId))?.[0]?.message).toContain(
-      "(1 retiré)",
+      "(1 absent de NetBox)",
     );
   });
 
@@ -416,6 +429,162 @@ describe("NetBox import", () => {
     expect(ports.filter((port) => port.source)).toEqual([]);
   });
 
+  it("keeps an absent device with its MACs and cables, and links it again when NetBox returns it", async () => {
+    const lists = {
+      devices: [
+        device(12, "pc-0012"),
+        device(20, "panel-a", { role: { id: 5 } }),
+      ],
+      interfaces: [
+        { id: 10, device: { id: 12 }, name: "1", mac_address: MAC_A },
+      ],
+      frontPorts: [{ id: 30, device: { id: 20 }, name: "F1" }],
+      cables: [
+        {
+          id: 100,
+          a_terminations: [{ object_type: "dcim.interface", object_id: 10 }],
+          b_terminations: [{ object_type: "dcim.frontport", object_id: 30 }],
+        },
+      ],
+    };
+    const { t, admin, editor, siteId } = await importingSite(
+      netboxServing(lists),
+    );
+    await refresh(editor, siteId);
+    const pcId = (await inventory(editor, siteId)).find(
+      (d) => d.name === "pc-0012",
+    )?.id;
+
+    // Its role changed in NetBox: the import no longer lists it, nor sees
+    // its cable's end.
+    const [pc] = lists.devices.splice(0, 1);
+    await refresh(editor, siteId);
+    const absent = (await inventory(editor, siteId)).find((d) => d.id === pcId);
+    expect(absent).toMatchObject({
+      macs: [MAC_A],
+      source: { integration: "netbox", externalId: "12" },
+    });
+    const since = absent?.source?.missingSince;
+    expect(since).toBeNumber();
+    const cables = async () =>
+      await t.run(async (ctx) => await ctx.db.query("cables").collect());
+    expect((await cables()).map((c) => c.source?.externalId)).toEqual(["100"]);
+
+    // A later import keeps the date it first went missing.
+    await refresh(editor, siteId);
+    expect(
+      (await inventory(editor, siteId)).find((d) => d.id === pcId)?.source
+        ?.missingSince,
+    ).toBe(since);
+
+    lists.devices.unshift(pc);
+    await refresh(editor, siteId);
+    const back = (await inventory(editor, siteId)).find((d) => d.id === pcId);
+    expect(back?.source?.missingSince).toBeUndefined();
+    expect(back?.macs).toEqual([MAC_A]);
+    expect((await cables()).map((c) => c.source?.externalId)).toEqual(["100"]);
+    expect((await lastSteps(admin, siteId))?.[0]?.message).toContain(
+      "1 de retour",
+    );
+  });
+
+  it("purges an absent device after 30 days of imports off the plan, never a placed one", async () => {
+    const DAY = 24 * 60 * 60_000;
+    const devices = [device(12, "pc-0012"), device(13, "pc-0013")];
+    const { t, editor, siteId } = await importingSite(
+      netbox(devices, [iface(12, MAC_A)]),
+    );
+    await refresh(editor, siteId);
+    devices.length = 0;
+    await refresh(editor, siteId);
+
+    const age = async (
+      missingFor: number,
+      { importedAgo = 0, offPlanFor = missingFor } = {},
+    ) =>
+      await t.run(async (ctx) => {
+        const now = Date.now();
+        for (const row of await ctx.db.query("devices").collect()) {
+          if (!row.source) continue;
+          await ctx.db.patch(row._id, {
+            source: {
+              ...row.source,
+              missingSince: now - missingFor,
+              ...(row.name !== "pc-0013" && { offPlanSince: now - offPlanFor }),
+            },
+            ...(row.name === "pc-0013" && {
+              placement: {
+                floorId: "floor:a",
+                position: { x: 0, y: 0 },
+                size: { width: 80, height: 80 },
+              },
+            }),
+          });
+        }
+        const cycle = await ctx.db
+          .query("siteCycles")
+          .withIndex("by_site", (q) => q.eq("siteId", siteId))
+          .unique();
+        if (cycle) {
+          await ctx.db.patch(cycle._id, {
+            netboxImportedAt: now - importedAgo,
+          });
+        }
+      });
+    const purge = async () => {
+      await t.mutation(internal.netboxImport.purgeAbsent, {});
+      await t.finishAllScheduledFunctions(() => {});
+      return (await inventory(editor, siteId)).map((d) => d.name);
+    };
+
+    // Absent while on no floor: its clock runs from the import that missed it.
+    expect(await purge()).toEqual(["pc-0012", "pc-0013"]);
+    expect(
+      (await inventory(editor, siteId)).map(
+        (d) => d.source?.offPlanSince !== undefined,
+      ),
+    ).toEqual([true, true]);
+
+    await age(29 * DAY);
+    expect(await purge()).toEqual(["pc-0012", "pc-0013"]);
+
+    // NetBox has not been read for two days: those days do not count.
+    await age(31 * DAY, { importedAgo: 2 * DAY });
+    expect(await purge()).toEqual(["pc-0012", "pc-0013"]);
+
+    // Absent for long, but taken off a plan yesterday: its 30 days start then.
+    await age(40 * DAY, { offPlanFor: DAY });
+    expect(await purge()).toEqual(["pc-0012", "pc-0013"]);
+
+    // Archived, a site keeps everything, even a run already scheduled.
+    await age(31 * DAY);
+    await t.run(async (ctx) => {
+      const site = await ctx.db
+        .query("sites")
+        .withIndex("by_object_id", (q) => q.eq("objectId", siteId))
+        .unique();
+      if (site) await ctx.db.patch(site._id, { archivedAt: 1 });
+    });
+    await t.mutation(internal.netboxImport.purgeSite, { siteId });
+    expect((await inventory(editor, siteId)).map((d) => d.name)).toEqual([
+      "pc-0012",
+      "pc-0013",
+    ]);
+    await t.run(async (ctx) => {
+      const site = await ctx.db
+        .query("sites")
+        .withIndex("by_object_id", (q) => q.eq("objectId", siteId))
+        .unique();
+      if (site) await ctx.db.patch(site._id, { archivedAt: undefined });
+    });
+
+    await age(31 * DAY);
+    expect(await purge()).toEqual(["pc-0013"]);
+    expect(
+      await t.run(async (ctx) => await ctx.db.query("deviceMacs").collect()),
+    ).toEqual([]);
+  });
+
   it("ignores an import whose cycle or settings changed meanwhile", async () => {
     const source = netbox([], []);
     const { editor, siteId } = await importingSite(source);
@@ -472,6 +641,31 @@ describe("Import reviews", () => {
         source: { integration: "netbox", externalId: "12" },
       },
     ]);
+  });
+
+  it("offers an absent device for the NetBox device that only shares its name", async () => {
+    const devices = [device(12, "pc-0012")];
+    const { editor, siteId } = await importingSite(netbox(devices, []));
+    await refresh(editor, siteId);
+    const [absent] = await inventory(editor, siteId);
+    // Deleted and created again in NetBox, under another id.
+    devices.splice(0, 1, device(99, "PC-0012"));
+    await refresh(editor, siteId);
+    expect(await reviews(editor, siteId)).toMatchObject([
+      { kind: "suggestion", candidates: [{ id: absent.id }] },
+    ]);
+
+    await editor.mutation(api.importReviews.resolve, {
+      siteId,
+      externalId: "99",
+      deviceId: absent.id,
+    });
+
+    expect(await inventory(editor, siteId)).toMatchObject([
+      { id: absent.id, source: { externalId: "99" } },
+    ]);
+    const [relinked] = await inventory(editor, siteId);
+    expect(relinked.source?.missingSince).toBeUndefined();
   });
 
   it("keeps a refused suggestion apart as a new device", async () => {

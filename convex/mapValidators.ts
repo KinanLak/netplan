@@ -46,6 +46,10 @@ export const deviceSource = v.object({
   externalId: v.string(),
   url: v.optional(v.string()),
   syncedAt: v.number(),
+  /** Since when NetBox no longer returns the device (ADR 0039). */
+  missingSince: v.optional(v.number()),
+  /** While absent: since when the purge has seen it on no floor. */
+  offPlanSince: v.optional(v.number()),
 });
 
 /** `SourceRef`: the object of an integration a port or cable comes from. */

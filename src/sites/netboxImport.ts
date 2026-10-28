@@ -113,6 +113,8 @@ export type InventoryDevice = {
   serial?: string;
   macs: ReadonlyArray<string>;
   placed: boolean;
+  /** Since when NetBox no longer returns it (ADR 0039). */
+  missingSince?: number;
 };
 
 export type ImportPlan = {
@@ -123,9 +125,11 @@ export type ImportPlan = {
   suggest: Array<{ device: ImportedDevice; candidateIds: Array<string> }>;
   /** Several candidates or a contradiction: an admin chooses. */
   conflict: Array<{ device: ImportedDevice; candidateIds: Array<string> }>;
-  /** Devices NetBox no longer lists: unplaced ones go, placed ones stay as manual. */
-  remove: Array<string>;
-  unbind: Array<string>;
+  /**
+   * Devices NetBox stopped returning with this import; they keep their
+   * binding, absent since now (ADR 0039).
+   */
+  missing: Array<string>;
   /** The MAC addresses each written device ends with. */
   macs: Map<string, Array<string>>;
 };
@@ -150,7 +154,8 @@ const countOf = (keys: Iterable<string | undefined>) => {
  * already brought is updated; a new one merges into the one manual device
  * that shares its MAC or serial without contradicting it, waits for review
  * when only a hostname matches or the match is ambiguous, and is created
- * otherwise.
+ * otherwise. A device NetBox no longer returns is never removed here: it
+ * becomes absent (ADR 0039).
  */
 export function planNetBoxImport(
   imported: ReadonlyArray<ImportedDevice>,
@@ -161,8 +166,7 @@ export function planNetBoxImport(
     create: [],
     suggest: [],
     conflict: [],
-    remove: [],
-    unbind: [],
+    missing: [],
     macs: new Map(),
   };
   const bound = new Map(
@@ -170,7 +174,14 @@ export function planNetBoxImport(
       device.netboxId ? [[device.netboxId, device] as const] : [],
     ),
   );
-  const manual = inventory.filter((device) => device.netboxId === undefined);
+  const listed = new Set(imported.map((device) => device.externalId));
+  // A device NetBox no longer returns links again to the device NetBox
+  // returns in its place, by the same rules as a manual one (ADR 0039).
+  const free = inventory.filter(
+    (device) =>
+      device.netboxId === undefined ||
+      (device.netboxId !== null && !listed.has(device.netboxId)),
+  );
 
   // An identifier several imported devices share identifies none of them.
   const serialCounts = countOf(
@@ -193,7 +204,7 @@ export function planNetBoxImport(
     }
     const serial = serialOf(device);
     const macs = macsOf(device);
-    const candidates = manual.filter(
+    const candidates = free.filter(
       (other) =>
         (serial !== undefined && serialKey(other.serial) === serial) ||
         macs.some((mac) => other.macs.includes(mac)),
@@ -208,7 +219,7 @@ export function planNetBoxImport(
       continue;
     }
     const host = hostKey(device.name);
-    const named = manual.filter(
+    const named = free.filter(
       (other) =>
         host !== undefined &&
         (hostKey(other.hostname) === host || hostKey(other.name) === host),
@@ -233,10 +244,10 @@ export function planNetBoxImport(
     }
   }
 
-  const listed = new Set(imported.map((device) => device.externalId));
+  const relinked = new Set(plan.update.map((entry) => entry.deviceId));
   for (const [externalId, device] of bound) {
-    if (listed.has(externalId)) continue;
-    (device.placed ? plan.unbind : plan.remove).push(device.id);
+    if (listed.has(externalId) || relinked.has(device.id)) continue;
+    if (device.missingSince === undefined) plan.missing.push(device.id);
   }
 
   plan.macs = assignMacs(plan, inventory, macsOf);
@@ -268,10 +279,9 @@ function assignMacs(
   macsOf: (device: ImportedDevice) => Array<string>,
 ): Map<string, Array<string>> {
   const written = new Set(plan.update.map((entry) => entry.deviceId));
-  const removed = new Set(plan.remove);
   const kept = new Set<string>();
   for (const device of inventory) {
-    if (written.has(device.id) || removed.has(device.id)) continue;
+    if (written.has(device.id)) continue;
     for (const mac of device.macs) kept.add(mac);
   }
   const macs = new Map<string, Array<string>>();
@@ -287,6 +297,45 @@ function assignMacs(
   return macs;
 }
 
+/** How long a device absent from NetBox and on no floor is kept (ADR 0039). */
+export const ABSENCE_KEPT_MS = 30 * 24 * 60 * 60_000;
+
+/**
+ * Whether the purge deletes an absent device: 30 days from the later of when
+ * NetBox stopped returning it and when the purge first saw it off every plan,
+ * so taking a long-absent device off a plan never loses it overnight. The
+ * days are measured up to the site's last NetBox import rather than to now,
+ * so an absence NetBox has not confirmed, because its imports stopped or
+ * fail, is never purged.
+ */
+export const absencePurgeDue = (
+  device: { placed: boolean; missingSince?: number; offPlanSince?: number },
+  importedAt: number | undefined,
+) =>
+  !device.placed &&
+  device.missingSince !== undefined &&
+  device.offPlanSince !== undefined &&
+  importedAt !== undefined &&
+  importedAt - Math.max(device.missingSince, device.offPlanSince) >=
+    ABSENCE_KEPT_MS;
+
+/**
+ * The binding of a device whose placement changes: an absent device taken
+ * off every plan starts its 30 days now, one placed again stops them (ADR
+ * 0039). Any other binding is returned as it is.
+ */
+export const withPlacementClock = <
+  S extends { missingSince?: number; offPlanSince?: number },
+>(
+  source: S | undefined,
+  placed: boolean,
+  now: number,
+): S | undefined => {
+  if (source?.missingSince === undefined) return source;
+  const { offPlanSince: _, ...rest } = source;
+  return placed ? (rest as S) : { ...source, offPlanSince: now };
+};
+
 /** The key of a created device in `ImportPlan.macs`, before it has an id. */
 export const newDeviceKey = (device: ImportedDevice) =>
   `netbox:${device.externalId}`;
@@ -295,7 +344,10 @@ export type ImportCounts = {
   imported: number;
   created: number;
   merged: number;
-  removed: number;
+  /** Devices that became absent from NetBox with this import. */
+  missing: number;
+  /** Absent devices NetBox returns again. */
+  returned: number;
   review: number;
 };
 
@@ -307,7 +359,10 @@ export function importSummary(counts: ImportCounts): string {
   const changes = [
     counts.created > 0 ? counted(counts.created, "nouveau", "nouveaux") : null,
     counts.merged > 0 ? counted(counts.merged, "rattaché", "rattachés") : null,
-    counts.removed > 0 ? counted(counts.removed, "retiré", "retirés") : null,
+    counts.missing > 0
+      ? counted(counts.missing, "absent de NetBox", "absents de NetBox")
+      : null,
+    counts.returned > 0 ? `${counts.returned} de retour` : null,
     counts.review > 0 ? `${counts.review} à vérifier` : null,
   ].filter((part) => part !== null);
   const imported = `Import : ${counted(counts.imported, "équipement", "équipements")}`;
@@ -466,9 +521,9 @@ export type ExistingPort = {
 
 /**
  * How a device's ports become NetBox's: a port keeps its id when it already
- * came from that NetBox port or, on a manual device NetBox now owns, when
- * its kind and name match, so the cables plugged into it stay. Other ports go
- * with their cables.
+ * came from that NetBox port or, when it is manual or its NetBox port is
+ * gone, when its kind and name match, so the cables plugged into it stay.
+ * Other ports go with their cables.
  */
 export function planDevicePorts(
   deviceId: string,
@@ -485,10 +540,14 @@ export function planDevicePorts(
   );
   const nameKey = (kind: PortKind, name: string) =>
     `${kind}:${name.trim().toLowerCase()}`;
+  // A manual port, or one whose NetBox port NetBox no longer lists, as when
+  // an absent device comes back recreated (ADR 0039), keeps its id by name.
+  const listed = new Set(wanted.map((port) => port.externalId));
   const manual = new Map<string, string>();
   for (const port of existing) {
     const key = nameKey(port.kind, port.name);
-    if (port.netboxId === null && !manual.has(key)) manual.set(key, port.id);
+    const free = port.netboxId === null || !listed.has(port.netboxId);
+    if (free && !manual.has(key)) manual.set(key, port.id);
   }
   const used = new Set<string>();
   const matched = wanted.map((port) => {

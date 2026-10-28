@@ -47,3 +47,4 @@ record's Source section points to its questions in the
 - **[0034 — A selection of several devices moves by one offset, as one block that never passes through a wall](0034-rigid-group-moves.md)**
 - **[0037 — Editing stops the moment the connection drops, a page keeps its session and its Convex identity through an outage, and everything comes back by itself](0037-outage-keeps-the-page.md)** (supersedes the « Offline » section of 0031)
 - **[0038 — A site is collected at one interval day and night, its readings expire after two intervals and the lease, and the collection says its doubts quietly](0038-one-cadence-and-quiet-collection.md)** (supersedes 0010)
+- **[0039 — A device NetBox stops returning becomes absent, is kept while on a plan, purged after 30 days off it, and linked again when NetBox returns it; a new NetBox address keeps everything when it reaches the same instance](0039-netbox-absence.md)**
