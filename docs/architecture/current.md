@@ -280,7 +280,7 @@ Built by lot 3b (ADR 0025) and redrawn by the UX lot U3 (ADR 0029).
   puts one where the plan is clicked. They go with a deleted floor.
 - **View, keys and selection (ADR 0030).** Each floor's view lives in
   `sessionStorage`; a first visit fits devices, walls and calque at most at
-  100 %. A device selected from outside the plan goes through
+  100 %, and the view zooms out at least far enough to show them whole. A device selected from outside the plan goes through
   `locateDevice`, which the canvas answers once the floor shows. One
   shortcut listener in the authenticated layout routes keys by
   `src/lib/shortcut-intents.ts`; React Flow's own keyboard handling is off.

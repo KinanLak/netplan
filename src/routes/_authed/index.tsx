@@ -97,16 +97,16 @@ function HomePage() {
 
   useMapUrlSync();
 
+  // The fallbacks below read the store, not this render: the URL sync above
+  // may have just opened a floor in the same pass of effects (A7).
   useEffect(() => {
     if (!buildings) return;
+    const { currentBuildingId: current } = useMapStore.getState();
     if (buildings.length === 0) {
-      if (currentBuildingId) setCurrentBuilding(null);
+      if (current) setCurrentBuilding(null);
       return;
     }
-    if (
-      currentBuildingId &&
-      buildings.some((building) => building.id === currentBuildingId)
-    ) {
+    if (current && buildings.some((building) => building.id === current)) {
       return;
     }
     setCurrentBuilding(asBuildingId(buildings[0].id));
@@ -128,11 +128,20 @@ function HomePage() {
 
   useEffect(() => {
     if (!floors) return;
-    if (currentFloorId && floors.some((floor) => floor.id === currentFloorId)) {
-      return;
-    }
+    const { currentBuildingId: building, currentFloorId: current } =
+      useMapStore.getState();
+    // These floors belong to the building of this render; another building
+    // has opened since, and its floors are on their way.
+    if (building !== currentBuildingId) return;
+    if (current && floors.some((floor) => floor.id === current)) return;
     setCurrentFloor(sortedFloors[0]?.id ?? null);
-  }, [floors, sortedFloors, currentFloorId, setCurrentFloor]);
+  }, [
+    floors,
+    sortedFloors,
+    currentBuildingId,
+    currentFloorId,
+    setCurrentFloor,
+  ]);
 
   // Only once loaded, so the map never flashes empty while it opens a floor.
   const currentBuilding =

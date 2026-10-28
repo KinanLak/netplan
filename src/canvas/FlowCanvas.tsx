@@ -63,7 +63,6 @@ import {
   FLOW_CANVAS_BACKGROUND_DOT_SIZE,
   FLOW_CANVAS_HALO_SHADOWS,
   FLOW_CANVAS_MAX_ZOOM,
-  FLOW_CANVAS_MIN_ZOOM,
 } from "@/lib/constants";
 
 const SNAP_GRID: [number, number] = [GRID_SIZE, GRID_SIZE];
@@ -307,7 +306,7 @@ export default function FlowCanvas() {
   // only hands ReactFlow these identity-stable bridge callbacks.
   const [paneBridge] = useState(createWallPaneEventBridge);
 
-  const { fitViewport } = useFloorViewport(reactFlow);
+  const { fitViewport, minZoom } = useFloorViewport(reactFlow);
   const { zoomIn, zoomOut, fitFloor } = useCanvasKeyboardShortcuts({
     reactFlow,
     fitViewport,
@@ -432,7 +431,7 @@ export default function FlowCanvas() {
               nodeTypes={nodeTypes}
               snapToGrid={true}
               snapGrid={SNAP_GRID}
-              minZoom={FLOW_CANVAS_MIN_ZOOM}
+              minZoom={minZoom}
               maxZoom={FLOW_CANVAS_MAX_ZOOM}
               panOnDrag={isMultiSelectMode ? RIGHT_MOUSE_PAN_BUTTON : panOnDrag}
               // The wheel zooms; arrow keys and Tab never reach the nodes, whose
