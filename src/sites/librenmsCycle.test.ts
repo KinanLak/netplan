@@ -121,28 +121,50 @@ describe("freshFdb", () => {
     read.fresh.map(({ portId }) => portId);
 
   it("keeps what the latest discovery refreshed", () => {
-    const first = freshFdb(table, undefined, true);
+    const first = freshFdb(table, undefined, "finished");
     expect(ports(first)).toEqual([1, 2]);
     expect(first.table).toEqual({ newest });
     // Read again before the next discovery: the same entries.
-    expect(ports(freshFdb(table, { newest }, false))).toEqual([1, 2]);
+    expect(ports(freshFdb(table, { newest }, "none"))).toEqual([1, 2]);
     // Without timestamps nothing can be told apart.
     expect(
-      freshFdb([entry(1, null), entry(2, null)], undefined, true).fresh,
+      freshFdb([entry(1, null), entry(2, null)], undefined, "finished").fresh,
     ).toHaveLength(2);
   });
 
   it("sees nothing once a discovery refreshed nothing, until one does", () => {
-    const stale = freshFdb(table, { newest }, true);
+    const stale = freshFdb(table, { newest }, "finished");
     expect(ports(stale)).toEqual([]);
     expect(stale.table).toEqual({ newest, staleUpTo: newest });
     // A read without a discovery remembers it.
-    expect(ports(freshFdb(table, stale.table ?? undefined, false))).toEqual([]);
+    expect(ports(freshFdb(table, stale.table ?? undefined, "none"))).toEqual(
+      [],
+    );
     // A later discovery refreshes one entry.
     const refreshed = [entry(5, "2026-10-16 07:10:00"), ...table];
-    expect(ports(freshFdb(refreshed, stale.table ?? undefined, true))).toEqual([
-      5,
-    ]);
+    expect(
+      ports(freshFdb(refreshed, stale.table ?? undefined, "finished")),
+    ).toEqual([5]);
+  });
+
+  it("says a table is not refreshed from a missed discovery until one finishes", () => {
+    const missed = freshFdb(table, { newest }, "missed");
+    // Counted as it was: a busy LibreNMS does not take devices offline.
+    expect(ports(missed)).toEqual([1, 2]);
+    expect(missed.table).toEqual({ newest, unrefreshed: true });
+    // A read without a discovery keeps saying it.
+    expect(freshFdb(table, missed.table ?? undefined, "none").table).toEqual({
+      newest,
+      unrefreshed: true,
+    });
+    // A finished discovery, or a table that moved, clears it.
+    expect(
+      freshFdb(table, missed.table ?? undefined, "finished").table?.unrefreshed,
+    ).toBeUndefined();
+    const moved = [entry(5, "2026-10-16 07:10:00"), ...table];
+    expect(
+      freshFdb(moved, missed.table ?? undefined, "none").table?.unrefreshed,
+    ).toBeUndefined();
   });
 
   it("sees nothing on a first read when the discovery left the table as it was", () => {
@@ -169,13 +191,17 @@ describe("freshFdb", () => {
     const recorded = Date.UTC(2026, 9, 13, 12, 0, 27);
     expect(newestFdbEntry(entries)).toBe(recorded);
 
-    const first = freshFdb(entries, { newest: recorded }, true);
+    const first = freshFdb(entries, { newest: recorded }, "finished");
     expect(first.fresh).toEqual([]);
     expect(first.table).toEqual({ newest: recorded, staleUpTo: recorded });
     // A table the discovery refreshed is read as before.
     expect(
       ports(
-        freshFdb(table, { newest: Date.UTC(2026, 9, 16, 6, 55, 30) }, true),
+        freshFdb(
+          table,
+          { newest: Date.UTC(2026, 9, 16, 6, 55, 30) },
+          "finished",
+        ),
       ),
     ).toEqual([1, 2]);
     expect(newestFdbEntry([entry(1, null)])).toBeNull();

@@ -70,6 +70,7 @@ export const cycleRun = v.object({
 export const fdbTable = v.object({
   newest: v.number(),
   staleUpTo: v.optional(v.number()),
+  unrefreshed: v.optional(v.boolean()),
 });
 
 /**

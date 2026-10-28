@@ -184,9 +184,20 @@ export function readLibreNMSTime(value: unknown): number | null {
 
 /**
  * What a cycle keeps of a switch's table, in LibreNMS's clock: its newest
- * entry, and up to when a discovery proved its entries stale.
+ * entry, up to when a discovery proved its entries stale, and whether the
+ * last discovery asked for did not finish.
  */
-export type FdbTable = { newest: number; staleUpTo?: number };
+export type FdbTable = {
+  newest: number;
+  staleUpTo?: number;
+  unrefreshed?: boolean;
+};
+
+/**
+ * What became of this read's discovery: it finished, it was asked for and
+ * did not finish (busy, refused, too slow), or none was asked for.
+ */
+export type FdbDiscovery = "finished" | "missed" | "none";
 
 /** A table's newest entry, or `null` when none has a timestamp. */
 export const newestFdbEntry = (
@@ -208,16 +219,24 @@ export const newestFdbEntry = (
  * without timestamps cannot be judged and is kept whole. The comparison stays
  * within the table's own clock, which may differ from the one LibreNMS dates
  * discoveries with.
+ *
+ * A discovery that did not finish leaves the table counted as it was, but
+ * `unrefreshed` until one finishes or the table moves, so the reads without
+ * a discovery in between keep saying so.
  */
 export function freshFdb(
   entries: ReadonlyArray<FdbEntry>,
   previous: FdbTable | undefined,
-  discovered: boolean,
+  discovery: FdbDiscovery,
 ): { fresh: Array<FdbEntry>; table: FdbTable | null } {
   const newest = newestFdbEntry(entries);
   if (newest === null) return { fresh: [...entries], table: null };
+  const unchanged = previous?.newest === newest;
   const staleUpTo =
-    discovered && previous?.newest === newest ? newest : previous?.staleUpTo;
+    discovery === "finished" && unchanged ? newest : previous?.staleUpTo;
+  const unrefreshed =
+    discovery === "missed" ||
+    (discovery === "none" && unchanged && previous.unrefreshed === true);
   const fresh = entries.filter(
     ({ updatedAt }) =>
       updatedAt !== null &&
@@ -226,7 +245,11 @@ export function freshFdb(
   );
   return {
     fresh,
-    table: { newest, ...(staleUpTo !== undefined && { staleUpTo }) },
+    table: {
+      newest,
+      ...(staleUpTo !== undefined && { staleUpTo }),
+      ...(unrefreshed && { unrefreshed }),
+    },
   };
 }
 
