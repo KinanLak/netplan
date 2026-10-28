@@ -75,9 +75,8 @@ export function TimeZoneField({
                 <span className="min-w-0 flex-1 truncate">
                   {zone}
                   {zone === own ? (
-                    <span className="text-muted-foreground">
-                      {" "}
-                      · ce navigateur
+                    <span className="ml-3 text-muted-foreground">
+                      ce navigateur
                     </span>
                   ) : null}
                 </span>

@@ -15,7 +15,11 @@ export function NoSite() {
   const allArchived = (sites?.length ?? 0) > 0;
   return (
     <div className="flex justify-center rounded-lg border border-dashed p-8">
-      <Link to="/admin/sites" className={buttonVariants()}>
+      <Link
+        to="/admin/sites"
+        search={allArchived ? {} : { create: true }}
+        className={buttonVariants()}
+      >
         {allArchived ? "Désarchiver un site" : "Créer un site"}
       </Link>
     </div>

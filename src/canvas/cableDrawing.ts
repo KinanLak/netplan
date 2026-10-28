@@ -99,7 +99,7 @@ export const cableStart = (
   return {
     kind: "unplug",
     cable,
-    label: `${near} ↔ ${farLabel}`,
+    label: `${near} à ${farLabel}`,
     far: farLabel,
   };
 };

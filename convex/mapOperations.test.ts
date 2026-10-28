@@ -4,6 +4,7 @@ import { addLine } from "../src/walls/engine";
 import type { DeviceSource, FloorId, WallId } from "../src/types/map";
 import { signedInTest, createTestSite } from "./_test/auth.setup";
 import type { TestClient } from "./_test/auth.setup";
+import { ARCHIVED_SITE } from "./sites";
 
 let counter = 0;
 
@@ -418,7 +419,7 @@ describe("mapOperations.apply", () => {
     });
     expect(refused).toMatchObject({
       status: "rejected",
-      error: "Ce site est archivé : il est en lecture seule.",
+      error: ARCHIVED_SITE,
     });
     await expect(
       t.mutation(api.floors.rename, { id: floorId, name: "Autre" }),

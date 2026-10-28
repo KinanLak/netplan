@@ -63,7 +63,7 @@ function SwitchNode({ data: device, id }: NodeProps<SwitchNodeType>) {
               grip.isGrip && "cursor-crosshair",
               PORT_STATE_CLASSES[portState(port)],
             )}
-            title={`${port.name} · ${PORT_STATE_LABELS[portState(port)]}`}
+            title={`${port.name}, ${PORT_STATE_LABELS[portState(port)]}`}
           >
             <CableHandle id={port.id} />
           </div>

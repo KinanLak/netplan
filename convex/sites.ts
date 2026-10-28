@@ -88,7 +88,7 @@ export const requireSite = async (ctx: QueryCtx, siteId: string) => {
   return site;
 };
 
-export const ARCHIVED_SITE = "Ce site est archivé : il est en lecture seule.";
+export const ARCHIVED_SITE = "Ce site est archivé.";
 
 /**
  * The site, for a change to its plan, inventory or collection: an archived
