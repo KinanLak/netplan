@@ -39,6 +39,7 @@ import type * as lib_ignoredMacs from "../lib/ignoredMacs.js";
 import type * as lib_imageHeader from "../lib/imageHeader.js";
 import type * as lib_integrationProbe from "../lib/integrationProbe.js";
 import type * as lib_keycloak from "../lib/keycloak.js";
+import type * as lib_keycloakRole from "../lib/keycloakRole.js";
 import type * as lib_mailTemplates from "../lib/mailTemplates.js";
 import type * as lib_netboxApi from "../lib/netboxApi.js";
 import type * as lib_overlayFiles from "../lib/overlayFiles.js";
@@ -108,6 +109,7 @@ declare const fullApi: ApiFromModules<{
   "lib/imageHeader": typeof lib_imageHeader;
   "lib/integrationProbe": typeof lib_integrationProbe;
   "lib/keycloak": typeof lib_keycloak;
+  "lib/keycloakRole": typeof lib_keycloakRole;
   "lib/mailTemplates": typeof lib_mailTemplates;
   "lib/netboxApi": typeof lib_netboxApi;
   "lib/overlayFiles": typeof lib_overlayFiles;

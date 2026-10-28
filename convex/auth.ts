@@ -18,12 +18,9 @@ import type { DataModel } from "./_generated/dataModel";
 import authConfig from "./auth.config";
 import authSchema from "./betterAuth/schema";
 import { authRoles } from "./lib/authRoles";
-import {
-  keycloakRoleNames,
-  readKeycloakConfig,
-  roleFromKeycloak,
-} from "./lib/keycloak";
+import { readKeycloakConfig } from "./lib/keycloak";
 import type { KeycloakConfig } from "./lib/keycloak";
+import { setRoleFromTokens } from "./lib/keycloakRole";
 import { resetPasswordMail } from "./lib/mailTemplates";
 import type { AttemptKind } from "./lib/signInLimit";
 import { noteSignIn } from "./lib/signIns";
@@ -87,18 +84,12 @@ async function applyKeycloakRole(
     ],
   });
   if (!account) return;
-  const mapping = await runQuery(internal.authSettings.keycloakRoleMapping, {});
-  const role = roleFromKeycloak(
-    keycloakRoleNames(account, config.clientId, mapping),
-    mapping,
+  await setRoleFromTokens(
+    { runQuery, runMutation },
+    config.clientId,
+    userId,
+    account,
   );
-  await runMutation(components.betterAuth.adapter.updateOne, {
-    input: {
-      model: "user",
-      where: [{ field: "_id", value: userId }],
-      update: { role, updatedAt: Date.now() },
-    },
-  });
 }
 
 /**

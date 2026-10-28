@@ -47,6 +47,9 @@ let nextLogin: Login = { sub: "", email: "", name: "", roles: [] };
 // What the token endpoint answers to a refresh token: the roles Keycloak
 // now gives, or a refusal, or no answer at all.
 let nextRefresh: Array<string> | "invalid_grant" | "down" = [];
+// The scopes Keycloak grants: without the offline one, a client that does
+// not offer it gives an ordinary refresh token.
+let grantedScope = "openid profile email offline_access";
 const refreshTokensSeen: Array<string | null> = [];
 
 const tokensFor = ({ sub, email, name, roles, groups }: Login) =>
@@ -54,6 +57,7 @@ const tokensFor = ({ sub, email, name, roles, groups }: Login) =>
     token_type: "Bearer",
     expires_in: 300,
     refresh_expires_in: 0,
+    scope: grantedScope,
     refresh_token: `offline-${sub}-${roles.join("+")}`,
     access_token: jwt({ sub, realm_access: { roles }, groups }),
     id_token: jwt({ sub, email, email_verified: true, name }),
@@ -399,6 +403,19 @@ describe("Keycloak role refresh", () => {
       (await keycloakLogin(t, { ...camille, roles: ["netplan-editor"] }))
         .location,
     ).toBe("/");
+  });
+
+  it("never ends a login over an ordinary refresh token, which dies with Keycloak's idle session", async () => {
+    const t = withMail();
+    grantedScope = "openid profile email";
+    try {
+      const { cookie, useAnHourLater } = await signedInEditor(t);
+      nextRefresh = "invalid_grant";
+      await useAnHourLater();
+      expect(await sessionOf(t, cookie)).not.toBeNull();
+    } finally {
+      grantedScope = "openid profile email offline_access";
+    }
   });
 
   it("changes nothing while Keycloak does not answer", async () => {
