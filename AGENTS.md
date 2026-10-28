@@ -170,7 +170,9 @@ in the PR which entries applied:
   assert props, or write tests that mirror the implementation.
 - Never wait on sleeps in a test. A test that needs a timeout to pass is wrong.
 - An empty database is a bad test of the UI. Verify a user-visible change in a
-  real browser, never against a deployment other people use.
+  real browser, never against a deployment other people use, through a Codex
+  `gpt-6.1-terra` subagent (`delegate_task`) rather than yourself; the same
+  goes for UI reviews. Effort `medium` for a few actions, `high` for many.
 
 ## Code
 
