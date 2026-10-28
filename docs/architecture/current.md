@@ -218,7 +218,7 @@ Built by lot 4 (ADR 0026).
 
 ## Shell
 
-Built by the UX lot U1 (ADR 0031).
+Built by the UX lot U1 (ADR 0031) and reworked by U8 (ADR 0034).
 
 - **Theme and errors.** A script in `<head>` sets the theme class before the
   first paint and `ThemeProvider` lives at the root, so every page, the
@@ -233,11 +233,13 @@ Built by the UX lot U1 (ADR 0031).
   a session update hook. A function refusing a lost session says whether
   the account was disabled, and the sign-in page says so.
 - **Offline.** `ConnectionBanner`, mounted once in the signed-in layout,
-  turns Convex's connection state into a phase (`src/lib/connection.ts`):
-  after 2 s a banner, after 30 s a frozen map. Frozen is a flag in
-  `useConnectionStore` that `useIsEditMode()` and the shortcut runtime read,
-  so edit controls leave as for a Lecteur; open tools and the structure
-  dialog close, and the queued operations go out on reconnection.
+  follows Convex's socket and `navigator.onLine` (`src/lib/connection.ts`).
+  The moment either drops, `useConnectionStore.isMapFrozen` turns the map
+  read-only: `useIsEditMode()` and the shortcut runtime read it, open tools
+  and the structure dialog close, and the map session refuses new
+  operations. After 2 s a discreet line says so, with the count of edits
+  sent but unconfirmed; Convex's client sends those again on reconnection
+  (ADR 0034).
 
 ## Map
 

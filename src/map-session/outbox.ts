@@ -14,63 +14,34 @@ export interface OutboxApplyResult {
 /** The rejection an operation gets when the user's role cannot edit. */
 export const FORBIDDEN_REJECTION = "forbidden";
 
-/**
- * Turns the server's refusal of the caller's role into a rejection. It fails
- * the same way on every retry, so retrying it would leave the operation
- * pending forever behind a "reconnecting" banner.
- */
-export const rejectingForbidden =
-  (send: SequentialOutboxOptions["send"]): SequentialOutboxOptions["send"] =>
-  async (operation) => {
-    try {
-      return await send(operation);
-    } catch (error) {
-      if (!isForbidden(error)) throw error;
-      return {
-        status: "rejected",
-        opId: operation.meta.opId,
-        error: FORBIDDEN_REJECTION,
-      };
-    }
-  };
+/** What the user reads when the server failed on an operation. */
+export const FAILED_REJECTION =
+  "La modification n'a pas pu être enregistrée. Réessayez.";
 
 export interface OutboxState {
   pendingCount: number;
-  isFlushing: boolean;
-  isRetrying: boolean;
-  lastFailure: string | null;
-  nextRetryAt: number | null;
 }
-
-interface RetryOptions {
-  baseDelayMs?: number;
-  maxDelayMs?: number;
-  jitterRatio?: number;
-  random?: () => number;
-  now?: () => number;
-  setTimeout?: (callback: () => void, delayMs: number) => RetryTimer;
-  clearTimeout?: (timeout: RetryTimer) => void;
-}
-
-type RetryTimer = number | ReturnType<typeof setTimeout>;
 
 export interface SequentialOutboxOptions {
   send: (operation: MapOperation) => Promise<OutboxApplyResult>;
   onAck: (operation: MapOperation, result: OutboxApplyResult) => void;
   onReject: (operation: MapOperation, error: string) => void;
-  onNetworkFailure: (operation: MapOperation, error: Error) => void;
   onStateChange?: (state: OutboxState) => void;
-  retry?: RetryOptions;
 }
 
+/**
+ * Sends the map's operations one at a time, in the order they were made.
+ *
+ * Nothing is made without a connection (ADR 0034). An operation already
+ * sent when the connection drops stays with Convex's client, which sends it
+ * again on reconnection: the server confirms it, or refuses it and it rolls
+ * back like any refusal. A function that fails rolls back too, with a
+ * message: retrying it would fail the same way.
+ */
 export class SequentialOutbox {
   private readonly queue: Array<MapOperation> = [];
   private flushing = false;
   private generation = 0;
-  private retryAttempts = 0;
-  private retryTimer: RetryTimer | null = null;
-  private lastFailure: string | null = null;
-  private nextRetryAt: number | null = null;
   private readonly options: SequentialOutboxOptions;
 
   constructor(options: SequentialOutboxOptions) {
@@ -86,18 +57,10 @@ export class SequentialOutbox {
     void this.flush();
   }
 
-  retry() {
-    this.cancelRetryTimer();
-    void this.flush();
-  }
-
   clear() {
     this.queue.length = 0;
     this.generation += 1;
     this.flushing = false;
-    this.retryAttempts = 0;
-    this.lastFailure = null;
-    this.cancelRetryTimer();
     this.emitState();
   }
 
@@ -110,99 +73,45 @@ export class SequentialOutbox {
   }
 
   get state(): OutboxState {
-    return {
-      pendingCount: this.queue.length,
-      isFlushing: this.flushing,
-      isRetrying: this.retryTimer !== null,
-      lastFailure: this.lastFailure,
-      nextRetryAt: this.nextRetryAt,
-    };
+    return { pendingCount: this.queue.length };
   }
 
   private emitState() {
     this.options.onStateChange?.(this.state);
   }
 
-  private cancelRetryTimer() {
-    if (!this.retryTimer) return;
-    const clearTimeoutFn = this.options.retry?.clearTimeout ?? clearTimeout;
-    clearTimeoutFn(this.retryTimer);
-    this.retryTimer = null;
-    this.nextRetryAt = null;
-  }
-
-  private scheduleRetry() {
-    if (this.retryTimer || this.queue.length === 0) return;
-    const retry = this.options.retry;
-    const baseDelayMs = retry?.baseDelayMs ?? 750;
-    const maxDelayMs = retry?.maxDelayMs ?? 10_000;
-    const jitterRatio = retry?.jitterRatio ?? 0.3;
-    const random = retry?.random ?? Math.random;
-    const now = retry?.now ?? Date.now;
-    const setTimeoutFn = retry?.setTimeout ?? setTimeout;
-    const exponentialDelay = Math.min(
-      maxDelayMs,
-      baseDelayMs * 2 ** Math.max(0, this.retryAttempts - 1),
-    );
-    const jitter = exponentialDelay * jitterRatio * random();
-    const delayMs = Math.round(exponentialDelay + jitter);
-    this.nextRetryAt = now() + delayMs;
-    this.retryTimer = setTimeoutFn(() => {
-      this.retryTimer = null;
-      this.nextRetryAt = null;
-      this.emitState();
-      void this.flush();
-    }, delayMs);
-    this.emitState();
-  }
-
   private async flush() {
     if (this.flushing) return;
-    this.cancelRetryTimer();
     this.flushing = true;
     const generation = this.generation;
-    this.emitState();
 
     try {
       while (this.queue.length > 0) {
         const operation = this.queue[0];
+        let result: OutboxApplyResult;
         try {
-          const result = await this.options.send(operation);
-          if (generation !== this.generation) return;
-          if (result.status === "rejected") {
-            this.queue.shift();
-            this.options.onReject(
-              operation,
-              result.error ?? "Le serveur a refusé la modification.",
-            );
-            this.retryAttempts = 0;
-            this.lastFailure = null;
-            this.emitState();
-            continue;
-          }
-          this.queue.shift();
-          this.retryAttempts = 0;
-          this.lastFailure = null;
-          this.options.onAck(operation, result);
-          this.emitState();
+          result = await this.options.send(operation);
         } catch (error) {
-          if (generation !== this.generation) return;
-          this.retryAttempts += 1;
-          this.lastFailure =
-            error instanceof Error ? error.message : String(error);
-          this.options.onNetworkFailure(
-            operation,
-            error instanceof Error ? error : new Error(String(error)),
-          );
-          this.scheduleRetry();
-          break;
+          result = {
+            status: "rejected",
+            opId: operation.meta.opId,
+            error: isForbidden(error) ? FORBIDDEN_REJECTION : FAILED_REJECTION,
+          };
         }
-      }
-    } finally {
-      if (generation === this.generation) {
-        this.flushing = false;
+        if (generation !== this.generation) return;
+        this.queue.shift();
+        if (result.status === "rejected") {
+          this.options.onReject(
+            operation,
+            result.error ?? "Le serveur a refusé la modification.",
+          );
+        } else {
+          this.options.onAck(operation, result);
+        }
         this.emitState();
       }
+    } finally {
+      if (generation === this.generation) this.flushing = false;
     }
   }
 }

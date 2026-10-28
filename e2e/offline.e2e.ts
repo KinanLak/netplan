@@ -29,13 +29,18 @@ const position = (page: Page) =>
  */
 const backendSwitch = async (page: Page) => {
   let down = false;
+  // The server's answers are dropped, so what the page sent stays in flight.
+  let deaf = false;
   const sockets = new Set<WebSocketRoute>();
   await page.routeWebSocket(/\/api\/[^/]+\/sync/, (socket) => {
     if (down) {
       void socket.close();
       return;
     }
-    socket.connectToServer();
+    const server = socket.connectToServer();
+    server.onMessage((message) => {
+      if (!deaf) socket.send(message);
+    });
     sockets.add(socket);
   });
   await page.route(/\/(_serverFn|api\/auth)\//, (route) =>
@@ -44,8 +49,12 @@ const backendSwitch = async (page: Page) => {
       : route.fallback(),
   );
   return {
+    deafen: () => {
+      deaf = true;
+    },
     cut: async () => {
       down = true;
+      deaf = false;
       for (const socket of sockets) await socket.close();
       sockets.clear();
     },
@@ -101,6 +110,44 @@ test("a page change during a backend outage keeps the page, and editing works ag
     await expect.poll(() => position(other)).toBe(moved);
   } finally {
     // The seed is shared with the next run and the developer's instance.
+    await page.keyboard.press("Control+z");
+    await expect.poll(() => position(other)).toBe(before);
+  }
+});
+
+// ADR 0034: nothing is edited without a connection, and an edit already sent
+// when it drops is confirmed on its return rather than lost.
+test("an edit in flight when the backend drops lands on its return, and the map is read-only meanwhile", async ({
+  page,
+}) => {
+  const backend = await backendSwitch(page);
+  await signIn(page);
+  const edit = page.getByRole("button", { name: /^(Modifier|Terminer) E$/ });
+  await edit.click();
+  await switchNode(page).click();
+  const before = await position(page);
+
+  backend.deafen();
+  await page.keyboard.press("ArrowDown");
+  const moved = await position(page);
+  expect(moved).not.toBe(before);
+  await backend.cut();
+
+  await expect(edit).toBeDisabled();
+  await expect(offlineLine(page)).toContainText("1 modification en attente");
+
+  backend.restore();
+  // Convex reconnects on its own backoff, which grew during the outage.
+  await expect(offlineLine(page)).toBeHidden({ timeout: 20_000 });
+  await expect(edit).toBeEnabled();
+
+  const other = await page.context().newPage();
+  try {
+    await other.goto(page.url());
+    await expect.poll(() => position(other)).toBe(moved);
+  } finally {
+    // The seed is shared with the next run and the developer's instance.
+    await switchNode(page).click();
     await page.keyboard.press("Control+z");
     await expect.poll(() => position(other)).toBe(before);
   }
