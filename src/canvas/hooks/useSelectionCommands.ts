@@ -4,7 +4,6 @@ import {
   alignDevices,
   arrangedDevicesOverlap,
   distributeDevices,
-  nudgeDevices,
   orderMoves,
 } from "@/canvas/arrangement";
 import type {
@@ -44,18 +43,21 @@ export function useSelectionMoves() {
     );
   };
 
+  const withinLimit = (devices: ReadonlyArray<Device>): boolean => {
+    if (devices.length <= MAX_SELECTION_MOVE) return true;
+    toast.error(
+      `Sélectionnez au plus ${MAX_SELECTION_MOVE} équipements pour les déplacer ensemble.`,
+    );
+    return false;
+  };
+
   /** Applies the moves when every device lands on free ground. */
   const move = (
     devices: ReadonlyArray<Device>,
     updates: Array<PositionUpdate>,
   ): boolean => {
     if (updates.length === 0) return false;
-    if (devices.length > MAX_SELECTION_MOVE) {
-      toast.error(
-        `Sélectionnez au plus ${MAX_SELECTION_MOVE} équipements pour les déplacer ensemble.`,
-      );
-      return false;
-    }
+    if (!withinLimit(devices)) return false;
     const ignored = new Set(devices.map((device) => device.id));
     const byId = new Map(devices.map((device) => [device.id, device]));
     const blocked =
@@ -74,13 +76,26 @@ export function useSelectionMoves() {
         );
       });
     if (blocked) return false;
-    // Spreading and centring move devices in opposite directions, which the
-    // provider's one-direction sort cannot order.
-    commands.updateDevicePositions(orderMoves(devices, updates), {
-      ordered: true,
-    });
+    // Spreading and centring move devices in opposite directions: each
+    // moves once the spot it takes is free.
+    commands.updateDevicePositions(orderMoves(devices, updates));
     return true;
   };
+
+  /** Moves the devices as one block, never through a wall (ADR 0034). */
+  const translate = (
+    devices: ReadonlyArray<Device>,
+    offset: Position,
+  ): boolean =>
+    devices.length > 0 &&
+    withinLimit(devices) &&
+    commands.moveDevices(
+      devices.map((device) => ({
+        deviceId: device.id,
+        position: device.position,
+      })),
+      offset,
+    );
 
   const arrange = (
     plan: (devices: ReadonlyArray<Device>) => Array<PositionUpdate>,
@@ -94,7 +109,7 @@ export function useSelectionMoves() {
 
   return {
     selectedDevices,
-    move,
+    translate,
     align: (alignment: Alignment) =>
       arrange(
         (devices) => alignDevices(devices, alignment),
@@ -115,7 +130,7 @@ export function useSelectionMoves() {
  */
 export function useSelectionShortcuts() {
   const { commands, getDocument } = useMapDocumentActions();
-  const { selectedDevices, move } = useSelectionMoves();
+  const { selectedDevices, translate } = useSelectionMoves();
   const heldKeyRef = useRef<string | null>(null);
 
   useShortcutIntentEffect("nudge-selection", (event) => {
@@ -127,14 +142,10 @@ export function useSelectionShortcuts() {
       commands.beginHistoryGroup();
     }
     const cells = event.shiftKey ? 4 : 1;
-    const devices = selectedDevices();
-    move(
-      devices,
-      nudgeDevices(devices, {
-        x: direction.x * cells * GRID_SIZE,
-        y: direction.y * cells * GRID_SIZE,
-      }),
-    );
+    translate(selectedDevices(), {
+      x: direction.x * cells * GRID_SIZE,
+      y: direction.y * cells * GRID_SIZE,
+    });
   });
 
   useEffect(() => {

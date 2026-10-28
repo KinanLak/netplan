@@ -1,6 +1,7 @@
 import type { MapDocumentSnapshot } from "@/types/map";
 import { cableTouches } from "@/devices/ports";
 import { applyOperation } from "./applyOperation";
+import { shifted } from "./devicePatch";
 import { applyLabelPatch } from "./labels";
 import type { LabelPatch } from "./labels";
 import type { BatchSubOperation, DevicePatch, MapOperation } from "./types";
@@ -84,6 +85,18 @@ export function buildInverseOperation(
 
     case "device.patch":
       return invertDevicePatch(snapshotBeforeOperation, operation);
+
+    case "devices.move": {
+      const { from, offset } = operation;
+      return {
+        kind: "devices.move",
+        meta: operation.meta,
+        // Each where the move leaves it: anywhere else, someone has moved
+        // it since, and the group would come back deformed.
+        from: shifted(from, offset),
+        offset: { x: -offset.x, y: -offset.y },
+      };
+    }
 
     case "device.delete": {
       const device = snapshotBeforeOperation.devices.find(

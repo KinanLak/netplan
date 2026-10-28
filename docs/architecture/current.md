@@ -125,8 +125,8 @@ says how to check a real LibreNMS.
 
 Built by lot 2 (ADRs 0005, 0007 and 0022). A device belongs to its site;
 its placement (floor, position, size) is optional. Placing, unplacing and
-moving are map operations (`device.place`, `device.unplace`,
-`device.patch`), so they are undoable and an operation touches one floor.
+moving are map operations (`device.place`, `device.unplace`, `device.patch`,
+`devices.move`), so they are undoable and an operation touches one floor.
 Identity (name, hostname, serial, MACs, model, IP) is edited through
 site-scoped mutations from the drawer or the inventory page
 (`/inventory`), which also creates and deletes devices. The map's « Placer »
@@ -284,13 +284,14 @@ Built by lot 3b (ADR 0025) and redrawn by the UX lot U3 (ADR 0029).
   `locateDevice`, which the canvas answers once the floor shows. One
   shortcut listener in the authenticated layout routes keys by
   `src/lib/shortcut-intents.ts`; React Flow's own keyboard handling is off.
-  The selection is the store's set: arrows nudge it inside a history group
-  that merges to one patch per device on key release, and Delete takes it
-  off the plan as one batch.
+  The selection is the store's set: a drag or the arrows move it as one
+  `devices.move`, one offset for every member that no member's path may take
+  through a wall (ADR 0034); a held arrow key sums its steps into one move on
+  release. Delete takes the selection off the plan as one batch.
 - **Moves made by others.** The cycle moves devices through
   `applyMapOperation`, so they reach every client and enter no history. An
   undo or redo carries where it expects the device (`expected` on
-  `device.patch` and `device.unplace`), and the engine and server refuse it
+  `device.patch` and `device.unplace`, `from` on `devices.move`), and the engine and server refuse it
   once someone else, the cycle included, has moved the device since.
 
 ## History and the push to NetBox

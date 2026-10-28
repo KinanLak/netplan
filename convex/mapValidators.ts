@@ -127,6 +127,9 @@ export const devicePatch = v.object({
   size: v.optional(size),
 });
 
+/** A member of a group move, where it stands before the move. */
+const groupMember = v.object({ deviceId: v.string(), position });
+
 export const wallSegment = v.object({
   id: v.string(),
   floorId: v.string(),
@@ -183,6 +186,12 @@ export const mapOperation = v.union(
     deviceId: v.string(),
     patch: devicePatch,
     expected: v.optional(devicePatch),
+  }),
+  v.object({
+    kind: v.literal("devices.move"),
+    meta: operationMeta,
+    from: v.array(groupMember),
+    offset: position,
   }),
   v.object({
     kind: v.literal("device.delete"),
@@ -255,6 +264,11 @@ export const mapOperation = v.union(
           deviceId: v.string(),
           patch: devicePatch,
           expected: v.optional(devicePatch),
+        }),
+        v.object({
+          kind: v.literal("devices.move"),
+          from: v.array(groupMember),
+          offset: position,
         }),
         v.object({
           kind: v.literal("device.delete"),

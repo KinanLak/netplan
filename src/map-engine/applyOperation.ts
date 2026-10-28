@@ -5,7 +5,7 @@ import {
   defaultPorts,
   portListError,
 } from "@/devices/ports";
-import { isAsExpected } from "./devicePatch";
+import { isAsExpected, movedAsExpected, shifted } from "./devicePatch";
 import { applyLabelPatch, labelError, labelIsAsExpected } from "./labels";
 import {
   applyOverlayPatch,
@@ -117,6 +117,8 @@ const isSafeBatchNoop = (
       return reason === "already-exists";
     case "label.delete":
       return reason === "missing-label";
+    case "devices.move":
+      return reason === "already-exists";
     case "overlay.patch":
     case "device.patch":
     case "label.patch":
@@ -193,6 +195,42 @@ export function applyOperation(
       devices[index] = { ...device, ...operation.patch };
 
       return changed({ ...snapshot, devices });
+    }
+
+    case "devices.move": {
+      const { from, offset } = operation;
+      const ids = new Set<string>(from.map((member) => member.deviceId));
+      if (ids.size === 0 || ids.size !== from.length) {
+        return unchanged(snapshot, "invalid-move");
+      }
+      const members = snapshot.devices.filter((device) => ids.has(device.id));
+      if (members.length !== ids.size) {
+        return unchanged(snapshot, "missing-device");
+      }
+      if (members.some((device) => device.floorId !== members[0].floorId)) {
+        return unchanged(snapshot, "wrong-floor");
+      }
+      // The server's document may already hold a move still pending here.
+      if (movedAsExpected(members, shifted(from, offset))) {
+        return unchanged(snapshot, "already-exists");
+      }
+      if (!movedAsExpected(members, from)) {
+        return unchanged(snapshot, "conflict");
+      }
+      return changed({
+        ...snapshot,
+        devices: snapshot.devices.map((device) =>
+          ids.has(device.id)
+            ? {
+                ...device,
+                position: {
+                  x: device.position.x + offset.x,
+                  y: device.position.y + offset.y,
+                },
+              }
+            : device,
+        ),
+      });
     }
 
     case "device.delete": {

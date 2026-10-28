@@ -3,7 +3,8 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { useCanvasDeviceNodes } from "./useCanvasDeviceNodes";
 import type { NodeChange } from "@xyflow/react";
 import type { DeviceNode } from "@/devices/reactFlowDeviceAdapter";
-import type { Device, DeviceId, FloorId, Position, Size } from "@/types/map";
+import type { Device, DeviceId, FloorId, Position } from "@/types/map";
+import type { GroupMember } from "@/map-engine/types";
 
 const floorId = "floor-a" as FloorId;
 const deviceId = "device-a" as DeviceId;
@@ -35,7 +36,8 @@ describe("useCanvasDeviceNodes", () => {
           canEditDevices: true,
           checkCollision: () => false,
           updateDevicePosition,
-          updateDevicePositions: () => {},
+          moveDevices: () => true,
+          canMoveDevices: () => true,
           selectDevice: () => {},
           setSelectedDevices: () => {},
           setHoveredDevice: () => {},
@@ -67,81 +69,89 @@ describe("useCanvasDeviceNodes", () => {
     expect(updateDevicePosition.mock.calls.length).toBe(0);
   });
 
-  it("ignores selected devices for collisions only when the dragged one moves with them", async () => {
-    const single = new Set(["device-b" as DeviceId]);
-    const othersOnly = new Set(["device-b", "device-c"] as Array<DeviceId>);
-    const selectedDeviceIds = new Set([
-      "device-a",
-      "device-c",
-    ] as Array<DeviceId>);
-    const checkCollision = mock(
-      (
-        _floorId: FloorId,
-        _draggedDeviceId: DeviceId,
-        _position: Position,
-        _size: Size,
-        _ignoredDeviceIds?: ReadonlySet<DeviceId>,
-      ) => false,
+  it("drags a selection as one block, waiting where all its members fit", async () => {
+    const other: Device = {
+      ...device,
+      id: "device-b" as DeviceId,
+      name: "PC B",
+      position: { x: 140, y: 100 },
+    };
+    const selection = new Set([device.id, other.id]);
+    // A wall the group cannot reach past an offset of 40 to the right.
+    const canMoveDevices = mock(
+      (_from: ReadonlyArray<GroupMember>, offset: Position) => offset.x <= 40,
     );
-    const { result, rerender } = renderHook(
-      ({ selection }: { selection: ReadonlySet<DeviceId> }) =>
-        useCanvasDeviceNodes({
-          devices: [device],
-          ports: [],
-          currentFloorId: floorId,
-          selectedDeviceId: null,
-          selectedDeviceIdSet: selection,
-          isMultiSelectMode: false,
-          activeDrawTool: "device",
-          canEditDevices: true,
-          checkCollision,
-          updateDevicePosition: () => {},
-          updateDevicePositions: () => {},
-          selectDevice: () => {},
-          setSelectedDevices: () => {},
-          setHoveredDevice: () => {},
-        }),
-      { initialProps: { selection: single } },
+    const moveDevices = mock(
+      (_from: ReadonlyArray<GroupMember>, _offset: Position) => true,
     );
-    await waitFor(() => expect(result.current.nodes).toHaveLength(1));
+    const updateDevicePosition = mock(() => {});
+    const { result } = renderHook(() =>
+      useCanvasDeviceNodes({
+        devices: [device, other],
+        ports: [],
+        currentFloorId: floorId,
+        selectedDeviceId: null,
+        selectedDeviceIdSet: selection,
+        isMultiSelectMode: false,
+        activeDrawTool: "device",
+        canEditDevices: true,
+        checkCollision: () => false,
+        updateDevicePosition,
+        moveDevices,
+        canMoveDevices,
+        selectDevice: () => {},
+        setSelectedDevices: () => {},
+        setHoveredDevice: () => {},
+      }),
+    );
+    await waitFor(() => expect(result.current.nodes).toHaveLength(2));
 
-    act(() => {
-      result.current.handleNodesChange([
-        {
-          id: deviceId,
-          type: "position",
-          position: { x: 40, y: 0 },
-          dragging: true,
-        },
-      ]);
-    });
-    expect(checkCollision.mock.calls.at(-1)?.[4]).toBeUndefined();
+    const drag = (dx: number, dragging: boolean) =>
+      act(() => {
+        result.current.handleNodesChange([
+          {
+            id: device.id,
+            type: "position",
+            position: { x: dx, y: 0 },
+            dragging,
+          },
+          {
+            id: other.id,
+            type: "position",
+            position: { x: 140 + dx, y: 100 },
+            dragging,
+          },
+        ]);
+      });
+    const positions = () => result.current.nodes.map((node) => node.position);
 
-    // Dragging a device outside the selected group: the group still blocks.
-    rerender({ selection: othersOnly });
-    act(() => {
-      result.current.handleNodesChange([
-        {
-          id: deviceId,
-          type: "position",
-          position: { x: 60, y: 0 },
-          dragging: true,
-        },
-      ]);
-    });
-    expect(checkCollision.mock.calls.at(-1)?.[4]).toBeUndefined();
+    drag(20, true);
+    expect(positions()).toEqual([
+      { x: 20, y: 0 },
+      { x: 160, y: 100 },
+    ]);
+    // Past the wall, both wait at the last offset where both fit: the group
+    // keeps its shape, and each shows the spot it cannot take.
+    drag(120, true);
+    expect(positions()).toEqual([
+      { x: 40, y: 0 },
+      { x: 180, y: 100 },
+    ]);
+    expect(result.current.blockedSpots).toHaveLength(2);
 
-    rerender({ selection: selectedDeviceIds });
-    act(() => {
-      result.current.handleNodesChange([
-        {
-          id: deviceId,
-          type: "position",
-          position: { x: 80, y: 0 },
-          dragging: true,
-        },
-      ]);
-    });
-    expect(checkCollision.mock.calls.at(-1)?.[4]).toBe(selectedDeviceIds);
+    drag(120, false);
+    // From where the drag found them, so a member moved meanwhile refuses
+    // the move rather than bending the group.
+    expect(moveDevices.mock.calls).toEqual([
+      [
+        [
+          { deviceId: device.id, position: { x: 0, y: 0 } },
+          { deviceId: other.id, position: { x: 140, y: 100 } },
+        ],
+        { x: 40, y: 0 },
+      ],
+    ]);
+    expect(updateDevicePosition.mock.calls.length).toBe(0);
+    expect(result.current.blockedSpots).toHaveLength(0);
   });
 });

@@ -10,7 +10,9 @@ import {
   overlayError,
   sameOverlay,
 } from "../src/map-engine/overlay";
-import { isAsExpected } from "../src/map-engine/devicePatch";
+import { isAsExpected, movedAsExpected } from "../src/map-engine/devicePatch";
+import { groupMoveRefusal } from "../src/map-engine/groupMove";
+import type { GroupMoveRefusal } from "../src/map-engine/groupMove";
 import {
   applyLabelPatch,
   labelError,
@@ -44,6 +46,7 @@ import { ARCHIVED_SITE } from "./sites";
 export type OperationInput = Infer<typeof mapOperation>;
 type DeviceCreateOperation = Extract<OperationInput, { kind: "device.create" }>;
 type DevicePatchOperation = Extract<OperationInput, { kind: "device.patch" }>;
+type DevicesMoveOperation = Extract<OperationInput, { kind: "devices.move" }>;
 type DeviceDeleteOperation = Extract<OperationInput, { kind: "device.delete" }>;
 type DevicePlaceOperation = Extract<OperationInput, { kind: "device.place" }>;
 type DeviceUnplaceOperation = Extract<
@@ -403,6 +406,14 @@ const collectOperationScope = (
       break;
     case "device.patch":
       scope.deviceIds.add(operation.deviceId);
+      break;
+    case "devices.move":
+      // Planning rejects longer lists before it would need these rows.
+      if (operation.from.length <= MAX_BATCH_OPERATIONS) {
+        for (const member of operation.from) {
+          scope.deviceIds.add(member.deviceId);
+        }
+      }
       break;
     case "device.delete":
       scope.deviceIds.add(operation.deviceId);
@@ -1039,6 +1050,102 @@ const planDevicePatch = (
   return null;
 };
 
+const GROUP_MOVE_REFUSALS: Record<GroupMoveRefusal, string> = {
+  "device-collision": "L'équipement chevauche un autre équipement.",
+  "wall-collision": "L'équipement chevauche un mur.",
+  "wall-crossing": "Un équipement du groupe traverserait un mur.",
+};
+
+const rectOf = (value: {
+  position: { x: number; y: number };
+  size: { width: number; height: number };
+}) => ({ ...value.position, ...value.size });
+
+/**
+ * Moves a group by one offset, so it never deforms, and refuses it when a
+ * member would land on something or pass through a wall (ADR 0034).
+ */
+const planDevicesMove = (
+  state: PlanningState,
+  operation: DevicesMoveOperation,
+): string | null => {
+  const ids = new Set(operation.from.map((member) => member.deviceId));
+  if (ids.size === 0 || ids.size !== operation.from.length) {
+    return "Le déplacement est invalide.";
+  }
+  if (ids.size > MAX_BATCH_OPERATIONS)
+    return "Trop de modifications en une fois.";
+  const offsetError = validatePosition(operation.offset);
+  if (offsetError) return offsetError;
+
+  const members: Array<PlannedDevice> = [];
+  for (const member of operation.from) {
+    const existing = state.devices.get(member.deviceId);
+    if (!existing) return "Cet équipement n'existe plus.";
+    members.push(existing);
+  }
+  const { floorId } = members[0];
+  if (members.some((member) => member.floorId !== floorId)) {
+    return "Une modification ne peut toucher qu'un seul étage.";
+  }
+  // Where the user saw them: a member moved since would deform the group.
+  if (
+    !movedAsExpected(
+      members.map((member) => ({
+        id: member.objectId,
+        position: member.position,
+      })),
+      operation.from,
+    )
+  ) {
+    return MOVED_SINCE;
+  }
+
+  const refusal = groupMoveRefusal(members.map(rectOf), operation.offset, {
+    devices: [...state.devices.values()]
+      .filter((other) => other.floorId === floorId && !ids.has(other.objectId))
+      .map(rectOf),
+    walls: [...state.walls.values()]
+      .filter((wall) => wall.floorId === floorId)
+      .map(getWallCollisionRect),
+  });
+  if (refusal) return GROUP_MOVE_REFUSALS[refusal];
+
+  for (const existing of members) {
+    const patched: PlannedDevice = {
+      ...existing,
+      position: {
+        x: existing.position.x + operation.offset.x,
+        y: existing.position.y + operation.offset.y,
+      },
+      updatedAt: operation.meta.createdAt,
+      updatedBy: operation.meta.clientId,
+    };
+    const shapeError = validateDeviceShape(patched);
+    if (shapeError) return shapeError;
+    state.devices.set(existing.objectId, patched);
+    if (existing.rowId) {
+      state.plan.push({
+        kind: "patchDevice",
+        rowId: existing.rowId,
+        value: {
+          placement: {
+            floorId: patched.floorId,
+            position: patched.position,
+            size: patched.size,
+          },
+          updatedAt: patched.updatedAt,
+          updatedBy: patched.updatedBy,
+        },
+      });
+    } else {
+      updatePlannedDeviceInsert(state, patched);
+    }
+  }
+  markAffectedFloor(state, floorId);
+  return null;
+};
+
 /** Deletes a device's ports and the cables plugged into them. */
 const planCablingDelete = (state: PlanningState, deviceId: string) => {
   for (const value of [...state.cables.values()]) {
@@ -1480,6 +1587,8 @@ const planOperation = (
       return planDeviceCreate(state, operation);
     case "device.patch":
       return planDevicePatch(state, operation);
+    case "devices.move":
+      return planDevicesMove(state, operation);
     case "device.delete":
       return planDeviceDelete(state, operation);
     case "device.place":
@@ -1628,6 +1737,7 @@ const operationFloorId = (operation: OperationInput): string | undefined => {
           })
         : undefined;
     case "device.patch":
+    case "devices.move":
     case "device.delete":
     case "device.unplace":
     case "walls.delete":

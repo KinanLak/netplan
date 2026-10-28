@@ -16,6 +16,9 @@ import { toDeviceNodes } from "@/devices/reactFlowDeviceAdapter";
 import type { DeviceNode } from "@/devices/reactFlowDeviceAdapter";
 import { portsByDevice } from "@/devices/ports";
 import { GRID_SIZE } from "@/lib/grid";
+import { createGroupDrag } from "@/canvas/groupDrag";
+import type { GroupDrag } from "@/canvas/groupDrag";
+import type { GroupMember } from "@/map-engine/types";
 
 interface UseCanvasDeviceNodesParams {
   devices: Array<Device>;
@@ -34,9 +37,12 @@ interface UseCanvasDeviceNodesParams {
     ignoredDeviceIds?: ReadonlySet<DeviceId>,
   ) => boolean;
   updateDevicePosition: (deviceId: DeviceId, position: Position) => void;
-  updateDevicePositions: (
-    updates: Array<{ deviceId: DeviceId; position: Position }>,
-  ) => void;
+  /** Moves a group as one block (ADR 0034); false when refused. */
+  moveDevices: (from: ReadonlyArray<GroupMember>, offset: Position) => boolean;
+  canMoveDevices: (
+    from: ReadonlyArray<GroupMember>,
+    offset: Position,
+  ) => boolean;
   selectDevice: (deviceId: DeviceId | null) => void;
   setSelectedDevices: (deviceIds: Array<DeviceId>) => void;
   setHoveredDevice: (deviceId: DeviceId | null) => void;
@@ -146,6 +152,37 @@ const areNodeListsEqual = (a: Array<DeviceNode>, b: Array<DeviceNode>) => {
   return a.every((node, index) => areNodesEqual(node, b[index]));
 };
 
+type GroupDragSession = {
+  /** The members where the drag found them: React Flow drags from there. */
+  from: ReadonlyArray<GroupMember>;
+  startOf: ReadonlyMap<string, Position>;
+  drag: GroupDrag;
+};
+
+/**
+ * The group being dragged: the selection's devices on the floor, where the
+ * drag started. Its offset is always measured from there, and the move is
+ * refused if a member has moved since, as someone else may.
+ */
+const startGroupDrag = (
+  devices: ReadonlyArray<Device>,
+  floorId: FloorId,
+  selectedDeviceIdSet: ReadonlySet<DeviceId>,
+  canMoveDevices: UseCanvasDeviceNodesParams["canMoveDevices"],
+): GroupDragSession => {
+  const from = devices
+    .filter(
+      (device) =>
+        device.floorId === floorId && selectedDeviceIdSet.has(device.id),
+    )
+    .map((device) => ({ deviceId: device.id, position: device.position }));
+  return {
+    from,
+    startOf: new Map(from.map((member) => [member.deviceId, member.position])),
+    drag: createGroupDrag((offset) => canMoveDevices(from, offset)),
+  };
+};
+
 export function useCanvasDeviceNodes({
   devices,
   ports,
@@ -157,27 +194,16 @@ export function useCanvasDeviceNodes({
   canEditDevices,
   checkCollision,
   updateDevicePosition,
-  updateDevicePositions,
+  moveDevices,
+  canMoveDevices,
   selectDevice,
   setSelectedDevices,
   setHoveredDevice,
 }: UseCanvasDeviceNodesParams): UseCanvasDeviceNodesResult {
   const [nodes, setNodes, onNodesChange] = useNodesState<DeviceNode>([]);
-  const devicePlacement = useDevicePlacement(
-    (floorId, deviceId, position, size) =>
-      checkCollision(
-        floorId,
-        deviceId,
-        position,
-        size,
-        // A group moves together, so its members never block each other;
-        // a device dragged on its own is blocked by all of them.
-        selectedDeviceIdSet.size > 1 && selectedDeviceIdSet.has(deviceId)
-          ? selectedDeviceIdSet
-          : undefined,
-      ),
-  );
+  const devicePlacement = useDevicePlacement(checkCollision);
   const draggingDeviceIdsRef = useRef<Set<DeviceId>>(new Set());
+  const groupDragRef = useRef<GroupDragSession | null>(null);
   const [blockedSpots, setBlockedSpots] = useState<ReadonlyArray<BlockedSpot>>(
     [],
   );
@@ -230,19 +256,79 @@ export function useCanvasDeviceNodes({
     setNodes,
   ]);
 
+  // A drag belongs to the selection it started with.
+  useEffect(() => {
+    groupDragRef.current = null;
+  }, [selectedDeviceIdSet]);
+
   const handleNodesChange: OnNodesChange<DeviceNode> = useCallback(
     (changes) => {
       const committedPositions = new Map<DeviceId, Position>();
+      // Set from within the map below, where the drag ends.
+      const ended: {
+        group: { from: ReadonlyArray<GroupMember>; offset: Position } | null;
+      } = { group: null };
+      const isGroupMember = (deviceId: DeviceId) =>
+        selectedDeviceIdSet.size > 1 && selectedDeviceIdSet.has(deviceId);
+
       const processedChanges = changes.map((change) => {
-        if (change.type === "position" && change.position && change.dragging) {
-          draggingDeviceIdsRef.current.add(change.id as DeviceId);
-          const device = devices.find(
-            (candidate) => candidate.id === change.id,
+        if (change.type !== "position" || !change.position) return change;
+        const deviceId = change.id as DeviceId;
+        const device = devices.find((candidate) => candidate.id === deviceId);
+
+        // A selection of several moves by one offset, or not at all: its
+        // members never look for a free spot each (ADR 0034).
+        if (device && isGroupMember(deviceId)) {
+          const group = (groupDragRef.current ??= startGroupDrag(
+            devices,
+            device.floorId,
+            selectedDeviceIdSet,
+            canMoveDevices,
+          ));
+          const start = group.startOf.get(deviceId) ?? device.position;
+          if (change.dragging) {
+            draggingDeviceIdsRef.current.add(deviceId);
+            const wanted = {
+              x: change.position.x - start.x,
+              y: change.position.y - start.y,
+            };
+            const offset = group.drag.resolve(wanted);
+            const snapped = snapToGrid(change.position);
+            const position = { x: start.x + offset.x, y: start.y + offset.y };
+            setBlockedSpots((current) =>
+              withBlockedSpot(
+                current,
+                deviceId,
+                arePositionsEqual(snapped, position)
+                  ? null
+                  : { deviceId, position: snapped, size: device.size },
+              ),
+            );
+            return { ...change, position };
+          }
+
+          draggingDeviceIdsRef.current.delete(deviceId);
+          setBlockedSpots((current) =>
+            withBlockedSpot(current, deviceId, null),
           );
+          ended.group ??= { from: group.from, offset: group.drag.offset() };
+          // Refused at the last moment (someone else moved a member), the
+          // group stays where the server has it.
+          const position = canMoveDevices(group.from, ended.group.offset)
+            ? {
+                x: start.x + ended.group.offset.x,
+                y: start.y + ended.group.offset.y,
+              }
+            : device.position;
+          return { ...change, position };
+        }
+
+        if (change.dragging) {
+          draggingDeviceIdsRef.current.add(deviceId);
           if (device) {
             const result = devicePlacement.resolve({
               kind: "drag",
-              deviceId: change.id as DeviceId,
+              deviceId,
               floorId: device.floorId,
               requestedPosition: change.position,
               size: device.size,
@@ -266,52 +352,40 @@ export function useCanvasDeviceNodes({
               };
             }
           }
+          return change;
         }
 
-        if (change.type === "position" && change.position && !change.dragging) {
-          draggingDeviceIdsRef.current.delete(change.id as DeviceId);
-          setBlockedSpots((current) =>
-            withBlockedSpot(current, change.id as DeviceId, null),
-          );
-          const committedPosition = devicePlacement.commitDrag(
-            change.id as DeviceId,
-          );
-          if (committedPosition) {
-            committedPositions.set(change.id as DeviceId, committedPosition);
-            return {
-              ...change,
-              position: committedPosition,
-            };
-          }
+        draggingDeviceIdsRef.current.delete(deviceId);
+        setBlockedSpots((current) => withBlockedSpot(current, deviceId, null));
+        const committedPosition = devicePlacement.commitDrag(deviceId);
+        if (committedPosition) {
+          committedPositions.set(deviceId, committedPosition);
+          return {
+            ...change,
+            position: committedPosition,
+          };
         }
-
         return change;
       });
 
+      if (ended.group) groupDragRef.current = null;
       onNodesChange(processedChanges);
 
-      if (canEditDevices) {
-        if (committedPositions.size > 1) {
-          updateDevicePositions(
-            [...committedPositions].map(([deviceId, position]) => ({
-              deviceId,
-              position,
-            })),
-          );
-        } else {
-          committedPositions.forEach((position, deviceId) => {
-            updateDevicePosition(deviceId, position);
-          });
-        }
-      }
+      if (!canEditDevices) return;
+      if (ended.group) moveDevices(ended.group.from, ended.group.offset);
+      committedPositions.forEach((position, deviceId) => {
+        updateDevicePosition(deviceId, position);
+      });
     },
     [
       canEditDevices,
+      canMoveDevices,
       devicePlacement,
       devices,
+      moveDevices,
       onNodesChange,
+      selectedDeviceIdSet,
       updateDevicePosition,
-      updateDevicePositions,
     ],
   );
 

@@ -257,7 +257,7 @@ export default function FlowCanvas() {
   const isReady = useMapDocumentReady();
   const { commands } = useMapDocumentActions();
   const { devices, ports, walls } = document;
-  const { updateDevicePosition, updateDevicePositions, checkCollision } =
+  const { updateDevicePosition, moveDevices, canMoveDevices, checkCollision } =
     commands;
 
   // While the calque panel is open, the canvas edits the calque, not devices.
@@ -286,7 +286,8 @@ export default function FlowCanvas() {
     canEditDevices,
     checkCollision,
     updateDevicePosition,
-    updateDevicePositions,
+    moveDevices,
+    canMoveDevices,
     selectDevice,
     setSelectedDevices,
     setHoveredDevice,

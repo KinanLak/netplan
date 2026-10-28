@@ -44,3 +44,4 @@ record's Source section points to its questions in the
 - **[0031 — The theme and errors live at the root, sessions slide with activity, sign-in attempts count per identifier, and the map freezes 30 seconds after the connection drops](0031-shell-sessions-and-offline-grace.md)**
 - **[0032 — A device the network once saw keeps a "stale" status that says when it was last heard from, and everyone sees where it was last seen](0032-device-last-heard.md)**
 - **[0033 — An archived site leaves the picker, refuses every change to its plan and inventory, and is never collected, until an admin brings it back](0033-site-archive.md)**
+- **[0034 — A selection of several devices moves by one offset, as one block that never passes through a wall](0034-rigid-group-moves.md)**

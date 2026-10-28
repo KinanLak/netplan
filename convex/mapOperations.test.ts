@@ -192,6 +192,183 @@ describe("mapOperations.apply", () => {
     expect(result.error).toBe("L'équipement chevauche un autre équipement.");
   });
 
+  describe("devices.move", () => {
+    /** Two PCs left of a wall from (210, 10) to (210, 190), one more apart. */
+    const groupRoom = async (t: TestClient) => {
+      const floorId = await freshFloor(t);
+      const walls = addLine({
+        walls: [],
+        floorId: floorId as FloorId,
+        color: "concrete",
+        start: { x: 210, y: 10 },
+        end: { x: 210, y: 190 },
+        generateWallId: (() => {
+          let index = 0;
+          return () => `wall:group:${counter}:${++index}` as WallId;
+        })(),
+      }).nextWalls;
+      await t.mutation(api.mapOperations.apply, {
+        operation: {
+          kind: "batch",
+          meta: meta(40),
+          operations: [
+            { kind: "walls.add", walls },
+            {
+              kind: "device.create",
+              device: device("device:g1", floorId, 100, 0),
+            },
+            {
+              kind: "device.create",
+              device: device("device:g2", floorId, 100, 100),
+            },
+            {
+              kind: "device.create",
+              device: device("device:g3", floorId, 0, 300),
+            },
+          ],
+        },
+      });
+      return floorId;
+    };
+    /** Where `groupRoom` puts them. */
+    const seeded = (ids: Array<string>) =>
+      ids.map((deviceId) => ({
+        deviceId,
+        position: {
+          "device:g1": { x: 100, y: 0 },
+          "device:g2": { x: 100, y: 100 },
+          "device:g3": { x: 0, y: 300 },
+        }[deviceId] ?? { x: 0, y: 0 },
+      }));
+    const positionsOf = async (t: TestClient, floorId: string) =>
+      Object.fromEntries(
+        (await getFloorDocument(t, floorId)).devices.map((d) => [
+          d.id,
+          d.position,
+        ]),
+      );
+
+    it("moves every member by one offset, in one revision", async () => {
+      const t = await signedInTest();
+      const floorId = await groupRoom(t);
+      const before = await getFloorDocument(t, floorId);
+
+      const result = await t.mutation(api.mapOperations.apply, {
+        operation: {
+          kind: "devices.move",
+          meta: meta(41),
+          from: seeded(["device:g1", "device:g2"]),
+          offset: { x: 20, y: 0 },
+        },
+      });
+
+      expect(result.status).toBe("applied");
+      expect(result.appliedRevision).toBe(before.revision + 1);
+      expect(await positionsOf(t, floorId)).toEqual({
+        "device:g1": { x: 120, y: 0 },
+        "device:g2": { x: 120, y: 100 },
+        "device:g3": { x: 0, y: 300 },
+      });
+    });
+
+    it("refuses a member passing through a wall, and one landing on it", async () => {
+      const t = await signedInTest();
+      const floorId = await groupRoom(t);
+      const apply = (offset: { x: number; y: number }, seq: number) =>
+        expectApplicationRejected(() =>
+          t.mutation(api.mapOperations.apply, {
+            operation: {
+              kind: "devices.move",
+              meta: meta(seq),
+              from: seeded(["device:g1", "device:g2"]),
+              offset,
+            },
+          }),
+        );
+
+      expect((await apply({ x: 160, y: 0 }, 42)).error).toBe(
+        "Un équipement du groupe traverserait un mur.",
+      );
+      expect((await apply({ x: 40, y: 0 }, 43)).error).toBe(
+        "L'équipement chevauche un mur.",
+      );
+      expect((await positionsOf(t, floorId))["device:g1"]).toEqual({
+        x: 100,
+        y: 0,
+      });
+    });
+
+    it("lets members take each other's spots, and refuses a group over floors", async () => {
+      const t = await signedInTest();
+      const floorId = await groupRoom(t);
+      const moved = await t.mutation(api.mapOperations.apply, {
+        operation: {
+          kind: "devices.move",
+          meta: meta(44),
+          from: seeded(["device:g1", "device:g2"]),
+          offset: { x: 0, y: 40 },
+        },
+      });
+      expect(moved.status).toBe("applied");
+
+      const otherFloor = await freshFloor(t);
+      await t.mutation(api.mapOperations.apply, {
+        operation: {
+          kind: "device.create",
+          meta: meta(45),
+          device: device("device:elsewhere", otherFloor, 0),
+        },
+      });
+      await expectApplicationRejected(() =>
+        t.mutation(api.mapOperations.apply, {
+          operation: {
+            kind: "devices.move",
+            meta: meta(46),
+            from: [
+              ...seeded(["device:g3"]),
+              { deviceId: "device:elsewhere", position: { x: 0, y: 0 } },
+            ],
+            offset: { x: 20, y: 0 },
+          },
+        }),
+      );
+      expect((await positionsOf(t, floorId))["device:g3"]).toEqual({
+        x: 0,
+        y: 300,
+      });
+    });
+
+    it("refuses a move, or its undo, once a member has moved since", async () => {
+      const t = await signedInTest();
+      const floorId = await groupRoom(t);
+      await t.mutation(api.mapOperations.apply, {
+        operation: {
+          kind: "device.patch",
+          meta: meta(47),
+          deviceId: "device:g2",
+          patch: { position: { x: 100, y: 200 } },
+        },
+      });
+
+      const result = await expectApplicationRejected(() =>
+        t.mutation(api.mapOperations.apply, {
+          operation: {
+            kind: "devices.move",
+            meta: meta(48),
+            from: seeded(["device:g1", "device:g2"]),
+            offset: { x: -20, y: 0 },
+          },
+        }),
+      );
+      expect(result.error).toBe(
+        "Cet équipement a été déplacé depuis, par une autre personne ou par la collecte.",
+      );
+      expect(await positionsOf(t, floorId)).toMatchObject({
+        "device:g1": { x: 100, y: 0 },
+      });
+    });
+  });
+
   it("rejects putting back a device that has moved since", async () => {
     const t = await signedInTest();
     const floorId = await freshFloor(t);
