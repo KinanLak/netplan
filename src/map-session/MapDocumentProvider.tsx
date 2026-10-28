@@ -516,7 +516,7 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
     const device = documentRef.current.devices.find(
       (item) => item.id === deviceId,
     );
-    // A source would bring it back, unless it no longer returns it (ADR 0034).
+    // A source would bring it back, unless it no longer returns it (ADR 0039).
     if (!device || !isDeletable(device)) return false;
     if (isPlacementPending(pendingEntriesRef.current, deviceId)) {
       setRejectedMessage(

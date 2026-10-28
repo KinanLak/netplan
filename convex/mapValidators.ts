@@ -182,7 +182,7 @@ export const mapOperation = v.union(
   v.object({
     kind: v.literal("device.create"),
     meta: operationMeta,
-    // A source only when undo brings back a device NetBox dropped (ADR 0034).
+    // A source only when undo brings back a device NetBox dropped (ADR 0039).
     device: placedDevice,
     ports: v.optional(v.array(newPort)),
     cables: v.optional(v.array(newCable)),

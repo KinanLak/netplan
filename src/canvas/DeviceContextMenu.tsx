@@ -85,7 +85,7 @@ export function DeviceContextMenu({ deviceId }: { deviceId: DeviceId }) {
               Retirer du plan
             </ContextMenuItem>
             {/* A sourced device comes back at each sync, so it is never
-                deleted, unless its source no longer returns it (ADR 0034). */}
+                deleted, unless its source no longer returns it (ADR 0039). */}
             {!isDeletable(device) ? null : (
               <ContextMenuItem variant="destructive" onClick={deleteDevice}>
                 <HugeiconsIcon icon={WasteIcon} />

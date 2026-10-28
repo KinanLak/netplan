@@ -264,7 +264,7 @@ export default function DeviceDrawer() {
             />
           </Button>
           {/* A sourced device comes back at each sync, so it is never deleted,
-              unless its source no longer returns it (ADR 0034). */}
+              unless its source no longer returns it (ADR 0039). */}
           {!isDeletable(device) ? null : (
             <Button
               variant="destructive"

@@ -15,7 +15,7 @@ export type InventoryFilters = {
   placement: Placement;
   status: "all" | DeviceStatus;
   type: "all" | DeviceType;
-  /** Only the devices NetBox no longer returns (ADR 0034). */
+  /** Only the devices NetBox no longer returns (ADR 0039). */
   absent: boolean;
 };
 

@@ -27,21 +27,21 @@ export const isSourceOwned = (
   source !== undefined &&
   SOURCE_OWNED_FIELDS[source.integration].includes(field);
 
-/** Whether the source that brought a device no longer returns it (ADR 0034). */
+/** Whether the source that brought a device no longer returns it (ADR 0039). */
 export const isAbsentFromSource = (
   source: { missingSince?: number } | undefined,
 ): boolean => source?.missingSince !== undefined;
 
 /**
  * Whether a person may delete a device: a manual one, or one its source no
- * longer returns; any other would come back with the next sync (ADR 0034).
+ * longer returns; any other would come back with the next sync (ADR 0039).
  */
 export const isDeletable = (device: {
   source?: { missingSince?: number };
 }): boolean => device.source === undefined || isAbsentFromSource(device.source);
 
 /**
- * The binding a device a person brings back may carry (ADR 0034): only a
+ * The binding a device a person brings back may carry (ADR 0039): only a
  * NetBox one NetBox no longer returns, as undoing its deletion sends, and
  * marked `staleId`, since nothing proves the id still names that device:
  * only the identity rules link it again. A forged binding can then do no

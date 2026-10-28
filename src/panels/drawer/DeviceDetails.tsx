@@ -66,7 +66,7 @@ export function DeviceHeading({ device }: { device: DetailedDevice }) {
   );
 }
 
-/** Since when the source no longer returns the device (ADR 0034). */
+/** Since when the source no longer returns the device (ADR 0039). */
 export function AbsenceNote({
   source,
   className = "text-sm",

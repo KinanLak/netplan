@@ -192,7 +192,7 @@ const removedDevice = {
   cables: v.optional(v.array(newCable)),
   /**
    * Only for a device NetBox no longer returns, which the "Annuler" of its
-   * deletion brings back absent (ADR 0034).
+   * deletion brings back absent (ADR 0039).
    */
   source: v.optional(deviceSource),
 };
@@ -278,7 +278,7 @@ export async function insertManualDevice(
 
 /**
  * Deletes a manual device that is on no floor, or one NetBox no longer
- * returns (ADR 0034). A placed one is deleted from the map, where undo
+ * returns (ADR 0039). A placed one is deleted from the map, where undo
  * restores its cables; one its source still returns only leaves the map.
  * Returns what `create` needs to undo it, or `null` if it was already gone.
  */
@@ -304,7 +304,7 @@ export const remove = editorMutation({
       .withIndex("by_device", (q) => q.eq("deviceId", deviceId))
       .collect();
     for (const row of macs) await ctx.db.delete(row._id);
-    // NetBox no longer lists an absent device's cables (ADR 0034).
+    // NetBox no longer lists an absent device's cables (ADR 0039).
     const cabling = await deleteDeviceCabling(ctx, deviceId, {
       keepSourced: isAbsentFromSource(device.source),
     });

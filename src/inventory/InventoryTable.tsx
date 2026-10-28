@@ -280,7 +280,7 @@ function InventoryItem({
   const canReadHistory = useCanEdit();
   const hasHistory = canReadHistory && HAS_HISTORY.has(device.type);
   const { location, source } = device;
-  // A device its source no longer returns may go too (ADR 0034).
+  // A device its source no longer returns may go too (ADR 0039).
   const removable = canEdit && !location && isDeletable(device);
   const status = statusOf(device);
   const place = locationLabel(device);

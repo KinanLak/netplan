@@ -105,7 +105,7 @@ export function buildInverseOperation(
       );
       // A device its source still returns is never deleted, so there is
       // nothing to restore. One it no longer returns comes back absent, with
-      // its binding and date (ADR 0034).
+      // its binding and date (ADR 0039).
       if (!device || !isDeletable(device)) return null;
       return {
         kind: "device.create",
@@ -116,7 +116,7 @@ export function buildInverseOperation(
           .map(({ source: _, ...port }) => port),
         // A source's cable comes back with its next sync, not as a manual
         // one; NetBox no longer lists those of an absent device, so they come
-        // back manual (ADR 0034).
+        // back manual (ADR 0039).
         cables: snapshotBeforeOperation.cables
           .filter(
             (cable) =>
