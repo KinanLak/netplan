@@ -7,7 +7,7 @@ import {
   ComboboxList,
 } from "@/components/ui/combobox";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
-import { browserTimeZone } from "@/lib/time";
+import { browserTimeZone, displayLocale } from "@/lib/time";
 
 const TIME_ZONES: ReadonlyArray<string> = Intl.supportedValuesOf("timeZone");
 
@@ -18,7 +18,7 @@ const offsetOf = (zone: string): string => {
   let offset = offsets.get(zone);
   if (offset === undefined) {
     offset =
-      new Intl.DateTimeFormat("fr-FR", {
+      new Intl.DateTimeFormat(displayLocale.current, {
         timeZone: zone,
         timeZoneName: "shortOffset",
       })

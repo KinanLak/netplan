@@ -1,7 +1,10 @@
-// Every date and time the app shows is in the reader's time zone, on a
-// 24-hour clock, with the zone one hover away. Sites keep their own zone for
-// what they schedule (business hours, snapshot slots), never for display.
-// `timeZone` is a parameter only so tests can pin it.
+// Every date and time the app shows is in the reader's time zone and the
+// browser's locale, on a 24-hour clock, with the zone one hover away (owner,
+// 2026-10-28): an en-US browser reads « Wed, Oct 21, 14:05 ». Relative words
+// (« il y a 3 min », « Aujourd'hui ») stay French with the interface. Sites
+// keep their own zone for what they schedule (business hours, snapshot
+// slots), never for display. `timeZone` is a parameter only so tests can pin
+// it.
 
 const MINUTE = 60_000;
 
@@ -9,12 +12,20 @@ const MINUTE = 60_000;
 export const browserTimeZone = (): string =>
   Intl.DateTimeFormat().resolvedOptions().timeZone;
 
+/**
+ * The locale dates are written in: `undefined` is the browser's own. Tests
+ * pin it, since the runtime's default differs from one machine to another.
+ */
+export const displayLocale: { current: string | undefined } = {
+  current: undefined,
+};
+
 const format = (
   at: number,
   options: Intl.DateTimeFormatOptions,
   timeZone: string | undefined,
 ) =>
-  new Intl.DateTimeFormat("fr-FR", {
+  new Intl.DateTimeFormat(displayLocale.current, {
     hourCycle: "h23",
     ...options,
     timeZone: timeZone ?? browserTimeZone(),
@@ -26,11 +37,14 @@ const dayKey = (at: number, timeZone: string | undefined) =>
 const yearOf = (at: number, timeZone: string | undefined) =>
   format(at, { year: "numeric" }, timeZone);
 
-/** `14:05`. */
+/** `14:05` (fr-FR and en-US alike). */
 export const formatTime = (at: number, timeZone?: string): string =>
   format(at, { hour: "2-digit", minute: "2-digit" }, timeZone);
 
-/** `mer. 21 oct., 14:05`, with the year when it is not this year's. */
+/**
+ * `mer. 21 oct., 14:05` in fr-FR, `Wed, Oct 21, 14:05` in en-US, with the
+ * year when it is not this year's.
+ */
 export const formatDateTime = (
   at: number,
   now: number = Date.now(),
@@ -75,10 +89,13 @@ export const formatAge = (
   return `le ${formatWhen(at, now, timeZone)}`;
 };
 
-/** `Europe/Paris • UTC+2`: the zone a time is shown in, and its offset then. */
+/**
+ * `Europe/Paris • UTC+2` (`GMT+2` in en-US): the zone a time is shown in,
+ * and its offset then.
+ */
 export const timeZoneHint = (at: number, timeZone?: string): string => {
   const zone = timeZone ?? browserTimeZone();
-  const offset = new Intl.DateTimeFormat("fr-FR", {
+  const offset = new Intl.DateTimeFormat(displayLocale.current, {
     timeZone: zone,
     timeZoneName: "shortOffset",
   })
@@ -134,7 +151,10 @@ export const isCalendarDay = (value: unknown): value is string =>
   new Date(Date.parse(`${value}T12:00:00Z`)).toISOString().slice(0, 10) ===
     value;
 
-/** « Aujourd'hui », « Hier », else `mercredi 21 octobre`, with the year when not this one. */
+/**
+ * « Aujourd'hui », « Hier », else `Mercredi 21 octobre` (`Wednesday, October
+ * 21` in en-US), with the year when not this one.
+ */
 export const formatDay = (
   at: number,
   now: number,

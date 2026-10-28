@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import {
   ageHint,
   dayOf,
+  displayLocale,
   formatDay,
   isCalendarDay,
   nextDay,
@@ -16,6 +17,17 @@ import {
 const MINUTE = 60_000;
 // Wednesday 21 October 2026, 12:05 UTC: 14:05 in Paris, 08:05 in New York.
 const AT = Date.parse("2026-10-21T12:05:00Z");
+
+// The test preload pins French; these read another browser's locale.
+const inLocale = <T>(locale: string, read: () => T): T => {
+  const pinned = displayLocale.current;
+  displayLocale.current = locale;
+  try {
+    return read();
+  } finally {
+    displayLocale.current = pinned;
+  }
+};
 
 describe("formatting in the reader's zone", () => {
   it("shows the same instant on each reader's own 24-hour clock", () => {
@@ -49,6 +61,33 @@ describe("formatting in the reader's zone", () => {
     expect(formatAge(AT, AT + 48 * 60 * MINUTE, "Europe/Paris")).toMatch(
       /^le mer\. 21 oct\.,? 14:05$/,
     );
+  });
+});
+
+describe("the browser's locale", () => {
+  it("writes dates as the browser does, on a 24-hour clock", () => {
+    expect(
+      inLocale("en-US", () => formatDateTime(AT, AT, "Europe/Paris")),
+    ).toBe("Wed, Oct 21, 14:05");
+    expect(
+      inLocale("en-US", () =>
+        formatTime(Date.parse("2026-10-21T22:05:00Z"), "UTC"),
+      ),
+    ).toBe("22:05");
+    expect(
+      inLocale("en-US", () =>
+        formatDay(AT - 2 * 24 * 60 * MINUTE, AT, "Europe/Paris"),
+      ),
+    ).toBe("Monday, October 19");
+  });
+
+  it("keeps relative words French with the interface", () => {
+    expect(inLocale("en-US", () => formatDay(AT, AT, "Europe/Paris"))).toBe(
+      "Aujourd'hui",
+    );
+    expect(
+      inLocale("en-US", () => formatAge(AT, AT + 4 * MINUTE, "Europe/Paris")),
+    ).toBe("il y a 4 min");
   });
 });
 
