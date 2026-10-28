@@ -27,6 +27,9 @@ const useMapFindState = create<{
   set: (patch) => set(patch),
 }));
 
+/** Whether the find bar shows, for what must keep clear of it. */
+export const useIsMapFindOpen = () => useMapFindState((state) => state.open);
+
 /**
  * Ctrl+F on the map: a small find bar that moves the view to the device
  * whose name or hostname holds the query, on whatever floor, without

@@ -2,7 +2,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { MouseRightClick04Icon } from "@hugeicons/core-free-icons";
 import { Kbd } from "@/components/ui/kbd";
 import type { DrawTool } from "@/types/map";
-import { DRAWING_HELP_CLASS } from "./drawingHelp";
+import { useDrawingHelpClass } from "./drawingHelp";
 
 /** One short line on each tool's gesture, and nothing more (A14). */
 const GESTURES: Record<Exclude<DrawTool, "device">, string> = {
@@ -23,12 +23,13 @@ export function WallToolHelpCard({
   tool,
   drawMessage,
 }: WallToolHelpCardProps) {
+  const className = useDrawingHelpClass();
   if (!isVisible || tool === "device") {
     return null;
   }
 
   return (
-    <div className={DRAWING_HELP_CLASS}>
+    <div className={className}>
       <p className="mb-1 text-foreground">{GESTURES[tool]}</p>
       <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
         <Kbd>Échap</Kbd>

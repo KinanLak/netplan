@@ -298,6 +298,11 @@ const moveBrushPointer = (
     };
   }
 
+  // A new stroke starts afresh, so a device it meets flashes again even if
+  // the last stroke's refusal still shows.
+  const stroke = baseState.isBrushStrokeActive
+    ? baseState
+    : { ...baseState, drawMessage: null };
   const previous = baseState.isBrushStrokeActive
     ? baseState.brushStrokeLastSample
     : null;
@@ -311,7 +316,7 @@ const moveBrushPointer = (
     : addBrushAtPoint(context, adapter, sample.snappedPoint);
 
   return {
-    ...withBrushResult(baseState, strokeResult, "stroke"),
+    ...withBrushResult(stroke, strokeResult, "stroke"),
     isBrushStrokeActive: true,
     ignoreNextBrushClick: true,
     brushStrokeLastSample: sample,

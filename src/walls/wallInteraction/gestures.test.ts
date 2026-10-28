@@ -3,6 +3,7 @@ import type { FloorId, WallCommandResult } from "@/types/map";
 import { snapPositionToWallGrid } from "@/walls/gridGeometry";
 import { clickWallPane, moveWallPointer, pressWallPane } from "./gestures";
 import {
+  releaseWallPointer,
   areWallInteractionStatesEqual,
   createWallInteractionState,
   stabilizeWallInteractionState,
@@ -286,6 +287,11 @@ describe("press and drag", () => {
     // Into the device, out of it, and into it again: two flashes.
     expect(state.refusals).toBe(2);
     expect(state.drawMessage).toBe("Mur refusé : il traverse un équipement.");
+
+    // Released, then a new stroke straight into the same device flashes too.
+    state = releaseWallPointer(state, context);
+    state = moveWallPointer(state, context, adapter, sampleAt(120, 40), 1);
+    expect(state.refusals).toBe(3);
   });
 
   it("does nothing for the brush, the eraser, or a shape already started", () => {
