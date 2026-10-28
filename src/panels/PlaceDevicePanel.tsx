@@ -169,8 +169,9 @@ function PlaceDevicePanelContent() {
                       device.macs[0],
                     ]
                       .filter(Boolean)
-                      .map((part) => (
-                        <span key={part} className="truncate">
+                      .map((part, index) => (
+                        // A building and its floor may share a name.
+                        <span key={index} className="truncate">
                           {part}
                         </span>
                       ))}

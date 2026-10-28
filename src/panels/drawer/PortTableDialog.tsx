@@ -325,7 +325,15 @@ function PortTableLine({
                 seen.current ? "text-foreground" : "text-muted-foreground",
               )}
             >
-              <span className="truncate">{seen.name}</span>
+              <span
+                className="truncate"
+                title={seen.current ? undefined : "Plus vu sur ce port"}
+              >
+                {seen.name}
+                {seen.current ? null : (
+                  <span className="sr-only">, plus vu sur ce port</span>
+                )}
+              </span>
               <Time at={seen.at} className="shrink-0" />
             </div>
           ))}
@@ -484,8 +492,9 @@ function DeviceList({
                   ...(device.location
                     ? [device.location.buildingName, device.location.floorName]
                     : ["Hors plan"]),
-                ].map((part) => (
-                  <span key={part} className="truncate">
+                ].map((part, index) => (
+                  // A building and its floor may share a name.
+                  <span key={index} className="truncate">
                     {part}
                   </span>
                 ))}

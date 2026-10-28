@@ -138,8 +138,9 @@ export function LastSeenSection({ deviceId }: { deviceId: string }) {
         </div>
         {place.socketName ? (
           <div className="flex min-w-0 gap-x-2 text-muted-foreground">
-            {[place.socketName, ...where].map((part) => (
-              <span key={part} className="truncate">
+            {[place.socketName, ...where].map((part, index) => (
+              // A building and its floor may share a name.
+              <span key={index} className="truncate">
                 {part}
               </span>
             ))}
