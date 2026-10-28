@@ -18,6 +18,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -567,6 +568,7 @@ function RoleMappingForm({
   const save = useOnlineMutation(api.authSettings.setKeycloakRoleMapping);
   const [editorRole, setEditorRole] = useState(settings.editorRole ?? "");
   const [adminRole, setAdminRole] = useState(settings.adminRole ?? "");
+  const [acceptGroups, setAcceptGroups] = useState(settings.acceptGroups);
   const [pending, setPending] = useState(false);
   const [notice, setNotice] = useState<{ error: boolean; text: string }>();
 
@@ -575,7 +577,7 @@ function RoleMappingForm({
     setPending(true);
     setNotice(undefined);
     try {
-      await save({ editorRole, adminRole });
+      await save({ editorRole, adminRole, acceptGroups });
       setNotice({
         error: false,
         text: "Correspondance enregistrée. Elle s'applique à la prochaine connexion de chaque compte Keycloak.",
@@ -591,9 +593,9 @@ function RoleMappingForm({
     <form onSubmit={(event) => void submit(event)} className="max-w-md">
       <FieldGroup>
         <FieldDescription>
-          Un compte Keycloak est Lecteur, sauf s'il porte l'un des rôles ou
-          groupes ci-dessous ; Admin l'emporte. Son rôle est relu à chaque
-          connexion.
+          Un compte Keycloak est Lecteur, sauf s'il porte l'un des rôles
+          ci-dessous, rôle du royaume ou du client ; Admin l'emporte. Son rôle
+          est relu à chaque connexion.
         </FieldDescription>
         <Field>
           <FieldLabel htmlFor="keycloak-editor-role">
@@ -616,6 +618,16 @@ function RoleMappingForm({
             value={adminRole}
             onChange={(event) => setAdminRole(event.target.value)}
           />
+        </Field>
+        <Field orientation="horizontal">
+          <Checkbox
+            id="keycloak-accept-groups"
+            checked={acceptGroups}
+            onCheckedChange={(checked) => setAcceptGroups(checked)}
+          />
+          <FieldLabel htmlFor="keycloak-accept-groups">
+            Accepter aussi les groupes
+          </FieldLabel>
         </Field>
         {notice ? (
           notice.error ? (

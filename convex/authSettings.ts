@@ -10,12 +10,14 @@ async function roleMapping(ctx: QueryCtx): Promise<KeycloakRoleMapping> {
   return {
     editorRole: settings?.keycloakEditorRole ?? null,
     adminRole: settings?.keycloakAdminRole ?? null,
+    acceptGroups: settings?.keycloakAcceptGroups ?? false,
   };
 }
 
 const mapping = v.object({
   editorRole: v.union(v.string(), v.null()),
   adminRole: v.union(v.string(), v.null()),
+  acceptGroups: v.boolean(),
 });
 
 /** Read by the sign-in hook at each Keycloak login. */
@@ -49,7 +51,10 @@ export const keycloak = adminQuery({
   },
 });
 
-/** Sets the Keycloak role names that grant Éditeur and Admin. */
+/**
+ * Sets the Keycloak role names that grant Éditeur and Admin, and whether
+ * groups of those names grant them too.
+ */
 export const setKeycloakRoleMapping = adminMutation({
   args: mapping.fields,
   returns: v.null(),
@@ -64,6 +69,7 @@ export const setKeycloakRoleMapping = adminMutation({
     const settings = {
       keycloakEditorRole: editorRole,
       keycloakAdminRole: adminRole,
+      keycloakAcceptGroups: args.acceptGroups,
       updatedAt: Date.now(),
     };
     const current = await ctx.db.query("authSettings").first();

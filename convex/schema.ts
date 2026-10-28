@@ -448,10 +448,12 @@ export default defineSchema({
     .index("by_last_attempt", ["lastAttemptAt"]),
 
   // A single row: the Keycloak role names that grant Éditeur and Admin
-  // (ADR 0004). Absent until an admin first saves them.
+  // (ADR 0004), and whether groups count too (ADR 0036, absent is no).
+  // Absent until an admin first saves them.
   authSettings: defineTable({
     keycloakEditorRole: v.union(v.string(), v.null()),
     keycloakAdminRole: v.union(v.string(), v.null()),
+    keycloakAcceptGroups: v.optional(v.boolean()),
     updatedAt: v.number(),
   }),
 });
