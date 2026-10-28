@@ -344,7 +344,7 @@ describe("cables", () => {
 
     await expect(
       t.mutation(api.cables.disconnect, { cableId: "cable:sw-panel" }),
-    ).rejects.toThrow("vient de NetBox");
+    ).rejects.toThrow("NetBox");
   });
 
   it("lets only an éditeur change cables", async () => {

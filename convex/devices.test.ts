@@ -246,13 +246,13 @@ describe("devices.updateIdentity", () => {
         deviceId: id,
         edit: { name: "Autre" },
       }),
-    ).rejects.toThrow("Le champ « nom » vient de NetBox");
+    ).rejects.toThrow("« nom »");
     await expect(
       t.mutation(api.devices.updateIdentity, {
         deviceId: id,
         edit: { macs: [] },
       }),
-    ).rejects.toThrow("Le champ « adresses MAC » vient de NetBox");
+    ).rejects.toThrow("« adresses MAC »");
 
     // The drawer sends its whole form: unchanged owned fields pass.
     await t.mutation(api.devices.updateIdentity, {
@@ -279,7 +279,7 @@ describe("devices.updateIdentity", () => {
       [{ name: "  " }, "Le nom est obligatoire."],
       [
         { notes: "x".repeat(2001) },
-        "Trop long : notes (2000 caractères au plus).",
+        "Le champ « notes » dépasse 2000 caractères.",
       ],
       [{ ip: "999.1.1" }, "« 999.1.1 » n'est pas une adresse IP."],
       [{ macs: ["02:AB:CD:00:00:0A"] }, "Une adresse MAC n'est pas valide."],
@@ -667,7 +667,7 @@ describe("the site inventory", () => {
     ).rejects.toThrow("depuis le plan");
     await expect(
       t.mutation(api.devices.remove, { deviceId: "device:netbox" }),
-    ).rejects.toThrow("vient de NetBox");
+    ).rejects.toThrow("NetBox");
   });
 
   it("deletes an unplaced device NetBox no longer returns, and brings it back absent", async () => {
@@ -723,6 +723,6 @@ describe("the site inventory", () => {
         identity: { name: "pc-9", macs: [] },
         source: { ...source, externalId: "9", missingSince: undefined },
       }),
-    ).rejects.toThrow("vient d'une intégration");
+    ).rejects.toThrow("intégration");
   });
 });

@@ -9,7 +9,7 @@ import { useConnectionStore } from "@/store/useConnectionStore";
 
 /** What a change made without a connection answers (ADR 0037). */
 export const OFFLINE_REFUSAL =
-  "Hors connexion : la modification n'a pas été envoyée.";
+  "Hors connexion, la modification n'a pas été envoyée.";
 
 /**
  * `useMutation` for a change the user makes: refused at once while the page
