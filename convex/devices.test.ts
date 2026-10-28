@@ -404,6 +404,27 @@ describe("the site inventory", () => {
     expect(await t.query(api.devices.unplacedCount, { siteId })).toBe(1);
   });
 
+  it("tells the floor of a placed device of the site, and nothing else", async () => {
+    const t = await signedInTest();
+    const { siteId, floorId } = await siteWithFloor(t);
+    await createDevice(t, floorId, "device:on-floor", "PC-1", 0);
+    await t.mutation(api.devices.create, {
+      siteId,
+      deviceId: "device:off-floor",
+      type: "endpoint",
+      identity: identity("PC-2"),
+    });
+    const otherSite = await createTestSite(t);
+    const floorOf = (site: string, deviceId: string) =>
+      t.query(api.devices.floorOf, { siteId: site, deviceId });
+
+    expect(await floorOf(siteId, "device:on-floor")).toBe(floorId);
+    expect(await floorOf(siteId, "device:off-floor")).toBeNull();
+    expect(await floorOf(siteId, "device:missing")).toBeNull();
+    // A link whose site and device disagree opens nothing on another site.
+    expect(await floorOf(otherSite, "device:on-floor")).toBeNull();
+  });
+
   it("tells where and when the network last saw a device", async () => {
     const t = await signedInTest();
     const { siteId, floorId } = await siteWithFloor(t);
