@@ -50,13 +50,13 @@ describe("cableStart", () => {
     const unplug = {
       kind: "unplug",
       cable: floor.cables[0],
-      label: "« Accès » 1 ↔ « Prise 2 » 1",
+      label: "« Accès » 1 à « Prise 2 » 1",
       far: "« Prise 2 » 1",
     };
     expect(press("sw")).toEqual(unplug);
     expect(press("wall2")).toEqual({
       ...unplug,
-      label: "« Prise 2 » 1 ↔ « Accès » 1",
+      label: "« Prise 2 » 1 à « Accès » 1",
       far: "« Accès » 1",
     });
   });

@@ -64,8 +64,6 @@ export type ShortcutConfig = {
   keys: [ShortcutKeyBinding, ...Array<ShortcutKeyBinding>];
   /** What the key does, as a specific verb and its object (ADR 0041). */
   label: string;
-  /** Unused: the label says it all. The shortcuts dialog still reads it. */
-  description?: string;
   /** Logical scope (used for enabled conditions) */
   scope: ShortcutScope;
   /**

@@ -27,7 +27,7 @@ every source answered.
 | "Aucune donnée collectée"    | No cycle has succeeded yet, and none read any source. Read the step lines.                               |
 | "Collecte partielle …"       | No cycle has fully succeeded, but the last one read some sources; the failing ones are named. Amber dot. |
 | "Données collectées il y a…" | Fine.                                                                                                    |
-| "Données en retard : …"      | Two failures in a row, or the second scheduled run after the last success is 2 minutes late.             |
+| "Données en retard, …"       | Two failures in a row, or the second scheduled run after the last success is 2 minutes late.             |
 
 "Late" never applies to a paused server, a site without sources, or a site
 whose automatic collection is off. At the default interval a site is late
@@ -37,7 +37,7 @@ The line under it says when the next cycle runs:
 
 - **"Collecte en cours…"**: a cycle holds its 15-minute lease. A cycle
   that dies is given up when the lease runs out, and counts as a failure.
-- **"Collecte suspendue sur le serveur"**, with a banner: the backend has
+- **"Collecte suspendue"**, with a banner: the backend has
   `NETPLAN_COLLECTION_PAUSED=true` ([Configuration](configuration.md)).
   Manual cycles are refused too; statuses still expire.
 - **"Collecte automatique désactivée"**: the site's setting is off; only
@@ -59,18 +59,17 @@ import at most every 15 minutes, so an age up to that is normal.
 
 ## Step lines
 
-Each source's line reads `NetBox · …` or `LibreNMS · …`: the step's report,
-or "Connexion réussie : <source> <version>." when it had nothing else to
-say. The LibreNMS line only counts ("2 switchs lus sur 3, …"); each switch's
+Each source's line reads `NetBox …` or `LibreNMS …`: the step's report,
+or "Connecté à <source> <version>." when it had nothing else to say. The LibreNMS line only counts ("2 switchs lus sur 3, …"); each switch's
 trouble is in the list under it, and "Revoir la correspondance des switchs"
 appears when LibreNMS answered 404 for one ("n'existe plus dans LibreNMS").
 
 **Before the source is reached:**
 
-- **"Le serveur n'a pas de clé de chiffrement valide (NETPLAN_SECRET_KEY)"**:
+- **"La clé de chiffrement du serveur (NETPLAN_SECRET_KEY) est invalide."**:
   the key is unset, not base64, or not 32 bytes
   ([Configuration](configuration.md)).
-- **"Le jeton enregistré ne peut plus être déchiffré"**: no configured key
+- **"Le jeton enregistré est illisible."**: no configured key
   opens the token. Usually a key rotated without
   `NETPLAN_SECRET_KEY_PREVIOUS`: restore it and re-encrypt, or enter the
   token again in **Intégrations**.
@@ -81,18 +80,18 @@ appears when LibreNMS answered 404 for one ("n'existe plus dans LibreNMS").
 retried 5 times over about 2.5 minutes before a cycle reports them; a 4xx
 answer and a refused certificate are final.
 
-| Message                                        | Cause                                                                                                            |
-| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| "… ne répond pas (délai dépassé)."             | Every attempt timed out (30 s each).                                                                             |
-| "… est injoignable à cette adresse."           | DNS or connection refused: test the address from the backend's container, not from a browser. See below for DNS. |
-| "Le certificat TLS de … est refusé (CODE) : …" | See below.                                                                                                       |
-| "… refuse ce jeton (401)." / "(403)."          | Token wrong, expired or without the rights [Integrations](integrations.md) lists.                                |
-| "Aucune API … à cette adresse (404)."          | Wrong base address. On a LibreNMS switch line, the switch's LibreNMS device no longer exists: map it again.      |
-| "L'adresse redirige (3xx) : …"                 | Redirects are not followed: enter the final address, usually with `https://`.                                    |
-| "… a répondu 5xx." or another 4xx              | The source's own error after every retry; its log says why.                                                      |
-| "… n'a pas répondu en JSON."                   | A proxy or a login page answered.                                                                                |
-| "Cette adresse ne répond pas comme …"          | Something else answers at that address.                                                                          |
-| "Erreur inattendue pendant la collecte."       | A bug or an answer of an unexpected shape: the backend's log has it.                                             |
+| Message                                     | Cause                                                                                                            |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| "… ne répond pas (délai dépassé)."          | Every attempt timed out (30 s each).                                                                             |
+| "… est injoignable à cette adresse."        | DNS or connection refused: test the address from the backend's container, not from a browser. See below for DNS. |
+| "Le certificat TLS de … est refusé (CODE)." | See below.                                                                                                       |
+| "… refuse ce jeton (401)." / "(403)."       | Token wrong, expired or without the rights [Integrations](integrations.md) lists.                                |
+| "Aucune API … à cette adresse (404)."       | Wrong base address. On a LibreNMS switch line, the switch's LibreNMS device no longer exists: map it again.      |
+| "L'adresse redirige ailleurs (3xx)."        | Redirects are not followed: enter the final address, usually with `https://`.                                    |
+| "… a répondu 5xx." or another 4xx           | The source's own error after every retry; its log says why.                                                      |
+| "… n'a pas répondu en JSON."                | A proxy or a login page answered.                                                                                |
+| "Cette adresse ne répond pas comme …"       | Something else answers at that address.                                                                          |
+| "Erreur inattendue pendant la collecte."    | A bug or an answer of an unexpected shape: the backend's log has it.                                             |
 
 **"… est injoignable à cette adresse."** on an address the host itself
 reaches: a container keeps the DNS servers the host had when the container
@@ -108,19 +107,19 @@ erreurs de certificat TLS" is for ([Integrations](integrations.md)).
 
 **NetBox import:**
 
-- **"Aucun site NetBox choisi : rien n'est importé."**: choose the NetBox
+- **"Aucun site NetBox choisi."**: choose the NetBox
   site in **Import NetBox**.
-- **"Aucun rôle NetBox n'a de type : rien n'est importé."**: map NetBox
+- **"Aucun rôle NetBox à importer."**: map NetBox
   roles to device types there.
 - **"NetBox renvoie trop d'objets."**: one list exceeds 200,000 objects.
-- **"Import : N équipements (… à vérifier)."**: normal; "à vérifier" are
+- **"N équipements importés (… à vérifier)."**: normal; "à vérifier" are
   suggestions and conflicts waiting in the inventory.
 - If any list fails, the import changes nothing and the line gives that
   list's error.
 
 **LibreNMS:**
 
-- **"Aucun switch n'est interrogé."**: no switch of the site is mapped to a
+- **"Aucun switch associé."**: no switch of the site is mapped to a
   LibreNMS device in **Switchs LibreNMS**, or the mapped ones are not of
   type switch.
 - **"N switchs lus, M MAC vues (…)"**: normal. "inconnues" are MAC
@@ -135,10 +134,9 @@ failed, amber when it was read with a remark:
 - **An error from the table above**: LibreNMS failed to answer for this
   switch while reading it, its ports or its forwarding table. A failed read
   leaves its statuses as they were until they expire.
-- **"n'existe plus dans LibreNMS (404) : revoyez la correspondance des
-  switchs."**: the device was deleted or renumbered in LibreNMS; pick its
+- **"N'existe plus dans LibreNMS (404)."**: the device was deleted or renumbered in LibreNMS; pick its
   new device in the site's LibreNMS mapping.
-- **"Sa découverte n'a pas pu être lancée."** (amber): LibreNMS answered
+- **"Découverte refusée (401)."** or **"(403)."** (amber): LibreNMS answered
   401 or 403, so the token may not ask for a discovery. The switch is still
   read and its statuses updated, from a table that may be as old as its last
   discovery.
@@ -147,20 +145,20 @@ A discovery LibreNMS was too busy to take (a 5xx, a 429, a timeout) or that
 did not finish within 2 minutes says no more than the muted line below and
 fails nothing: the switch is read anyway and the next cycle asks again.
 
-- **"· Table MAC non rafraîchie"** (muted, after "lu"): the last
+- **"Table MAC non rafraîchie"** (muted, after "Lu"): the last
   discovery asked for did not finish, or finished and moved nothing in the
   forwarding table. In the second case none of its entries counts and the devices
   behind the switch go offline after two cycles. It clears by itself with
   the next discovery that refreshes the table; if it stays, run
   `scripts/check-librenms.ts --discover`.
-- **"· Table MAC non datée"** (muted): LibreNMS gave the entries no
+- **"Table MAC non datée"** (muted): LibreNMS gave the entries no
   timestamps, so the whole table counts, old entries included, and a device
   switched off may stay online.
 
 **Switch counts.** The first line counts the site's switches by how the
 last cycle read them: "lus", "en échec" for a mapped switch it could not
 read, and "non interrogé" for a switch with no LibreNMS device in the
-mapping; a stack sharing one device counts each of its switches; "Statut le plus ancien" is the age of the oldest read still
+mapping; a stack sharing one device counts each of its switches; "Statut le plus ancien lu" is the age of the oldest read still
 vouching for a status. Under it, "en ligne" and "hors ligne" are LibreNMS's own status:
 "hors ligne" means LibreNMS cannot poll the switch, not that Netplan failed
 to read it. "inconnu" means not mapped, no status from LibreNMS, or no

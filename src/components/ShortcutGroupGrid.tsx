@@ -32,16 +32,11 @@ function ShortcutRow({ action }: { action: ShortcutAction }) {
 
   return (
     <li className="flex items-center justify-between gap-3">
-      <span className="text-sm text-foreground">
-        {config.description ?? config.label}
-      </span>
+      <span className="text-sm text-foreground">{config.label}</span>
       {/* Keys never wrap: "Ctrl Shift Z" reads as one chord. */}
-      <span className="flex shrink-0 items-center gap-1 whitespace-nowrap">
-        {getShortcutDisplay(action).map((keys, index) => (
+      <span className="flex shrink-0 items-center gap-3 whitespace-nowrap">
+        {getShortcutDisplay(action).map((keys) => (
           <span key={keys.join("+")} className="flex items-center gap-1">
-            {index > 0 ? (
-              <span className="text-xs text-muted-foreground">/</span>
-            ) : null}
             <KbdGroup>
               {keys.map((key) => (
                 <Kbd key={key}>{key}</Kbd>

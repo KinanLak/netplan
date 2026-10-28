@@ -539,7 +539,11 @@ function NoSite() {
       )}
       <div className="flex flex-wrap justify-center gap-2">
         {admin ? (
-          <Link to="/admin/sites" className={buttonVariants()}>
+          <Link
+            to="/admin/sites"
+            search={allArchived ? {} : { create: true }}
+            className={buttonVariants()}
+          >
             {allArchived ? "Désarchiver un site" : "Créer un site"}
           </Link>
         ) : null}

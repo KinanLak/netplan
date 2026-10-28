@@ -223,7 +223,7 @@ function DrawingCable({ draft }: { draft: CableDraft }) {
         a: { deviceId: fromDevice.id, portId: fromPort.id },
         b: { deviceId: toDevice.id, portId: port.id },
       },
-      `${endLabel(fromDevice.name, fromPort, fromDevice.type)} ↔ ${endLabel(toDevice.name, port, toDevice.type)}`,
+      `${endLabel(fromDevice.name, fromPort, fromDevice.type)} à ${endLabel(toDevice.name, port, toDevice.type)}`,
     );
     if (refusal) {
       toast.error(refusal);
