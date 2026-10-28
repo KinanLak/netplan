@@ -159,6 +159,12 @@ export default defineSchema({
     portId: v.string(),
     /** The wall socket the port's cabling reaches, if any. */
     socketId: v.optional(v.string()),
+    /**
+     * Set while the device's place follows another socket than this one, or
+     * none yet (ADR 0038): it was seen at several about as recent, or
+     * another of its MACs placed it.
+     */
+    decided: v.optional(v.object({ socketId: v.optional(v.string()) })),
     seenAt: v.number(),
     /** Cycles in a row that read its switch without seeing it. */
     misses: v.number(),

@@ -16,7 +16,9 @@ import {
   readStaleAfterMs,
   sightingSummary,
   portMoves,
+  clearlyNewest,
   socketMoves,
+  socketSightings,
 } from "./librenmsCycle";
 import type { OwnPort, SwitchPort } from "./librenmsCycle";
 
@@ -357,6 +359,36 @@ describe("edgeSightings", () => {
     ]);
   });
 
+  it("places a MAC behind two sockets at the one LibreNMS refreshed last, and lists both", () => {
+    const twoSockets = [
+      port("to-socket", "socket", true),
+      port("to-other", "other", true),
+    ];
+    const both = new Map([
+      [1, "to-socket"],
+      [5, "to-other"],
+    ]);
+    const fdb = [
+      { portId: 1, mac: mac(1), updatedAt: 1_000 },
+      { portId: 5, mac: mac(1), updatedAt: 500_000 },
+    ];
+    expect(edgeSightings(fdb, both, twoSockets)).toEqual([
+      { mac: mac(1), portId: "to-other", switchId: "sw", socketId: "other" },
+    ]);
+    expect(socketSightings(fdb, both, twoSockets)).toEqual([
+      { mac: mac(1), socketId: "socket", updatedAt: 1_000 },
+      { mac: mac(1), socketId: "other", updatedAt: 500_000 },
+    ]);
+    // An undated table says nothing of when.
+    expect(
+      socketSightings(
+        [{ portId: 1, mac: mac(1), updatedAt: null }],
+        both,
+        twoSockets,
+      ),
+    ).toEqual([{ mac: mac(1), socketId: "socket" }]);
+  });
+
   it("tells where a device may be behind a port, apart from where to place it", () => {
     const fdb = [
       { portId: 3, mac: mac(1), updatedAt: null },
@@ -397,50 +429,148 @@ describe("presence", () => {
       ["mac-b", { id: "pc", placed: true }],
     ]);
     const atA = [{ ownerId: "pc", socketId: "socket-a", seenAt: 1 }];
+    const moves = (
+      seen: Parameters<typeof socketMoves>[0],
+      history: Parameters<typeof socketMoves>[2] = atA,
+    ) => [...socketMoves(seen, owners, history).moves];
     // Seen through its other interface at another socket.
-    expect([
-      ...socketMoves([{ mac: "mac-b", socketId: "socket-b" }], owners, atA),
-    ]).toEqual([["pc", "socket-b"]]);
+    expect(moves([{ mac: "mac-b", socketId: "socket-b" }])).toEqual([
+      ["pc", "socket-b"],
+    ]);
     // Still where its latest sighting saw it, through either MAC.
     expect(
-      socketMoves(
-        [
-          { mac: "mac-b", socketId: "socket-b" },
-          { mac: "mac-a", socketId: "socket-a" },
-        ],
-        owners,
-        atA,
-      ).size,
-    ).toBe(0);
-    // Back at a socket an older sighting saw it at.
-    expect([
-      ...socketMoves([{ mac: "mac-a", socketId: "socket-a" }], owners, [
-        ...atA,
-        { ownerId: "pc", socketId: "socket-b", seenAt: 2 },
+      moves([
+        { mac: "mac-b", socketId: "socket-b" },
+        { mac: "mac-a", socketId: "socket-a" },
       ]),
-    ]).toEqual([["pc", "socket-a"]]);
-    // Seen for the first time: a person's place stays.
+    ).toEqual([]);
+    // Back at a socket an older sighting saw it at.
     expect(
-      socketMoves([{ mac: "mac-a", socketId: "socket-a" }], owners, []).size,
-    ).toBe(0);
+      moves(
+        [{ mac: "mac-a", socketId: "socket-a" }],
+        [...atA, { ownerId: "pc", socketId: "socket-b", seenAt: 2 }],
+      ),
+    ).toEqual([["pc", "socket-a"]]);
+    // Seen for the first time: a person's place stays.
+    expect(moves([{ mac: "mac-a", socketId: "socket-a" }], [])).toEqual([]);
+    // The place follows what the cycle decided, not what the row saw.
+    expect(
+      moves(
+        [{ mac: "mac-a", socketId: "socket-a" }],
+        [
+          {
+            ownerId: "pc",
+            socketId: "socket-a",
+            decided: { socketId: "socket-b" },
+            seenAt: 1,
+          },
+        ],
+      ),
+    ).toEqual([["pc", "socket-a"]]);
   });
 
-  it("places an unplaced device at the first socket read", () => {
+  it("moves a device seen at several new sockets to the one clearly refreshed last, else holds it", () => {
+    const owners = new Map([
+      ["mac-a", { id: "pc", placed: true }],
+      ["mac-b", { id: "pc", placed: true }],
+    ]);
+    const atOld = [{ ownerId: "pc", socketId: "socket-old", seenAt: 1 }];
+    const minute = 60_000;
+    const decide = (
+      seen: Parameters<typeof socketMoves>[0],
+      history: Parameters<typeof socketMoves>[2] = atOld,
+    ) => {
+      const { moves, kept, held } = socketMoves(seen, owners, history);
+      return { moves: [...moves], kept: [...kept], held: [...held] };
+    };
+    // Three minutes apart: more than one cycle's discoveries.
+    expect(
+      decide([
+        { mac: "mac-a", socketId: "socket-b", updatedAt: 10 * minute },
+        { mac: "mac-b", socketId: "socket-c", updatedAt: 13 * minute },
+      ]),
+    ).toEqual({ moves: [["pc", "socket-c"]], kept: [], held: [] });
+    // One MAC behind two sockets, the same way.
+    expect(
+      decide([
+        { mac: "mac-a", socketId: "socket-b", updatedAt: 13 * minute },
+        { mac: "mac-a", socketId: "socket-c", updatedAt: 10 * minute },
+      ]),
+    ).toEqual({ moves: [["pc", "socket-b"]], kept: [], held: [] });
+    // About as recent, or undated: it stays where it is.
+    expect(
+      decide([
+        { mac: "mac-a", socketId: "socket-b", updatedAt: 10 * minute },
+        { mac: "mac-b", socketId: "socket-c", updatedAt: 11 * minute },
+      ]),
+    ).toEqual({ moves: [], kept: [], held: ["pc"] });
+    expect(
+      decide([
+        { mac: "mac-a", socketId: "socket-b" },
+        { mac: "mac-b", socketId: "socket-c", updatedAt: 11 * minute },
+      ]),
+    ).toEqual({ moves: [], kept: [], held: ["pc"] });
+    // One of them is where its place follows: nothing to decide.
+    expect(
+      decide([
+        { mac: "mac-a", socketId: "socket-old", updatedAt: 10 * minute },
+        { mac: "mac-b", socketId: "socket-c", updatedAt: 13 * minute },
+      ]),
+    ).toEqual({ moves: [], kept: [["pc", "socket-old"]], held: [] });
+  });
+
+  it("places an unplaced device at a socket it was seen at before, else by the same rule", () => {
     const owners = new Map([
       ["mac-a", { id: "pc", placed: false }],
       ["mac-b", { id: "pc", placed: false }],
     ]);
+    const seen = [
+      { mac: "mac-b", socketId: "socket-b" },
+      { mac: "mac-a", socketId: "socket-a" },
+    ];
     expect([
-      ...socketMoves(
-        [
-          { mac: "mac-b" },
-          { mac: "mac-b", socketId: "socket-b" },
-          { mac: "mac-a", socketId: "socket-a" },
-        ],
-        owners,
-        [{ ownerId: "pc", socketId: "socket-a", seenAt: 1 }],
-      ),
+      ...socketMoves(seen, owners, [
+        { ownerId: "pc", socketId: "socket-a", seenAt: 1 },
+      ]).moves,
+    ]).toEqual([["pc", "socket-a"]]);
+    // Never seen, at two undated sockets: it stays off the plan.
+    expect(socketMoves(seen, owners, [])).toEqual({
+      moves: new Map(),
+      kept: new Map(),
+      held: new Set(["pc"]),
+    });
+    // Held before, with no place decided: the socket it was seen at then is
+    // not a known one.
+    expect(
+      socketMoves(seen, owners, [
+        { ownerId: "pc", socketId: "socket-a", decided: {}, seenAt: 1 },
+      ]).held,
+    ).toEqual(new Set(["pc"]));
+    expect([
+      ...socketMoves([{ mac: "mac-b", socketId: "socket-b" }], owners, [])
+        .moves,
     ]).toEqual([["pc", "socket-b"]]);
+  });
+
+  it("names a clearly newest socket only past one cycle's spread", () => {
+    const minute = 60_000;
+    expect(clearlyNewest(new Map([["a", null]]))).toBe("a");
+    expect(
+      clearlyNewest(
+        new Map([
+          ["a", 0],
+          ["b", 2 * minute + 1],
+        ]),
+      ),
+    ).toBe("b");
+    expect(
+      clearlyNewest(
+        new Map([
+          ["a", 0],
+          ["b", 2 * minute],
+        ]),
+      ),
+    ).toBeNull();
   });
 
   it("records a device as located when first seen or seen on another port", () => {

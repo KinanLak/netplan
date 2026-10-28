@@ -70,8 +70,15 @@ A device seen in one cycle at several sockets, none of them where it was last
 seen, moves to the socket whose LibreNMS entry is clearly the most recent:
 newer than every other by more than two minutes, the spread of one cycle's
 discoveries (`FDB_FRESH_MS`). When the entries are about as recent, or carry
-no time, it stays where it is, its sightings keep their last place, and a
-later cycle decides. There is no new state and no message.
+no time, it stays where it is and a later cycle decides. There is no new
+state and no message. A sighting always records what was seen, which
+switch included, so presence and expiry rest on current evidence; when the
+device's place follows another socket, or none yet while it is held, the
+sighting says so (`decided`), and the next cycle compares with that rather
+than with an arbitrary one of the sockets. The history records a location
+where the cycle decides the device is: none while it is held or stays,
+and the new socket when it moves, even when the plan cannot draw it there
+(a socket off the plan, no free spot), since the network did see it there.
 
 ## LibreNMS's port names are proposed, not adopted
 

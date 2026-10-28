@@ -64,6 +64,17 @@ export type Sighting = {
 };
 
 /**
+ * A MAC address seen behind a wall socket during a cycle, and when LibreNMS
+ * last refreshed that entry, absent when the table is undated. A MAC may be
+ * seen behind several.
+ */
+export type SocketSighting = {
+  mac: string;
+  socketId: string;
+  updatedAt?: number;
+};
+
+/**
  * An uncabled port with more addresses than this leads to another switch or
  * an access point rather than to a desk.
  */
@@ -417,50 +428,104 @@ export const adoptedPorts = (
   return { rename, add, remove };
 };
 
+/**
+ * The MACs on each matched port, each with when LibreNMS last refreshed it
+ * there, `null` when it did not say.
+ */
 const macsByPort = (
   fdb: ReadonlyArray<FdbEntry>,
   matched: ReadonlyMap<number, string>,
 ) => {
-  const macs = new Map<string, Set<string>>();
+  const macs = new Map<string, Map<string, number | null>>();
   for (const entry of fdb) {
     const portId = matched.get(entry.portId);
     if (portId === undefined) continue;
-    macs.set(portId, (macs.get(portId) ?? new Set<string>()).add(entry.mac));
+    const onPort = macs.get(portId) ?? new Map<string, number | null>();
+    const known = onPort.get(entry.mac) ?? null;
+    onPort.set(
+      entry.mac,
+      known === null || (entry.updatedAt ?? 0) > known
+        ? (entry.updatedAt ?? known)
+        : known,
+    );
+    macs.set(portId, onPort);
   }
   return macs;
 };
 
 /** A port whose cabling reaches a wall socket, or uncabled with few MACs. */
-const isEdge = (port: SwitchPort, macs: ReadonlySet<string>) =>
+const isEdge = (port: SwitchPort, macs: ReadonlyMap<string, unknown>) =>
   port.socketId !== null ||
   (!port.cabled && macs.size <= MAX_UNCABLED_EDGE_MACS);
 
+/** The edge ports the MACs were seen on, each MAC with its refresh time. */
+const edgePorts = (
+  fdb: ReadonlyArray<FdbEntry>,
+  matched: ReadonlyMap<number, string>,
+  switchPorts: ReadonlyArray<SwitchPort>,
+) => {
+  const portsById = new Map(switchPorts.map((port) => [port.id, port]));
+  return [...macsByPort(fdb, matched)].flatMap(([portId, macs]) => {
+    const port = portsById.get(portId);
+    return port && isEdge(port, macs) ? [{ port, macs }] : [];
+  });
+};
+
 /**
  * The MAC addresses seen on edge ports (ADR 0022). A MAC seen on several is
- * placed at a socket when one of them has one.
+ * placed at a socket when one of them has one, the one LibreNMS refreshed
+ * last when several do.
  */
 export const edgeSightings = (
   fdb: ReadonlyArray<FdbEntry>,
   matched: ReadonlyMap<number, string>,
   switchPorts: ReadonlyArray<SwitchPort>,
 ): Array<Sighting> => {
-  const portsById = new Map(switchPorts.map((port) => [port.id, port]));
-  const sightings = new Map<string, Sighting>();
-  for (const [portId, macs] of macsByPort(fdb, matched)) {
-    const port = portsById.get(portId);
-    if (!port || !isEdge(port, macs)) continue;
-    for (const mac of macs) {
-      if (sightings.get(mac)?.socketId !== undefined) continue;
+  const sightings = new Map<
+    string,
+    { sighting: Sighting; updatedAt: number | null }
+  >();
+  for (const { port, macs } of edgePorts(fdb, matched, switchPorts)) {
+    for (const [mac, updatedAt] of macs) {
+      const known = sightings.get(mac);
+      const atSocket = port.socketId !== null;
+      if (known) {
+        const knownAtSocket = known.sighting.socketId !== undefined;
+        const newer =
+          updatedAt !== null &&
+          (known.updatedAt === null || updatedAt > known.updatedAt);
+        if (knownAtSocket && (!atSocket || !newer)) continue;
+        if (!knownAtSocket && !atSocket) continue;
+      }
       sightings.set(mac, {
-        mac,
-        portId,
-        switchId: port.switchId,
-        ...(port.socketId === null ? {} : { socketId: port.socketId }),
+        sighting: {
+          mac,
+          portId: port.id,
+          switchId: port.switchId,
+          ...(port.socketId === null ? {} : { socketId: port.socketId }),
+        },
+        updatedAt,
       });
     }
   }
-  return [...sightings.values()];
+  return [...sightings.values()].map(({ sighting }) => sighting);
 };
+
+/** Every socket each MAC was seen behind, with when (`SocketSighting`). */
+export const socketSightings = (
+  fdb: ReadonlyArray<FdbEntry>,
+  matched: ReadonlyMap<number, string>,
+  switchPorts: ReadonlyArray<SwitchPort>,
+): Array<SocketSighting> =>
+  edgePorts(fdb, matched, switchPorts).flatMap(({ port, macs }) => {
+    const { socketId } = port;
+    if (socketId === null) return [];
+    return [...macs].map(([mac, updatedAt]) => ({
+      mac,
+      socketId,
+      ...(updatedAt !== null && { updatedAt }),
+    }));
+  });
 
 /** Where a read may have seen a device behind a port (`PortPresence`). */
 export const portPresence = (
@@ -472,9 +537,9 @@ export const portPresence = (
   return [...macsByPort(fdb, matched)].flatMap(([portId, macs]) => {
     const port = portsById.get(portId);
     if (!port) return [];
-    if (isEdge(port, macs)) return [{ portId, macs: [...macs] }];
+    if (isEdge(port, macs)) return [{ portId, macs: [...macs.keys()] }];
     if (port.endId === null) return [];
-    return [{ portId, macs: [...macs], deviceId: port.endId }];
+    return [{ portId, macs: [...macs.keys()], deviceId: port.endId }];
   });
 };
 
@@ -505,41 +570,99 @@ function latestSeen<Row extends { ownerId?: string; seenAt: number }, Value>(
 }
 
 /**
- * The socket each device is to be placed next to: the first one this read saw
- * it at, when it is on no floor, or when none of the sockets its MACs are seen
- * at now is one where its latest sighting saw it. A device the network sees
- * for the first time keeps a place a person gave it.
+ * The socket among several whose entry LibreNMS refreshed clearly last: more
+ * than one cycle's spread of discoveries after every other (ADR 0038). None
+ * when two are about as recent, or one is undated.
+ */
+export function clearlyNewest(
+  sockets: ReadonlyMap<string, number | null>,
+): string | null {
+  const dated: Array<[string, number]> = [];
+  for (const [socket, at] of sockets) {
+    if (at === null) return sockets.size === 1 ? socket : null;
+    dated.push([socket, at]);
+  }
+  if (dated.length === 0) return null;
+  const [first, ...others] = dated.toSorted(([, a], [, b]) => b - a);
+  return others.every(([, at]) => first[1] - at > FDB_FRESH_MS)
+    ? first[0]
+    : null;
+}
+
+/**
+ * Where a sighting row says its device's place follows: the socket it saw
+ * the MAC at, unless the cycle decided otherwise (`decided`).
+ */
+export const placeSocketOf = (row: {
+  socketId?: string;
+  decided?: { socketId?: string };
+}): string | undefined => (row.decided ? row.decided.socketId : row.socketId);
+
+/**
+ * Where each device seen at a socket goes (ADR 0038): `moves`, the socket to
+ * place it next to; `kept`, the socket its place already follows; `held`,
+ * the devices left where they are because their new sockets are about as
+ * recent.
+ *
+ * A device seen at a socket its place follows stays, and one on no floor
+ * goes there; a device the network sees for the first time keeps a place a
+ * person gave it. Otherwise a device goes to the one new socket it is seen
+ * at, or to the one LibreNMS refreshed clearly last; when several are about
+ * as recent it is held, and a later cycle decides.
  */
 export function socketMoves(
-  sightings: ReadonlyArray<{ mac: string; socketId?: string }>,
+  sightings: ReadonlyArray<SocketSighting>,
   ownerOf: ReadonlyMap<string, { id: string; placed: boolean }>,
   history: ReadonlyArray<{
     ownerId?: string;
     socketId?: string;
+    decided?: { socketId?: string };
     seenAt: number;
   }>,
-): Map<string, string> {
+): {
+  moves: Map<string, string>;
+  kept: Map<string, string>;
+  held: Set<string>;
+} {
   const current = new Map<
     string,
-    { placed: boolean; sockets: Array<string> }
+    { placed: boolean; sockets: Map<string, number | null> }
   >();
-  for (const { mac, socketId } of sightings) {
+  for (const { mac, socketId, updatedAt = null } of sightings) {
     const owner = ownerOf.get(mac);
-    if (!owner || socketId === undefined) continue;
-    const seen = current.get(owner.id) ?? { placed: owner.placed, sockets: [] };
-    seen.sockets.push(socketId);
+    if (!owner) continue;
+    const seen = current.get(owner.id) ?? {
+      placed: owner.placed,
+      sockets: new Map<string, number | null>(),
+    };
+    const known = seen.sockets.get(socketId);
+    seen.sockets.set(
+      socketId,
+      known === undefined
+        ? updatedAt
+        : known === null || updatedAt === null
+          ? null
+          : Math.max(known, updatedAt),
+    );
     current.set(owner.id, seen);
   }
-  const latest = latestSeen(history, current, ({ socketId }) => socketId);
+  const latest = latestSeen(history, current, placeSocketOf);
   const moves = new Map<string, string>();
+  const kept = new Map<string, string>();
+  const held = new Set<string>();
   for (const [id, { placed, sockets }] of current) {
     const last = latest.get(id);
-    const moved =
-      !placed ||
-      (last !== undefined && !sockets.some((socket) => last.has(socket)));
-    if (moved) moves.set(id, sockets[0]);
+    const known = [...sockets.keys()].find((socket) => last?.has(socket));
+    if (known !== undefined) {
+      (placed ? kept : moves).set(id, known);
+      continue;
+    }
+    if (placed && last === undefined) continue;
+    const target = clearlyNewest(sockets);
+    if (target === null) held.add(id);
+    else moves.set(id, target);
   }
-  return moves;
+  return { moves, kept, held };
 }
 
 /**
