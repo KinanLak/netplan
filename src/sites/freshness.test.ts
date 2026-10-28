@@ -9,13 +9,13 @@ import {
   refreshOutcome,
 } from "./freshness";
 import type { SiteFreshness } from "./freshness";
-import { DEFAULT_CADENCE } from "./settings";
+import { DEFAULT_INTERVAL_MINUTES } from "./settings";
 
 const MINUTE = 60_000;
 const TZ = "Europe/Paris";
-// A Wednesday at 10:00 in Paris: business hours, a cycle every 5 minutes.
+// A Wednesday at 10:00 in Paris.
 const WEDNESDAY_10H = Date.parse("2026-10-14T08:00:00Z");
-// The same Wednesday at 23:00: a cycle every hour.
+// The same Wednesday at 23:00: the night runs at the same cadence.
 const WEDNESDAY_23H = Date.parse("2026-10-14T21:00:00Z");
 
 const site = (overrides: Partial<SiteFreshness> = {}): SiteFreshness => ({
@@ -24,8 +24,7 @@ const site = (overrides: Partial<SiteFreshness> = {}): SiteFreshness => ({
   hasSources: true,
   automaticRefresh: true,
   manualRefresh: true,
-  cadence: DEFAULT_CADENCE,
-  timezone: TZ,
+  intervalMinutes: DEFAULT_INTERVAL_MINUTES,
   running: null,
   last: null,
   lastSuccessAt: WEDNESDAY_10H,
@@ -37,13 +36,17 @@ const site = (overrides: Partial<SiteFreshness> = {}): SiteFreshness => ({
 });
 
 describe("isLate", () => {
-  it("waits two scheduled cycles and the time to run one, at any cadence", () => {
+  it("waits two scheduled cycles and the time to run one, day and night", () => {
     expect(isLate(site(), WEDNESDAY_10H + 12 * MINUTE)).toBe(false);
     expect(isLate(site(), WEDNESDAY_10H + 12 * MINUTE + 1)).toBe(true);
 
     const night = site({ lastSuccessAt: WEDNESDAY_23H });
-    expect(isLate(night, WEDNESDAY_23H + 90 * MINUTE)).toBe(false);
-    expect(isLate(night, WEDNESDAY_23H + 123 * MINUTE)).toBe(true);
+    expect(isLate(night, WEDNESDAY_23H + 12 * MINUTE)).toBe(false);
+    expect(isLate(night, WEDNESDAY_23H + 12 * MINUTE + 1)).toBe(true);
+
+    const hourly = site({ intervalMinutes: 60 });
+    expect(isLate(hourly, WEDNESDAY_10H + 122 * MINUTE)).toBe(false);
+    expect(isLate(hourly, WEDNESDAY_10H + 123 * MINUTE)).toBe(true);
   });
 
   it("is late after two failures in a row, even with fresh data", () => {

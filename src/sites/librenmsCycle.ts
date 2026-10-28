@@ -234,17 +234,11 @@ export const readLibreNMSDeviceStatus = (
 
 /**
  * How long a switch's read vouches for the statuses resting on it
- * (ADR 0025): two of the site's longest intervals and a cycle's lease, so
- * that one late or failed cycle changes nothing.
+ * (ADRs 0025 and 0038): two of the site's intervals and a cycle's lease, so
+ * that one late or failed cycle changes nothing; 25 minutes by default.
  */
-export const readStaleAfterMs = (
-  cadence: { businessIntervalMinutes: number; otherIntervalMinutes: number },
-  leaseMs: number,
-) =>
-  2 *
-    Math.max(cadence.businessIntervalMinutes, cadence.otherIntervalMinutes) *
-    60_000 +
-  leaseMs;
+export const readStaleAfterMs = (intervalMinutes: number, leaseMs: number) =>
+  2 * intervalMinutes * 60_000 + leaseMs;
 
 /** A switch's last successful read, and whether its statuses were removed. */
 export type SwitchRead = { switchId: string; readAt: number; expired?: true };

@@ -13,6 +13,7 @@ import {
   readLibreNMSFdb,
   readLibreNMSPorts,
   readLibreNMSTime,
+  readStaleAfterMs,
   sightingSummary,
   portMoves,
   socketMoves,
@@ -372,6 +373,13 @@ describe("edgeSightings", () => {
       { portId: "to-socket", macs: [mac(1)] },
       { portId: "uplink", macs: [mac(2)], deviceId: "core" },
     ]);
+  });
+});
+
+describe("readStaleAfterMs", () => {
+  it("vouches for a read two intervals and a lease, 25 minutes by default", () => {
+    expect(readStaleAfterMs(5, 15 * 60_000)).toBe(25 * 60_000);
+    expect(readStaleAfterMs(60, 15 * 60_000)).toBe(135 * 60_000);
   });
 });
 

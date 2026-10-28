@@ -26,8 +26,8 @@ export const PRESENT_TYPES: ReadonlySet<Doc<"devices">["type"]> = new Set([
   "endpoint",
 ]);
 
-export const staleAfterOf = (site: Pick<Doc<"sites">, "cadence">) =>
-  readStaleAfterMs(site.cadence, LEASE_MS);
+export const staleAfterOf = (site: Pick<Doc<"sites">, "intervalMinutes">) =>
+  readStaleAfterMs(site.intervalMinutes, LEASE_MS);
 
 /**
  * A present device's status from the MACs it was last seen with on a switch

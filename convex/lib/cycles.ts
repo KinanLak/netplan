@@ -22,7 +22,7 @@ export const isRunning = (
 ): boolean => cycle?.running !== undefined && cycle.running.leaseUntil > now;
 
 /**
- * Brings the next cycle forward when a shorter cadence would have run it
+ * Brings the next cycle forward when a shorter interval would have run it
  * sooner; a longer one waits for the cycle already planned.
  */
 export const rescheduleCycle = async (
@@ -31,7 +31,7 @@ export const rescheduleCycle = async (
 ): Promise<void> => {
   const cycle = await cycleOf(ctx, site.objectId);
   if (!cycle?.last || cycle.failures > 0) return;
-  const next = nextRunAt(site.cadence, site.timezone, cycle.last.startedAt);
+  const next = nextRunAt(site.intervalMinutes, cycle.last.startedAt);
   if (next < cycle.nextRunAt)
     await ctx.db.patch(cycle._id, { nextRunAt: next });
 };

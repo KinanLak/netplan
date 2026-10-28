@@ -25,7 +25,6 @@ import {
   pushRun,
   runningCycle,
   runningPush,
-  siteCadence,
   switchRead,
 } from "./siteValidators";
 
@@ -34,7 +33,8 @@ export default defineSchema({
     objectId: v.string(),
     name: v.string(),
     timezone: v.string(),
-    cadence: siteCadence,
+    /** Minutes between two cycles, day and night alike (ADR 0038). */
+    intervalMinutes: v.number(),
     automaticRefresh: v.boolean(),
     manualRefresh: v.boolean(),
     /** Hidden from the picker, read only and not collected (ADR 0033). */

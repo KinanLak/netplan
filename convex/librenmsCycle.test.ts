@@ -785,12 +785,13 @@ describe("the LibreNMS step", () => {
         .every(([url]) => String(url).includes("/api/v0/system")),
     ).toBe(true);
 
-    // Two hours of the site's longest interval, and the lease, vouch for
-    // the read; the minute cron removes what rests on it afterwards.
-    setSystemTime(new Date("2026-10-16T10:15:00Z"));
+    // Two of the site's intervals and the lease, 25 minutes by default,
+    // vouch for the read, day and night; the minute cron removes what rests
+    // on it afterwards.
+    setSystemTime(new Date("2026-10-16T08:25:00Z"));
     await tick(admin);
     expect(await statusOf(admin, "device:pc")).toBe("up");
-    setSystemTime(new Date("2026-10-16T10:16:00Z"));
+    setSystemTime(new Date("2026-10-16T08:26:00Z"));
     await tick(admin);
     // Seen at the first cycle's read, at 08:00: no news since.
     const eight = Date.parse("2026-10-16T08:00:00Z");
@@ -909,7 +910,7 @@ describe("the LibreNMS step", () => {
     librenms.state.fdb = [{ port_id: 101, mac_address: PC }];
     await cycle(admin, siteId);
     librenms.state.fdbStatus = 403;
-    setSystemTime(new Date("2026-10-16T09:00:00Z"));
+    setSystemTime(new Date("2026-10-16T08:10:00Z"));
     expect((await cycle(await signIn(), siteId)).ok).toBe(false);
     expect(await statusOf(admin, "device:pc")).toBe("up");
     setSystemTime(new Date("2026-10-16T10:16:00Z"));
@@ -1039,7 +1040,7 @@ describe("the LibreNMS step", () => {
       siteId,
       name: site.name,
       timezone: site.timezone,
-      cadence: site.cadence,
+      intervalMinutes: site.intervalMinutes,
       automaticRefresh: false,
       manualRefresh: true,
     });

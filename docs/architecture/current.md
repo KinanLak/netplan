@@ -98,8 +98,9 @@ it, so anything clickable placed there needs `pointer-events-auto`.
 ## Sites and integrations
 
 Built by lot 2 (ADR 0023). Admins create, configure and remove sites under
-`/admin`. A site holds its name, unique ignoring case, its time zone and the
-cadence of its collection cycle; `src/sites/settings.ts` holds the rules both
+`/admin`. A site holds its name, unique ignoring case, its time zone, which
+dates its history, and the one interval of its collection cycle, day and
+night (ADR 0038); `src/sites/settings.ts` holds the rules both
 the form and the server apply. A site with a building cannot be removed;
 one no longer used is archived instead (ADR 0033): out of the picker, read
 only through `requireOpenSite` and `useCanEditSite`, never collected, and
@@ -148,7 +149,7 @@ other end is elsewhere.
 
 ## Collection
 
-Each site's collection cycle (`convex/collection.ts`) runs on its cadence or
+Each site's collection cycle (`convex/collection.ts`) runs every interval or
 on demand, one at a time per site under a lease (`siteCycles`), and records
 what each source answered for the admin page. `NETPLAN_COLLECTION_PAUSED`
 stops every cycle on a server.
@@ -188,7 +189,7 @@ Built by lot 4 (ADR 0026).
 
 - **Freshness.** `collection.freshness` is a reader query; the client ages
   it against its own clock with the pure rules of `src/sites/freshness.ts`
-  (`siteCycles.lastSuccessAt`, the cadence, failures in a row), so a page
+  (`siteCycles.lastSuccessAt`, the interval, failures in a row), so a page
   turns late without a query re-running. One `CollectionFreshness` block
   shows it on the map and in the inventory, with "Actualiser" and its
   shortcut for Éditeurs.
@@ -244,8 +245,8 @@ Built by lot 3b (ADR 0025) and redrawn by the UX lot U3 (ADR 0029).
 - **Observed facts.** The LibreNMS step records each switch's last good
   read (`siteCycles.switchReads`). A switch's status, its ports' link and
   "Appareil vu", and the status of every device last seen on it rest on
-  that read. Past twice the longest cadence plus the lease, the minute cron
-  expires them (`expireStaleReads`): port facts go, and a device or switch
+  that read. Past two intervals plus the lease, 25 minutes by default, the
+  minute cron expires them (`expireStaleReads`): port facts go, and a device or switch
   the network did see turns `stale`, « Plus de nouvelles depuis … », with
   `metadata.lastSeenAt` (ADR 0032), so a dead LibreNMS shows as such rather
   than freezing the map. « Inconnu » means never seen.

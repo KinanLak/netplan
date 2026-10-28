@@ -4,7 +4,6 @@ import { formatAge, formatWhen } from "../lib/time";
 import { nextRunAt } from "./cadence";
 import { INTEGRATION_LABELS } from "./integrations";
 import type { IntegrationKind } from "./integrations";
-import type { SiteCadence } from "./settings";
 
 const MINUTE = 60_000;
 
@@ -18,8 +17,7 @@ export interface SiteFreshness {
   hasSources: boolean;
   automaticRefresh: boolean;
   manualRefresh: boolean;
-  cadence: SiteCadence;
-  timezone: string;
+  intervalMinutes: number;
   running: { startedAt: number; manual: boolean } | null;
   last: {
     startedAt: number;
@@ -48,9 +46,8 @@ export const isLate = (freshness: SiteFreshness, now: number): boolean => {
   if (paused || archived || !hasSources || !automaticRefresh) return false;
   if (failures >= 2) return true;
   if (freshness.lastSuccessAt === null) return false;
-  const { cadence, timezone } = freshness;
-  const first = nextRunAt(cadence, timezone, freshness.lastSuccessAt);
-  const second = nextRunAt(cadence, timezone, first);
+  const first = nextRunAt(freshness.intervalMinutes, freshness.lastSuccessAt);
+  const second = nextRunAt(freshness.intervalMinutes, first);
   return now > second + DUE_GRACE_MS;
 };
 

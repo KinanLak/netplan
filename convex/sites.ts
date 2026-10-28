@@ -9,9 +9,9 @@ import { deletePushes } from "./netboxPush";
 import { adminMutation, adminQuery, readerQuery } from "./lib/functions";
 import type { Doc } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
-import { integrationKind, siteCadence } from "./siteValidators";
+import { integrationKind } from "./siteValidators";
 import {
-  DEFAULT_CADENCE,
+  DEFAULT_INTERVAL_MINUTES,
   SITE_NAME_TAKEN,
   siteSettingsError,
 } from "../src/sites/settings";
@@ -31,7 +31,7 @@ const siteSettings = v.object({
   timezone: v.string(),
   archived: v.boolean(),
   archivedAt: v.union(v.null(), v.number()),
-  cadence: siteCadence,
+  intervalMinutes: v.number(),
   automaticRefresh: v.boolean(),
   manualRefresh: v.boolean(),
   buildingCount: v.number(),
@@ -76,7 +76,7 @@ const countBuildings = async (ctx: QueryCtx, siteId: string) =>
 const toSettings = async (ctx: QueryCtx, site: Doc<"sites">) => ({
   ...toSummary(site),
   archivedAt: site.archivedAt ?? null,
-  cadence: site.cadence,
+  intervalMinutes: site.intervalMinutes,
   automaticRefresh: site.automaticRefresh,
   manualRefresh: site.manualRefresh,
   buildingCount: await countBuildings(ctx, site.objectId),
@@ -136,7 +136,7 @@ const assertSettings = (settings: SiteSettings) => {
   if (error) throw new ConvexError(error);
 };
 
-/** Creates a site with the default cadence, refusing invalid settings. */
+/** Creates a site with the default interval, refusing invalid settings. */
 export const insertSite = async (
   ctx: MutationCtx,
   input: { objectId: string; name: string; timezone: string },
@@ -144,7 +144,7 @@ export const insertSite = async (
   const settings: SiteSettings = {
     name: input.name.trim(),
     timezone: input.timezone,
-    cadence: DEFAULT_CADENCE,
+    intervalMinutes: DEFAULT_INTERVAL_MINUTES,
     automaticRefresh: true,
     manualRefresh: true,
   };
@@ -299,21 +299,14 @@ export const update = adminMutation({
     siteId: v.string(),
     name: v.string(),
     timezone: v.string(),
-    cadence: siteCadence,
+    intervalMinutes: v.number(),
     automaticRefresh: v.boolean(),
     manualRefresh: v.boolean(),
   },
   returns: v.null(),
   handler: async (ctx, { siteId, ...input }) => {
     const site = await requireSite(ctx, siteId);
-    const settings: SiteSettings = {
-      ...input,
-      name: input.name.trim(),
-      cadence: {
-        ...input.cadence,
-        businessDays: [...input.cadence.businessDays].sort((a, b) => a - b),
-      },
-    };
+    const settings: SiteSettings = { ...input, name: input.name.trim() };
     assertSettings(settings);
     await assertNameFree(ctx, settings.name, siteId);
     await ctx.db.patch(site._id, { ...settings, updatedAt: Date.now() });
