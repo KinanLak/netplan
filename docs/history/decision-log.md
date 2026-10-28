@@ -3670,6 +3670,7 @@ Questions of 2026-10-28.
 - Fixed in #157:
   - **P2, password.** A password reset under way at the handover could create a password. The account-creation hook refuses a password for an account waiting for Keycloak, and for any account with Keycloak.
   - **P2, session.** A password sign-in under way at the handover could open a session. The session hook refuses it outside the Keycloak callback, and every role builder treats a waiting account as signed out, which also covers a session written between the check and the insert.
+  - **P2, what slips in.** A third round showed that a session or password written between a check and its insert would work again once the wait lifted. Ending a handover, by the Keycloak sign-in that completes it or by « Annuler le passage sur Keycloak », now deletes any password and ends every session of the account first.
 - Answered: rewriting ADR 0036 inside the stack. It was not on main yet, so every revision moved into #152 and the record landed once, in its final form.
 - Who: agent (obvious)
 
