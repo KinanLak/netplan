@@ -1,6 +1,9 @@
+import { useRouter } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import { useEffect } from "react";
 import { toast } from "sonner";
+import { useCurrentUser } from "@/hooks/use-current-user";
+import { isAdmin } from "@/lib/roles";
 import { refreshOutcome } from "@/sites/freshness";
 import { usePendingRefreshes } from "@/sites/useSiteRefresh";
 import { api } from "../../convex/_generated/api";
@@ -13,6 +16,8 @@ function RefreshWatcher({
   startedAt: number;
 }) {
   const freshness = useQuery(api.collection.freshness, { siteId });
+  const admin = isAdmin(useCurrentUser()?.role);
+  const router = useRouter();
   useEffect(() => {
     if (freshness === undefined) return;
     const outcome = refreshOutcome(freshness, startedAt);
@@ -20,8 +25,20 @@ function RefreshWatcher({
     // A success shows on the button and in the freshness line, not a toast.
     usePendingRefreshes.getState().settle(siteId, outcome.kind === "succeeded");
     if (outcome.kind === "failed") {
+      // An Admin is the one who sees the detail: on Santé it is on screen,
+      // elsewhere the toast leads there.
+      const onHealth = router.state.location.pathname === "/admin/health";
       toast.error("L'actualisation a échoué", {
-        description: `Échec côté ${outcome.sources}. Un administrateur en voit le détail.`,
+        description: admin
+          ? `Échec côté ${outcome.sources}.`
+          : `Échec côté ${outcome.sources}. Un administrateur en voit le détail.`,
+        action:
+          admin && !onHealth
+            ? {
+                label: "Voir le détail",
+                onClick: () => void router.navigate({ to: "/admin/health" }),
+              }
+            : undefined,
       });
     }
     if (outcome.kind === "interrupted") {
@@ -29,7 +46,7 @@ function RefreshWatcher({
         description: "Une nouvelle collecte est prévue.",
       });
     }
-  }, [freshness, siteId, startedAt]);
+  }, [admin, freshness, router, siteId, startedAt]);
   return null;
 }
 

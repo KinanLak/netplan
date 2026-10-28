@@ -298,9 +298,11 @@ function SettingsForm({
                 {suggestion && id !== suggestion.id ? (
                   <p className="text-xs text-muted-foreground">
                     Suggéré : {suggestion.name}{" "}
+                    {/* Spaced and underlined, so it reads as a link apart
+                        from the name. */}
                     <button
                       type="button"
-                      className="text-primary underline-offset-4 hover:underline"
+                      className="ml-1.5 font-medium text-foreground underline underline-offset-4 hover:text-primary"
                       onClick={() =>
                         setChosen((all) => ({
                           ...all,

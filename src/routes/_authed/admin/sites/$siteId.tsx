@@ -629,9 +629,9 @@ function DeleteSite({ site }: { site: Site }) {
         <p className="text-sm text-muted-foreground">
           Ce site a encore{" "}
           {site.buildingCount === 1
-            ? "un bâtiment"
-            : `${site.buildingCount} bâtiments`}
-          , listés plus haut. Supprimez-les d'abord{" "}
+            ? "un bâtiment, listé plus haut. Supprimez-le"
+            : `${site.buildingCount} bâtiments, listés plus haut. Supprimez-les`}{" "}
+          d'abord{" "}
           <Link
             to="/"
             search={{ site: site.id }}
@@ -653,8 +653,13 @@ function DeleteSite({ site }: { site: Site }) {
       >
         Supprimer le site
       </Button>
-      {error ? <FieldError>{error}</FieldError> : null}
-      <AlertDialog open={open} onOpenChange={setOpen}>
+      <AlertDialog
+        open={open}
+        onOpenChange={(next) => {
+          setOpen(next);
+          if (!next) setError(null);
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Supprimer « {site.name} » ?</AlertDialogTitle>
@@ -663,6 +668,8 @@ function DeleteSite({ site }: { site: Site }) {
               intégrations.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {/* In the dialog, which a refusal keeps open. */}
+          {error ? <FieldError>{error}</FieldError> : null}
           <AlertDialogFooter>
             <AlertDialogCancel>Annuler</AlertDialogCancel>
             <AlertDialogAction
