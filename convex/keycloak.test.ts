@@ -722,6 +722,44 @@ describe("handing a local account to Keycloak", () => {
     expect(accounts.page).toEqual([]);
   });
 
+  it("clears what slipped in during the wait, whether it completes or is cancelled", async () => {
+    const providers = async (t: TestBackend, userId: string) =>
+      (
+        (
+          await t.run((ctx) =>
+            ctx.runQuery(components.betterAuth.adapter.findMany, {
+              model: "account",
+              where: [{ field: "userId", value: userId }],
+              paginationOpts: { numItems: 10, cursor: null },
+            }),
+          )
+        ).page as Array<{ providerId: string }>
+      ).map((account) => account.providerId);
+
+    for (const ending of ["keycloak", "cancel"] as const) {
+      const t = withMail();
+      const { admin, userId, signIn } = await localAccount(t);
+      // A password session and the password itself, both written after the
+      // handover's own cleanup by requests already past their checks.
+      const straggler = cookieOf(await signIn());
+      await t.mutation(internal.keycloakHandovers.start, { userId });
+
+      if (ending === "keycloak") {
+        const { location, cookie } = await keycloakLogin(t, {
+          ...lou,
+          roles: [],
+        });
+        expect(location).toBe("/");
+        expect(await sessionOf(t, cookie)).not.toBeNull();
+        expect(await providers(t, userId)).toEqual(["keycloak"]);
+      } else {
+        await admin.mutation(api.users.cancelHandover, { userId });
+        expect(await providers(t, userId)).toEqual([]);
+      }
+      expect(await sessionOf(t, straggler)).toBeNull();
+    }
+  });
+
   it("never gives a Keycloak account a password, even from a reset begun before", async () => {
     const t = withMail();
     await keycloakLogin(t, { ...camille, roles: [] });

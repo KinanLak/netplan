@@ -277,13 +277,6 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
               throw new APIError("FORBIDDEN", { code: "ACCOUNT_NOT_LINKED" });
             }
           },
-          after: async (account) => {
-            if (account.providerId !== "keycloak") return;
-            await requireActionCtx(ctx).runMutation(
-              internal.keycloakHandovers.end,
-              { userId: account.userId },
-            );
-          },
         },
       },
       session: {
@@ -325,9 +318,18 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
             // A password sign-in already checking its hash at the handover
             // would otherwise open a session after they were all closed. A
             // Keycloak sign-in is the one the account waits for: the account
-            // hook let it link, and ends the wait just after.
-            if (!viaKeycloak && (await awaitingKeycloak(session.userId))) {
+            // hook let it link.
+            const awaiting = await awaitingKeycloak(session.userId);
+            if (awaiting && !viaKeycloak) {
               throw new APIError("FORBIDDEN", { code: "AWAITING_KEYCLOAK" });
+            }
+            // The Keycloak sign-in the account waited for: what slipped in
+            // during the wait goes before its own session is written.
+            if (awaiting) {
+              await requireActionCtx(ctx).runMutation(
+                internal.keycloakHandovers.end,
+                { userId: session.userId },
+              );
             }
             if (keycloakConfig && viaKeycloak) {
               await applyKeycloakRole(ctx, keycloakConfig, session.userId);
