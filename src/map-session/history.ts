@@ -193,17 +193,7 @@ export const dispatchUndoRedoEvent = (type: MapFlash) => {
  * What an undone deletion says when some of its cables no longer fit: their
  * far end has gone or holds another cable since (4.1).
  */
-export const droppedCablesMessage = (
-  count: number,
-): { title: string; description: string } =>
+export const droppedCablesMessage = (count: number): string =>
   count === 1
-    ? {
-        title: "1 câble n'a pas pu être rebranché.",
-        description:
-          "Son autre extrémité a disparu ou porte déjà un autre câble.",
-      }
-    : {
-        title: `${count} câbles n'ont pas pu être rebranchés.`,
-        description:
-          "Leur autre extrémité a disparu ou porte déjà un autre câble.",
-      };
+    ? "1 câble n'a pas pu être rebranché."
+    : `${count} câbles n'ont pas pu être rebranchés.`;

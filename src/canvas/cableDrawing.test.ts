@@ -51,11 +51,13 @@ describe("cableStart", () => {
       kind: "unplug",
       cable: floor.cables[0],
       label: "« Accès » 1 ↔ « Prise 2 » 1",
+      far: "« Prise 2 » 1",
     };
     expect(press("sw")).toEqual(unplug);
     expect(press("wall2")).toEqual({
       ...unplug,
       label: "« Prise 2 » 1 ↔ « Accès » 1",
+      far: "« Accès » 1",
     });
   });
 
@@ -69,13 +71,16 @@ describe("cableStart", () => {
         },
       ],
     };
-    expect(
-      cableStart({ deviceId: id("sw"), portId: portOf("sw").id }, netbox),
-    ).toEqual({
-      kind: "refused",
-      reason:
-        "Le câble de « Accès » 1 vient de NetBox : il ne se débranche pas dans NetPlan.",
-    });
+    const fromNetbox = cableStart(
+      { deviceId: id("sw"), portId: portOf("sw").id },
+      netbox,
+    );
+    expect(fromNetbox.kind).toBe("refused");
+    expect(fromNetbox.kind === "refused" && fromNetbox.reason).toContain(
+      "NetBox",
+    );
+    // Nothing in NetPlan unplugs it: no port table is offered.
+    expect(fromNetbox).not.toHaveProperty("deviceId");
 
     // The socket's device is on another floor: not in this floor's document.
     const upstairs = {
@@ -87,8 +92,9 @@ describe("cableStart", () => {
       cableStart({ deviceId: id("sw"), portId: portOf("sw").id }, upstairs),
     ).toEqual({
       kind: "refused",
-      reason:
-        "« Accès » 1 est câblé vers un autre étage : débranchez-le dans la table des ports.",
+      reason: "« Accès » 1 est câblé vers un autre étage.",
+      // Its port table can unplug it.
+      deviceId: id("sw"),
     });
   });
 });

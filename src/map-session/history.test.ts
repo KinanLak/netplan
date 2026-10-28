@@ -216,13 +216,7 @@ describe("session history", () => {
   });
 
   it("says how many cables an undone deletion could not lay again (4.1)", () => {
-    expect(droppedCablesMessage(1)).toEqual({
-      title: "1 câble n'a pas pu être rebranché.",
-      description:
-        "Son autre extrémité a disparu ou porte déjà un autre câble.",
-    });
-    expect(droppedCablesMessage(3).title).toBe(
-      "3 câbles n'ont pas pu être rebranchés.",
-    );
+    expect(droppedCablesMessage(1)).toContain("1 câble ");
+    expect(droppedCablesMessage(3)).toContain("3 câbles ");
   });
 });

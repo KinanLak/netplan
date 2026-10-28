@@ -337,7 +337,7 @@ const clickErasePane = (
     return { ...state, ignoreNextEraseClick: false };
   }
 
-  const eraseResult = adapter.eraseWallAtPointer({
+  adapter.eraseWallAtPointer({
     floorId: context.currentFloorId,
     pointer: sample.pointer,
     snappedPoint: sample.snappedPoint,
@@ -346,7 +346,7 @@ const clickErasePane = (
 
   return {
     ...state,
-    drawMessage: eraseResult.changed ? null : "Aucun bloc de mur à supprimer.",
+    drawMessage: null,
     hoverSnapPoint: sample.snappedPoint,
     pointerPreview: null,
     erasePreviewKeys: previewErase(context, adapter, sample),

@@ -1,28 +1,35 @@
 import type { WallCommandReason } from "@/types/map";
 
-export const toLineFailureMessage = (reason: WallCommandReason): string => {
+// Drawing over walls already there changes nothing the user cannot see, so
+// it says nothing.
+
+export const toLineFailureMessage = (
+  reason: WallCommandReason,
+): string | null => {
   switch (reason) {
     case "invalid-line":
       return "Segment de mur invalide.";
     case "collision-with-device":
       return COLLISION_LINE_MESSAGE;
     case "already-exists":
-      return "Aucun nouveau bloc de mur à ajouter.";
+      return null;
     default:
       return "Impossible d'ajouter ce mur.";
   }
 };
 
-export const COLLISION_LINE_MESSAGE = "Mur refusé : il traverse un équipement.";
+export const COLLISION_LINE_MESSAGE = "Ce mur traverse un équipement.";
 
-export const toRoomFailureMessage = (reason: WallCommandReason): string => {
+export const toRoomFailureMessage = (
+  reason: WallCommandReason,
+): string | null => {
   switch (reason) {
     case "invalid-room":
-      return "Salle refusée : rectangle vide.";
+      return "Cette salle est trop petite.";
     case "collision-with-device":
-      return "Salle refusée : elle chevauche un équipement.";
+      return "Cette salle chevauche un équipement.";
     case "already-exists":
-      return "Aucun nouveau bloc de mur à ajouter.";
+      return null;
     default:
       return "Impossible d'ajouter cette salle.";
   }

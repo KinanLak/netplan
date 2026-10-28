@@ -159,7 +159,6 @@ export interface MapDocumentSyncStatus {
   isSaving: boolean;
   /** Operations not yet acknowledged, on every floor. */
   pendingCount: number;
-  hasBackgroundPendingOperations: boolean;
   hasRejectedOperations: boolean;
   rejectedMessage: string | null;
 }
@@ -520,7 +519,7 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
     if (!device || !isDeletable(device)) return false;
     if (isPlacementPending(pendingEntriesRef.current, deviceId)) {
       setRejectedMessage(
-        "Cet équipement vient d'être placé : réessayez dans un instant.",
+        "Cet équipement vient d'être placé, réessayez dans un instant.",
       );
       return false;
     }
@@ -854,7 +853,7 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
     const preview = applyOperation(snapshotBefore, operation);
     if (!preview.applied) {
       setRejectedMessage(
-        `Impossible ${type === "undo" ? "d'annuler" : "de rétablir"} : l'élément a été modifié depuis, par une autre personne ou par la collecte.`,
+        `Impossible ${type === "undo" ? "d'annuler" : "de rétablir"}, l'élément a changé depuis.`,
       );
       return;
     }
@@ -1041,9 +1040,6 @@ export function MapDocumentProvider({
   const activeHistory = historyByFloor[activeFloorId] ?? EMPTY_FLOOR_HISTORY;
   const undoStack = activeHistory.undoStack;
   const redoStack = activeHistory.redoStack;
-  const hasBackgroundPendingOperations = pendingEntries.some(
-    (entry) => entry.floorId !== activeFloorId,
-  );
   const observedPendingOpIds = useMemo(
     () =>
       pendingEntries
@@ -1114,10 +1110,7 @@ export function MapDocumentProvider({
       onAck: (operation, result) => {
         // The device is back, but the user lost cables to lay again by hand.
         if (result.droppedCables) {
-          const { title, description } = droppedCablesMessage(
-            result.droppedCables,
-          );
-          toast.warning(title, { description });
+          toast.warning(droppedCablesMessage(result.droppedCables));
         }
         ackedRevisionsRef.current.set(
           operation.meta.opId,
@@ -1275,16 +1268,10 @@ export function MapDocumentProvider({
     () => ({
       isSaving,
       pendingCount: pendingEntries.length,
-      hasBackgroundPendingOperations,
       hasRejectedOperations: rejectedMessage !== null,
       rejectedMessage,
     }),
-    [
-      isSaving,
-      pendingEntries.length,
-      hasBackgroundPendingOperations,
-      rejectedMessage,
-    ],
+    [isSaving, pendingEntries.length, rejectedMessage],
   );
   const history = useMemo<MapDocumentHistoryState>(
     () => ({

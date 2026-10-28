@@ -144,7 +144,6 @@ export function OverlayControls({ overlay, isReady }: OverlayControlsProps) {
           size="sm"
           disabled={!canPlace}
           onClick={toggleCalibration}
-          title="Cliquer deux points du plan et saisir leur distance réelle"
         >
           <HugeiconsIcon icon={RulerIcon} strokeWidth={2} />
           Étalonner l'échelle

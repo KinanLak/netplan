@@ -163,13 +163,9 @@ export function DeviceSearch() {
               )}
             </li>
           ))}
-          {shown.length === 0 ? (
+          {matches.length > SHOWN ? (
             <li className="px-2 py-1 text-xs text-muted-foreground">
-              Aucun équipement ne correspond.
-            </li>
-          ) : matches.length > SHOWN ? (
-            <li className="px-2 py-1 text-xs text-muted-foreground">
-              {matches.length - SHOWN} autres : précisez la recherche.
+              {matches.length - SHOWN} autres
             </li>
           ) : null}
         </ul>

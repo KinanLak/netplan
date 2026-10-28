@@ -13,11 +13,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Alert02Icon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
+import { IconNote } from "@/components/icon-note";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -198,10 +199,7 @@ function CreateBuildingForm({
       }
     >
       <DialogHeader>
-        <DialogTitle>Nouveau bâtiment</DialogTitle>
-        <DialogDescription>
-          Il s'ouvre sur son premier étage ; d'autres s'ajoutent ensuite.
-        </DialogDescription>
+        <DialogTitle>Créer un bâtiment</DialogTitle>
       </DialogHeader>
       <FieldGroup>
         <NameField
@@ -221,7 +219,7 @@ function CreateBuildingForm({
       <FormFooter
         error={error}
         saving={saving}
-        label="Créer"
+        label="Créer le bâtiment"
         onCancel={onDone}
       />
     </form>
@@ -259,10 +257,7 @@ function AddFloorForm({
       }
     >
       <DialogHeader>
-        <DialogTitle>Nouvel étage</DialogTitle>
-        <DialogDescription>
-          Il s'ajoute au-dessus des autres étages de {action.buildingName}.
-        </DialogDescription>
+        <DialogTitle>Ajouter un étage à {action.buildingName}</DialogTitle>
       </DialogHeader>
       <FieldGroup>
         <NameField
@@ -276,7 +271,7 @@ function AddFloorForm({
       <FormFooter
         error={error}
         saving={saving}
-        label="Ajouter"
+        label="Ajouter l'étage"
         onCancel={onDone}
       />
     </form>
@@ -312,9 +307,6 @@ function RenameForm({
         <DialogTitle>
           {building ? "Renommer le bâtiment" : "Renommer l'étage"}
         </DialogTitle>
-        <DialogDescription>
-          Tout le monde voit le nouveau nom aussitôt.
-        </DialogDescription>
       </DialogHeader>
       <FieldGroup>
         <NameField
@@ -366,11 +358,6 @@ function RemoveDialog({
     try {
       const run = building ? removeBuilding : removeFloor;
       await run({ id: action.id });
-      toast.success(
-        building
-          ? `Bâtiment « ${action.name} » supprimé`
-          : `Étage « ${action.name} » supprimé`,
-      );
     } catch (caught) {
       toast.error(failureMessage(caught, "editor"));
     }
@@ -390,15 +377,19 @@ function RemoveDialog({
               ? `Supprimer le bâtiment « ${action.name} »${along} ?`
               : `Supprimer l'étage « ${action.name} »${along} ?`}
           </AlertDialogTitle>
-          <AlertDialogDescription>
-            {remaining
-              ? building
-                ? `Ses étages portent encore ${remaining}. Retirez-les du plan avant de supprimer le bâtiment.`
-                : `Il porte encore ${remaining}. Retirez-les du plan avant de supprimer l'étage.`
-              : building
-                ? "Le bâtiment est vide ; ses étages partent avec lui."
-                : "L'étage est vide."}
-          </AlertDialogDescription>
+          {remaining ? (
+            <AlertDialogDescription render={<div />}>
+              <IconNote icon={Alert02Icon} tone="warning">
+                {building
+                  ? `Ses étages portent encore ${remaining}.`
+                  : `Il porte encore ${remaining}.`}
+              </IconNote>
+            </AlertDialogDescription>
+          ) : building ? (
+            <AlertDialogDescription>
+              Ses étages sont supprimés avec lui.
+            </AlertDialogDescription>
+          ) : null}
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Annuler</AlertDialogCancel>
@@ -407,7 +398,7 @@ function RemoveDialog({
             disabled={!canRemove}
             onClick={() => void remove()}
           >
-            Supprimer
+            {building ? "Supprimer le bâtiment" : "Supprimer l'étage"}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

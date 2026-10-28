@@ -105,7 +105,7 @@ export class SequentialOutbox {
         if (result.status === "rejected") {
           this.options.onReject(
             operation,
-            result.error ?? "Le serveur a refusé la modification.",
+            result.error ?? "Modification refusée.",
           );
         } else {
           this.options.onAck(operation, result);

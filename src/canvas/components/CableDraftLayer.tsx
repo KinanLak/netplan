@@ -6,10 +6,11 @@ import { cableDropResult, cableStart } from "@/canvas/cableDrawing";
 import type { CableDrop } from "@/canvas/cableDrawing";
 import { TRACED_ON_ASK } from "@/canvas/cablePaths";
 import { PORT_ID_ATTRIBUTE, portIdAt } from "@/canvas/hooks/useCableGrip";
+import { Link01Icon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
+import { IconNote } from "@/components/icon-note";
 import {
   Command,
-  CommandEmpty,
   CommandInput,
   CommandItem,
   CommandList,
@@ -81,17 +82,37 @@ function PressedPort({ draft }: { draft: CableDraft }) {
           portId={draft.portId}
           cable={start.cable}
           label={start.label}
+          far={start.far}
         />
       );
     case "refused":
-      return <RefusedStart reason={start.reason} />;
+      return <RefusedStart reason={start.reason} deviceId={start.deviceId} />;
   }
 }
 
-function RefusedStart({ reason }: { reason: string }) {
+function RefusedStart({
+  reason,
+  deviceId,
+}: {
+  reason: string;
+  deviceId?: DeviceId;
+}) {
   const setCableDraft = useMapStore((s) => s.setCableDraft);
+  const selectDevice = useMapStore((s) => s.selectDevice);
   const refuse = useEffectEvent(() => {
-    toast(reason, { id: REFUSAL_TOAST });
+    // The device's sheet holds its port table, which can do what the map
+    // cannot.
+    toast(reason, {
+      id: REFUSAL_TOAST,
+      ...(deviceId
+        ? {
+            action: {
+              label: "Ouvrir la fiche",
+              onClick: () => selectDevice(deviceId),
+            },
+          }
+        : {}),
+    });
     setCableDraft(null);
   });
   useEffect(() => refuse(), []);
@@ -103,10 +124,12 @@ function UnplugMenu({
   portId,
   cable,
   label,
+  far,
 }: {
   portId: CableDraft["portId"];
   cable: Cable;
   label: string;
+  far: string;
 }) {
   const setCableDraft = useMapStore((s) => s.setCableDraft);
   const { unplug } = useCableCommands();
@@ -142,7 +165,9 @@ function UnplugMenu({
       }}
     >
       <PopoverContent anchor={anchor} className="w-auto max-w-80 gap-3 p-3">
-        <p>{label}</p>
+        <IconNote icon={Link01Icon} className="text-foreground">
+          {far}
+        </IconNote>
         <Button
           variant="destructive"
           size="sm"
@@ -304,7 +329,6 @@ function DrawingCable({ draft }: { draft: CableDraft }) {
             <Command>
               <CommandInput placeholder="Port libre…" autoFocus />
               <CommandList>
-                <CommandEmpty>Aucun port ne correspond.</CommandEmpty>
                 {pick.ports.map((port) => (
                   <CommandItem
                     key={port.id}

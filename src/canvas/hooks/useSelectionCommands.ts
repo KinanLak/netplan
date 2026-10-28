@@ -113,12 +113,12 @@ export function useSelectionMoves() {
     align: (alignment: Alignment) =>
       arrange(
         (devices) => alignDevices(devices, alignment),
-        "Impossible d'aligner : des équipements se chevaucheraient ou toucheraient un mur.",
+        "Alignés, ces équipements se chevaucheraient ou toucheraient un mur.",
       ),
     distribute: (axis: DistributionAxis) =>
       arrange(
         (devices) => distributeDevices(devices, axis),
-        "Impossible de répartir : des équipements se chevaucheraient ou toucheraient un mur.",
+        "Répartis, ces équipements se chevaucheraient ou toucheraient un mur.",
       ),
   };
 }
