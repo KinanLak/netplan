@@ -7,19 +7,22 @@ import {
 } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import { TanStackDevtools } from "@tanstack/react-devtools";
-import { ConvexBetterAuthProvider } from "@convex-dev/better-auth/react";
+import { ConvexProviderWithAuth } from "convex/react";
 import { createServerFn } from "@tanstack/react-start";
 import { useEffect } from "react";
 import type { ReactNode } from "react";
-import { ErrorScreen, isNetworkError } from "@/components/error-screen";
+import { ErrorScreen } from "@/components/error-screen";
 import { ThemeProvider, themeScript } from "@/components/theme-provider";
 import { useDocumentTitle } from "@/hooks/use-document-title";
 import appCss from "@/styles.css?url";
 import logoCss from "@/netplan-logo.css?url";
-import { providerAuthClient } from "@/lib/auth-client";
+import { authClient } from "@/lib/auth-client";
 import { getToken } from "@/lib/auth-server";
 import { getConvexClient } from "@/lib/convex";
 import { getRuntimeConfig } from "@/lib/getRuntimeConfig";
+import type { RuntimeConfig } from "@/lib/runtimeConfig";
+import { createSessionTokens, tokenAnswer } from "@/lib/session-token";
+import type { SessionTokens } from "@/lib/session-token";
 import { logGraphicsAccelerationStatusOnce } from "@/lib/graphicsAcceleration";
 
 // Read from the session cookie on the server, so a signed-out visitor is
@@ -28,22 +31,24 @@ const getAuthToken = createServerFn({ method: "GET" }).handler(
   async () => (await getToken()) ?? null,
 );
 
-// The token the browser last read. Every page change asks again, and without
-// a network that request fails: the session has not changed for it, so the
-// page opens and says it is offline instead of failing. Signing in and out
-// reload the page, and the signed-in layout notices a session lost meanwhile.
-// Any other failure still fails: the server may have something to say.
-let lastClientToken: string | null | undefined;
+// What the server said when the page loaded. Signing in and out reload the
+// page, so in the browser neither changes until the next full load, and a
+// page change does not ask again: during an outage that request failed, and
+// its failure replaced every page, the map's queued edits with it, by the
+// error screen. A session lost meanwhile shows as Convex refusing it, which
+// the signed-in layout handles.
+let pageToken: { token: string | null } | undefined;
+let pageConfig: RuntimeConfig | undefined;
 
 const readAuthToken = async () => {
   if (typeof window === "undefined") return await getAuthToken();
-  try {
-    lastClientToken = await getAuthToken();
-  } catch (error) {
-    const offline = isNetworkError(error) || !navigator.onLine;
-    if (!offline || lastClientToken === undefined) throw error;
-  }
-  return lastClientToken;
+  pageToken ??= { token: await getAuthToken() };
+  return pageToken.token;
+};
+
+const readRuntimeConfig = async () => {
+  if (typeof window === "undefined") return await getRuntimeConfig();
+  return (pageConfig ??= await getRuntimeConfig());
 };
 
 export const Route = createRootRoute({
@@ -65,7 +70,7 @@ export const Route = createRootRoute({
       },
     ],
   }),
-  loader: () => getRuntimeConfig(),
+  loader: () => readRuntimeConfig(),
   staleTime: Infinity,
   shellComponent: RootDocument,
   component: RootComponent,
@@ -88,22 +93,52 @@ function NotFoundComponent() {
   );
 }
 
+// One per page in the browser, so a remount keeps the token; one per
+// request on the server, which never fetches one.
+let browserTokens: SessionTokens | undefined;
+
+const sessionTokens = (initialToken: string | null) => {
+  const create = () =>
+    createSessionTokens({
+      initialToken,
+      requestToken: async () => {
+        try {
+          return tokenAnswer(
+            await authClient.convex.token({ fetchOptions: { throw: false } }),
+          );
+        } catch {
+          return { kind: "unreachable" };
+        }
+      },
+    });
+  if (typeof window === "undefined") return create();
+  return (browserTokens ??= create());
+};
+
 function RootComponent() {
-  const { convexUrl } = Route.useLoaderData();
+  const config = Route.useLoaderData();
   const { token } = Route.useRouteContext();
-  // A full load hydrates the server's context without running `beforeLoad`
-  // in the browser, so the first page change offline starts from it.
+  // A full load hydrates the server's answers without running `beforeLoad`
+  // or the loader in the browser, so the first page change starts from them.
   useEffect(() => {
-    lastClientToken ??= token;
-  }, [token]);
+    pageToken ??= { token };
+    pageConfig ??= config;
+  }, [token, config]);
+  const tokens = sessionTokens(token);
+  // Constant for the page's life: Convex drops the identity whenever these
+  // change, and queries in flight then fail as a lost session.
+  const useAuth = () => ({
+    isLoading: false,
+    isAuthenticated: tokens.signedIn,
+    fetchAccessToken: tokens.fetchAccessToken,
+  });
   return (
-    <ConvexBetterAuthProvider
-      client={getConvexClient(convexUrl, { signedIn: Boolean(token) })}
-      authClient={providerAuthClient}
-      initialToken={token}
+    <ConvexProviderWithAuth
+      client={getConvexClient(config.convexUrl, { signedIn: tokens.signedIn })}
+      useAuth={useAuth}
     >
       <Outlet />
-    </ConvexBetterAuthProvider>
+    </ConvexProviderWithAuth>
   );
 }
 

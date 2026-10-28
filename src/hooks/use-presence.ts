@@ -11,6 +11,10 @@ import { colorHueFor } from "../../convex/lib/presence";
 const HEARTBEAT_MS = 2_000;
 const STALE_TICK_MS = 1_000;
 
+// A heartbeat that fails is replaced by the next one, and a lost session is
+// the signed-in layout's to handle: neither is worth an uncaught error.
+const ignoreHeartbeatFailure = () => {};
+
 /**
  * Publishes this page's presence for `floorId`, subscribes to every live
  * presence across the map, and returns one entry per user with stale rows
@@ -36,7 +40,7 @@ export function usePresence(floorId: FloorId | null): Array<ActivePresence> {
     if (!identity) return;
     const clientId = identity.clientId;
     if (!floorId) {
-      void removePresence({ clientId });
+      removePresence({ clientId }).catch(ignoreHeartbeatFailure);
       return;
     }
 
@@ -44,7 +48,9 @@ export function usePresence(floorId: FloorId | null): Array<ActivePresence> {
     // user is now, so their avatar follows them across tabs and devices in
     // the order they switched, not in the order their heartbeats fire.
     const publish = (active: boolean) => {
-      void updateOnlineUser({ clientId, floorId, active });
+      updateOnlineUser({ clientId, floorId, active }).catch(
+        ignoreHeartbeatFailure,
+      );
     };
     const markActive = () => {
       if (document.visibilityState === "visible") publish(true);
@@ -65,7 +71,7 @@ export function usePresence(floorId: FloorId | null): Array<ActivePresence> {
     if (!identity) return;
     const clientId = identity.clientId;
     const remove = () => {
-      void removePresence({ clientId });
+      removePresence({ clientId }).catch(ignoreHeartbeatFailure);
     };
 
     window.addEventListener("pagehide", remove);

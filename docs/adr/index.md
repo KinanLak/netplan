@@ -46,3 +46,4 @@ record's Source section points to its questions in the
 - **[0033 — An archived site leaves the picker, refuses every change to its plan and inventory, and is never collected, until an admin brings it back](0033-site-archive.md)**
 - **[0034 — A selection of several devices moves by one offset, as one block that never passes through a wall](0034-rigid-group-moves.md)**
 - **[0038 — A site is collected at one interval day and night, its readings expire after two intervals and the lease, and the collection says its doubts quietly](0038-one-cadence-and-quiet-collection.md)** (supersedes 0010)
+- **[0034 — A page keeps its session and its Convex identity through an outage, says when the server cannot be reached, and recovers by itself](0034-outage-keeps-the-page.md)**
