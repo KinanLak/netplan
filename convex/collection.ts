@@ -18,12 +18,7 @@ import { SOURCE_RETRY } from "./lib/httpRetry";
 import { probeIntegration } from "./lib/integrationProbe";
 import type { Transport } from "./lib/integrationProbe";
 import { requireOpenSite } from "./sites";
-import {
-  cycleRun,
-  cycleStep,
-  integrationKind,
-  siteCadence,
-} from "./siteValidators";
+import { cycleRun, cycleStep, integrationKind } from "./siteValidators";
 import { nextRunAt, retryAt } from "../src/sites/cadence";
 import { INTEGRATION_KINDS } from "../src/sites/integrations";
 import type { IntegrationKind } from "../src/sites/integrations";
@@ -285,8 +280,8 @@ export const finish = internalMutation({
       running: undefined,
       failures,
       nextRunAt: ok
-        ? nextRunAt(site.cadence, site.timezone, startedAt)
-        : retryAt(site.cadence, site.timezone, startedAt, failures),
+        ? nextRunAt(site.intervalMinutes, startedAt)
+        : retryAt(site.intervalMinutes, startedAt, failures),
       last: { startedAt, finishedAt: Date.now(), manual, steps },
       ...(ok ? { lastSuccessAt: startedAt } : {}),
     });
@@ -321,7 +316,7 @@ export const expire = internalMutation({
     await ctx.db.patch(cycle._id, {
       running: undefined,
       failures,
-      nextRunAt: retryAt(site.cadence, site.timezone, now, failures),
+      nextRunAt: retryAt(site.intervalMinutes, now, failures),
     });
     return null;
   },
@@ -370,8 +365,7 @@ export const siteFreshness = v.object({
   hasSources: v.boolean(),
   automaticRefresh: v.boolean(),
   manualRefresh: v.boolean(),
-  cadence: siteCadence,
-  timezone: v.string(),
+  intervalMinutes: v.number(),
   running: v.union(
     v.null(),
     v.object({ startedAt: v.number(), manual: v.boolean() }),
@@ -434,8 +428,7 @@ export const freshnessOf = async (
     hasSources: sources.length > 0,
     automaticRefresh: site.automaticRefresh,
     manualRefresh: site.manualRefresh,
-    cadence: site.cadence,
-    timezone: site.timezone,
+    intervalMinutes: site.intervalMinutes,
     running:
       cycle?.running && isRunning(cycle, Date.now())
         ? { startedAt: cycle.running.startedAt, manual: cycle.running.manual }

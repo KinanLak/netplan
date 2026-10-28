@@ -47,13 +47,9 @@ import { Time } from "@/components/time";
 import {
   MAX_INTERVAL_MINUTES,
   MIN_INTERVAL_MINUTES,
-  WEEKDAYS,
-  formatMinuteOfDay,
   INTERVAL_RANGE,
   SITE_NAME_TAKEN,
-  parseMinuteOfDay,
   siteSettingsProblem,
-  tidyTimeOfDay,
 } from "@/sites/settings";
 import type { SiteField, SiteProblem, SiteSettings } from "@/sites/settings";
 import { api } from "../../../../../convex/_generated/api";
@@ -163,12 +159,8 @@ function SiteContent({ site }: { site: Site }) {
   );
 }
 
-type Draft = Omit<SiteSettings, "cadence"> & {
-  businessIntervalMinutes: string;
-  otherIntervalMinutes: string;
-  businessStart: string;
-  businessEnd: string;
-  businessDays: Array<number>;
+type Draft = Omit<SiteSettings, "intervalMinutes"> & {
+  intervalMinutes: string;
 };
 
 const toDraft = (site: Site): Draft => ({
@@ -176,34 +168,13 @@ const toDraft = (site: Site): Draft => ({
   timezone: site.timezone,
   automaticRefresh: site.automaticRefresh,
   manualRefresh: site.manualRefresh,
-  businessIntervalMinutes: String(site.cadence.businessIntervalMinutes),
-  otherIntervalMinutes: String(site.cadence.otherIntervalMinutes),
-  businessStart: formatMinuteOfDay(site.cadence.businessStartMinute),
-  businessEnd: formatMinuteOfDay(site.cadence.businessEndMinute),
-  businessDays: site.cadence.businessDays,
+  intervalMinutes: String(site.intervalMinutes),
 });
 
 const fromDraft = (draft: Draft): SiteSettings | SiteProblem => {
-  const businessStartMinute = parseMinuteOfDay(draft.businessStart);
-  const businessEndMinute = parseMinuteOfDay(draft.businessEnd);
-  if (businessStartMinute === null || businessEndMinute === null) {
-    return {
-      field: "businessHours",
-      message: "Les heures ouvrées s'écrivent HH:MM.",
-    };
-  }
   const settings: SiteSettings = {
-    name: draft.name,
-    timezone: draft.timezone,
-    automaticRefresh: draft.automaticRefresh,
-    manualRefresh: draft.manualRefresh,
-    cadence: {
-      businessIntervalMinutes: Number(draft.businessIntervalMinutes),
-      otherIntervalMinutes: Number(draft.otherIntervalMinutes),
-      businessStartMinute,
-      businessEndMinute,
-      businessDays: [...draft.businessDays].sort((a, b) => a - b),
-    },
+    ...draft,
+    intervalMinutes: Number(draft.intervalMinutes),
   };
   return siteSettingsProblem(settings) ?? settings;
 };
@@ -212,15 +183,11 @@ const fromDraft = (draft: Draft): SiteSettings | SiteProblem => {
 const FIELD_INPUT: Record<SiteField, string> = {
   name: "site-name",
   timezone: "site-timezone",
-  businessIntervalMinutes: "site-business-interval",
-  otherIntervalMinutes: "site-other-interval",
-  businessHours: "site-business-start",
-  businessDays: "site-day-1",
+  intervalMinutes: "site-interval",
 };
 
 const sameDraft = (a: Draft, b: Draft) =>
-  JSON.stringify({ ...a, businessDays: a.businessDays.toSorted() }) ===
-  JSON.stringify({ ...b, businessDays: b.businessDays.toSorted() });
+  JSON.stringify(a) === JSON.stringify(b);
 
 function SiteSettingsForm({ site }: { site: Site }) {
   const update = useMutation(api.sites.update);
@@ -245,22 +212,6 @@ function SiteSettingsForm({ site }: { site: Site }) {
     setDraft((current) => ({ ...current, ...patch }));
     setProblem(null);
   };
-
-  // Tidies a time on leaving its field without clearing an error: focus
-  // moves to the refused field, which blurs this one, as a save is refused.
-  const tidy = (key: "businessStart" | "businessEnd", value: string) => {
-    const tidied = tidyTimeOfDay(value);
-    if (tidied !== value) {
-      setDraft((current) => ({ ...current, [key]: tidied }));
-    }
-  };
-
-  const toggleDay = (day: number) =>
-    change({
-      businessDays: draft.businessDays.includes(day)
-        ? draft.businessDays.filter((other) => other !== day)
-        : [...draft.businessDays, day],
-    });
 
   // A field refused while saving is focused once the form is enabled again:
   // a disabled field takes no focus.
@@ -351,8 +302,7 @@ function SiteSettingsForm({ site }: { site: Site }) {
       <FieldSet disabled={pending}>
         <FieldLegend>Collecte</FieldLegend>
         <FieldDescription>
-          NetPlan interroge les intégrations du site à ce rythme, à l'heure du
-          site.
+          NetPlan interroge les intégrations du site à ce rythme, jour et nuit.
         </FieldDescription>
         <FieldGroup>
           <Field orientation="horizontal">
@@ -380,113 +330,31 @@ function SiteSettingsForm({ site }: { site: Site }) {
             </FieldLabel>
           </Field>
 
-          <div className="space-y-2">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field data-invalid={errorOf("businessHours") !== null}>
-                <FieldLabel htmlFor="site-business-start">
-                  Début des heures ouvrées
-                </FieldLabel>
-                <Input
-                  id="site-business-start"
-                  // Typed on a 24-hour clock whatever the browser's locale:
-                  // a native time field shows AM/PM in English (A90).
-                  inputMode="numeric"
-                  autoComplete="off"
-                  placeholder="HH:MM"
-                  maxLength={5}
-                  className="tabular-nums"
-                  value={draft.businessStart}
-                  {...invalid("businessHours", "site-business-hours")}
-                  onChange={(event) =>
-                    change({ businessStart: event.target.value })
-                  }
-                  onBlur={(event) => tidy("businessStart", event.target.value)}
-                />
-              </Field>
-              <Field data-invalid={errorOf("businessHours") !== null}>
-                <FieldLabel htmlFor="site-business-end">
-                  Fin des heures ouvrées
-                </FieldLabel>
-                <Input
-                  id="site-business-end"
-                  // Typed on a 24-hour clock whatever the browser's locale:
-                  // a native time field shows AM/PM in English (A90).
-                  inputMode="numeric"
-                  autoComplete="off"
-                  placeholder="HH:MM"
-                  maxLength={5}
-                  className="tabular-nums"
-                  value={draft.businessEnd}
-                  {...invalid("businessHours", "site-business-hours")}
-                  onChange={(event) =>
-                    change({ businessEnd: event.target.value })
-                  }
-                  onBlur={(event) => tidy("businessEnd", event.target.value)}
-                />
-              </Field>
-            </div>
-            {error("businessHours", "site-business-hours")}
-          </div>
-
-          <Field data-invalid={errorOf("businessDays") !== null}>
-            <FieldLabel>Jours ouvrés</FieldLabel>
-            <div className="flex flex-wrap gap-2">
-              {WEEKDAYS.map(({ day, label, short }) => {
-                const on = draft.businessDays.includes(day);
-                return (
-                  <Button
-                    key={day}
-                    id={`site-day-${day}`}
-                    type="button"
-                    size="sm"
-                    variant={on ? "default" : "outline"}
-                    aria-pressed={on}
-                    aria-label={label}
-                    onClick={() => toggleDay(day)}
-                  >
-                    {short}
-                  </Button>
-                );
-              })}
-            </div>
-            {error("businessDays", "site-days")}
+          <Field
+            data-invalid={errorOf("intervalMinutes") !== null}
+            className="max-w-xs"
+          >
+            <FieldLabel htmlFor="site-interval">
+              Intervalle (minutes)
+            </FieldLabel>
+            <Input
+              id="site-interval"
+              type="number"
+              min={MIN_INTERVAL_MINUTES}
+              max={MAX_INTERVAL_MINUTES}
+              value={draft.intervalMinutes}
+              {...invalid("intervalMinutes", "site-interval")}
+              onChange={(event) =>
+                change({ intervalMinutes: event.target.value })
+              }
+            />
+            {error("intervalMinutes", "site-interval") ?? (
+              <FieldDescription>
+                {INTERVAL_RANGE.charAt(0).toUpperCase()}
+                {INTERVAL_RANGE.slice(1)}.
+              </FieldDescription>
+            )}
           </Field>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            {(
-              [
-                [
-                  "businessIntervalMinutes",
-                  "site-business-interval",
-                  "Intervalle en heures ouvrées (minutes)",
-                ],
-                [
-                  "otherIntervalMinutes",
-                  "site-other-interval",
-                  "Intervalle le reste du temps (minutes)",
-                ],
-              ] as const
-            ).map(([field, id, label]) => (
-              <Field key={field} data-invalid={errorOf(field) !== null}>
-                <FieldLabel htmlFor={id}>{label}</FieldLabel>
-                <Input
-                  id={id}
-                  type="number"
-                  min={MIN_INTERVAL_MINUTES}
-                  max={MAX_INTERVAL_MINUTES}
-                  value={draft[field]}
-                  {...invalid(field, id)}
-                  onChange={(event) => change({ [field]: event.target.value })}
-                />
-                {error(field, id) ?? (
-                  <FieldDescription>
-                    {INTERVAL_RANGE.charAt(0).toUpperCase()}
-                    {INTERVAL_RANGE.slice(1)}.
-                  </FieldDescription>
-                )}
-              </Field>
-            ))}
-          </div>
         </FieldGroup>
       </FieldSet>
 

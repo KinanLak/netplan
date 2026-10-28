@@ -15,7 +15,6 @@ import {
 } from "./_test/auth.setup";
 import { stubFetch } from "./_test/fetch";
 import type { TestClient } from "./_test/auth.setup";
-import { DEFAULT_CADENCE } from "../src/sites/settings";
 
 const TOKEN = "a-token-for-tests"; // gitleaks:allow
 const NETBOX_OK = () => Response.json({ "netbox-version": "4.6.10" });
@@ -138,7 +137,7 @@ describe("collection cycles", () => {
       siteId,
       name: site.name,
       timezone: site.timezone,
-      cadence: site.cadence,
+      intervalMinutes: site.intervalMinutes,
       automaticRefresh: false,
       manualRefresh: true,
     });
@@ -148,7 +147,7 @@ describe("collection cycles", () => {
       siteId,
       name: site.name,
       timezone: site.timezone,
-      cadence: site.cadence,
+      intervalMinutes: site.intervalMinutes,
       automaticRefresh: true,
       manualRefresh: true,
     });
@@ -184,7 +183,7 @@ describe("collection cycles", () => {
       siteId,
       name: site.name,
       timezone: site.timezone,
-      cadence: site.cadence,
+      intervalMinutes: site.intervalMinutes,
       automaticRefresh: true,
       manualRefresh: false,
     });
@@ -202,7 +201,7 @@ describe("collection cycles", () => {
       siteId,
       name: site.name,
       timezone: site.timezone,
-      cadence: site.cadence,
+      intervalMinutes: site.intervalMinutes,
       automaticRefresh: true,
       manualRefresh: true,
     });
@@ -400,11 +399,7 @@ describe("collection cycles", () => {
       timezone: site.timezone,
       automaticRefresh: true,
       manualRefresh: true,
-      cadence: {
-        ...DEFAULT_CADENCE,
-        businessIntervalMinutes: minutes,
-        otherIntervalMinutes: minutes,
-      },
+      intervalMinutes: minutes,
     });
     await admin.mutation(api.sites.update, every(60));
     await admin.mutation(api.collection.refresh, { siteId });

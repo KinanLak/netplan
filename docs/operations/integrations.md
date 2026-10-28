@@ -92,9 +92,8 @@ After the script passes, with an admin account and one site:
    network sees and no device carries; "Créer l'équipement" on one places
    an endpoint next to its socket.
 
-The automatic cycles then follow the site's cadence, by default every five
-minutes from 07:00 to 20:00 on weekdays in the site's time zone, and hourly
-otherwise.
+The automatic cycles then run at the site's interval, every five minutes by
+default, day and night.
 
 ## Writing locations back to NetBox
 

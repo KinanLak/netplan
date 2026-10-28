@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { api } from "./_generated/api";
 import { signedInTest } from "./_test/auth.setup";
-import { DEFAULT_CADENCE } from "../src/sites/settings";
+import { DEFAULT_INTERVAL_MINUTES } from "../src/sites/settings";
 
 const arles = { name: "Arles", timezone: "Europe/Paris" };
 
@@ -20,7 +20,7 @@ describe("sites", () => {
       timezone: "Europe/Paris",
       archived: false,
       archivedAt: null,
-      cadence: DEFAULT_CADENCE,
+      intervalMinutes: DEFAULT_INTERVAL_MINUTES,
       automaticRefresh: true,
       manualRefresh: true,
       buildingCount: 0,
@@ -54,7 +54,7 @@ describe("sites", () => {
       admin.mutation(api.sites.update, {
         siteId: second,
         ...arles,
-        cadence: DEFAULT_CADENCE,
+        intervalMinutes: DEFAULT_INTERVAL_MINUTES,
         automaticRefresh: true,
         manualRefresh: true,
       }),
@@ -64,7 +64,7 @@ describe("sites", () => {
       siteId: first,
       name: "arles",
       timezone: "Europe/Paris",
-      cadence: DEFAULT_CADENCE,
+      intervalMinutes: DEFAULT_INTERVAL_MINUTES,
       automaticRefresh: true,
       manualRefresh: true,
     });
@@ -80,35 +80,28 @@ describe("sites", () => {
       admin.mutation(api.sites.update, {
         siteId,
         ...arles,
-        cadence: { ...DEFAULT_CADENCE, businessIntervalMinutes: 1 },
+        intervalMinutes: 1,
         automaticRefresh: true,
         manualRefresh: true,
       }),
     ).rejects.toThrow("intervalle");
   });
 
-  it("saves the cadence and the refresh switches", async () => {
+  it("saves the interval and the refresh switches", async () => {
     const admin = await signedInTest("admin");
     const siteId = await admin.mutation(api.sites.create, arles);
-    const cadence = {
-      businessIntervalMinutes: 10,
-      otherIntervalMinutes: 120,
-      businessStartMinute: 8 * 60,
-      businessEndMinute: 18 * 60 + 30,
-      businessDays: [6, 1, 3],
-    };
     await admin.mutation(api.sites.update, {
       siteId,
       name: "Arles",
       timezone: "America/Montreal",
-      cadence,
+      intervalMinutes: 10,
       automaticRefresh: false,
       manualRefresh: true,
     });
 
     expect(await admin.query(api.sites.getSettings, { siteId })).toMatchObject({
       timezone: "America/Montreal",
-      cadence: { ...cadence, businessDays: [1, 3, 6] },
+      intervalMinutes: 10,
       automaticRefresh: false,
       manualRefresh: true,
     });
@@ -210,7 +203,7 @@ describe("sites", () => {
       siteId,
       name: "Arles (ancien)",
       timezone: "Europe/Paris",
-      cadence: DEFAULT_CADENCE,
+      intervalMinutes: DEFAULT_INTERVAL_MINUTES,
       automaticRefresh: true,
       manualRefresh: true,
     });

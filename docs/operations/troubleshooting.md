@@ -30,8 +30,8 @@ every source answered.
 | "Données en retard : …"      | Two failures in a row, or the second scheduled run after the last success is 2 minutes late.             |
 
 "Late" never applies to a paused server, a site without sources, or a site
-whose automatic collection is off. With the default cadence a site is late
-after about 12 minutes in business hours and about 2 hours otherwise.
+whose automatic collection is off. At the default interval a site is late
+after about 12 minutes.
 
 The line under it says when the next cycle runs:
 
@@ -48,7 +48,7 @@ The line under it says when the next cycle runs:
   `convex-backend` and its log.
 
 After a failure the next run backs off: 5, 10, 20, 40, 80, then 120 minutes,
-never sooner than the cadence.
+never sooner than the site's interval.
 
 **"Échecs de suite"** counts consecutive cycles with a failed step, manual
 ones included, and turns red at 2. A cycle that died without reporting
@@ -160,8 +160,8 @@ mapping; a stack sharing one device counts each of its switches; "Statut le plus
 vouching for a status. Under it, "en ligne" and "hors ligne" are LibreNMS's own status:
 "hors ligne" means LibreNMS cannot poll the switch, not that Netplan failed
 to read it. "inconnu" means not mapped, no status from LibreNMS, or no
-successful read for 2 × the longest cadence interval + 15 minutes (2 h 15
-with the default cadence). Expiry runs every minute, even while collection
+successful read for 2 × the site's interval + 15 minutes (25 minutes at the
+default interval). Expiry runs every minute, even while collection
 is paused, and also clears the statuses of the PCs last seen only on that
 switch.
 
