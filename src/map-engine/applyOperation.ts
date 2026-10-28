@@ -1,4 +1,5 @@
 import type { Device, MapDocumentSnapshot } from "@/types/map";
+import { isAbsentFromSource, isDeletable } from "@/devices/identity";
 import {
   cableTouches,
   cablesToLay,
@@ -142,6 +143,10 @@ export function applyOperation(
           : unchanged(snapshot, "conflict");
       }
       const { device } = operation;
+      // Only undo brings a sourced device back, one its source had dropped.
+      if (device.source && !isAbsentFromSource(device.source)) {
+        return unchanged(snapshot, "source-owned");
+      }
       const ports = operation.ports ?? defaultPorts(device.id, device.type);
       const ownPortIds = new Set<string>(ports.map((port) => port.id));
       // Another floor's ports are the server's to check; a far end on this
@@ -239,7 +244,7 @@ export function applyOperation(
       );
       if (!device) return unchanged(snapshot, "missing-device");
       // Its integration would bring it back at the next sync.
-      if (device.source) return unchanged(snapshot, "source-owned");
+      if (!isDeletable(device)) return unchanged(snapshot, "source-owned");
 
       return changed(withoutDevice(snapshot, device, "delete"));
     }

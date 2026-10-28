@@ -19,6 +19,8 @@ import { requireOpenSite, requireSite } from "./sites";
 import {
   IDENTITY_FIELD_NAMES,
   identityEditError,
+  isAbsentFromSource,
+  isDeletable,
   isSourceOwned,
   namedAfterHostname,
   normalizeIdentityEdit,
@@ -187,6 +189,11 @@ const removedDevice = {
   /** Absent for a new device, which gets its type's ports. */
   ports: v.optional(v.array(newPort)),
   cables: v.optional(v.array(newCable)),
+  /**
+   * Only for a device NetBox no longer returns, which the "Annuler" of its
+   * deletion brings back absent (ADR 0034).
+   */
+  source: v.optional(deviceSource),
 };
 
 /**
@@ -214,12 +221,14 @@ export async function insertManualDevice(
     metadata,
     ports,
     cables,
+    source,
   }: {
     siteId: string;
     deviceId: string;
     type: Doc<"devices">["type"];
     identity: IdentityEdit;
     metadata?: Doc<"devices">["metadata"];
+    source?: Doc<"devices">["source"];
     ports?: Array<Infer<typeof newPort>>;
     cables?: Array<Infer<typeof newCable>>;
   },
@@ -231,7 +240,8 @@ export async function insertManualDevice(
     throw new ConvexError("Cet identifiant d'équipement est déjà pris.");
   }
 
-  const edit = namedAfterHostname(normalizeIdentityEdit(identity), {});
+  if (source) await requireRestorableSource(ctx, siteId, deviceId, source);
+  const edit = namedAfterHostname(normalizeIdentityEdit(identity), { source });
   if (!edit.name) throw new ConvexError("Le nom est obligatoire.");
   const error = identityEditError(edit);
   if (error) throw new ConvexError(error);
@@ -250,6 +260,7 @@ export async function insertManualDevice(
     model: edit.model ?? undefined,
     ip: edit.ip ?? undefined,
     notes: edit.notes ?? undefined,
+    ...(source && { source }),
     metadata: await observedMetadata(ctx, device, metadata ?? {}),
     updatedAt: Date.now(),
     updatedBy: userId,
@@ -264,8 +275,43 @@ export async function insertManualDevice(
 }
 
 /**
- * Deletes a manual device that is on no floor. A placed one is deleted from
- * the map, where undo restores its cables; a sourced one only leaves the map.
+ * Refuses a source a person sends with a device: only one NetBox no longer
+ * returns, and only while no other device holds its NetBox id (ADR 0034).
+ */
+const requireRestorableSource = async (
+  ctx: MutationCtx,
+  siteId: string,
+  deviceId: string,
+  source: NonNullable<Doc<"devices">["source"]>,
+) => {
+  if (source.integration !== "netbox" || !isAbsentFromSource(source)) {
+    throw new ConvexError(
+      "Cet équipement vient d'une intégration : il ne peut pas être créé.",
+    );
+  }
+  if (source.formerInstance) return;
+  const holders = await ctx.db
+    .query("devices")
+    .withIndex("by_site_source", (q) =>
+      q
+        .eq("siteId", siteId)
+        .eq("source.integration", "netbox")
+        .eq("source.externalId", source.externalId),
+    )
+    .collect();
+  if (
+    holders.some(
+      (row) => row.objectId !== deviceId && !row.source?.formerInstance,
+    )
+  ) {
+    throw new ConvexError("NetBox a renvoyé cet équipement entre-temps.");
+  }
+};
+
+/**
+ * Deletes a manual device that is on no floor, or one NetBox no longer
+ * returns (ADR 0034). A placed one is deleted from the map, where undo
+ * restores its cables; one its source still returns only leaves the map.
  * Returns what `create` needs to undo it, or `null` if it was already gone.
  */
 export const remove = editorMutation({
@@ -275,7 +321,7 @@ export const remove = editorMutation({
     const device = await getDevice(ctx, deviceId);
     if (!device) return null;
     await requireOpenSite(ctx, device.siteId);
-    if (device.source) {
+    if (device.source && !isDeletable(device)) {
       throw new ConvexError(
         `Cet équipement vient de ${INTEGRATION_LABELS[device.source.integration]} : il ne se supprime pas dans NetPlan.`,
       );
@@ -305,6 +351,7 @@ export const remove = editorMutation({
         notes: device.notes ?? null,
       },
       metadata: device.metadata,
+      ...(device.source && { source: device.source }),
     };
   },
 });

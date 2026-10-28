@@ -27,6 +27,19 @@ export const isSourceOwned = (
   source !== undefined &&
   SOURCE_OWNED_FIELDS[source.integration].includes(field);
 
+/** Whether the source that brought a device no longer returns it (ADR 0034). */
+export const isAbsentFromSource = (
+  source: { missingSince?: number } | undefined,
+): boolean => source?.missingSince !== undefined;
+
+/**
+ * Whether a person may delete a device: a manual one, or one its source no
+ * longer returns; any other would come back with the next sync (ADR 0034).
+ */
+export const isDeletable = (device: {
+  source?: { missingSince?: number };
+}): boolean => device.source === undefined || isAbsentFromSource(device.source);
+
 export const IDENTITY_TEXT_LIMITS: Record<IdentityTextField | "notes", number> =
   {
     // A name may be a hostname (B10), so it is as long as one may be.

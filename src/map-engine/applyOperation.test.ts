@@ -247,6 +247,25 @@ describe("applyOperation", () => {
     expect(result.snapshot).toBe(snapshot);
   });
 
+  it("creates a sourced device only when it comes back absent from its source", () => {
+    const sourced: Device = {
+      ...device(deviceId("device:a")),
+      source: { integration: "netbox", externalId: "42", syncedAt: 1 },
+    };
+    const create = (value: Device) =>
+      applyOperation(emptySnapshot, {
+        kind: "device.create",
+        meta: meta(1),
+        device: value,
+      });
+
+    expect(create(sourced).reason).toBe("source-owned");
+    expect(
+      create({ ...sourced, source: { ...sourced.source!, missingSince: 1 } })
+        .applied,
+    ).toBe(true);
+  });
+
   it("unplacing a device keeps its cables, even for a sourced one", () => {
     const { a, b, snapshot } = cabledPair({
       integration: "netbox",

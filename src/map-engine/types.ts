@@ -43,7 +43,11 @@ export type AtomicMapOperation =
   | {
       kind: "device.create";
       meta: OperationMeta;
-      device: NewDevice;
+      /**
+       * A source binding only when undo brings back a device its source no
+       * longer returns (ADR 0034); a person creates manual devices.
+       */
+      device: NewDevice & Pick<Device, "source">;
       /** Its ports; without them, the defaults of its type (`defaultPorts`). */
       ports?: Array<Port>;
       /** Cables from its ports, as when undo brings a deleted device back. */

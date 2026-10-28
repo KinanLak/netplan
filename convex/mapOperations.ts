@@ -25,6 +25,8 @@ import { recordArrival } from "./history";
 import { syncOverlayFileReleases } from "./lib/overlayFiles";
 import {
   identityEditError,
+  isAbsentFromSource,
+  isDeletable,
   macListProblem,
   MAX_MACS_PER_DEVICE,
 } from "../src/devices/identity";
@@ -112,6 +114,11 @@ interface PlanningState {
   unplacedDevices: Map<string, UnplacedDevice>;
   /** The device owning each loaded MAC address, keyed by `macKey`. */
   macOwners: Map<string, string>;
+  /**
+   * The devices of the current NetBox bound to each NetBox id an absent
+   * device brought back would carry, keyed by `macKey(siteId, externalId)`.
+   */
+  netboxBindings: Map<string, string>;
   walls: Map<string, PlannedWall>;
   /**
    * The loaded ports and cables: those of created and deleted devices, and
@@ -347,6 +354,8 @@ interface OperationScope {
   deviceIds: Set<string>;
   /** MAC addresses of created devices, whose owners planning must know. */
   createdMacs: Array<{ floorId: string; mac: string }>;
+  /** NetBox ids of absent devices that undo brings back (ADR 0034). */
+  restoredBindings: Array<{ floorId: string; externalId: string }>;
   wallIds: Set<string>;
   /** Devices whose ports and cables planning must know. */
   cablingDeviceIds: Set<string>;
@@ -370,6 +379,7 @@ const collectOperationScope = (
     floorIds: new Set(),
     deviceIds: new Set(),
     createdMacs: [],
+    restoredBindings: [],
     wallIds: new Set(),
     cablingDeviceIds: new Set(),
     cablePortIds: new Set(),
@@ -405,6 +415,12 @@ const collectOperationScope = (
         for (const mac of operation.device.macs) {
           scope.createdMacs.push({ floorId: operation.device.floorId, mac });
         }
+      }
+      if (operation.device.source) {
+        scope.restoredBindings.push({
+          floorId: operation.device.floorId,
+          externalId: operation.device.source.externalId,
+        });
       }
       break;
     case "device.patch":
@@ -624,6 +640,21 @@ const buildPlanningState = async (
         .unique();
     }),
   );
+  const bindingRows = await Promise.all(
+    scope.restoredBindings.map(async ({ floorId, externalId }) => {
+      const siteId = floorSites.get(floorId);
+      if (!siteId) return [];
+      return await ctx.db
+        .query("devices")
+        .withIndex("by_site_source", (q) =>
+          q
+            .eq("siteId", siteId)
+            .eq("source.integration", "netbox")
+            .eq("source.externalId", externalId),
+        )
+        .collect();
+    }),
+  );
   const [
     devicesByFloor,
     wallsByFloor,
@@ -697,6 +728,20 @@ const buildPlanningState = async (
       macOwnerRows.flatMap((row) =>
         row ? [[macKey(row.siteId, row.mac), row.deviceId] as const] : [],
       ),
+    ),
+    netboxBindings: new Map(
+      bindingRows
+        .flat()
+        .flatMap((row) =>
+          row.source && !row.source.formerInstance
+            ? [
+                [
+                  macKey(row.siteId, row.source.externalId),
+                  row.objectId,
+                ] as const,
+              ]
+            : [],
+        ),
     ),
     walls: new Map(
       walls.map((wall) => [
@@ -904,6 +949,8 @@ const planDeviceCreate = (
 
   const macsError = deviceMacsError(state, siteId, operation.device);
   if (macsError) return macsError;
+  const sourceError = restoredSourceError(state, siteId, operation.device);
+  if (sourceError) return sourceError;
   const identityError = identityEditError(operation.device);
   if (identityError) return identityError;
   if (portListError(operation.device.id, ports)) {
@@ -1175,6 +1222,28 @@ const planCablingDelete = (state: PlanningState, deviceId: string) => {
   }
 };
 
+/**
+ * Why a created device may not carry its source: only undo brings back a
+ * sourced device, one NetBox no longer returns, while no other device holds
+ * its NetBox id (ADR 0034).
+ */
+const restoredSourceError = (
+  state: PlanningState,
+  siteId: string,
+  device: DeviceInput,
+): string | null => {
+  const { source } = device;
+  if (!source) return null;
+  if (source.integration !== "netbox" || !isAbsentFromSource(source)) {
+    return "Cet équipement vient d'une intégration : il ne peut pas être créé.";
+  }
+  if (source.formerInstance) return null;
+  const holder = state.netboxBindings.get(macKey(siteId, source.externalId));
+  return holder !== undefined && holder !== device.id
+    ? "NetBox a renvoyé cet équipement entre-temps."
+    : null;
+};
+
 const planDeviceDelete = (
   state: PlanningState,
   operation: DeviceDeleteOperation,
@@ -1182,7 +1251,7 @@ const planDeviceDelete = (
   const existing = state.devices.get(operation.deviceId);
   if (!existing) return "Cet équipement n'existe plus.";
   // Its integration would bring it back at the next sync.
-  if (existing.source)
+  if (!isDeletable(existing))
     return "Cet équipement vient d'une intégration : il ne peut pas être supprimé.";
 
   planCablingDelete(state, operation.deviceId);

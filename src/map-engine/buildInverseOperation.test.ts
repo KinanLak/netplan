@@ -161,6 +161,38 @@ describe("buildInverseOperation", () => {
     expect(inverse.ports?.some((port) => "source" in port)).toBe(false);
   });
 
+  it("brings a device NetBox no longer returns back absent, with its date", () => {
+    const { a, snapshot } = cabledPair();
+    const absent: Device = {
+      ...a,
+      source: {
+        integration: "netbox",
+        externalId: "42",
+        syncedAt: 1,
+        missingSince: 5,
+      },
+    };
+    const before = {
+      ...snapshot,
+      devices: snapshot.devices.map((each) =>
+        each.id === a.id ? absent : each,
+      ),
+    };
+    const remove: MapOperation = {
+      kind: "device.delete",
+      meta: meta(1),
+      deviceId: a.id,
+    };
+
+    const deleted = applyOperation(before, remove);
+    expect(deleted.applied).toBe(true);
+    const inverse = buildInverseOperation(before, remove);
+    if (!inverse) throw new Error("no inverse");
+    expect(
+      applyOperation(deleted.snapshot, inverse).snapshot.devices,
+    ).toContainEqual(absent);
+  });
+
   it("puts an unplaced device back, and takes a placed one off", () => {
     const { a, snapshot } = cabledPair();
     const unplace: MapOperation = {

@@ -1,5 +1,6 @@
 import type { MapDocumentSnapshot } from "@/types/map";
 import { cableTouches } from "@/devices/ports";
+import { isDeletable } from "@/devices/identity";
 import { applyOperation } from "./applyOperation";
 import { shifted } from "./devicePatch";
 import { applyLabelPatch } from "./labels";
@@ -102,8 +103,10 @@ export function buildInverseOperation(
       const device = snapshotBeforeOperation.devices.find(
         (item) => item.id === operation.deviceId,
       );
-      // A sourced device is never deleted, so there is nothing to restore.
-      if (!device || device.source) return null;
+      // A device its source still returns is never deleted, so there is
+      // nothing to restore. One it no longer returns comes back absent, with
+      // its binding and date (ADR 0034).
+      if (!device || !isDeletable(device)) return null;
       return {
         kind: "device.create",
         meta: operation.meta,

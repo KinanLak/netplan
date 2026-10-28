@@ -648,4 +648,53 @@ describe("the site inventory", () => {
       t.mutation(api.devices.remove, { deviceId: "device:netbox" }),
     ).rejects.toThrow("vient de NetBox");
   });
+
+  it("deletes an unplaced device NetBox no longer returns, and brings it back absent", async () => {
+    const t = await signedInTest();
+    const { siteId } = await siteWithFloor(t);
+    const source = {
+      integration: "netbox" as const,
+      externalId: "3",
+      syncedAt: 1,
+      missingSince: 2,
+    };
+    await t.run(async (ctx) => {
+      await ctx.db.insert("devices", {
+        objectId: "device:absent",
+        siteId,
+        type: "pc",
+        name: "pc-3",
+        hostname: "poste-3",
+        macs: [],
+        source,
+        metadata: {},
+        updatedAt: 1,
+        updatedBy: "netbox",
+      });
+    });
+
+    const removed = await t.mutation(api.devices.remove, {
+      deviceId: "device:absent",
+    });
+    expect(await t.query(api.devices.listForSite, { siteId })).toEqual([]);
+    await t.mutation(api.devices.create, {
+      siteId,
+      deviceId: "device:absent",
+      ...removed!,
+    });
+    // NetBox still owns its name: the hostname does not rename it.
+    expect(await t.query(api.devices.listForSite, { siteId })).toMatchObject([
+      { id: "device:absent", name: "pc-3", source },
+    ]);
+
+    await expect(
+      t.mutation(api.devices.create, {
+        siteId,
+        deviceId: "device:forged",
+        type: "pc",
+        identity: { name: "pc-9", macs: [] },
+        source: { ...source, externalId: "9", missingSince: undefined },
+      }),
+    ).rejects.toThrow("vient d'une intégration");
+  });
 });
