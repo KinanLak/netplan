@@ -5,7 +5,7 @@ import {
   defaultPorts,
   portListError,
 } from "@/devices/ports";
-import { isAsExpected } from "./devicePatch";
+import { isAsExpected, movedAsExpected } from "./devicePatch";
 import { applyLabelPatch, labelError, labelIsAsExpected } from "./labels";
 import {
   applyOverlayPatch,
@@ -119,6 +119,7 @@ const isSafeBatchNoop = (
       return reason === "missing-label";
     case "overlay.patch":
     case "device.patch":
+    case "devices.move":
     case "label.patch":
     case "batch":
       return false;
@@ -193,6 +194,38 @@ export function applyOperation(
       devices[index] = { ...device, ...operation.patch };
 
       return changed({ ...snapshot, devices });
+    }
+
+    case "devices.move": {
+      const ids = new Set(operation.deviceIds);
+      if (ids.size === 0 || ids.size !== operation.deviceIds.length) {
+        return unchanged(snapshot, "invalid-move");
+      }
+      const members = snapshot.devices.filter((device) => ids.has(device.id));
+      if (members.length !== ids.size) {
+        return unchanged(snapshot, "missing-device");
+      }
+      if (members.some((device) => device.floorId !== members[0].floorId)) {
+        return unchanged(snapshot, "wrong-floor");
+      }
+      if (operation.expected && !movedAsExpected(members, operation.expected)) {
+        return unchanged(snapshot, "conflict");
+      }
+      const { offset } = operation;
+      return changed({
+        ...snapshot,
+        devices: snapshot.devices.map((device) =>
+          ids.has(device.id)
+            ? {
+                ...device,
+                position: {
+                  x: device.position.x + offset.x,
+                  y: device.position.y + offset.y,
+                },
+              }
+            : device,
+        ),
+      });
     }
 
     case "device.delete": {

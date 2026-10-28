@@ -84,20 +84,6 @@ export function distributeDevices(
   });
 }
 
-/** The moves of a nudge: every device by the same step. */
-export function nudgeDevices(
-  devices: ReadonlyArray<ArrangedDevice>,
-  step: Position,
-): Array<PositionUpdate> {
-  return devices.map((device) => ({
-    deviceId: device.id,
-    position: {
-      x: device.position.x + step.x,
-      y: device.position.y + step.y,
-    },
-  }));
-}
-
 /**
  * The moves in an order the server can apply one by one: each device moves
  * once the devices standing where it goes have left. Moves in opposite

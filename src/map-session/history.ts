@@ -54,6 +54,8 @@ export const withOperationMeta = (
       return { ...operation, meta };
     case "device.patch":
       return { ...operation, meta };
+    case "devices.move":
+      return { ...operation, meta };
     case "device.delete":
       return { ...operation, meta };
     case "device.place":
@@ -137,40 +139,41 @@ export const coalesceHistoryGroupOperations = (
     };
   }
 
-  const batchOperations = mergeDevicePatches(toBatchSubOperations(operations));
+  const move = mergeGroupMoves(operations);
+  if (move) return move;
+
+  const batchOperations = toBatchSubOperations(operations);
   return batchOperations.length === 0
     ? null
     : { kind: "batch", meta: first.meta, operations: batchOperations };
 };
 
+type GroupMoveOperation = Extract<MapOperation, { kind: "devices.move" }>;
+
 /**
- * Moves only: one patch per device, where it ended, in the order of its last
- * move, so a held arrow key sends one small batch, not one per repeat, and
- * the server moves the leading devices first (ADR 0030).
+ * A held arrow key moving the same group: one move by the sum of the steps,
+ * whose straight path is the one the steps took.
  */
-type DevicePatchOperation = Extract<
-  BatchSubOperation,
-  { kind: "device.patch" }
->;
-
-const isDevicePatch = (
-  operation: BatchSubOperation,
-): operation is DevicePatchOperation => operation.kind === "device.patch";
-
-const mergeDevicePatches = (
-  operations: Array<BatchSubOperation>,
-): Array<BatchSubOperation> => {
-  if (!operations.every(isDevicePatch)) return operations;
-  const byDevice = new Map<string, DevicePatchOperation>();
-  for (const operation of operations) {
-    const previous = byDevice.get(operation.deviceId);
-    byDevice.delete(operation.deviceId);
-    byDevice.set(operation.deviceId, {
-      ...operation,
-      patch: { ...previous?.patch, ...operation.patch },
-    });
-  }
-  return [...byDevice.values()];
+const mergeGroupMoves = (
+  operations: ReadonlyArray<MapOperation>,
+): GroupMoveOperation | null => {
+  const [first] = operations;
+  if (first.kind !== "devices.move") return null;
+  const ids = new Set(first.deviceIds);
+  const moves = operations.filter(
+    (operation): operation is GroupMoveOperation =>
+      operation.kind === "devices.move" &&
+      operation.deviceIds.length === ids.size &&
+      operation.deviceIds.every((id) => ids.has(id)),
+  );
+  if (moves.length !== operations.length) return null;
+  return {
+    ...first,
+    offset: moves.reduce(
+      (sum, move) => ({ x: sum.x + move.offset.x, y: sum.y + move.offset.y }),
+      { x: 0, y: 0 },
+    ),
+  };
 };
 
 /**

@@ -127,6 +127,9 @@ export const devicePatch = v.object({
   size: v.optional(size),
 });
 
+/** Where an undo expects a device of a group move. */
+const expectedPosition = v.object({ deviceId: v.string(), position });
+
 export const wallSegment = v.object({
   id: v.string(),
   floorId: v.string(),
@@ -183,6 +186,13 @@ export const mapOperation = v.union(
     deviceId: v.string(),
     patch: devicePatch,
     expected: v.optional(devicePatch),
+  }),
+  v.object({
+    kind: v.literal("devices.move"),
+    meta: operationMeta,
+    deviceIds: v.array(v.string()),
+    offset: position,
+    expected: v.optional(v.array(expectedPosition)),
   }),
   v.object({
     kind: v.literal("device.delete"),
@@ -255,6 +265,12 @@ export const mapOperation = v.union(
           deviceId: v.string(),
           patch: devicePatch,
           expected: v.optional(devicePatch),
+        }),
+        v.object({
+          kind: v.literal("devices.move"),
+          deviceIds: v.array(v.string()),
+          offset: position,
+          expected: v.optional(v.array(expectedPosition)),
         }),
         v.object({
           kind: v.literal("device.delete"),

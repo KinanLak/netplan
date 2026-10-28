@@ -55,6 +55,18 @@ export type AtomicMapOperation =
        */
       expected?: DevicePatch;
     }
+  | {
+      /**
+       * Moves devices of one floor by one offset, as a rigid block that
+       * never passes through a wall (ADR 0034).
+       */
+      kind: "devices.move";
+      meta: OperationMeta;
+      deviceIds: Array<DeviceId>;
+      offset: Position;
+      /** Where an undo or a redo expects each device, as for `device.patch`. */
+      expected?: Array<{ deviceId: DeviceId; position: Position }>;
+    }
   | { kind: "device.delete"; meta: OperationMeta; deviceId: DeviceId }
   | {
       /**
@@ -124,6 +136,7 @@ export type ApplyOperationReason =
   | "overlay-locked"
   | "invalid-overlay"
   | "wrong-floor"
+  | "invalid-move"
   | "source-owned"
   | "invalid-batch";
 

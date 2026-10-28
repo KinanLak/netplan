@@ -85,6 +85,28 @@ export function buildInverseOperation(
     case "device.patch":
       return invertDevicePatch(snapshotBeforeOperation, operation);
 
+    case "devices.move": {
+      const ids = new Set(operation.deviceIds);
+      const { offset } = operation;
+      return {
+        kind: "devices.move",
+        meta: operation.meta,
+        deviceIds: operation.deviceIds,
+        offset: { x: -offset.x, y: -offset.y },
+        // Each where the move leaves it: anywhere else, someone has moved
+        // it since, and the group would come back deformed.
+        expected: snapshotBeforeOperation.devices
+          .filter((device) => ids.has(device.id))
+          .map((device) => ({
+            deviceId: device.id,
+            position: {
+              x: device.position.x + offset.x,
+              y: device.position.y + offset.y,
+            },
+          })),
+      };
+    }
+
     case "device.delete": {
       const device = snapshotBeforeOperation.devices.find(
         (item) => item.id === operation.deviceId,

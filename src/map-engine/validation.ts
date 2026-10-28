@@ -1,11 +1,13 @@
 import { rectanglesOverlap } from "@/lib/geometry";
 import type { Device, MapDocumentSnapshot, Position, Size } from "@/types/map";
 import { getWallCollisionRect } from "@/walls/gridGeometry";
+import { groupMoveRefusal } from "./groupMove";
 import type { MapOperation } from "./types";
 
 export type ValidationError =
   | "device-collision"
   | "wall-collision"
+  | "wall-crossing"
   | "missing-device";
 
 export interface ValidationResult {
@@ -75,6 +77,32 @@ export function validateDevicePlacement(
   return valid();
 }
 
+/** Whether devices of one floor may move by `offset` as one block. */
+export function validateGroupMove(
+  snapshot: MapDocumentSnapshot,
+  deviceIds: ReadonlyArray<Device["id"]>,
+  offset: Position,
+): ValidationResult {
+  const ids = new Set<string>(deviceIds);
+  const members = snapshot.devices.filter((device) => ids.has(device.id));
+  if (members.length === 0 || members.length !== ids.size) {
+    return invalid("missing-device");
+  }
+  const [first] = members;
+  const rect = ({ position, size }: Device) => ({ ...position, ...size });
+  const refusal = groupMoveRefusal(members.map(rect), offset, {
+    devices: snapshot.devices
+      .filter(
+        (device) => device.floorId === first.floorId && !ids.has(device.id),
+      )
+      .map(rect),
+    walls: snapshot.walls
+      .filter((wall) => wall.floorId === first.floorId)
+      .map(getWallCollisionRect),
+  });
+  return refusal ? invalid(refusal) : valid();
+}
+
 export function validateOperation(
   snapshot: MapDocumentSnapshot,
   operation: MapOperation,
@@ -93,6 +121,9 @@ export function validateOperation(
       const size = operation.patch.size ?? device.size;
       return validateDevicePlacement(snapshot, { ...device, position, size });
     }
+
+    case "devices.move":
+      return validateGroupMove(snapshot, operation.deviceIds, operation.offset);
 
     case "batch": {
       for (const subOperation of operation.operations) {

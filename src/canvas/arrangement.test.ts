@@ -3,7 +3,6 @@ import {
   alignDevices,
   arrangedDevicesOverlap,
   distributeDevices,
-  nudgeDevices,
   orderMoves,
 } from "@/canvas/arrangement";
 import type { ArrangedDevice } from "@/canvas/arrangement";
@@ -49,12 +48,8 @@ describe("arranging a selection", () => {
     expect(distributeDevices(devices.slice(0, 2), "horizontal")).toEqual([]);
   });
 
-  it("moves every device by the same step, and sees overlaps among them", () => {
+  it("sees overlaps among the arranged devices", () => {
     const devices = [device("a", 0, 0), device("b", 100, 0)];
-    expect(nudgeDevices(devices, { x: 20, y: 0 })).toEqual([
-      { deviceId: "a" as DeviceId, position: { x: 20, y: 0 } },
-      { deviceId: "b" as DeviceId, position: { x: 120, y: 0 } },
-    ]);
     expect(arrangedDevicesOverlap(devices, alignDevices(devices, "left"))).toBe(
       true,
     );

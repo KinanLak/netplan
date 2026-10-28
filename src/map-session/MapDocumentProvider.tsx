@@ -17,6 +17,7 @@ import type {
   OverlayPatch,
 } from "@/map-engine/types";
 import { normalizeLabelText } from "@/map-engine/labels";
+import { validateGroupMove } from "@/map-engine/validation";
 import { forgetCableChange, reshowCableChange } from "@/devices/cableUndo";
 import {
   createObjectId,
@@ -86,21 +87,31 @@ import type {
   PendingOperationObservation,
 } from "./pendingOperations";
 import { reconcileEphemeralState } from "./reconcileEphemeralState";
-import { sortGroupPositionUpdates } from "@/canvas/groupMovement";
-import type { DevicePositionUpdate } from "@/canvas/groupMovement";
+import type { PositionUpdate } from "@/canvas/arrangement";
 
 export interface MapDocumentCommands {
   addDevice: (draft: DeviceDraft) => DeviceId | null;
   addDevices: (drafts: Array<DeviceDraft>) => Array<DeviceId>;
   updateDevicePosition: (deviceId: DeviceId, position: Position) => void;
   /**
-   * Moves several devices in one change. They are sorted for a move in one
-   * direction unless `ordered` says the caller already ordered them.
+   * Moves several devices to their own spots in one change, in the order
+   * given, which the server follows one by one (`orderMoves`).
    */
-  updateDevicePositions: (
-    updates: Array<DevicePositionUpdate>,
-    options?: { ordered?: boolean },
-  ) => void;
+  updateDevicePositions: (updates: Array<PositionUpdate>) => void;
+  /**
+   * Moves devices of the current floor by one offset, as a rigid block
+   * (ADR 0034); false when a member would land on something or pass
+   * through a wall.
+   */
+  moveDevices: (
+    deviceIds: ReadonlyArray<DeviceId>,
+    offset: Position,
+  ) => boolean;
+  /** Whether `moveDevices` would take this move, without making it. */
+  canMoveDevices: (
+    deviceIds: ReadonlyArray<DeviceId>,
+    offset: Position,
+  ) => boolean;
   /** False when the device cannot be deleted yet, or at all. */
   deleteDevice: (deviceId: DeviceId) => boolean;
   /** Takes a device off the map; it stays in the site inventory. */
@@ -263,6 +274,7 @@ const operationFloorId = (
       return fallbackFloorId;
     }
     case "device.patch":
+    case "devices.move":
     case "device.delete":
     case "device.unplace":
     case "walls.delete":
@@ -447,17 +459,12 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
     });
   };
 
-  const updateDevicePositions = (
-    updates: Array<DevicePositionUpdate>,
-    options: { ordered?: boolean } = {},
-  ) => {
+  const updateDevicePositions = (updates: Array<PositionUpdate>) => {
     if (!isReadyRef.current || updates.length === 0) return;
-    const devices = documentRef.current.devices;
-    const deviceById = new Map(devices.map((device) => [device.id, device]));
-    const sorted = options.ordered
-      ? updates
-      : sortGroupPositionUpdates(devices, updates);
-    const changedUpdates = sorted.filter((update) => {
+    const deviceById = new Map(
+      documentRef.current.devices.map((device) => [device.id, device]),
+    );
+    const changedUpdates = updates.filter((update) => {
       const device = deviceById.get(update.deviceId);
       return (
         device &&
@@ -477,6 +484,30 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
         patch: { position: update.position },
       })),
     });
+  };
+
+  const canMoveDevices = (
+    deviceIds: ReadonlyArray<DeviceId>,
+    offset: Position,
+  ): boolean =>
+    isReadyRef.current &&
+    validateGroupMove(documentRef.current, deviceIds, offset).valid;
+
+  const moveDevices = (
+    deviceIds: ReadonlyArray<DeviceId>,
+    offset: Position,
+  ): boolean => {
+    if (!canMoveDevices(deviceIds, offset)) return false;
+    if (offset.x === 0 && offset.y === 0) return true;
+    const meta = freshMeta();
+    if (!meta) return false;
+    dispatchOperation({
+      kind: "devices.move",
+      meta,
+      deviceIds: [...new Set(deviceIds)],
+      offset,
+    });
+    return true;
   };
 
   const deleteDevice = (deviceId: DeviceId): boolean => {
@@ -890,6 +921,8 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
       addDevices,
       updateDevicePosition,
       updateDevicePositions,
+      moveDevices,
+      canMoveDevices,
       deleteDevice,
       unplaceDevice,
       unplaceDevices,
