@@ -20,7 +20,8 @@ export function MapSkeleton() {
   return (
     <div aria-busy className="flex h-screen w-screen bg-background">
       <span className="sr-only">Chargement du plan…</span>
-      <div className="flex w-(--sidebar-width) shrink-0 flex-col gap-4 border-r bg-sidebar p-4">
+      {/* The server renders it outside the sidebar's provider too. */}
+      <div className="flex w-[var(--sidebar-width,16rem)] shrink-0 flex-col gap-4 border-r bg-sidebar p-4">
         <Skeleton className="h-8 w-32" />
         <Skeleton className="h-5 w-40" />
         <Skeleton className="h-5 w-28" />
@@ -31,6 +32,40 @@ export function MapSkeleton() {
         </div>
       </div>
       <div className="flex-1" />
+    </div>
+  );
+}
+
+/**
+ * A list page's frame (inventory, history) before its code runs: the server
+ * renders it, so a slow link shows the page's shape instead of white.
+ */
+export function ListPageSkeleton() {
+  return (
+    <div className="flex h-svh flex-col bg-background">
+      <div className="flex h-12 shrink-0 items-center gap-3 border-b bg-sidebar px-4">
+        <Skeleton className="h-7 w-24" />
+        <Skeleton className="h-5 w-40" />
+      </div>
+      <div className="mx-auto w-full max-w-6xl p-4 md:p-8">
+        <ListSkeleton />
+      </div>
+    </div>
+  );
+}
+
+/** The administration's frame before its code runs: its menu and a list. */
+export function AdminSkeleton() {
+  return (
+    <div className="flex h-svh flex-col bg-background md:flex-row">
+      <div className="flex shrink-0 gap-2 border-b bg-sidebar p-2 md:w-56 md:flex-col md:border-r md:border-b-0 md:p-3">
+        <Skeleton className="h-8 w-24" />
+        <Skeleton className="hidden h-6 w-full md:block" />
+        <Skeleton className="hidden h-6 w-full md:block" />
+      </div>
+      <div className="mx-auto w-full max-w-4xl p-4 md:p-8">
+        <ListSkeleton />
+      </div>
     </div>
   );
 }

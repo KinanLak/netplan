@@ -18,6 +18,10 @@ const config = defineConfig({
   plugins: [
     devtools(),
     nitro({
+      // Every asset ships gzip, brotli and zstd copies, served by
+      // `Accept-Encoding`: uncompressed, the first load took half a minute
+      // on a slow link.
+      compressPublicAssets: true,
       // The server bundle has no RSC boundary, so dependency `"use client"`
       // directives are meaningless there.
       rolldownConfig: { checks: { moduleLevelDirective: false } },

@@ -6,11 +6,12 @@ import {
   Search01Icon,
 } from "@hugeicons/core-free-icons";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
-import { usePaginatedQuery, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
+import { useKeptPaginatedQuery } from "@/hooks/use-kept-paginated-query";
 import type { FunctionReturnType } from "convex/server";
 import { useEffect, useState } from "react";
 import { ModeToggle } from "@/components/mode-toggle";
-import { ListSkeleton } from "@/components/loading-skeletons";
+import { ListPageSkeleton, ListSkeleton } from "@/components/loading-skeletons";
 import { AppNavLinks, UserMenu } from "@/components/app-nav";
 import { NetplanLogo } from "@/components/netplan-logo";
 import { Segmented } from "@/components/segmented";
@@ -91,6 +92,8 @@ const historySearch = (search: Record<string, unknown>): HistorySearch => ({
 
 export const Route = createFileRoute("/_authed/history")({
   ssr: false,
+  // Rendered by the server, so a slow link shows the frame at once.
+  pendingComponent: ListPageSkeleton,
   validateSearch: historySearch,
   head: () => ({ meta: [{ title: "Historique" }] }),
   component: HistoryPage,
@@ -251,7 +254,7 @@ function SiteEvents({ site }: { site: SiteSummary }) {
     });
   };
 
-  const { results, status, loadMore } = usePaginatedQuery(
+  const { results, status, loadMore } = useKeptPaginatedQuery(
     api.history.forSite,
     {
       siteId: site.id,
@@ -327,7 +330,7 @@ function SiteEvents({ site }: { site: SiteSummary }) {
           options={KIND_FILTERS}
         />
       </div>
-      {status === "LoadingFirstPage" ? null : results.length === 0 ? (
+      {results.length === 0 ? (
         status === "Exhausted" ? (
           filtered ? (
             <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
@@ -348,7 +351,7 @@ function SiteEvents({ site }: { site: SiteSummary }) {
           )
         ) : null
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-6" aria-busy={status === "LoadingFirstPage"}>
           {timeline(results).map((day) => (
             <section key={day.day} aria-label={formatDay(day.at, now)}>
               <h2 className="mb-2 text-sm font-medium">
@@ -614,7 +617,7 @@ function SlotEntries({ site, slot }: { site: SiteSummary; slot: Slot }) {
     results: shown,
     status,
     loadMore,
-  } = usePaginatedQuery(
+  } = useKeptPaginatedQuery(
     api.history.slotEntries,
     {
       siteId: site.id,
@@ -653,14 +656,17 @@ function SlotEntries({ site, slot }: { site: SiteSummary; slot: Slot }) {
           className="pl-8"
         />
       </div>
-      {status === "LoadingFirstPage" ? null : shown.length === 0 ? (
+      {shown.length === 0 ? (
         status === "Exhausted" ? (
           <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
             Aucune adresse ne correspond.
           </p>
         ) : null
       ) : (
-        <div className="overflow-x-auto rounded-lg border">
+        <div
+          className="overflow-x-auto rounded-lg border"
+          aria-busy={status === "LoadingFirstPage"}
+        >
           <table className="w-full text-sm">
             <thead className="border-b bg-muted text-left text-xs text-muted-foreground">
               <tr>
