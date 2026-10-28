@@ -3311,3 +3311,174 @@ Questions of 2026-10-28, in the order they came up.
 #### Leftovers
 
 - None in scope. No NetBox or LibreNMS request was made. The demo data of this worktree's backend was reseeded once, after an aborted e2e run left a switch moved.
+
+### U11 — NetBox absence
+
+Questions of 2026-10-28.
+
+#### Where is absence stored?
+
+- Context: an absent device must keep its binding so NetBox can return it, and the UI must show since when.
+- Decision: `devices.source.missingSince`, on the NetBox binding itself; the binding, the read-only fields, the MACs, ports and cables stay.
+- Why: the binding is what lets the device come back under its id; a separate table would have to be joined by every reader of devices.
+- Who: agent (obvious)
+
+#### How does a device recreated in NetBox under a new id come back?
+
+- Context: point 1 says a device NetBox returns again is linked again; a deleted-then-recreated NetBox device has a new id.
+- Decision: an absent device is a candidate for the usual identity rules (MAC/serial without contradiction binds, hostname alone is a suggestion, ambiguity a conflict), like a manual device, including in import reviews. A port whose NetBox port is gone keeps its id and cables when the new port has the same kind and name.
+- Why: the same rules the owner already accepted for manual devices; point 4 asks for exactly this for another instance.
+- Who: agent (judgement call)
+
+#### What does the 30-day clock measure?
+
+- Context: point 2, 30 days of absence. If NetBox stops answering, or the site stops reading it, an absence is no longer being confirmed.
+- Decision: purge when the site's last NetBox import is at least 30 days after `missingSince` and the device is on no floor; daily cron; archived sites skipped. A device taken off the plan after 30 days of absence is purged at the next run.
+- Why: never purge on days NetBox did not confirm; the owner's "once it is no longer on any plan, the 30-day clock applies" reads as the same clock, not a new one.
+- Who: agent (judgement call)
+- Update (agent, self-review): the clock now also waits 30 days from when the device left the plan; see "Does taking a long-absent device off a plan start its 30 days?".
+
+#### What happens to an absent device's NetBox cables?
+
+- Context: an import deletes NetBox cables it no longer lists; a device out of the import (role unmapped) no longer has its cables "seen".
+- Decision: a NetBox cable that touches an absent device stays until the device comes back or is purged.
+- Why: "nothing is lost" (point 1); with a patch panel's role unmapped, dropping its cables would break every trace behind it.
+- Who: agent (judgement call)
+
+#### Is an absent placed device still localised by LibreNMS?
+
+- Context: fix plan asks to decide and write it in the ADR.
+- Decision: yes, as any pc or endpoint; a sighting may also place an unplaced absent device, which then is no longer purged.
+- Why: the network shows the device exists and where; the map should keep saying so.
+- Who: agent (judgement call)
+
+#### Is an absent device pushed to NetBox?
+
+- Decision: no; the push skips it, and the admin's "devices the push writes to" count leaves it out.
+- Why: fix plan; NetBox has nothing under that id.
+- Who: owner (fix plan)
+
+#### How is "the same NetBox instance" recognised at a new address?
+
+- Context: point 4 suggests `/api/status/` and the configured site's id and name.
+- Decision: the configured site read by id (`/api/dcim/sites/<id>/`) must answer with the same name; then every mapped role id must still exist (role names may change in place). `/api/status/` is not compared: its version changes with an upgrade of the same instance. A network failure saves nothing and says why; a 404 or another name means another instance.
+- Why: site id + name is specific to an instance; a clone of production would pass, and its ids do name the same devices.
+- Who: agent (judgement call)
+- Update (agent, self-review): roles are no longer compared, and a renamed site is recognised by its linked devices; see "A NetBox site renamed in place".
+
+#### What happens to ports, cables and ids after a confirmed change of instance?
+
+- Context: the other instance reuses numeric ids for other devices, ports and cables.
+- Decision: devices become absent with `source.staleId` (binding kept for read-only fields and date, never matched by id again, only by MAC/serial/hostname); their ports and NetBox cables become manual; reviews and push rows of the old instance are dropped; the NetBox site and roles are forgotten. No site chosen yet, or no linked device: no confirmation.
+- Why: the new NetBox's device 12 must never update the old one's device 12; manual ports keep their ids by name when the device links again.
+- Who: agent (judgement call)
+
+#### How does undo bring back a deleted absent device?
+
+- Context: CLAUDE.md wants an inverse for every durable change; `device.create` only made manual devices.
+- Decision: `device.create` (map) and `devices.create` (inventory "Annuler") accept a source only when it is an absent NetBox binding, refused when another current device holds that NetBox id. The device comes back absent with its date; ports come back manual and NetBox cables are left to NetBox, as for any undo.
+- Why: restoring it as manual would be the "release to manual" the owner ruled out.
+- Who: agent (judgement call)
+
+#### What does "greyed" look like, and does an existing state fit?
+
+- Context: point 3 asks to reuse stale/offline if one fits.
+- Decision: neither fits (both describe the network, absence describes NetBox); the React Flow node gets `opacity-60 grayscale`, set by the adapter, so no node component changes and the status dot still shows.
+- Why: a device can be absent from NetBox and online at once.
+- Who: agent (judgement call)
+
+#### Does the inventory get a filter?
+
+- Context: fix plan lists "the inventory and its filters".
+- Decision: a toggle « N absents de NetBox » in the count line, shown only when some exist, `?absent=true`; Santé's count links to it.
+- Why: least UI that lets an Éditeur find what to clean.
+- Who: agent (judgement call)
+
+#### How are unmapped roles counted?
+
+- Context: point 5; the import only read the mapped roles' devices.
+- Decision: the import reads every device of the NetBox site (one list) and keeps the mapped ones; per role without a type, the count is stored on `siteCycles` and shown by Santé, minus roles mapped since. Devices without a role are not listed.
+- Why: no extra request per role; NetBox's own `device_count` on roles is global, not per site.
+- Who: agent (judgement call)
+
+#### Which cables count as "replaced by NetBox"?
+
+- Context: point 6, keep it very simple.
+- Decision: only a manual cable a NetBox cable took the place of on a port. Manual cables that leave with a manual port NetBox does not name, and the breakouts and second cables NetBox has that the model skips, are not counted.
+- Why: the owner's wording; the rest is not a replacement.
+- Who: agent (judgement call)
+
+#### Where do 3.6 and 5.2 go in the stack?
+
+- Decision: 3.6 (interface name exclusion only without a NetBox cable) in #148 with the other import changes; 5.2 in its own PR #150 on top, with ADR 0035 superseding the last-seen part of ADR 0027. The type rule (virtual, bridge, LAG) stays unconditional: NetBox refuses cables on those types.
+- Why: one concern per PR; the push is unrelated to absence.
+- Who: agent (obvious)
+
+#### How is `netplan_updated` written, and what about the existing `netplan_last_seen`?
+
+- Decision: `netplan_updated` (« Modifié par NetPlan le ») holds when the PATCH was sent and is only part of a PATCH a location change sends. `netplan_last_seen` is no longer written and is left in NetBox; neither the app nor the script deletes or changes a field. The script was not run against the real NetBox. Rows sent before keep an optional, unread `lastSeen`, so they deploy as they are (self-review).
+- Why: owner, 5.2 refined; keep NetBox's changelog quiet.
+- Who: owner (5.2), agent (deployment note)
+
+#### Does taking a long-absent device off a plan start its 30 days? (self-review)
+
+- Context: the delete dialog suggests « Retirer du plan »; with the clock counted from `missingSince` only, a device absent 45 days and taken off a plan would be purged the next night, with no undo.
+- Decision: the purge counts 30 days from the later of `missingSince` and `source.offPlanSince`, which the daily purge sets when it first sees an absent device on no floor and clears when it is placed again.
+- Why: the owner's "once it is no longer on any plan, the 30-day clock applies" reads as the clock starting then; no device is lost overnight by following the app's own advice. Map operations stay unaware of sources.
+- Who: agent (judgement call, found in self-review)
+
+#### Can a person forge a NetBox binding through undo? (self-review)
+
+- Context: undo sends the device with its source; nothing proves the request is a real undo.
+- Decision: a restored source must be an absent NetBox binding and is always stored `staleId` : it is linked again only by MAC/serial/hostname, never by id. The previous "another device holds that id" check became unnecessary and went.
+- Why: a forged binding then gives no more than a manual device with the same MACs; one rule, shared by the map and the inventory (`restoredSource`).
+- Who: agent (found in self-review)
+
+#### What comes back with an undone absent device's cables? (self-review)
+
+- Decision: its NetBox cables come back as manual cables (NetBox no longer lists them); its NetBox name is kept even with a hostname.
+- Why: "nothing is lost"; the hostname rename would overwrite a NetBox-owned field.
+- Who: agent (found in self-review)
+
+#### A NetBox site renamed in place (self-review)
+
+- Context: the stored site name is never refreshed, so a rename then a move to HTTPS looked like another instance.
+- Decision: same id and name, or same id and most of up to 10 linked devices answering under their ids with their names. Role ids are no longer compared: a deleted role says nothing about the instance.
+- Who: agent (found in self-review)
+
+#### Is reading every NetBox device every 15 minutes acceptable? (self-review)
+
+- Decision: yes, kept: one list request of 1000 per page on top of the interface, port and cable lists that already cover the whole site; per-role count requests would be one request per unmapped role.
+- Why: the real site's unmapped devices are few; revisit if a site has thousands of unmapped devices.
+- Who: agent (judgement call)
+
+#### ADR numbers
+
+- Context: 0034 and 0038 landed from U9 and U13 while this lot ran; U8 and U12 hold 0034 (again) and 0036 in open PRs.
+- Decision: NetBox absence is ADR 0039, the push change ADR 0040.
+- Who: agent (obvious)
+
+#### Who checks in the browser?
+
+- Context: owner's rule of 2026-10-28, refined during this lot.
+- Decision: every browser check goes to a codex `gpt-6.1-terra` delegate (`isolation: shared`) on this worktree's dev:agent, first with Playwright scratch scripts, then with the T3 Code browser as the default, re-checking only what a fix or a rebase changed. The data came from a local fake NetBox (three ports on 172.17.0.1: two for one instance, one for another), seeded through `dev:agent --integrations` with fake values and the app's own API.
+- Who: owner
+
+#### Items
+
+- NetBox absence 1 (one trigger, never deleted or released, return): fait #139
+- NetBox absence 2 (purge after 30 days off the plan): fait #139
+- NetBox absence 3 (greyed on the plan, « Absent de NetBox depuis » in drawer and inventory, Éditeur deletion with undo): fait #146
+- NetBox absence 4 (same instance keeps everything, another asks and makes the devices absent): fait #142
+- NetBox absence 5 (Santé lists the roles without a type): fait #148
+- NetBox absence 6 (import message counts replaced manual cables): fait #148
+- NetBox absence 7 (no threshold, Santé counts absent devices): fait #139 and #148
+- NetBox absence 8 (« Retirer » unchanged): déjà fait
+- NetBox absence 9 (ADR, current.md): fait #139 (ADR 0039)
+- 3.6 (virtual-looking names excluded only without a NetBox cable): fait #148
+- 5.2 (no more `netplan_last_seen`; `netplan_updated` only inside a move's PATCH): fait #150 (ADR 0040)
+
+#### Leftovers
+
+- The custom field `netplan_updated` does not exist in the real NetBox yet, and `netplan_last_seen` is still there: the owner runs `scripts/netbox-custom-fields.ts` and removes the old field when he wants. Until then a site with the push on gets 400s, shown in Santé.
+- No NetBox test object was created; the real NetBox and LibreNMS got no request from this lot.
