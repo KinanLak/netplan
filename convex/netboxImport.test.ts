@@ -268,7 +268,7 @@ describe("NetBox import", () => {
     ).toEqual([]);
   });
 
-  it("marks absent what NetBox brought once no role has a type, without reading NetBox", async () => {
+  it("marks absent what NetBox brought once no role has a type, reading only the devices to count their roles", async () => {
     const source = netbox([device(12, "pc-0012"), device(13, "PC-0013")], []);
     const { t, admin, editor, siteId } = await importingSite(source);
     await editor.mutation(api.devices.create, {
@@ -288,7 +288,17 @@ describe("NetBox import", () => {
     source.reads.length = 0;
     await refresh(editor, siteId);
 
-    expect(source.reads).toEqual(["/api/status/"]);
+    expect(source.reads).toEqual(["/api/status/", "/api/dcim/devices/"]);
+    const cycle = await t.run(
+      async (ctx) =>
+        await ctx.db
+          .query("siteCycles")
+          .withIndex("by_site", (q) => q.eq("siteId", siteId))
+          .unique(),
+    );
+    expect(cycle?.netboxUnmappedRoles).toEqual([
+      { id: 4, name: "4", devices: 2 },
+    ]);
     expect(
       (await inventory(editor, siteId)).map((d) => [
         d.name,
@@ -472,6 +482,9 @@ describe("NetBox import", () => {
     });
 
     await refresh(editor, siteId);
+    expect((await lastSteps(admin, siteId))?.[0]?.message).toContain(
+      "1 câble saisi à la main remplacé par NetBox.",
+    );
 
     const pc = await editor.query(api.cables.portTable, {
       deviceId: "device:manual",

@@ -22,12 +22,14 @@ import {
   importedDevice,
   importedPort,
   netboxSettings,
+  unmappedRole,
 } from "./siteValidators";
 import {
   absencePurgeDue,
   importSummary,
   withPlacementClock,
   newDeviceKey,
+  unmappedNetBoxRoles,
   planDevicePorts,
   planNetBoxImport,
   readNetBoxCabling,
@@ -100,21 +102,24 @@ export const importFromNetBox = async (
   }
   const { baseUrl } = connection;
 
-  // Without a role NetBox would list every device of the site, so nothing is
-  // read, and the empty import still marks absent what earlier roles brought.
+  // Every device of the site is read, so Santé can list the roles that have
+  // no type yet (ADR 0034); the merge keeps the mapped ones. Without a role,
+  // ports and cables are not read, and the empty import still marks absent
+  // what earlier roles brought.
   const noRole = settings.roles.length === 0;
-  const roleFilter = settings.roles.map((role) => `&role_id=${role.id}`);
-  const lists = noRole
-    ? []
-    : await Promise.all(
-        [
-          `/api/dcim/devices/?site_id=${site.id}${roleFilter.join("")}`,
-          `/api/dcim/interfaces/?site_id=${site.id}`,
-          `/api/dcim/front-ports/?site_id=${site.id}`,
-          `/api/dcim/rear-ports/?site_id=${site.id}`,
-          `/api/dcim/cables/?site_id=${site.id}`,
-        ].map((path) => netboxList(connection, path, SOURCE_RETRY)),
-      );
+  const lists = await Promise.all(
+    [
+      `/api/dcim/devices/?site_id=${site.id}`,
+      ...(noRole
+        ? []
+        : [
+            `/api/dcim/interfaces/?site_id=${site.id}`,
+            `/api/dcim/front-ports/?site_id=${site.id}`,
+            `/api/dcim/rear-ports/?site_id=${site.id}`,
+            `/api/dcim/cables/?site_id=${site.id}`,
+          ]),
+    ].map((path) => netboxList(connection, path, SOURCE_RETRY)),
+  );
   const items = [];
   for (const list of lists) {
     if (!list.ok) return { ok: false, message: list.message };
@@ -135,6 +140,7 @@ export const importFromNetBox = async (
     baseUrl,
     settings,
     devices: imported,
+    unmappedRoles: unmappedNetBoxRoles(devices, settings.roles),
     ...readNetBoxCabling(imported, {
       interfaces,
       frontPorts,
@@ -159,6 +165,7 @@ const importCounts = v.object({
   missing: v.number(),
   returned: v.number(),
   review: v.number(),
+  replacedCables: v.number(),
 });
 
 /** Merges an import into the inventory; `null` when it no longer applies. */
@@ -171,6 +178,7 @@ export const apply = internalMutation({
     devices: v.array(importedDevice),
     ports: v.array(importedPort),
     cables: v.array(importedCable),
+    unmappedRoles: v.optional(v.array(unmappedRole)),
   },
   returns: v.union(v.null(), importCounts),
   handler: async (ctx, args) => {
@@ -299,9 +307,19 @@ export const apply = internalMutation({
         )
         .map((device) => device.objectId),
     ]);
-    await importCables(ctx, siteId, portIds, args.cables, absent, now);
+    const replacedCables = await importCables(
+      ctx,
+      siteId,
+      portIds,
+      args.cables,
+      absent,
+      now,
+    );
     await replaceReviews(ctx, siteId, plan, now);
-    await ctx.db.patch(cycle._id, { netboxImportedAt: now });
+    await ctx.db.patch(cycle._id, {
+      netboxImportedAt: now,
+      netboxUnmappedRoles: args.unmappedRoles ?? [],
+    });
     const wasAbsent = (deviceId: string) =>
       byId.get(deviceId)?.source?.missingSince !== undefined;
     return {
@@ -313,6 +331,7 @@ export const apply = internalMutation({
       missing: plan.missing.length,
       returned: plan.update.filter((entry) => wasAbsent(entry.deviceId)).length,
       review: plan.suggest.length + plan.conflict.length,
+      replacedCables,
     };
   },
 });
@@ -634,6 +653,7 @@ const importCables = async (
     existing.map((row) => [row.source?.externalId ?? "", row]),
   );
   const kept = new Set<string>();
+  let replaced = 0;
   for (const cable of cables) {
     const a = located.get(cable.a);
     const b = located.get(cable.b);
@@ -651,6 +671,7 @@ const importCables = async (
       if (!other) continue;
       await ctx.db.delete(other._id);
       if (other.source) byId.delete(other.source.externalId);
+      else replaced += 1;
     }
     await ctx.db.insert("cables", {
       ...cableRow(
@@ -668,6 +689,7 @@ const importCables = async (
     if (absent.has(row.aDeviceId) || absent.has(row.bDeviceId)) continue;
     await ctx.db.delete(row._id);
   }
+  return replaced;
 };
 
 export const macRowsOf = async (ctx: MutationCtx, deviceId: string) =>

@@ -106,6 +106,13 @@ export const netboxSettings = v.object({
   push: v.optional(v.boolean()),
 });
 
+/** `UnmappedRole` from `src/sites/netboxImport.ts`. */
+export const unmappedRole = v.object({
+  id: v.number(),
+  name: v.string(),
+  devices: v.number(),
+});
+
 /** `PushedValues` from `src/sites/netboxPush.ts`. */
 export const pushedValues = v.object({
   site: v.string(),
