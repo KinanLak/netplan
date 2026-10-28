@@ -45,8 +45,9 @@ Built by lot 1 (ADRs 0003, 0004 and 0021). better-auth runs inside Convex as
 a locally installed component (`convex/betterAuth/`, `convex/auth.ts`); the
 app server proxies `/api/auth/*` to the Convex site and sends a visitor
 without a session to `/login` before any page loads. There is no sign-up; a
-session lasts 24 hours from its last use and 7 days from login at most, and
-sign-in attempts are limited per identifier typed (ADR 0031).
+session lasts 24 hours from its last use and 7 days from login at most
+(ADR 0031), and sign-in and password-reset attempts wait longer and longer
+per identifier typed, with no limit shared between people (ADR 0036).
 
 - **Roles.** `reader`, `editor` and `admin` on the better-auth user, shown as
   Lecteur, Éditeur and Admin. Public Convex functions are built only with the
@@ -230,8 +231,9 @@ Built by the UX lot U1 (ADR 0031) and reworked by U8 (ADR 0037).
   to. In the browser, the root `beforeLoad` and loader answer from what the
   page loaded with, and Convex gets a constant identity from
   `src/lib/session-token.ts` that survives an outage (ADR 0037).
-- **Sign-in.** A better-auth `before` hook counts attempts per identifier in
-  `signInAttempts`; the address-keyed rules are only a shared ceiling. A
+- **Sign-in.** better-auth's address-keyed limiter is off; a `before` hook
+  counts sign-in and reset attempts per identifier in `signInAttempts`, and
+  an `after` hook wipes them on a successful sign-in (ADR 0036). A
   session slides 24 hours from its last use, capped at 7 days from login by
   a session update hook. A function refusing a lost session says whether
   the account was disabled, and the sign-in page says so.

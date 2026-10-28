@@ -415,15 +415,17 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_floor", ["floorId"]),
 
-  // Sign-in attempts per identifier typed, for the current minute
-  // (ADR 0031). Purged once their window has ended.
+  // Sign-in and password-reset attempts per identifier typed (ADR 0036).
+  // Purged an hour after their last attempt.
   signInAttempts: defineTable({
+    kind: v.union(v.literal("sign-in"), v.literal("password-reset")),
     identifier: v.string(),
-    windowStart: v.number(),
     count: v.number(),
+    lastAttemptAt: v.number(),
+    nextAllowedAt: v.number(),
   })
-    .index("by_identifier", ["identifier"])
-    .index("by_window_start", ["windowStart"]),
+    .index("by_kind_and_identifier", ["kind", "identifier"])
+    .index("by_last_attempt", ["lastAttemptAt"]),
 
   // A single row: the Keycloak role names that grant Éditeur and Admin
   // (ADR 0004). Absent until an admin first saves them.

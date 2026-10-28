@@ -50,25 +50,98 @@ async function onlySession(t: TestBackend) {
   };
 }
 
+const MINUTE = 60 * 1000;
+
+const retryAfter = async (response: Response) =>
+  ((await response.json()) as { retryAfter?: number }).retryAfter;
+
 describe("sign-in attempts", () => {
-  it("refuses an identifier after five attempts in a minute, not the others", async () => {
+  it("wait from the fifth failure on, longer each time, for that identifier only", async () => {
     const t = withMail();
     const email = await owner(t);
-    const start = Date.now();
-    setSystemTime(start);
+    let now = Date.now();
+    setSystemTime(now);
 
     for (let attempt = 0; attempt < 5; attempt += 1) {
       expect((await signIn(t, email, "wrong-password")).status).toBe(401);
     }
-    // The right password does not get through either, and the case typed
-    // does not make another identifier.
-    expect((await signIn(t, email.toUpperCase(), PASSWORD)).status).toBe(429);
+    // The right password does not get through during the wait, and the case
+    // typed does not make another identifier.
+    const refused = await signIn(t, email.toUpperCase(), PASSWORD);
+    expect(refused.status).toBe(429);
+    expect(await retryAfter(refused)).toBe(60);
+    // Nobody else waits.
     expect((await signIn(t, "someone@example.test", PASSWORD)).status).toBe(
       401,
     );
 
-    setSystemTime(start + 61_000);
+    // Each further failure doubles the wait.
+    now += MINUTE;
+    setSystemTime(now);
+    expect((await signIn(t, email, "wrong-password")).status).toBe(401);
+    expect(await retryAfter(await signIn(t, email, PASSWORD))).toBe(120);
+    now += 2 * MINUTE;
+    setSystemTime(now);
+    expect((await signIn(t, email, "wrong-password")).status).toBe(401);
+    expect(await retryAfter(await signIn(t, email, PASSWORD))).toBe(240);
+
+    // A success wipes the failures: the next mistake costs nothing.
+    now += 4 * MINUTE;
+    setSystemTime(now);
     expect((await signIn(t, email, PASSWORD)).status).toBe(200);
+    expect((await signIn(t, email, "wrong-password")).status).toBe(401);
+    expect((await signIn(t, email, PASSWORD)).status).toBe(200);
+  });
+
+  it("treat an identifier without an account like one with", async () => {
+    const t = withMail();
+    const email = await owner(t);
+    setSystemTime(Date.now());
+    const answers = async (identifier: string) => {
+      const statuses: Array<number> = [];
+      for (let attempt = 0; attempt < 6; attempt += 1) {
+        statuses.push((await signIn(t, identifier, "wrong-password")).status);
+      }
+      return statuses;
+    };
+    expect(await answers("nobody@example.test")).toEqual(await answers(email));
+  });
+
+  it("are forgotten after an hour left alone", async () => {
+    const t = withMail();
+    const email = await owner(t);
+    const start = Date.now();
+    setSystemTime(start);
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await signIn(t, email, "wrong-password");
+    }
+    setSystemTime(start + HOUR);
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      expect((await signIn(t, email, "wrong-password")).status).toBe(401);
+    }
+    expect((await signIn(t, email, PASSWORD)).status).toBe(200);
+  });
+});
+
+describe("password reset requests", () => {
+  it("wait from the fifth for one address, known or not, and nobody else", async () => {
+    const t = withMail();
+    const email = await owner(t);
+    setSystemTime(Date.now());
+    const request = (address: string) =>
+      post(t, "/request-password-reset", {
+        email: address,
+        redirectTo: "/reset-password",
+      });
+    for (const address of [email, "nobody@example.test"]) {
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        expect((await request(address)).status).toBe(200);
+      }
+      const refused = await request(address);
+      expect(refused.status).toBe(429);
+      expect(await retryAfter(refused)).toBe(60);
+    }
+    expect((await request("third@example.test")).status).toBe(200);
   });
 });
 

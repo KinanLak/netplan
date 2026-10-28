@@ -23,7 +23,7 @@ export function isEmail(identifier: string): boolean {
   return identifier.includes("@");
 }
 
-type AuthFailure = { status?: number; code?: string };
+type AuthFailure = { status?: number; code?: string; retryAfter?: number };
 
 /**
  * The failure of an auth client request, or null once it succeeded. The client
@@ -52,13 +52,18 @@ const WRONG_CREDENTIALS = new Set([
   "INVALID_EMAIL",
 ]);
 
-export function loginErrorMessage(error: {
-  status?: number;
-  code?: string;
-}): string {
-  // Five attempts per identifier and minute (ADR 0031).
+/**
+ * How long the server asks to wait (ADR 0036), in whole minutes: the waits
+ * are minutes, and a countdown in seconds would read as a threat.
+ */
+function waitText(retryAfter: number | undefined): string {
+  if (retryAfter === undefined || retryAfter <= 60) return "dans une minute";
+  return `dans ${Math.ceil(retryAfter / 60)} minutes`;
+}
+
+export function loginErrorMessage(error: AuthFailure): string {
   if (error.status === 429) {
-    return "Trop de tentatives. Réessayez dans une minute.";
+    return `Trop de tentatives. Réessayez ${waitText(error.retryAfter)}.`;
   }
   if (error.code === "BANNED_USER") {
     return "Ce compte est désactivé. Contactez un administrateur.";
@@ -89,9 +94,9 @@ export function keycloakErrorMessage(code: string): string {
 /** better-auth's default, which Netplan keeps. */
 export const MIN_PASSWORD_LENGTH = 8;
 
-export function forgotPasswordErrorMessage(error: { status?: number }): string {
+export function forgotPasswordErrorMessage(error: AuthFailure): string {
   if (error.status === 429) {
-    return "Trop de demandes. Réessayez dans une minute.";
+    return `Trop de demandes. Réessayez ${waitText(error.retryAfter)}.`;
   }
   return "La demande a échoué. Réessayez.";
 }

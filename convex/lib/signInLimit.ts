@@ -1,25 +1,58 @@
-/** Sign-in attempts one identifier may make per window (ADR 0031). */
-export const SIGN_IN_ATTEMPTS = 5;
-export const SIGN_IN_WINDOW_MS = 60_000;
+// How often one identifier may try to sign in or ask for a password reset
+// (ADR 0036). Netplan's servers see no client address they can trust, so
+// nothing is counted per address and no limit is shared between people.
 
-export type AttemptWindow = { windowStart: number; count: number };
+/** What is being tried: a password, or a reset mail. */
+export type AttemptKind = "sign-in" | "password-reset";
+
+/** Attempts in a row that never wait. */
+export const FREE_ATTEMPTS = 4;
+const FIRST_WAIT_MS = 60_000;
+const LONGEST_WAIT_MS = 15 * 60_000;
+/** An identifier left alone this long starts again from nothing. */
+export const ATTEMPTS_FORGOTTEN_AFTER_MS = 60 * 60_000;
+
+export type AttemptRecord = {
+  /** Attempts since the last success, or since the record was forgotten. */
+  count: number;
+  lastAttemptAt: number;
+  /** No attempt counts before then. */
+  nextAllowedAt: number;
+};
 
 /**
- * Counts one attempt against an identifier's window: a fixed window that
- * starts at its first attempt. `next` is what to store; a refused attempt
- * leaves the window as it was, so retrying does not push the end back.
+ * The wait the `count`-th attempt in a row imposes before the next one: none
+ * for the first four, then a minute from the fifth, doubling up to 15.
+ */
+export function waitAfter(count: number): number {
+  if (count <= FREE_ATTEMPTS) return 0;
+  return Math.min(
+    FIRST_WAIT_MS * 2 ** (count - FREE_ATTEMPTS - 1),
+    LONGEST_WAIT_MS,
+  );
+}
+
+/**
+ * Counts one attempt. A refused attempt leaves the record as it was, so
+ * hammering during a wait neither lengthens it nor gets through.
  */
 export function countAttempt(
-  current: AttemptWindow | null,
+  current: AttemptRecord | null,
   now: number,
-): { allowed: boolean; next: AttemptWindow } {
-  if (!current || now - current.windowStart >= SIGN_IN_WINDOW_MS) {
-    return { allowed: true, next: { windowStart: now, count: 1 } };
+):
+  | { allowed: true; next: AttemptRecord }
+  | { allowed: false; retryAfterMs: number } {
+  if (current && now < current.nextAllowedAt) {
+    return { allowed: false, retryAfterMs: current.nextAllowedAt - now };
   }
-  if (current.count >= SIGN_IN_ATTEMPTS) {
-    return { allowed: false, next: current };
-  }
-  return { allowed: true, next: { ...current, count: current.count + 1 } };
+  const count =
+    current && now - current.lastAttemptAt < ATTEMPTS_FORGOTTEN_AFTER_MS
+      ? current.count + 1
+      : 1;
+  return {
+    allowed: true,
+    next: { count, lastAttemptAt: now, nextAllowedAt: now + waitAfter(count) },
+  };
 }
 
 /** The same account whatever the case or spaces it is typed with. */
