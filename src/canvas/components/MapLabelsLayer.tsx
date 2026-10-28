@@ -13,6 +13,7 @@ import { useIsEditMode, useIsLabelToolActive } from "@/store/selectors";
 import { useMapStore } from "@/store/useMapStore";
 import type { LabelId, MapLabel, Position } from "@/types/map";
 import { cn } from "@/lib/utils";
+import { useDrawingHelpClass } from "./drawingHelp";
 
 /** A press that moves less than this, on screen, is a click, not a drag. */
 const DRAG_THRESHOLD_PX = 3;
@@ -37,6 +38,7 @@ export function MapLabelsLayer() {
   const { commands } = useMapDocumentActions();
   const [draft, setDraft] = useState<Position | null>(null);
   const [editing, setEditing] = useState<LabelId | null>(null);
+  const helpClass = useDrawingHelpClass();
 
   const canEdit = isEditMode && isReady;
 
@@ -117,7 +119,7 @@ export function MapLabelsLayer() {
         ) : null}
       </ViewportPortal>
       {isToolActive && canEdit && !draft ? (
-        <div className="absolute top-4 right-4 z-20 rounded-md border bg-card px-3 py-2 text-xs text-foreground shadow-md">
+        <div className={cn(helpClass, "text-foreground")}>
           Cliquez sur le plan où poser le texte.
         </div>
       ) : null}

@@ -3,6 +3,7 @@ import type {
   WallCommandReason,
   WallCommandResult,
 } from "@/types/map";
+import { GRID_SIZE } from "@/lib/grid";
 import { arePositionsEqual } from "@/walls/gridGeometry/cells";
 import { createBrushWallDraft } from "@/walls/gridGeometry/drafts";
 import {
@@ -93,7 +94,7 @@ export const pressWallPane = (
   const anchored = clickDrawPane(state, context, adapter, sample);
   return stabilizeWallInteractionState(state, {
     ...anchored,
-    anchoredByPress: anchored.drawAnchor !== null,
+    pressPointer: anchored.drawAnchor ? sample.pointer : null,
   });
 };
 
@@ -107,13 +108,16 @@ const computeClickedWallPane = (
     return { state, handled: false };
   }
 
-  if (state.anchoredByPress) {
-    const released = { ...state, anchoredByPress: false };
+  if (state.pressPointer) {
+    const released = { ...state, pressPointer: null };
     // A press released where it started was a click: the anchor stays for
-    // the second one. Released elsewhere, it ends the shape there.
+    // the second one. Released elsewhere, it ends the shape there. On a
+    // cell's edge, the press and the release may snap to two cells: the
+    // pointer, not the cell, says whether it moved.
     if (
       state.drawAnchor &&
-      arePositionsEqual(sample.snappedPoint, state.drawAnchor)
+      (arePositionsEqual(sample.snappedPoint, state.drawAnchor) ||
+        isNear(sample.pointer, state.pressPointer))
     ) {
       return { state: released, handled: true };
     }
@@ -142,6 +146,12 @@ const computeClickedWallPane = (
     handled: true,
   };
 };
+
+/** Half a cell: the most a click's pointer moves between press and release. */
+const CLICK_SLOP = GRID_SIZE / 2;
+
+const isNear = (a: Position, b: Position): boolean =>
+  Math.hypot(a.x - b.x, a.y - b.y) < CLICK_SLOP;
 
 const canUseWallTool = (context: WallInteractionContext): boolean =>
   context.isEditMode &&
@@ -288,38 +298,26 @@ const moveBrushPointer = (
     };
   }
 
-  if (!baseState.isBrushStrokeActive) {
-    addBrushAtPoint(context, adapter, sample.snappedPoint);
-
-    return {
-      ...baseState,
-      isBrushStrokeActive: true,
-      brushStrokeLastSample: sample,
-      ignoreNextBrushClick: true,
-    };
-  }
-
-  const previous = baseState.brushStrokeLastSample;
-  if (!previous) {
-    addBrushAtPoint(context, adapter, sample.snappedPoint);
-
-    return {
-      ...baseState,
-      brushStrokeLastSample: sample,
-      ignoreNextBrushClick: true,
-    };
-  }
-
-  const strokeResult = adapter.addWallLine({
-    floorId: context.currentFloorId,
-    start: previous.snappedPoint,
-    end: sample.snappedPoint,
-    color: context.selectedWallColor,
-  });
+  // A new stroke starts afresh, so a device it meets flashes again even if
+  // the last stroke's refusal still shows.
+  const stroke = baseState.isBrushStrokeActive
+    ? baseState
+    : { ...baseState, drawMessage: null };
+  const previous = baseState.isBrushStrokeActive
+    ? baseState.brushStrokeLastSample
+    : null;
+  const strokeResult = previous
+    ? adapter.addWallLine({
+        floorId: context.currentFloorId,
+        start: previous.snappedPoint,
+        end: sample.snappedPoint,
+        color: context.selectedWallColor,
+      })
+    : addBrushAtPoint(context, adapter, sample.snappedPoint);
 
   return {
-    ...baseState,
-    drawMessage: strokeResult.changed ? null : baseState.drawMessage,
+    ...withBrushResult(stroke, strokeResult, "stroke"),
+    isBrushStrokeActive: true,
     ignoreNextBrushClick: true,
     brushStrokeLastSample: sample,
   };
@@ -355,6 +353,28 @@ const clickErasePane = (
   };
 };
 
+/**
+ * A brush click or stroke that crosses a device says so and flashes; a
+ * stroke flashes once each time it reaches one, not at every cell it is
+ * held over (A19).
+ */
+const withBrushResult = (
+  state: WallInteractionState,
+  result: WallCommandResult,
+  gesture: "click" | "stroke",
+): WallInteractionState => {
+  if (result.reason === "collision-with-device") {
+    const flashes =
+      gesture === "click" || state.drawMessage !== COLLISION_LINE_MESSAGE;
+    return {
+      ...state,
+      drawMessage: COLLISION_LINE_MESSAGE,
+      refusals: state.refusals + (flashes ? 1 : 0),
+    };
+  }
+  return result.changed ? { ...state, drawMessage: null } : state;
+};
+
 const clickBrushPane = (
   state: WallInteractionState,
   context: WallInteractionContext,
@@ -366,16 +386,9 @@ const clickBrushPane = (
   }
 
   const brushResult = addBrushAtPoint(context, adapter, sample.snappedPoint);
-  const nextMessage =
-    brushResult.reason === "collision-with-device"
-      ? COLLISION_LINE_MESSAGE
-      : brushResult.changed
-        ? null
-        : state.drawMessage;
 
   return {
-    ...state,
-    drawMessage: nextMessage,
+    ...withBrushResult(state, brushResult, "click"),
     hoverSnapPoint: sample.snappedPoint,
     pointerPreview: null,
   };
@@ -433,6 +446,7 @@ const clickDrawPane = (
         ...state,
         pointerPreview: drawPoint,
         drawMessage: toLineFailureMessage(result.reason),
+        refusals: state.refusals + (isRefusal(result.reason) ? 1 : 0),
       };
     }
 
@@ -451,6 +465,7 @@ const clickDrawPane = (
       ...state,
       pointerPreview: drawPoint,
       drawMessage: toRoomFailureMessage(roomResult.reason),
+      refusals: state.refusals + (isRefusal(roomResult.reason) ? 1 : 0),
     };
   }
 
@@ -461,13 +476,17 @@ const resetFinishedDrawState = (
   state: WallInteractionState,
 ): WallInteractionState => ({
   ...state,
-  anchoredByPress: false,
+  pressPointer: null,
   drawAnchor: null,
   lastWallStartPoint: null,
   pointerPreview: null,
   hoverSnapPoint: null,
   drawMessage: null,
 });
+
+/** Drawing over walls already there adds nothing, but refuses nothing. */
+const isRefusal = (reason: WallCommandReason): boolean =>
+  reason !== "already-exists";
 
 const isPrimaryButtonPressed = (buttons: number): boolean =>
   (buttons & 1) === 1;

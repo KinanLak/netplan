@@ -4,8 +4,10 @@ import { HugeiconsIcon } from "@hugeicons/react";
 /**
  * A wall socket named in a sentence or a list: its icon says « prise », so
  * a socket named « Prise B-06 » does not read « Prise « Prise B-06 » » (A105).
+ * A screen reader hears « Prise » once, from the name or added before it.
  */
 export function SocketName({ name }: { name: string }) {
+  const namesItself = /^prise\b/iu.test(name.trim());
   return (
     <span className="inline-flex items-baseline gap-1">
       <HugeiconsIcon
@@ -15,7 +17,7 @@ export function SocketName({ name }: { name: string }) {
         className="shrink-0 self-center"
         aria-hidden
       />
-      <span className="sr-only">Prise </span>
+      {namesItself ? null : <span className="sr-only">Prise </span>}
       {name}
     </span>
   );
