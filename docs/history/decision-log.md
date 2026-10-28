@@ -3526,8 +3526,8 @@ Questions of 2026-10-28.
 - Decision:
   - A socket wins when its entry is more than `FDB_FRESH_MS` newer than every other. Entries that are undated or closer than that hold the device where it is.
   - A sighting row always records what was seen. A separate `decided` names the socket the place follows when it differs, or none yet while the device is held.
-  - The history records a location only where the map moves.
-- Why: two minutes is already the rule's « same discovery » window. The first version kept the old row instead; zipzoup showed on #156 that this skewed presence, expiry and history (three P2s). Two more followed: a decided move is located at its socket directly, and an undo's arrival never locates a device at a sighting whose place the cycle decided elsewhere.
+  - The history records a location where the cycle decides the device is, drawn on the plan or not; none while it is held or stays.
+- Why: two minutes is already the rule's « same discovery » window. The first version kept the old row instead; zipzoup showed on #156 that this skewed presence, expiry and history (three P2s). Two more followed: a decided move is located at its socket directly, and an undo's arrival never locates a device at a sighting whose place the cycle decided elsewhere. A third, to locate only moves the plan could draw, was answered as intended: history says where the network saw the device.
 - Who: agent (judgement call)
 
 #### Where is the port-name proposal kept, and who sees it?
