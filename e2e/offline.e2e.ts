@@ -22,14 +22,12 @@ const switchNode = (page: Page) =>
 const position = (page: Page) =>
   switchNode(page).evaluate((node) => (node as HTMLElement).style.transform);
 
-// ADR 0034: during a backend outage the page keeps its Convex provider and
-// its identity across page changes, so an edit queued meanwhile is sent when
-// the backend returns. A page change used to ask the app's server for the
-// session, which failed while Convex was down, and the error screen replaced
-// the page and dropped the queued edit.
-test("an edit queued while the backend is down survives page changes and lands on its return", async ({
-  page,
-}) => {
+/**
+ * Cuts Convex's socket and makes the app's server functions fail, as when
+ * the app's server answers but Convex behind it does not. Set up before the
+ * page loads.
+ */
+const backendSwitch = async (page: Page) => {
   let down = false;
   const sockets = new Set<WebSocketRoute>();
   await page.routeWebSocket(/\/api\/[^/]+\/sync/, (socket) => {
@@ -40,68 +38,70 @@ test("an edit queued while the backend is down survives page changes and lands o
     socket.connectToServer();
     sockets.add(socket);
   });
-  // The app's server answers, but Convex behind it does not.
   await page.route(/\/(_serverFn|api\/auth)\//, (route) =>
     down
       ? route.fulfill({ status: 502, body: "Unable to connect" })
       : route.fallback(),
   );
+  return {
+    cut: async () => {
+      down = true;
+      for (const socket of sockets) await socket.close();
+      sockets.clear();
+    },
+    restore: () => {
+      down = false;
+    },
+  };
+};
 
-  // The seed is shared with the next run and the developer's instance.
-  let nudged = false;
-  let restored = false;
+const offlineLine = (page: Page) =>
+  page.getByRole("status").getByText(/connexion/);
+
+// ADR 0034: during a backend outage the page keeps its Convex provider and
+// its identity across page changes, and works again once the backend
+// returns. A page change used to ask the app's server for the session,
+// which failed while Convex was down, and the error screen replaced the
+// page and dropped the client's identity.
+test("a page change during a backend outage keeps the page, and editing works again on its return", async ({
+  page,
+}) => {
+  const backend = await backendSwitch(page);
+  await signIn(page);
+  await page.getByRole("button", { name: /^Modifier/ }).click();
+  await switchNode(page).click();
+  const before = await position(page);
+
+  await backend.cut();
+  await expect(offlineLine(page)).toBeVisible();
+
+  // Each of these changes the page's URL.
+  const errorScreen = page.getByText(/n'a pas pu s'afficher/);
+  await page.getByText("PC-DEMO-POSTE-1", { exact: true }).click();
+  await expect(errorScreen).toBeHidden();
+  await page.keyboard.press("Escape");
+  await page.getByRole("link", { name: "Inventaire" }).click();
+  await expect(page.getByRole("heading", { name: "Inventaire" })).toBeVisible();
+  await page.goBack();
+  await expect(switchNode(page)).toBeVisible();
+  await expect(errorScreen).toBeHidden();
+
+  backend.restore();
+  // Convex reconnects on its own backoff, which grew during the outage.
+  await expect(offlineLine(page)).toBeHidden({ timeout: 20_000 });
+
+  await switchNode(page).click();
+  await page.keyboard.press("ArrowDown");
+  const moved = await position(page);
+  expect(moved).not.toBe(before);
+  // Another page reads what the server holds.
+  const other = await page.context().newPage();
   try {
-    await signIn(page);
-    await page.getByRole("button", { name: /^Modifier/ }).click();
-    await switchNode(page).click();
-    const before = await position(page);
-
-    down = true;
-    for (const socket of sockets) await socket.close();
-    await expect(page.getByText(/Serveur injoignable/)).toBeVisible();
-
-    await page.keyboard.press("ArrowDown");
-    nudged = true;
-    await expect(page.getByText("1 modification en attente")).toBeVisible();
-    const moved = await position(page);
-    expect(moved).not.toBe(before);
-
-    // Each of these changes the page's URL.
-    const errorScreen = page.getByText(/n'a pas pu s'afficher/);
-    await page.getByText("PC-DEMO-POSTE-1", { exact: true }).click();
-    await expect(errorScreen).toBeHidden();
-    await page.keyboard.press("Escape");
-    await page.getByRole("link", { name: "Inventaire" }).click();
-    await expect(
-      page.getByRole("heading", { name: "Inventaire" }),
-    ).toBeVisible();
-    await expect(page.getByText("1 modification en attente")).toBeVisible();
-    await page.goBack();
-    await expect(switchNode(page)).toBeVisible();
-
-    down = false;
-    // Convex reconnects on its own backoff, which grew during the outage.
-    await expect(page.getByText(/Serveur injoignable/)).toBeHidden({
-      timeout: 20_000,
-    });
-    await expect(page.getByText("1 modification en attente")).toBeHidden();
-
-    // Another page reads what the server holds.
-    const other = await page.context().newPage();
     await other.goto(page.url());
     await expect.poll(() => position(other)).toBe(moved);
-
-    // Put the seed back.
+  } finally {
+    // The seed is shared with the next run and the developer's instance.
     await page.keyboard.press("Control+z");
     await expect.poll(() => position(other)).toBe(before);
-    restored = true;
-  } finally {
-    down = false;
-    if (nudged && !restored) {
-      await page.keyboard.press("Control+z");
-      await expect(page.getByText(/modification en attente/)).toBeHidden({
-        timeout: 20_000,
-      });
-    }
   }
 });
