@@ -60,12 +60,17 @@ the offline session.
 What Keycloak answers decides what happens:
 
 - **New tokens:** the role follows them.
-- **`invalid_grant`:** Keycloak no longer vouches for that login, so every
-  Netplan session of the user ends. The next sign-in goes through Keycloak
-  and reads the role again.
+- **`invalid_grant` on an offline token:** Keycloak no longer vouches for
+  that login, so every Netplan session of the user ends. The next sign-in
+  goes through Keycloak and reads the role again. On an ordinary refresh
+  token, from a client that does not offer the offline scope, it only means
+  Keycloak's session idled out, and nothing happens.
 - **Anything else** (Keycloak down, a timeout, a 5xx): nothing changes and
   nobody is told. The next hourly refresh tries again. A role is never
   lowered or raised on a guess.
+
+Two refreshes never spend one token: a mutation claims it, so a realm that
+rotates refresh tokens does not refuse the second.
 
 The 7-day cap of ADR 0031 stays. It no longer bounds a role change, but it
 still bounds a stolen session.
@@ -93,13 +98,15 @@ it. The admin can cancel the handover, which leaves an account without a
 password that needs a new invitation.
 
 Implicit linking stays off for everyone else. better-auth's account linking
-is on for Keycloak, but a hook on account creation refuses every link except
-two: to a user that the same sign-in has just created, or to an account
-waiting for Keycloak. A local account with a password, or an invitation that
-was never used, still refuses a Keycloak sign-in with its email. The sign-in
-page then says to ask an administrator to hand the account over. The
-handover does not ask Keycloak whether the address is verified: the admin
-named the account, and its role comes from Keycloak anyway.
+is on, but a hook on account creation refuses every link except two: to a
+user that the same sign-in has just created, or to an account waiting for
+Keycloak. A local account with a password, or an invitation that was never
+used, still refuses a Keycloak sign-in with its email. The sign-in page then
+says to ask an administrator to hand the account over. better-auth links
+only when Keycloak says the address is verified, so someone who types a
+waiting account's address into their own Keycloak profile does not get it.
+A disabled account cannot be handed over: its Keycloak sign-in would be
+refused only after the link was made.
 
 ## Which Keycloak claims count
 
