@@ -71,6 +71,7 @@ describe("the admin health overview", () => {
         failures: 1,
         last,
         netboxImportedAt: 1_500,
+        netboxUnmappedRoles: [{ id: 6, name: "Serveur", devices: 2 }],
       });
       const devices: Array<[DeviceType, DeviceStatus | undefined]> = [
         ["switch", "up"],
@@ -78,6 +79,7 @@ describe("the admin health overview", () => {
         ["switch", "down"],
         ["switch", undefined],
         ["pc", "down"],
+        ["pc", undefined],
       ];
       for (const [index, [type, status]] of devices.entries()) {
         await ctx.db.insert("devices", {
@@ -87,6 +89,15 @@ describe("the admin health overview", () => {
           name: `${type}-${index}`,
           macs: [],
           metadata: status ? { status } : {},
+          // The last one NetBox no longer returns.
+          ...(index === devices.length - 1 && {
+            source: {
+              integration: "netbox" as const,
+              externalId: "9",
+              syncedAt: 0,
+              missingSince: 1_000,
+            },
+          }),
           updatedAt: 0,
           updatedBy: "test",
         });
@@ -100,7 +111,11 @@ describe("the admin health overview", () => {
       name: "Site A",
       freshness: { hasSources: true, failures: 1, nextRunAt: 3_000 },
       last,
-      netbox: { importedAt: 1_500 },
+      netbox: {
+        importedAt: 1_500,
+        absent: 1,
+        unmappedRoles: [{ id: 6, name: "Serveur", devices: 2 }],
+      },
       switches: { up: 2, down: 1, unknown: 1 },
       // No switch is mapped to a LibreNMS device in this site's settings.
       switchReads: { read: 0, failed: 0, notPolled: 4, oldestReadAt: null },
