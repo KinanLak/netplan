@@ -7,7 +7,6 @@ import { timeline } from "@/history/timeline";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -44,9 +43,6 @@ export function DeviceHistoryDialog({
       <DialogContent className="top-[8vh] translate-y-0 sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Historique de « {device.name} »</DialogTitle>
-          <DialogDescription>
-            Ce que le réseau a observé ces 30 derniers jours.
-          </DialogDescription>
         </DialogHeader>
         {open ? <DeviceHistoryBody deviceId={device.id} /> : null}
       </DialogContent>
@@ -86,13 +82,7 @@ function DeviceEvents({ deviceId }: { deviceId: string }) {
   if (status === "LoadingFirstPage") {
     return <p className="text-sm text-muted-foreground">Chargement…</p>;
   }
-  if (results.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        Le réseau n'a rien observé de cet équipement ces 30 derniers jours.
-      </p>
-    );
-  }
+  if (results.length === 0) return null;
   return (
     <ScrollArea className="*:data-[slot=scroll-area-viewport]:max-h-[60vh]">
       <ul className="divide-y divide-border">
@@ -126,13 +116,7 @@ function DeviceSnapshots({ deviceId }: { deviceId: string }) {
   }
   // A page can come back empty while older ones remain: it held only
   // entries of captures that failed.
-  if (results.length === 0 && status === "Exhausted") {
-    return (
-      <p className="text-sm text-muted-foreground">
-        Aucun relevé quotidien n'a vu cet équipement ces 30 derniers jours.
-      </p>
-    );
-  }
+  if (results.length === 0 && status === "Exhausted") return null;
   const manyMacs = new Set(results.map(({ mac }) => mac)).size > 1;
   return (
     <ScrollArea className="*:data-[slot=scroll-area-viewport]:max-h-[60vh]">
@@ -147,9 +131,7 @@ function DeviceSnapshots({ deviceId }: { deviceId: string }) {
                 <Time at={newest.slotAt} />
               ) : (
                 <>
-                  <span>
-                    <Time at={oldestAt} /> →
-                  </span>
+                  <Time at={oldestAt} />
                   <Time at={newest.slotAt} />
                   <span className="text-xs">{count} relevés</span>
                 </>

@@ -104,7 +104,11 @@ export function ConnectionBanner() {
       className="pointer-events-none fixed bottom-4 left-1/2 z-50 flex w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-2 rounded-2xl border bg-card px-3 py-1.5 text-xs text-card-foreground shadow-md"
     >
       <span aria-hidden className="size-2 shrink-0 rounded-full bg-down" />
-      <span className="text-pretty">{parts.join(" · ")}</span>
+      <span className="flex flex-wrap gap-x-3">
+        {parts.map((part) => (
+          <span key={part}>{part}</span>
+        ))}
+      </span>
     </div>
   );
 }

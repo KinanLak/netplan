@@ -251,7 +251,7 @@ describe("users.invite", () => {
           email: "eden@example.test",
           role: "reader",
         }),
-      ).rejects.toThrow("Mail is not configured: set SMTP_HOST.");
+      ).rejects.toThrow("Mail is not configured: set SMTP_HOST");
     } finally {
       process.env.SMTP_HOST = host;
     }
@@ -294,7 +294,7 @@ describe("users.cancelInvitation", () => {
     await addAccount(t, local.userId, "credential");
     await expect(
       as.mutation(api.users.cancelInvitation, { userId: local.userId }),
-    ).rejects.toThrow("désactivez-le");
+    ).rejects.toThrow("déjà servi");
   });
 });
 
@@ -340,7 +340,7 @@ describe("users.sendTestMail", () => {
     delete process.env.SMTP_FROM;
     try {
       await expect(as.action(api.users.sendTestMail, {})).rejects.toThrow(
-        "L'e-mail n'est pas parti : Mail is not configured: set SMTP_FROM.",
+        "L'e-mail n'est pas parti (Mail is not configured: set SMTP_FROM).",
       );
     } finally {
       process.env.SMTP_FROM = from;
@@ -371,6 +371,6 @@ describe("userAccounts", () => {
           "[Request ID: 1] Server Error\nUncaught Error: Mail is not configured: set SMTP_HOST\n    at handler",
         ),
       ),
-    ).toBe("Mail is not configured: set SMTP_HOST.");
+    ).toBe("Mail is not configured: set SMTP_HOST");
   });
 });

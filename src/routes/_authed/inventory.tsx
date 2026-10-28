@@ -2,13 +2,13 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { Add01Icon, Search01Icon } from "@hugeicons/core-free-icons";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
-import { toast } from "sonner";
 import { useEffect, useId, useState } from "react";
 import { ModeToggle } from "@/components/mode-toggle";
 import { ListPageSkeleton, ListSkeleton } from "@/components/loading-skeletons";
 import { Pending } from "@/components/pending";
 import { AppNavLinks, UserMenu } from "@/components/app-nav";
 import { NetplanLogo } from "@/components/netplan-logo";
+import { NoSite } from "@/components/no-site";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Kbd } from "@/components/ui/kbd";
@@ -47,7 +47,6 @@ import type {
   Placement,
 } from "@/inventory/filters";
 import { ColumnPicker, InventoryTable } from "@/inventory/InventoryTable";
-import { openPlacement } from "@/inventory/showOnMap";
 import { useRestoredScroll } from "@/inventory/useRestoredScroll";
 import { useTableRoom } from "@/inventory/useTableRoom";
 import { ImportReviews } from "@/sites/ImportReviews";
@@ -97,7 +96,7 @@ export const Route = createFileRoute("/_authed/inventory")({
 });
 
 function InventoryPage() {
-  const { sites, site } = useCurrentSite();
+  const { site } = useCurrentSite();
   return (
     <div className="flex h-svh flex-col bg-background text-foreground">
       <header className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b bg-sidebar px-4 py-2">
@@ -127,11 +126,7 @@ function InventoryPage() {
               <ListSkeleton />
             </Pending>
           ) : site === null ? (
-            <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-              {sites && sites.length > 0
-                ? "Tous les sites sont archivés."
-                : "Aucun site n'est encore configuré."}
-            </p>
+            <NoSite />
           ) : (
             <SiteInventory key={site.id} site={site} />
           )}
@@ -171,7 +166,6 @@ function SiteInventory({ site }: { site: SiteSummary }) {
   const [sheetId, setSheetId] = useState<string | null>(null);
   const [macDraft, setMacDraft] = useState<string | null>(null);
   const { measureFilters, room: tableHeight } = useTableRoom();
-  const goTo = useNavigate();
   const [hidden, setHidden] = useState(readHiddenColumns);
   useSlashToSearch();
   useRestoredScroll("inventory-page", devices !== undefined);
@@ -244,9 +238,8 @@ function SiteInventory({ site }: { site: SiteSummary }) {
   const shown = sortRows(applyFilters(all, active), sort);
   const filtered = isFiltered(active);
   const reset = () => update(NO_FILTERS);
-  // From a toast, which outlives the render it was made in: the filters are
-  // cleared from the URL as it is then, keeping the reader's order, and the
-  // devices' tab comes back.
+  // After the create dialog closes: the filters are cleared from the URL as
+  // it is then, keeping the reader's order, and the devices' tab comes back.
   const showEveryDevice = () => {
     setDraft(null);
     void navigate({
@@ -278,19 +271,15 @@ function SiteInventory({ site }: { site: SiteSummary }) {
       <header className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold">Inventaire</h1>
-          <p className="text-sm text-muted-foreground">
-            Tous les équipements du site, sur le plan ou hors plan.
-          </p>
           <CollectionFreshness
             siteId={site.id}
             className="mt-3 w-fit max-w-sm"
           />
         </div>
-        {/* An empty inventory offers the same button in its message. */}
-        {canEdit && all.length > 0 ? (
+        {canEdit ? (
           <Button onClick={() => setCreating(true)}>
             <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
-            Nouvel équipement
+            Créer un équipement
           </Button>
         ) : null}
       </header>
@@ -349,7 +338,6 @@ function SiteInventory({ site }: { site: SiteSummary }) {
             <PlanCoverage
               coverage={coverage}
               active={filters.placement === "unplaced" ? type : null}
-              canEdit={canEdit}
               onSelect={showUnplaced}
             />
           ) : null}
@@ -358,12 +346,7 @@ function SiteInventory({ site }: { site: SiteSummary }) {
             <Pending>
               <ListSkeleton />
             </Pending>
-          ) : all.length === 0 ? (
-            <InventoryEmpty
-              canEdit={canEdit}
-              onCreate={() => setCreating(true)}
-            />
-          ) : (
+          ) : all.length === 0 ? null : (
             <>
               {/* The filters stay in reach while the page scrolls (A63). */}
               <div
@@ -434,47 +417,43 @@ function SiteInventory({ site }: { site: SiteSummary }) {
                 </div>
 
                 <div className="flex items-center justify-between gap-3">
-                  <p
-                    className="text-sm text-muted-foreground"
+                  <div
+                    className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-sm text-muted-foreground"
                     aria-live="polite"
                   >
-                    {filtered
-                      ? `${shown.length} sur ${all.length} équipement${all.length > 1 ? "s" : ""}`
-                      : `${all.length} équipement${all.length > 1 ? "s" : ""}`}
+                    <span>
+                      {filtered
+                        ? `${shown.length} sur ${all.length} équipement${all.length > 1 ? "s" : ""}`
+                        : `${all.length} équipement${all.length > 1 ? "s" : ""}`}
+                    </span>
                     {/* Shown only when NetBox has dropped some (ADR 0039). */}
                     {counts.absent > 0 || active.absent ? (
-                      <>
-                        {" · "}
-                        <button
-                          type="button"
-                          aria-pressed={active.absent}
-                          onClick={() => update({ absent: !active.absent })}
-                          className={cn(
-                            "rounded-sm underline-offset-2 outline-none hover:text-foreground hover:underline focus-visible:ring-[3px] focus-visible:ring-ring",
-                            active.absent && "font-medium text-foreground",
-                          )}
-                        >
-                          {counts.absent}{" "}
-                          {counts.absent > 1
-                            ? "absents de NetBox"
-                            : "absent de NetBox"}
-                        </button>
-                      </>
+                      <button
+                        type="button"
+                        aria-pressed={active.absent}
+                        onClick={() => update({ absent: !active.absent })}
+                        className={cn(
+                          "rounded-sm underline-offset-2 outline-none hover:text-foreground hover:underline focus-visible:ring-[3px] focus-visible:ring-ring",
+                          active.absent && "font-medium text-foreground",
+                        )}
+                      >
+                        {counts.absent}{" "}
+                        {counts.absent > 1
+                          ? "absents de NetBox"
+                          : "absent de NetBox"}
+                      </button>
                     ) : null}
-                    {/* An empty list offers the same button in its message. */}
+                    {/* An empty result offers the same button in its place. */}
                     {filtered && shown.length > 0 ? (
-                      <>
-                        {" · "}
-                        <button
-                          type="button"
-                          onClick={reset}
-                          className="rounded-sm underline-offset-2 outline-none hover:text-foreground hover:underline focus-visible:ring-[3px] focus-visible:ring-ring"
-                        >
-                          Réinitialiser les filtres
-                        </button>
-                      </>
+                      <button
+                        type="button"
+                        onClick={reset}
+                        className="rounded-sm underline-offset-2 outline-none hover:text-foreground hover:underline focus-visible:ring-[3px] focus-visible:ring-ring"
+                      >
+                        Réinitialiser les filtres
+                      </button>
                     ) : null}
-                  </p>
+                  </div>
                   <ColumnPicker
                     hidden={hidden}
                     onChange={(next) => {
@@ -486,8 +465,7 @@ function SiteInventory({ site }: { site: SiteSummary }) {
               </div>
 
               {shown.length === 0 ? (
-                <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-                  <p>Aucun équipement ne correspond à ces filtres.</p>
+                <div className="flex justify-center rounded-lg border border-dashed p-8">
                   <Button variant="outline" size="sm" onClick={reset}>
                     Réinitialiser les filtres
                   </Button>
@@ -516,9 +494,9 @@ function SiteInventory({ site }: { site: SiteSummary }) {
           site={site}
           open={creating}
           onOpenChange={setCreating}
-          onCreated={(deviceId, name) => {
+          onCreated={(deviceId) => {
             // The new row may hide behind a filter, and in a long list it is
-            // easy to miss: show it, light it, and say where it is (A60).
+            // easy to miss: show it and light it (A60).
             showEveryDevice();
             setHighlightId(deviceId);
             window.setTimeout(
@@ -528,21 +506,6 @@ function SiteInventory({ site }: { site: SiteSummary }) {
                 ),
               2_500,
             );
-            toast(`« ${name} » créé, hors plan`, {
-              // The row may have been filtered out since: show it again.
-              action: {
-                label: "Voir",
-                onClick: () => {
-                  showEveryDevice();
-                  setSheetId(deviceId);
-                },
-              },
-              cancel: {
-                label: "Placer sur le plan",
-                onClick: () => openPlacement(goTo, site.id, deviceId),
-              },
-              duration: 10_000,
-            });
           }}
         />
       ) : null}
@@ -585,28 +548,18 @@ function useSlashToSearch() {
 function PlanCoverage({
   coverage,
   active,
-  canEdit,
   onSelect,
 }: {
   coverage: Array<TypeCoverage>;
   active: TypeFilter | null;
-  canEdit: boolean;
   onSelect: (type: DeviceType) => void;
 }) {
   const id = useId();
   return (
     <section aria-labelledby={id} className="space-y-2">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4">
-        <h2 id={id} className="text-sm font-medium">
-          Couverture du plan
-        </h2>
-        {canEdit ? (
-          <p className="text-xs text-muted-foreground">
-            Un équipement hors plan se place depuis son menu, « Placer sur le
-            plan… ».
-          </p>
-        ) : null}
-      </div>
+      <h2 id={id} className="text-sm font-medium">
+        Couverture du plan
+      </h2>
       <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-6">
         {coverage.map(({ type, placed, total }) => {
           const missing = total - placed;
@@ -634,45 +587,13 @@ function PlanCoverage({
                   style={{ width: `${(placed / total) * 100}%` }}
                 />
               </span>
-              <span
-                className={cn(
-                  "text-xs",
-                  missing === 0 ? "text-muted-foreground" : "text-foreground",
-                )}
-              >
-                {missing === 0
-                  ? "Tout est sur le plan"
-                  : `${missing} hors plan`}
-              </span>
+              {missing === 0 ? null : (
+                <span className="text-xs">{missing} hors plan</span>
+              )}
             </button>
           );
         })}
       </div>
     </section>
-  );
-}
-
-function InventoryEmpty({
-  canEdit,
-  onCreate,
-}: {
-  canEdit: boolean;
-  onCreate: () => void;
-}) {
-  return (
-    <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed p-8 text-center">
-      <h2 className="text-base font-semibold">Aucun équipement dans ce site</h2>
-      <p className="max-w-md text-sm text-muted-foreground">
-        {canEdit
-          ? "Créez-en un ici, hors plan, ou placez-le directement sur le plan."
-          : "Les équipements du site apparaîtront ici."}
-      </p>
-      {canEdit ? (
-        <Button onClick={onCreate}>
-          <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
-          Nouvel équipement
-        </Button>
-      ) : null}
-    </div>
   );
 }

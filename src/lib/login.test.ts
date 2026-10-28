@@ -57,7 +57,7 @@ describe("login", () => {
     ]) {
       expect(loginErrorMessage({ status: 422, code })).toBe(wrong);
     }
-    expect(loginErrorMessage({ status: 0 })).toContain("Réessayez");
+    expect(loginErrorMessage({ status: 0 })).toContain("a échoué");
   });
 
   it("explains a disabled account and rate limiting", () => {
@@ -67,13 +67,13 @@ describe("login", () => {
 
   it("says how long to wait, in whole minutes", () => {
     expect(loginErrorMessage({ status: 429, retryAfter: 45 })).toBe(
-      "Trop de tentatives. Réessayez dans une minute.",
+      "Trop de tentatives, réessayez dans une minute.",
     );
     expect(loginErrorMessage({ status: 429, retryAfter: 230 })).toBe(
-      "Trop de tentatives. Réessayez dans 4 minutes.",
+      "Trop de tentatives, réessayez dans 4 minutes.",
     );
     expect(forgotPasswordErrorMessage({ status: 429, retryAfter: 900 })).toBe(
-      "Trop de demandes. Réessayez dans 15 minutes.",
+      "Trop de demandes, réessayez dans 15 minutes.",
     );
   });
 });
@@ -130,9 +130,11 @@ describe("isForbidden", () => {
 
 describe("password reset messages", () => {
   it("tells a rate-limited user to wait rather than retry", () => {
-    expect(forgotPasswordErrorMessage({ status: 429 })).toContain("Réessayez");
+    expect(forgotPasswordErrorMessage({ status: 429 })).toContain(
+      "réessayez dans",
+    );
     expect(resetPasswordErrorMessage({ status: 429 })).toContain(
-      "Réessayez dans",
+      "réessayez dans",
     );
   });
 
@@ -164,7 +166,7 @@ describe("requestFailure", () => {
 describe("keycloakErrorMessage", () => {
   it("says why Keycloak could not sign the user in", () => {
     expect(keycloakErrorMessage("unable_to_link_account")).toContain(
-      "demandez à un administrateur de le passer sur Keycloak",
+      "déjà un compte NetPlan",
     );
     expect(keycloakErrorMessage("BANNED_USER")).toBe(
       loginErrorMessage({ code: "BANNED_USER" }),

@@ -32,7 +32,7 @@ export const statusOf = (device: InventoryRow): DeviceStatus | null =>
 
 export const locationLabel = (device: InventoryRow): string | undefined =>
   device.location
-    ? `${device.location.buildingName} · ${device.location.floorName}`
+    ? `${device.location.buildingName}, ${device.location.floorName}`
     : undefined;
 
 // What needs a look first: offline, then silent, then unknown.

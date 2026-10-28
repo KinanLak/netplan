@@ -1,7 +1,9 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
+import { Mail01Icon, SquareLock02Icon } from "@hugeicons/core-free-icons";
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { AuthCard } from "@/components/auth-card";
+import { IconNote } from "@/components/icon-note";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Field,
@@ -55,11 +57,9 @@ function ForgotPasswordPage() {
       <AuthCard title="Vérifiez vos e-mails">
         <FieldGroup>
           {/* The same answer whether or not the address has an account. */}
-          <FieldDescription className="text-center">
-            Si un compte NetPlan avec mot de passe utilise l'adresse {email}, un
-            lien pour en choisir un nouveau vient de lui être envoyé. Il est
-            valable une heure.
-          </FieldDescription>
+          <IconNote icon={Mail01Icon}>
+            Si {email} a un compte NetPlan, un lien vient de lui être envoyé
+          </IconNote>
           <Link to="/login" className={buttonVariants({ variant: "outline" })}>
             Retour à la connexion
           </Link>
@@ -69,10 +69,7 @@ function ForgotPasswordPage() {
   }
 
   return (
-    <AuthCard
-      title="Mot de passe oublié"
-      description="Saisissez l'adresse e-mail de votre compte : vous recevrez un lien pour choisir un nouveau mot de passe."
-    >
+    <AuthCard title="Mot de passe oublié">
       <form method="post" onSubmit={(event) => void submit(event)}>
         <FieldGroup>
           <Field>
@@ -86,10 +83,9 @@ function ForgotPasswordPage() {
               required
               onChange={() => setError(null)}
             />
-            <FieldDescription>
-              Un compte qui se connecte avec Keycloak change son mot de passe
-              dans Keycloak.
-            </FieldDescription>
+            <IconNote icon={SquareLock02Icon}>
+              Un compte Keycloak change son mot de passe dans Keycloak
+            </IconNote>
           </Field>
           {error ? <FieldError>{error}</FieldError> : null}
           <Button type="submit" disabled={!hydrated || pending}>

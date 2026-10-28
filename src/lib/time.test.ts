@@ -93,17 +93,17 @@ describe("the browser's locale", () => {
 
 describe("timeZoneHint", () => {
   it("names the zone and its offset at that instant", () => {
-    expect(timeZoneHint(AT, "Europe/Paris")).toBe("Europe/Paris • UTC+2");
+    expect(timeZoneHint(AT, "Europe/Paris")).toBe("Europe/Paris (UTC+2)");
     expect(
       timeZoneHint(Date.parse("2026-12-01T12:00:00Z"), "Europe/Paris"),
-    ).toBe("Europe/Paris • UTC+1");
-    expect(timeZoneHint(AT, "Asia/Kolkata")).toBe("Asia/Kolkata • UTC+5:30");
+    ).toBe("Europe/Paris (UTC+1)");
+    expect(timeZoneHint(AT, "Asia/Kolkata")).toBe("Asia/Kolkata (UTC+5:30)");
     expect(timeZoneHint(AT, "UTC")).toBe("UTC");
   });
 
   it("says when a relative time was, and where", () => {
     expect(ageHint(AT, AT, "Europe/Paris")).toMatch(
-      /^mer\. 21 oct\.,? 14:05 · Europe\/Paris • UTC\+2$/,
+      /^mer\. 21 oct\.,? 14:05\nEurope\/Paris \(UTC\+2\)$/,
     );
   });
 });

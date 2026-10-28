@@ -4,6 +4,7 @@ import {
   ArrowRight01Icon,
   Location01Icon,
   Search01Icon,
+  SquareLock02Icon,
 } from "@hugeicons/core-free-icons";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
@@ -18,6 +19,8 @@ import { NetplanLogo } from "@/components/netplan-logo";
 import { Segmented } from "@/components/segmented";
 import { Time } from "@/components/time";
 import { CopyValue } from "@/components/copy-value";
+import { IconNote } from "@/components/icon-note";
+import { NoSite } from "@/components/no-site";
 import { UnderlineTabs } from "@/components/underline-tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -101,7 +104,7 @@ export const Route = createFileRoute("/_authed/history")({
 });
 
 function HistoryPage() {
-  const { sites, site } = useCurrentSite();
+  const { site } = useCurrentSite();
   const canEdit = useCanEdit();
   return (
     <div className="flex h-svh flex-col bg-background text-foreground">
@@ -124,20 +127,17 @@ function HistoryPage() {
       </header>
       <main className="min-w-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-6xl p-4 md:p-8">
+          {/* Reached only by its address: the navigation hides it. */}
           {!canEdit ? (
-            <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-              L'historique est réservé aux éditeurs et aux administrateurs.
-            </p>
+            <IconNote icon={SquareLock02Icon}>
+              Réservé aux éditeurs et aux administrateurs
+            </IconNote>
           ) : site === undefined ? (
             <Pending>
               <ListSkeleton />
             </Pending>
           ) : site === null ? (
-            <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-              {sites && sites.length > 0
-                ? "Tous les sites sont archivés."
-                : "Aucun site n'est encore configuré."}
-            </p>
+            <NoSite />
           ) : (
             <SiteHistory key={site.id} site={site} />
           )}
@@ -162,13 +162,7 @@ function SiteHistory({ site }: { site: SiteSummary }) {
   const view: View = search.view ?? "events";
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-xl font-semibold">Historique</h1>
-        <p className="text-sm text-muted-foreground">
-          Ce que le réseau a observé à {site.name} ces 30 derniers jours :
-          déplacements, mises en ligne et hors ligne, et cinq relevés par jour.
-        </p>
-      </header>
+      <h1 className="text-xl font-semibold">Historique</h1>
       <UnderlineTabs
         label="Vue"
         idPrefix="history"
@@ -336,22 +330,12 @@ function SiteEvents({ site }: { site: SiteSummary }) {
       {results.length === 0 ? (
         status === "Exhausted" ? (
           filtered ? (
-            <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-              <p>
-                {kind === "offline" && !query.trim()
-                  ? "Aucun événement hors ligne sur la période."
-                  : "Aucun événement ne correspond à ces filtres."}
-              </p>
+            <div className="flex justify-center rounded-lg border border-dashed p-8">
               <Button variant="outline" size="sm" onClick={reset}>
                 Réinitialiser les filtres
               </Button>
             </div>
-          ) : (
-            <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-              Rien n'a été observé ces 30 derniers jours. L'historique se
-              remplit à chaque collecte LibreNMS.
-            </p>
-          )
+          ) : null
         ) : (
           <Pending />
         )
@@ -544,13 +528,7 @@ function SiteSnapshots({ site }: { site: SiteSummary }) {
         <Pending />
       ) : chosen?.entries !== undefined ? (
         <SlotEntries key={`${day}-${time}`} site={site} slot={chosen} />
-      ) : (
-        <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-          {taken.length === 0
-            ? "Aucun relevé ce jour-là."
-            : "Pas de relevé à cette heure-là : choisissez-en un autre."}
-        </p>
-      )}
+      ) : null}
     </section>
   );
 }
@@ -644,8 +622,7 @@ function SlotEntries({ site, slot }: { site: SiteSummary; slot: Slot }) {
   return (
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground">
-        Relevé pris le <Time at={slot.takenAt} />, par la première collecte de
-        sa fenêtre.
+        Relevé pris le <Time at={slot.takenAt} />
       </p>
       <div className="relative max-w-md">
         <HugeiconsIcon
@@ -665,9 +642,13 @@ function SlotEntries({ site, slot }: { site: SiteSummary; slot: Slot }) {
       </div>
       {shown.length === 0 ? (
         status === "Exhausted" ? (
-          <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-            Aucune adresse ne correspond.
-          </p>
+          query.trim() ? (
+            <div className="flex justify-center rounded-lg border border-dashed p-8">
+              <Button variant="outline" size="sm" onClick={() => typeQuery("")}>
+                Effacer la recherche
+              </Button>
+            </div>
+          ) : null
         ) : (
           <Pending />
         )

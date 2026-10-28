@@ -92,9 +92,6 @@ function NotFoundComponent() {
   return (
     <main className="flex min-h-svh flex-col items-center justify-center gap-3">
       <h1 className="text-2xl font-semibold">Page introuvable</h1>
-      <p className="text-muted-foreground">
-        L'adresse demandée n'existe pas ou n'est plus disponible.
-      </p>
       <Link to="/" className="text-primary underline underline-offset-4">
         Retour au plan
       </Link>

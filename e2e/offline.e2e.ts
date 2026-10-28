@@ -64,8 +64,9 @@ const backendSwitch = async (page: Page) => {
   };
 };
 
+// The banner's parts are separate elements, so match the banner itself.
 const offlineLine = (page: Page) =>
-  page.getByRole("status").getByText(/connexion/);
+  page.getByRole("status").filter({ hasText: /connexion/ });
 
 // ADR 0037: during a backend outage the page keeps its Convex provider and
 // its identity across page changes, and works again once the backend
