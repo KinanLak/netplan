@@ -304,7 +304,14 @@ export const handOverToKeycloak = adminMutation({
     if (!readKeycloakConfig(process.env)) {
       throw new ConvexError("La connexion avec Keycloak est désactivée.");
     }
-    await existingUser(ctx, userId);
+    const user = await existingUser(ctx, userId);
+    // A disabled account's Keycloak sign-in is refused after the link is
+    // made, which would complete the handover without a sign-in.
+    if (user.banned === true) {
+      throw new ConvexError(
+        "Réactivez ce compte avant de le passer sur Keycloak.",
+      );
+    }
     const kind = await kindOf(ctx, userId);
     if (kind === "sso") {
       throw new ConvexError("Ce compte se connecte déjà avec Keycloak.");

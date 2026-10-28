@@ -187,13 +187,12 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
       }),
     },
     account: {
-      // Linking is on for Keycloak only so that an account an admin handed
-      // over can attach; the account hook below refuses every other link
-      // (ADR 0036). A Keycloak login whose email a local account uses would
-      // otherwise get into an account its admin created with a password.
+      // Linking is on so that an account an admin handed to Keycloak can
+      // attach; the account hook below refuses every other link (ADR 0036).
+      // better-auth links only when Keycloak says the address is verified,
+      // so nobody takes a waiting account by typing its address there.
       accountLinking: {
         enabled: true,
-        trustedProviders: ["keycloak"],
         requireLocalEmailVerified: false,
       },
     },

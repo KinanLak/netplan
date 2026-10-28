@@ -48,6 +48,7 @@ type Login = {
   name: string;
   roles: Array<string>;
   groups?: Array<string>;
+  emailVerified?: boolean;
 };
 let nextLogin: Login = { sub: "", email: "", name: "", roles: [] };
 // What the token endpoint answers to a refresh token: the roles Keycloak
@@ -58,7 +59,14 @@ let nextRefresh: Array<string> | "invalid_grant" | "down" = [];
 let grantedScope = "openid profile email offline_access";
 const refreshTokensSeen: Array<string | null> = [];
 
-const tokensFor = ({ sub, email, name, roles, groups }: Login) =>
+const tokensFor = ({
+  sub,
+  email,
+  name,
+  roles,
+  groups,
+  emailVerified = true,
+}: Login) =>
   Response.json({
     token_type: "Bearer",
     expires_in: 300,
@@ -66,7 +74,7 @@ const tokensFor = ({ sub, email, name, roles, groups }: Login) =>
     scope: grantedScope,
     refresh_token: `offline-${sub}-${roles.join("+")}`,
     access_token: jwt({ sub, realm_access: { roles }, groups }),
-    id_token: jwt({ sub, email, email_verified: true, name }),
+    id_token: jwt({ sub, email, email_verified: emailVerified, name }),
   });
 const realFetch = globalThis.fetch;
 // The test DOM's Request and Response drop Cookie and Set-Cookie as a
@@ -590,6 +598,14 @@ describe("handing a local account to Keycloak", () => {
 
     await admin.mutation(api.users.handOverToKeycloak, { userId });
     expect(await kind()).toBe("awaiting-keycloak");
+    // Typing the address into one's own Keycloak profile is not enough.
+    expect(
+      errorOf(
+        (await keycloakLogin(t, { ...lou, roles: [], emailVerified: false }))
+          .location,
+      ),
+    ).toBe("account_not_linked");
+    expect(await kind()).toBe("awaiting-keycloak");
     expect(await sessionOf(t, cookieOf(signedIn))).toBeNull();
     expect((await signIn()).status).toBe(401);
     // No forgotten-password mail gives it a password back.
@@ -642,6 +658,15 @@ describe("handing a local account to Keycloak", () => {
     await expect(
       admin.mutation(api.users.cancelInvitation, { userId }),
     ).rejects.toThrow("déjà servi");
+  });
+
+  it("waits for a disabled account to be enabled again", async () => {
+    const t = withMail();
+    const { admin, userId } = await localAccount(t);
+    await admin.mutation(api.users.setDisabled, { userId, disabled: true });
+    await expect(
+      admin.mutation(api.users.handOverToKeycloak, { userId }),
+    ).rejects.toThrow("Réactivez ce compte");
   });
 
   it("is not for the admin's own account, nor one already on Keycloak", async () => {

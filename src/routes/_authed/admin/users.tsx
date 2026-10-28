@@ -439,7 +439,9 @@ function UserItem({
           act: () => setConfirming("sign-out"),
         }
       : null,
-    keycloakEnabled && (user.kind === "local" || user.kind === "invited")
+    keycloakEnabled &&
+    !user.disabled &&
+    (user.kind === "local" || user.kind === "invited")
       ? {
           label: "Passer ce compte sur Keycloak",
           act: () => setConfirming("hand-over"),
