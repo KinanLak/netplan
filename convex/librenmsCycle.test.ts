@@ -14,6 +14,7 @@ import {
   testBackend,
 } from "./_test/auth.setup";
 import { stubFetch } from "./_test/fetch";
+import { recordArrival } from "./history";
 import { MISSING_NOTE } from "./librenmsCycle";
 import type { TestClient } from "./_test/auth.setup";
 
@@ -1434,6 +1435,22 @@ describe("the LibreNMS step", () => {
       decided: { socketId: "device:socket-2" },
     });
     expect(await statusOf(admin, "device:pc")).toBe("up");
+    const locatedPorts = async () =>
+      (
+        await admin.query(api.history.forDevice, {
+          deviceId: "device:pc",
+          paginationOpts: { numItems: 20, cursor: null },
+        })
+      ).page
+        .toReversed()
+        .filter(({ kind }) => kind === "located")
+        .map(({ place }) => place?.portName);
+    expect(await locatedPorts()).toEqual(["GigabitEthernet1/0/2"]);
+    // Brought back by an undo, it was not located at socket 1 either.
+    await admin.run(
+      async (ctx) => await recordArrival(ctx, "device:pc", Date.now()),
+    );
+    expect(await locatedPorts()).toEqual(["GigabitEthernet1/0/2"]);
 
     // Behind the other one only: it moved there.
     librenms.state.fdb = [{ port_id: 101, mac_address: PC }];
@@ -1442,6 +1459,11 @@ describe("the LibreNMS step", () => {
       "1 placé près de sa prise",
     );
     expect((await placementOf("device:pc"))?.position.x).toBeLessThan(600);
+    // Though its row already saw socket 1, the move is in its history.
+    expect(await locatedPorts()).toEqual([
+      "GigabitEthernet1/0/2",
+      "GigabitEthernet1/0/1",
+    ]);
   });
 
   it("lists unknown MACs and makes an endpoint of one, next to its socket", async () => {

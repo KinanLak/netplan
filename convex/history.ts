@@ -203,16 +203,18 @@ export const recordArrival = async (
   }
   if (!latest) return;
   // When the network saw it, which an expired read leaves hours back. A
-  // device brought back by undo where it was has not moved.
-  await recordLocated(
-    ctx,
-    device,
-    await placeNamer(ctx)(latest),
-    latest.seenAt,
-    {
-      unlessLast: true,
-    },
-  );
+  // device brought back by undo where it was has not moved. A sighting whose
+  // place the cycle decided elsewhere, or not yet (ADR 0038), names no
+  // location of the device.
+  if (!latest.decided) {
+    await recordLocated(
+      ctx,
+      device,
+      await placeNamer(ctx)(latest),
+      latest.seenAt,
+      { unlessLast: true },
+    );
+  }
   const status = device.metadata.status;
   if (status === "up") {
     await recordPresence(ctx, device, "online", at);
