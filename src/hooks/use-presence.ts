@@ -5,11 +5,18 @@ import { useIdentity } from "@/lib/identity";
 import { activePresences } from "@/lib/presence";
 import type { ActivePresence } from "@/lib/presence";
 import { useCurrentUser } from "@/hooks/use-current-user";
+import { isSessionLost } from "@/lib/login";
 import { api } from "../../convex/_generated/api";
 import { colorHueFor } from "../../convex/lib/presence";
 
 const HEARTBEAT_MS = 2_000;
 const STALE_TICK_MS = 1_000;
+
+// A lost session is the signed-in layout's to handle, and the next
+// heartbeat replaces this one; anything else is worth reading.
+const ignoreHeartbeatFailure = (error: unknown) => {
+  if (!isSessionLost(error)) console.error(error);
+};
 
 /**
  * Publishes this page's presence for `floorId`, subscribes to every live
@@ -36,7 +43,7 @@ export function usePresence(floorId: FloorId | null): Array<ActivePresence> {
     if (!identity) return;
     const clientId = identity.clientId;
     if (!floorId) {
-      void removePresence({ clientId });
+      removePresence({ clientId }).catch(ignoreHeartbeatFailure);
       return;
     }
 
@@ -44,7 +51,9 @@ export function usePresence(floorId: FloorId | null): Array<ActivePresence> {
     // user is now, so their avatar follows them across tabs and devices in
     // the order they switched, not in the order their heartbeats fire.
     const publish = (active: boolean) => {
-      void updateOnlineUser({ clientId, floorId, active });
+      updateOnlineUser({ clientId, floorId, active }).catch(
+        ignoreHeartbeatFailure,
+      );
     };
     const markActive = () => {
       if (document.visibilityState === "visible") publish(true);
@@ -65,7 +74,7 @@ export function usePresence(floorId: FloorId | null): Array<ActivePresence> {
     if (!identity) return;
     const clientId = identity.clientId;
     const remove = () => {
-      void removePresence({ clientId });
+      removePresence({ clientId }).catch(ignoreHeartbeatFailure);
     };
 
     window.addEventListener("pagehide", remove);
