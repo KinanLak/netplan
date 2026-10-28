@@ -47,6 +47,13 @@ export function normalizeBaseUrl(
   return { url: `${url.origin}${path}` };
 }
 
+/**
+ * Refused when the address changes without a token: a token is only ever
+ * sent to the address it was typed for.
+ */
+export const TOKEN_FOR_NEW_ADDRESS =
+  "Saisissez à nouveau le jeton pour cette adresse.";
+
 /** A French reason the token is refused, or `null`. */
 export function tokenError(token: string): string | null {
   if (token.trim() === "") return "Saisissez le jeton.";

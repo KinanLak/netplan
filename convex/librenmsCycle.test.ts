@@ -807,7 +807,7 @@ describe("the LibreNMS step", () => {
     });
     const calls = fetchStub.calls.length;
     expect((await cycle(admin, siteId)).message).toContain(
-      "Aucun switch n'est interrogé.",
+      "Aucun switch associé.",
     );
     await cycle(admin, siteId);
     expect(await statusOf(admin, "device:pc")).toBe("up");
@@ -1172,9 +1172,7 @@ describe("the LibreNMS step", () => {
     expect(refused.ok).toBe(true);
     expect(refused.switches?.[0]).toMatchObject({
       ok: true,
-      notes: [
-        "sa découverte n'a pas pu être lancée. LibreNMS refuse ce jeton (403).",
-      ],
+      notes: ["Découverte refusée (403)."],
     });
     expect(librenms.state.discoveries).toBe(1);
 

@@ -892,7 +892,7 @@ type SwitchResult = Infer<typeof switchResult>;
  * The note for a device LibreNMS answers 404 for: it was deleted there.
  * Santé puts the way out, a link to the switch mapping, under it.
  */
-export const MISSING_NOTE = "n'existe plus dans LibreNMS (404).";
+export const MISSING_NOTE = "N'existe plus dans LibreNMS (404).";
 
 // A 404 on a device's own path says the device is gone, not the API.
 const deviceFailure = (answer: { message: string; status?: number }) =>
@@ -926,10 +926,7 @@ const rediscover = async (
     if (!current.ok) continue;
     const asked = await trigger(`/api/v0/devices/${device.id}/discover`);
     if (!asked.ok && (asked.status === 401 || asked.status === 403)) {
-      refusals.set(
-        device.id,
-        `sa découverte n'a pas pu être lancée. ${asked.message}`,
-      );
+      refusals.set(device.id, `Découverte refusée (${asked.status}).`);
     }
     // An answer other than a server error says the request did not start
     // one; a timeout or a 5xx may have, and only waiting tells.
@@ -1141,7 +1138,7 @@ export const collectFromLibreNMS = async (
     }
   }
   if (plan.devices.length === 0) {
-    return { ok: true, message: "Aucun switch n'est interrogé." };
+    return { ok: true, message: "Aucun switch associé." };
   }
   const switches = plan.devices.map((device) => {
     const deviceNotes = notes.get(device.id) ?? [];

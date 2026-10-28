@@ -56,7 +56,7 @@ export function intervalError(minutes: number): string | null {
     minutes >= MIN_INTERVAL_MINUTES &&
     minutes <= MAX_INTERVAL_MINUTES
     ? null
-    : `L'intervalle va ${INTERVAL_RANGE} (24 heures).`;
+    : `L'intervalle va ${INTERVAL_RANGE}.`;
 }
 
 /** The first problem with a site's settings, with the field to fix. */

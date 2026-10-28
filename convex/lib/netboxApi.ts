@@ -80,12 +80,12 @@ const refusalDetail = (body: unknown): string => {
 
 const refusal = (status: number): string => {
   if (status === 401 || status === 403) {
-    return `NetBox refuse ce jeton (${status}) : il doit pouvoir modifier les équipements.`;
+    return `NetBox refuse ce jeton en écriture (${status}).`;
   }
   if (status === 404) return "Cet équipement n'existe plus dans NetBox (404).";
   if (status === 400) return "NetBox refuse ces valeurs (400).";
   if (status >= 300 && status < 400) {
-    return `L'adresse redirige (${status}) : saisissez l'adresse finale de NetBox.`;
+    return `L'adresse redirige ailleurs (${status}).`;
   }
   return `NetBox a répondu ${status}.`;
 };

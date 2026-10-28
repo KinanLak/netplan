@@ -323,7 +323,7 @@ describe("importSummary", () => {
         replacedCables: 2,
       }),
     ).toBe(
-      "Import : 463 équipements (12 nouveaux, 1 rattaché, 3 absents de NetBox, 1 de retour, 2 à vérifier). 2 câbles saisis à la main remplacés par NetBox.",
+      "463 équipements importés (12 nouveaux, 1 rattaché, 3 absents de NetBox, 1 de retour, 2 à vérifier). 2 câbles saisis à la main remplacés par NetBox.",
     );
     expect(
       importSummary({
@@ -336,7 +336,7 @@ describe("importSummary", () => {
         replacedCables: 1,
       }),
     ).toBe(
-      "Import : 1 équipement. 1 câble saisi à la main remplacé par NetBox.",
+      "1 équipement importé. 1 câble saisi à la main remplacé par NetBox.",
     );
   });
 });

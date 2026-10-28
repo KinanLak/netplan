@@ -126,7 +126,7 @@ describe("NetBox settings", () => {
         baseUrl: NETBOX,
         settings: SETTINGS,
       }),
-    ).rejects.toThrow("Configurez d'abord");
+    ).rejects.toThrow("Connectez d'abord");
 
     await connect(admin, siteId);
     expect(await admin.query(api.netbox.settings, { siteId })).toEqual({

@@ -112,7 +112,7 @@ describe("collection cycles", () => {
       {
         source: "netbox",
         ok: true,
-        message: "Aucun site NetBox choisi : rien n'est importé.",
+        message: "Aucun site NetBox choisi.",
       },
     ]);
     expect(fetchStub.calls.slice(before).map(([url]) => url)).toEqual([

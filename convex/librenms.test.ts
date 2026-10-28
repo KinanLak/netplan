@@ -105,7 +105,7 @@ describe("LibreNMS settings", () => {
         baseUrl: LIBRENMS,
         settings,
       }),
-    ).rejects.toThrow("Configurez d'abord");
+    ).rejects.toThrow("Connectez d'abord");
 
     await connect(admin, siteId);
     await expect(
