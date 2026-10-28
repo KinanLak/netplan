@@ -142,6 +142,7 @@ const areNodesEqual = (a: DeviceNode, b: DeviceNode) => {
     a.selected === b.selected &&
     a.draggable === b.draggable &&
     a.dragging === b.dragging &&
+    a.className === b.className &&
     arePositionsEqual(a.position, b.position) &&
     areMeasuredEqual(a.measured, b.measured) &&
     areNodeDataEqual(a.data, b.data)

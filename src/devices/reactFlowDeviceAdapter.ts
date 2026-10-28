@@ -3,6 +3,7 @@ import {
   createDeviceKindRecord,
   deviceKindRegistry,
 } from "@/devices/deviceKindRegistry";
+import { isAbsentFromSource } from "@/devices/identity";
 import type { Device, DeviceId, FloorId, Port } from "@/types/map";
 
 /** A device as its node draws it, with its ports in display order. */
@@ -25,6 +26,10 @@ export const deviceNodeTypes: NodeTypes = createDeviceKindRecord(
 
 const NO_PORTS: ReadonlyArray<Port> = [];
 
+// A device NetBox no longer returns reads as no longer linked, without
+// covering its status (ADR 0034): the whole node, label included, greys.
+export const ABSENT_NODE_CLASS = "opacity-60 grayscale";
+
 export const toDeviceNode = ({
   device,
   ports = NO_PORTS,
@@ -41,6 +46,10 @@ export const toDeviceNode = ({
       device.id === selectedDeviceId ||
       Boolean(selectedDeviceIdSet?.has(device.id)),
     draggable: canEditDevices,
+    // Set even when absent, so a device NetBox returns again loses it.
+    className: isAbsentFromSource(device.source)
+      ? ABSENT_NODE_CLASS
+      : undefined,
   };
 };
 
