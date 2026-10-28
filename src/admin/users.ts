@@ -1,6 +1,7 @@
 // The users page's filters and wording, kept apart from the page so they
 // can be tested.
 import type { Role } from "../../convex/lib/roles";
+import type { AccountKind } from "../../convex/lib/userAccounts";
 
 export type UserStatus = "active" | "invited" | "disabled";
 
@@ -10,7 +11,7 @@ export interface ListedUser {
   username: string | null;
   role: Role;
   disabled: boolean;
-  kind: "local" | "sso" | "invited";
+  kind: AccountKind;
 }
 
 export const statusOf = (user: ListedUser): UserStatus =>

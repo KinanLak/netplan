@@ -11,7 +11,13 @@ import * as native from "undici";
 import { api, components, internal } from "./_generated/api";
 import { createSignedInUser } from "./_test/auth.setup";
 import type { TestBackend } from "./_test/auth.setup";
-import { SITE, post, withMail, withMailRelay } from "./_test/mail.setup";
+import {
+  SITE,
+  outbox,
+  post,
+  withMail,
+  withMailRelay,
+} from "./_test/mail.setup";
 import {
   keycloakRoleNames,
   readKeycloakConfig,
@@ -247,7 +253,7 @@ describe("Keycloak sign-in", () => {
       roles: [],
     });
     expect(new URL(location, SITE).searchParams.get("error")).toBe(
-      "account_not_linked",
+      "unable_to_link_account",
     );
     const accounts = await t.run((ctx) =>
       ctx.runQuery(components.betterAuth.adapter.findMany, {
@@ -544,6 +550,112 @@ describe("signing a user out everywhere", () => {
         .withIdentity(admin.identity)
         .mutation(api.users.signOutEverywhere, { userId: admin.userId }),
     ).rejects.toThrow("Se déconnecter");
+  });
+});
+
+describe("handing a local account to Keycloak", () => {
+  const PASSWORD = "first-password-1"; // gitleaks:allow
+  const lou = {
+    sub: "kc-lou",
+    email: "lou@example.test",
+    name: "Lou Keycloak",
+  };
+  const errorOf = (location: string) =>
+    new URL(location, SITE).searchParams.get("error");
+
+  async function localAccount(t: TestBackend) {
+    await t.action(internal.bootstrap.ensureFirstAdmin, {
+      email: lou.email,
+      password: PASSWORD,
+      name: "Lou Local",
+    });
+    const admin = await asAdmin(t);
+    const userId = (await userByEmail(t, lou.email))?._id ?? "";
+    const signIn = () =>
+      post(t, "/sign-in/email", { email: lou.email, password: PASSWORD });
+    const kind = async () =>
+      (await admin.query(api.users.list, {})).find((row) => row.id === userId)
+        ?.kind;
+    return { admin, userId, signIn, kind };
+  }
+
+  it("takes the password away and attaches the next Keycloak sign-in to the same account", async () => {
+    const t = withMail();
+    const { admin, userId, signIn, kind } = await localAccount(t);
+    const signedIn = await signIn();
+    expect(signedIn.status).toBe(200);
+    expect(
+      errorOf((await keycloakLogin(t, { ...lou, roles: [] })).location),
+    ).toBe("unable_to_link_account");
+
+    await admin.mutation(api.users.handOverToKeycloak, { userId });
+    expect(await kind()).toBe("awaiting-keycloak");
+    expect(await sessionOf(t, cookieOf(signedIn))).toBeNull();
+    expect((await signIn()).status).toBe(401);
+    // No forgotten-password mail gives it a password back.
+    await post(t, "/request-password-reset", {
+      email: lou.email,
+      redirectTo: "/reset-password",
+    });
+    await t.finishAllScheduledFunctions(() => {});
+    expect(await outbox(t)).toEqual([]);
+
+    expect((await keycloakLogin(t, { ...lou, roles: [] })).location).toBe("/");
+    const user = await userByEmail(t, lou.email);
+    // The same user, its name kept, its role now Keycloak's.
+    expect(user).toMatchObject({
+      _id: userId,
+      name: "Lou Local",
+      role: "reader",
+    });
+    expect(await kind()).toBe("sso");
+    expect(
+      await t.query(internal.keycloakHandovers.isPending, { userId }),
+    ).toBe(false);
+  });
+
+  it("leaves an invitation never used refusing Keycloak, as implicit linking stays off", async () => {
+    const t = withMail();
+    const admin = await asAdmin(t);
+    await admin.action(api.users.invite, {
+      name: "Invitée",
+      email: lou.email,
+      role: "editor",
+    });
+    expect(
+      errorOf((await keycloakLogin(t, { ...lou, roles: [] })).location),
+    ).toBe("unable_to_link_account");
+  });
+
+  it("can be cancelled before it completes, leaving a used account to invite again", async () => {
+    const t = withMail();
+    const { admin, userId, signIn, kind } = await localAccount(t);
+    await signIn();
+    await admin.mutation(api.users.handOverToKeycloak, { userId });
+    await admin.mutation(api.users.cancelHandover, { userId });
+
+    expect(await kind()).toBe("invited");
+    expect(
+      errorOf((await keycloakLogin(t, { ...lou, roles: [] })).location),
+    ).toBe("unable_to_link_account");
+    // It was used, so it is not deleted like a mistaken invitation.
+    await expect(
+      admin.mutation(api.users.cancelInvitation, { userId }),
+    ).rejects.toThrow("déjà servi");
+  });
+
+  it("is not for the admin's own account, nor one already on Keycloak", async () => {
+    const t = withMail();
+    const admin = await createSignedInUser(t, "admin");
+    const asIt = t.withIdentity(admin.identity);
+    await expect(
+      asIt.mutation(api.users.handOverToKeycloak, { userId: admin.userId }),
+    ).rejects.toThrow("Un autre administrateur");
+    await keycloakLogin(t, { ...camille, roles: [] });
+    const sso = (await userByEmail(t, camille.email))?._id ?? "";
+    await expect(
+      asIt.mutation(api.users.handOverToKeycloak, { userId: sso }),
+    ).rejects.toThrow("déjà avec Keycloak");
   });
 });
 

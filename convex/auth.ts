@@ -39,9 +39,10 @@ export const authComponent = createClient<DataModel, typeof authSchema>(
 
 /**
  * Whether a forgotten-password mail may go to this user. Not to a disabled
- * account, and not to an SSO account: setting a password would give it a
- * second way in that its identity provider does not control. An invited
- * user who has not chosen a password yet has no account at all and may.
+ * account, and not to an SSO account or one handed to Keycloak: setting a
+ * password would give it a second way in that its identity provider does
+ * not control. An invited user who has not chosen a password yet has no
+ * account at all and may.
  */
 async function mayResetPassword(
   ctx: GenericCtx<DataModel>,
@@ -53,6 +54,9 @@ async function mayResetPassword(
     where: [{ field: "_id", value: userId }],
   });
   if (!user || user.banned === true) return false;
+  if (await runQuery(internal.keycloakHandovers.isPending, { userId })) {
+    return false;
+  }
   const account = (providerId?: string) =>
     runQuery(components.betterAuth.adapter.findOne, {
       model: "account",
@@ -134,6 +138,9 @@ const signInOptions = (keycloakEnabled: boolean) =>
 
 export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
   const keycloakConfig = readKeycloakConfig(process.env);
+  // The email of the user a Keycloak sign-in is creating in this request:
+  // its account is the one link that needs no handover.
+  let signingUpEmail: string | null = null;
   return {
     baseURL: process.env.SITE_URL,
     // SITE_URL plus TRUSTED_ORIGINS (comma-separated), which dev:agent sets
@@ -180,10 +187,15 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
       }),
     },
     account: {
-      // A Keycloak login whose email a local account already uses is refused
-      // (ADR 0021): linking would let the identity provider into an account
-      // its admin created with a password, under that account's role.
-      accountLinking: { enabled: false },
+      // Linking is on for Keycloak only so that an account an admin handed
+      // over can attach; the account hook below refuses every other link
+      // (ADR 0036). A Keycloak login whose email a local account uses would
+      // otherwise get into an account its admin created with a password.
+      accountLinking: {
+        enabled: true,
+        trustedProviders: ["keycloak"],
+        requireLocalEmailVerified: false,
+      },
     },
     // Linking from a signed-in session does not check the setting above, and
     // generic OAuth also registers Keycloak with the social linking route.
@@ -209,6 +221,48 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
         : undefined,
     },
     databaseHooks: {
+      user: {
+        create: {
+          before: (user, context) => {
+            if (context?.path.startsWith("/oauth2/callback/")) {
+              signingUpEmail = user.email.toLowerCase();
+            }
+            return Promise.resolve();
+          },
+        },
+      },
+      account: {
+        create: {
+          // A Keycloak account goes to the user this sign-in just created,
+          // or to an account an admin handed to Keycloak; nowhere else.
+          before: async (account) => {
+            if (account.providerId !== "keycloak") return;
+            const { runQuery } = requireActionCtx(ctx);
+            const user = (await runQuery(
+              components.betterAuth.adapter.findOne,
+              {
+                model: "user",
+                where: [{ field: "_id", value: account.userId }],
+              },
+            )) as { email: string } | null;
+            if (user && user.email === signingUpEmail) return;
+            const handedOver = await runQuery(
+              internal.keycloakHandovers.isPending,
+              { userId: account.userId },
+            );
+            if (!handedOver) {
+              throw new APIError("FORBIDDEN", { code: "ACCOUNT_NOT_LINKED" });
+            }
+          },
+          after: async (account) => {
+            if (account.providerId !== "keycloak") return;
+            await requireActionCtx(ctx).runMutation(
+              internal.keycloakHandovers.end,
+              { userId: account.userId },
+            );
+          },
+        },
+      },
       session: {
         // Activity extends a session up to 7 days after its login, which
         // bounds a stolen session (ADR 0031).

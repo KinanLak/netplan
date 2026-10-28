@@ -5,6 +5,7 @@ import { components, internal } from "./_generated/api";
 import type { ActionCtx, MutationCtx, QueryCtx } from "./_generated/server";
 import { createAuth } from "./auth";
 import { internalMutation } from "./_generated/server";
+import { readKeycloakConfig } from "./lib/keycloak";
 import { endSessions } from "./lib/sessions";
 import { noteSignIn } from "./lib/signIns";
 import {
@@ -88,6 +89,7 @@ async function kindOf(
   });
   return accountKind(
     (page.page as Array<AuthDoc>).map((account) => String(account.providerId)),
+    await ctx.runQuery(internal.keycloakHandovers.isPending, { userId }),
   );
 }
 
@@ -98,7 +100,12 @@ const userRow = v.object({
   username: v.union(v.string(), v.null()),
   role,
   disabled: v.boolean(),
-  kind: v.union(v.literal("local"), v.literal("sso"), v.literal("invited")),
+  kind: v.union(
+    v.literal("local"),
+    v.literal("sso"),
+    v.literal("invited"),
+    v.literal("awaiting-keycloak"),
+  ),
   lastSignInAt: v.union(v.number(), v.null()),
   /** Invited only: when its latest link stops working; `null` without one. */
   invitationExpiresAt: v.union(v.number(), v.null()),
@@ -133,6 +140,11 @@ export const list = adminQuery({
       const userId = String(row.value);
       links.set(userId, Math.max(links.get(userId) ?? 0, expiresAt));
     }
+    const handedOver = new Set(
+      (await ctx.db.query("keycloakHandovers").collect()).map(
+        (row) => row.userId,
+      ),
+    );
     const signIns = new Map(
       (await ctx.db.query("signIns").collect()).map((row) => [
         row.userId,
@@ -153,7 +165,10 @@ export const list = adminQuery({
                 : null,
           role: roleOf(user.role),
           disabled: user.banned === true,
-          kind: accountKind(providers.get(user._id) ?? []),
+          kind: accountKind(
+            providers.get(user._id) ?? [],
+            handedOver.has(user._id),
+          ),
           lastSignInAt: signIns.get(user._id) ?? null,
           invitationExpiresAt: links.get(user._id) ?? null,
         }))
@@ -180,7 +195,8 @@ async function existingUser(
 
 /**
  * Sets a local account's role. A Keycloak account's role comes from the role
- * mapping at each login, so setting it here would be undone at the next one.
+ * mapping at each login and hourly refresh, so setting it here would be
+ * undone at the next one; so would an account waiting for Keycloak's.
  */
 export const setRole = adminMutation({
   args: { userId: v.string(), role },
@@ -190,7 +206,8 @@ export const setRole = adminMutation({
       throw new ConvexError("Vous ne pouvez pas changer votre propre rôle.");
     }
     await existingUser(ctx, userId);
-    if ((await kindOf(ctx, userId)) === "sso") {
+    const kind = await kindOf(ctx, userId);
+    if (kind === "sso" || kind === "awaiting-keycloak") {
       throw new ConvexError(
         "Le rôle d'un compte Keycloak suit la correspondance des rôles.",
       );
@@ -254,6 +271,81 @@ export const signOutEverywhere = adminMutation({
     }
     await existingUser(ctx, userId);
     return await endSessions(ctx, userId);
+  },
+});
+
+async function deleteAll(
+  ctx: MutationCtx,
+  model: "account" | "verification",
+  rows: Array<AuthDoc>,
+) {
+  for (const row of rows) {
+    await ctx.runMutation(components.betterAuth.adapter.deleteOne, {
+      input: { model, where: [{ field: "_id", value: row._id }] },
+    });
+  }
+}
+
+/**
+ * Hands a local account to Keycloak (ADR 0036): its password and pending
+ * password links go, its sessions end, and its first Keycloak sign-in with
+ * its email attaches to it. The user stays, with its role history and
+ * everything attributed to it.
+ */
+export const handOverToKeycloak = adminMutation({
+  args: { userId: v.string() },
+  returns: v.null(),
+  handler: async (ctx, { userId }) => {
+    if (userId === ctx.user.id) {
+      throw new ConvexError(
+        "Un autre administrateur doit passer votre compte sur Keycloak.",
+      );
+    }
+    if (!readKeycloakConfig(process.env)) {
+      throw new ConvexError("La connexion avec Keycloak est désactivée.");
+    }
+    await existingUser(ctx, userId);
+    const kind = await kindOf(ctx, userId);
+    if (kind === "sso") {
+      throw new ConvexError("Ce compte se connecte déjà avec Keycloak.");
+    }
+    if (kind === "awaiting-keycloak") return null;
+    const passwords = await ctx.runQuery(
+      components.betterAuth.adapter.findMany,
+      {
+        model: "account",
+        where: [
+          { field: "userId", value: userId },
+          { field: "providerId", value: "credential" },
+        ],
+        paginationOpts: { numItems: 10, cursor: null },
+      },
+    );
+    await deleteAll(ctx, "account", passwords.page as Array<AuthDoc>);
+    await deleteAll(
+      ctx,
+      "verification",
+      (await findAll(ctx, "verification")).filter(
+        (row) => String(row.value) === userId,
+      ),
+    );
+    await ctx.runMutation(internal.keycloakHandovers.start, { userId });
+    await endSessions(ctx, userId);
+    return null;
+  },
+});
+
+/**
+ * Takes back a handover not yet completed: the account has no password left,
+ * so it needs an invitation to choose one.
+ */
+export const cancelHandover = adminMutation({
+  args: { userId: v.string() },
+  returns: v.null(),
+  handler: async (ctx, { userId }) => {
+    await existingUser(ctx, userId);
+    await ctx.runMutation(internal.keycloakHandovers.end, { userId });
+    return null;
   },
 });
 
@@ -391,15 +483,20 @@ export const resendInvitation = adminAction({
 
 /**
  * Deletes an account invited by mistake (C5). Only one that never chose a
- * password: it has signed in nowhere and done nothing anyone could miss. A
- * used account is disabled instead, so its name stays in the history.
+ * password and never signed in: it has done nothing anyone could miss. A
+ * used account is disabled instead, so its name stays in the history; one
+ * whose handover to Keycloak was cancelled has no password but was used.
  */
 export const cancelInvitation = adminMutation({
   args: { userId: v.string() },
   returns: v.null(),
   handler: async (ctx, { userId }) => {
     await existingUser(ctx, userId);
-    if ((await kindOf(ctx, userId)) !== "invited") {
+    const signedIn = await ctx.db
+      .query("signIns")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .first();
+    if ((await kindOf(ctx, userId)) !== "invited" || signedIn) {
       throw new ConvexError("Ce compte a déjà servi : désactivez-le plutôt.");
     }
     for (const row of await findAll(ctx, "verification")) {

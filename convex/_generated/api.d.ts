@@ -29,6 +29,7 @@ import type * as historyValidators from "../historyValidators.js";
 import type * as http from "../http.js";
 import type * as importReviews from "../importReviews.js";
 import type * as integrations from "../integrations.js";
+import type * as keycloakHandovers from "../keycloakHandovers.js";
 import type * as keycloakRoles from "../keycloakRoles.js";
 import type * as lib_authRoles from "../lib/authRoles.js";
 import type * as lib_cycles from "../lib/cycles.js";
@@ -99,6 +100,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   importReviews: typeof importReviews;
   integrations: typeof integrations;
+  keycloakHandovers: typeof keycloakHandovers;
   keycloakRoles: typeof keycloakRoles;
   "lib/authRoles": typeof lib_authRoles;
   "lib/cycles": typeof lib_cycles;
