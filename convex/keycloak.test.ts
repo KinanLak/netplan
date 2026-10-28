@@ -1,4 +1,12 @@
-import { afterAll, beforeAll, describe, expect, it } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  it,
+  setSystemTime,
+} from "bun:test";
 import * as native from "undici";
 import { api, components } from "./_generated/api";
 import { createSignedInUser } from "./_test/auth.setup";
@@ -7,8 +15,10 @@ import { SITE, post, withMail, withMailRelay } from "./_test/mail.setup";
 import {
   keycloakRoleNames,
   readKeycloakConfig,
+  refreshKeycloakTokens,
   roleFromKeycloak,
 } from "./lib/keycloak";
+import { stubFetch } from "./_test/fetch";
 
 const ISSUER = "http://keycloak.test/realms/netplan";
 const KEYCLOAK_ENV = {
@@ -34,6 +44,20 @@ type Login = {
   groups?: Array<string>;
 };
 let nextLogin: Login = { sub: "", email: "", name: "", roles: [] };
+// What the token endpoint answers to a refresh token: the roles Keycloak
+// now gives, or a refusal, or no answer at all.
+let nextRefresh: Array<string> | "invalid_grant" | "down" = [];
+const refreshTokensSeen: Array<string | null> = [];
+
+const tokensFor = ({ sub, email, name, roles, groups }: Login) =>
+  Response.json({
+    token_type: "Bearer",
+    expires_in: 300,
+    refresh_expires_in: 0,
+    refresh_token: `offline-${sub}-${roles.join("+")}`,
+    access_token: jwt({ sub, realm_access: { roles }, groups }),
+    id_token: jwt({ sub, email, email_verified: true, name }),
+  });
 const realFetch = globalThis.fetch;
 // The test DOM's Request and Response drop Cookie and Set-Cookie as a
 // browser's do; the OAuth state round trip needs the server's own.
@@ -63,20 +87,34 @@ beforeAll(() => {
         );
       }
       if (url === `${ISSUER}/protocol/openid-connect/token`) {
-        const { sub, email, name, roles, groups } = nextLogin;
-        return Promise.resolve(
-          Response.json({
-            token_type: "Bearer",
-            expires_in: 300,
-            access_token: jwt({ sub, realm_access: { roles }, groups }),
-            id_token: jwt({ sub, email, email_verified: true, name }),
-          }),
-        );
+        const form = new URLSearchParams(String(init?.body ?? ""));
+        if (form.get("grant_type") !== "refresh_token") {
+          return Promise.resolve(tokensFor(nextLogin));
+        }
+        refreshTokensSeen.push(form.get("refresh_token"));
+        if (nextRefresh === "down") {
+          return Promise.reject(new TypeError("fetch failed"));
+        }
+        if (nextRefresh === "invalid_grant") {
+          return Promise.resolve(
+            Response.json(
+              {
+                error: "invalid_grant",
+                error_description: "Session not active",
+              },
+              { status: 400 },
+            ),
+          );
+        }
+        return Promise.resolve(tokensFor({ ...nextLogin, roles: nextRefresh }));
       }
       return realFetch(input, init);
     },
     realFetch,
   );
+});
+afterEach(() => {
+  setSystemTime();
 });
 afterAll(() => {
   globalThis.fetch = realFetch;
@@ -281,6 +319,143 @@ describe("Keycloak sign-in", () => {
   });
 });
 
+const HOUR = 60 * 60 * 1000;
+
+const sessionOf = async (t: TestBackend, cookie: string) =>
+  (await (
+    await t.fetch("/api/auth/get-session", {
+      headers: { cookie, origin: SITE },
+    })
+  ).json()) as { user: { role: string } } | null;
+
+describe("Keycloak role refresh", () => {
+  async function signedInEditor(t: TestBackend) {
+    const admin = await asAdmin(t);
+    await admin.mutation(api.authSettings.setKeycloakRoleMapping, {
+      editorRole: "netplan-editor",
+      adminRole: "netplan-admin",
+      acceptGroups: false,
+    });
+    const start = Date.now();
+    setSystemTime(start);
+    const { cookie } = await keycloakLogin(t, {
+      ...camille,
+      roles: ["netplan-editor"],
+    });
+    expect((await userByEmail(t, camille.email))?.role).toBe("editor");
+    /** Uses the session an hour later, which extends it. */
+    const useAnHourLater = async () => {
+      setSystemTime(start + HOUR + 60_000);
+      const session = await sessionOf(t, cookie);
+      await t.finishAllScheduledFunctions(() => {});
+      return session;
+    };
+    return { admin, cookie, useAnHourLater };
+  }
+
+  it("asks for an offline token, so the hourly refresh outlives Keycloak's idle session", async () => {
+    const t = withMail();
+    nextLogin = { ...camille, roles: [] };
+    const start = await post(t, "/sign-in/oauth2", {
+      providerId: "keycloak",
+      callbackURL: "/",
+    });
+    const { url } = (await start.json()) as { url: string };
+    expect(new URL(url).searchParams.get("scope")?.split(" ")).toContain(
+      "offline_access",
+    );
+  });
+
+  it("reads the role again with the stored refresh token when the session is extended", async () => {
+    const t = withMail();
+    const { cookie, useAnHourLater } = await signedInEditor(t);
+    nextRefresh = ["netplan-editor", "netplan-admin"];
+    refreshTokensSeen.length = 0;
+
+    expect(await useAnHourLater()).not.toBeNull();
+    expect(refreshTokensSeen).toEqual([
+      `offline-${camille.sub}-netplan-editor`,
+    ]);
+    expect((await userByEmail(t, camille.email))?.role).toBe("admin");
+
+    // Taken away in Keycloak, taken away here at the next refresh.
+    nextRefresh = [];
+    setSystemTime(Date.now() + 2 * HOUR);
+    await sessionOf(t, cookie);
+    await t.finishAllScheduledFunctions(() => {});
+    expect((await userByEmail(t, camille.email))?.role).toBe("reader");
+  });
+
+  it("ends every session of a user Keycloak no longer vouches for", async () => {
+    const t = withMail();
+    const { cookie, useAnHourLater } = await signedInEditor(t);
+    nextRefresh = "invalid_grant";
+
+    await useAnHourLater();
+    expect(await sessionOf(t, cookie)).toBeNull();
+    // Disabled in Netplan it is not: Keycloak decides at the next sign-in.
+    nextRefresh = [];
+    expect(
+      (await keycloakLogin(t, { ...camille, roles: ["netplan-editor"] }))
+        .location,
+    ).toBe("/");
+  });
+
+  it("changes nothing while Keycloak does not answer", async () => {
+    const t = withMail();
+    const { cookie, useAnHourLater } = await signedInEditor(t);
+    nextRefresh = "down";
+
+    expect(await useAnHourLater()).not.toBeNull();
+    expect(await sessionOf(t, cookie)).not.toBeNull();
+    expect((await userByEmail(t, camille.email))?.role).toBe("editor");
+  });
+});
+
+describe("signing a user out everywhere", () => {
+  it("ends their sessions without disabling them, and the next Keycloak sign-in reads the role", async () => {
+    const t = withMail();
+    const admin = await asAdmin(t);
+    await admin.mutation(api.authSettings.setKeycloakRoleMapping, {
+      editorRole: "netplan-editor",
+      adminRole: null,
+      acceptGroups: false,
+    });
+    const { cookie } = await keycloakLogin(t, {
+      ...camille,
+      roles: ["netplan-editor"],
+    });
+    await keycloakLogin(t, { ...camille, roles: ["netplan-editor"] });
+    const user = await userByEmail(t, camille.email);
+    const userId = user?._id ?? "";
+
+    expect(await admin.mutation(api.users.signOutEverywhere, { userId })).toBe(
+      2,
+    );
+    expect(await sessionOf(t, cookie)).toBeNull();
+    const row = (await admin.query(api.users.list, {})).find(
+      (candidate) => candidate.id === userId,
+    );
+    expect(row?.disabled).toBe(false);
+
+    await keycloakLogin(t, { ...camille, roles: [] });
+    expect((await userByEmail(t, camille.email))?.role).toBe("reader");
+    expect(await admin.mutation(api.users.signOutEverywhere, { userId })).toBe(
+      1,
+    );
+  });
+
+  it("is not for the admin's own account", async () => {
+    const t = withMail();
+    const admin = await createSignedInUser(t, "admin");
+    await expect(
+      t
+        .withIdentity(admin.identity)
+        .mutation(api.users.signOutEverywhere, { userId: admin.userId }),
+    ).rejects.toThrow("Se déconnecter");
+  });
+});
+
 describe("Keycloak role mapping", () => {
   it("shows what to register and keeps blank names as none", async () => {
     const t = withMail();
@@ -367,6 +542,35 @@ describe("Keycloak roles", () => {
         acceptGroups: false,
       }),
     ).toBe("reader");
+  });
+
+  it("ends a login only on invalid_grant, never on a client or server fault", async () => {
+    const config = {
+      issuer: ISSUER,
+      clientId: "netplan",
+      clientSecret: "test-client-secret", // gitleaks:allow
+    };
+    const answers = [
+      Response.json({ error: "invalid_grant" }, { status: 400 }),
+      Response.json({ error: "invalid_client" }, { status: 401 }),
+      new Response("Bad gateway", { status: 502 }),
+      Response.json({ token_type: "Bearer" }),
+    ];
+    const kinds: Array<string> = [];
+    for (const answer of answers) {
+      const fake = stubFetch(answer);
+      try {
+        kinds.push((await refreshKeycloakTokens(config, "offline")).kind);
+      } finally {
+        fake.restore();
+      }
+    }
+    expect(kinds).toEqual([
+      "revoked",
+      "unavailable",
+      "unavailable",
+      "unavailable",
+    ]);
   });
 
   it("is on only with an issuer, a client id and a secret", () => {

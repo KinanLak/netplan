@@ -209,8 +209,8 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
     },
     databaseHooks: {
       session: {
-        // Activity extends a session up to 7 days after its login, so a
-        // role removed in Keycloak lands within a week (ADR 0031).
+        // Activity extends a session up to 7 days after its login, which
+        // bounds a stolen session (ADR 0031).
         update: {
           before: async (session, endpoint) => {
             if (!(session.expiresAt instanceof Date)) return;
@@ -227,6 +227,13 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
             // out when it fails. The browser sends the cookie, and the
             // bearer plugin turns a token into one.
             if (!current) return;
+            // The hourly refresh reads a Keycloak role again (ADR 0036), in
+            // the background so that Keycloak never slows a page down.
+            if (keycloakConfig && "scheduler" in ctx) {
+              await ctx.scheduler.runAfter(0, internal.keycloakRoles.refresh, {
+                userId: current.session.userId,
+              });
+            }
             // The Convex adapter hands dates back as numbers.
             const cap =
               new Date(current.session.createdAt).getTime() + SESSION_MAX_MS;
@@ -288,7 +295,14 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
         config: keycloakConfig
           ? [
               {
-                ...keycloak({ ...keycloakConfig, pkce: true }),
+                ...keycloak({
+                  ...keycloakConfig,
+                  pkce: true,
+                  // An ordinary refresh token dies with Keycloak's session,
+                  // 30 minutes idle by default; the offline one lives as
+                  // long as Netplan reads the role with it (ADR 0036).
+                  scopes: ["openid", "profile", "email", "offline_access"],
+                }),
                 // Keycloak leaves `name` out for a user without first and
                 // last names, and better-auth refuses a login without one.
                 mapProfileToUser: (profile) => ({

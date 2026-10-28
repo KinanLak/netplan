@@ -1,5 +1,9 @@
 import { HugeiconsIcon } from "@hugeicons/react";
-import { MailSend01Icon, UserAdd01Icon } from "@hugeicons/core-free-icons";
+import {
+  MailSend01Icon,
+  MoreHorizontalIcon,
+  UserAdd01Icon,
+} from "@hugeicons/core-free-icons";
 import { createFileRoute } from "@tanstack/react-router";
 import { useAction, useQuery } from "convex/react";
 import { useOnlineMutation } from "@/hooks/use-online-mutation";
@@ -28,6 +32,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Field,
   FieldDescription,
@@ -277,9 +287,10 @@ function UserItem({
   const setRole = useOnlineMutation(api.users.setRole);
   const setDisabled = useOnlineMutation(api.users.setDisabled);
   const cancelInvitation = useOnlineMutation(api.users.cancelInvitation);
+  const signOutEverywhere = useOnlineMutation(api.users.signOutEverywhere);
   const resend = useAction(api.users.resendInvitation);
   const [confirming, setConfirming] = useState<
-    "disable" | "cancel" | { role: Role } | null
+    "disable" | "cancel" | "sign-out" | { role: Role } | null
   >(null);
   const [pending, setPending] = useState(false);
   const [notice, setNotice] = useState<{ error: boolean; text: string }>();
@@ -310,7 +321,7 @@ function UserItem({
   const roleLock = isMe
     ? "Un autre administrateur doit changer votre rôle."
     : user.kind === "sso"
-      ? "Suit la correspondance des rôles Keycloak, relue à chaque connexion."
+      ? "Suit la correspondance des rôles Keycloak, relue à chaque connexion et toutes les heures."
       : null;
 
   const roleSelect = (
@@ -352,34 +363,53 @@ function UserItem({
             run: () =>
               void run(() => setDisabled({ userId: user.id, disabled: true })),
           }
-        : confirming === "cancel"
+        : confirming === "sign-out"
           ? {
-              title: `Annuler l'invitation de « ${user.name} » ?`,
-              text: "Le compte, qui n'a jamais servi, est supprimé et son lien ne fonctionne plus. Vous pourrez inviter cette adresse à nouveau.",
-              action: "Annuler l'invitation",
-              destructive: true,
+              title: `Déconnecter « ${user.name} » partout ?`,
+              text:
+                user.kind === "sso"
+                  ? "Ses sessions se ferment tout de suite. Le compte reste actif : à sa prochaine connexion, Keycloak donne à nouveau son rôle."
+                  : "Ses sessions se ferment tout de suite. Le compte reste actif et peut se reconnecter aussitôt.",
+              action: "Déconnecter partout",
+              destructive: false,
               run: () =>
-                void run(
-                  () => cancelInvitation({ userId: user.id }),
-                  () => toast.success(`Invitation de ${user.email} annulée.`),
+                void run(async () =>
+                  setNotice({
+                    error: false,
+                    text: sessionsEnded(
+                      await signOutEverywhere({ userId: user.id }),
+                    ),
+                  }),
                 ),
             }
-          : {
-              title:
-                confirming.role === "admin"
-                  ? `Donner le rôle Admin à « ${user.name} » ?`
-                  : `Retirer le rôle Admin à « ${user.name} » ?`,
-              text:
-                confirming.role === "admin"
-                  ? "Il pourra gérer les utilisateurs, les sites et leurs intégrations, et changer le rôle des autres administrateurs."
-                  : `Il devient ${ROLE_LABELS[confirming.role]} : il ne verra plus l'administration.`,
-              action:
-                confirming.role === "admin"
-                  ? "Donner le rôle Admin"
-                  : "Retirer le rôle Admin",
-              destructive: false,
-              run: () => changeRole(confirming.role),
-            };
+          : confirming === "cancel"
+            ? {
+                title: `Annuler l'invitation de « ${user.name} » ?`,
+                text: "Le compte, qui n'a jamais servi, est supprimé et son lien ne fonctionne plus. Vous pourrez inviter cette adresse à nouveau.",
+                action: "Annuler l'invitation",
+                destructive: true,
+                run: () =>
+                  void run(
+                    () => cancelInvitation({ userId: user.id }),
+                    () => toast.success(`Invitation de ${user.email} annulée.`),
+                  ),
+              }
+            : {
+                title:
+                  confirming.role === "admin"
+                    ? `Donner le rôle Admin à « ${user.name} » ?`
+                    : `Retirer le rôle Admin à « ${user.name} » ?`,
+                text:
+                  confirming.role === "admin"
+                    ? "Il pourra gérer les utilisateurs, les sites et leurs intégrations, et changer le rôle des autres administrateurs."
+                    : `Il devient ${ROLE_LABELS[confirming.role]} : il ne verra plus l'administration.`,
+                action:
+                  confirming.role === "admin"
+                    ? "Donner le rôle Admin"
+                    : "Retirer le rôle Admin",
+                destructive: false,
+                run: () => changeRole(confirming.role),
+              };
 
   return (
     <li className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -461,6 +491,22 @@ function UserItem({
             Désactiver
           </Button>
         )}
+        {isMe || user.kind === "invited" || user.disabled ? null : (
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={<Button variant="ghost" size="icon-sm" />}
+              aria-label={`Autres actions pour ${user.name}`}
+              disabled={pending}
+            >
+              <HugeiconsIcon icon={MoreHorizontalIcon} strokeWidth={2} />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setConfirming("sign-out")}>
+                Déconnecter partout
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
         {roleSaved ? (
           <span role="status" className="text-sm text-muted-foreground">
             Enregistré
@@ -507,6 +553,11 @@ function UserItem({
       </AlertDialog>
     </li>
   );
+}
+
+function sessionsEnded(count: number): string {
+  if (count === 0) return "Aucune session n'était ouverte.";
+  return count === 1 ? "1 session fermée." : `${count} sessions fermées.`;
 }
 
 // An empty mapping is easy to miss: every Keycloak account then arrives as
@@ -580,7 +631,7 @@ function RoleMappingForm({
       await save({ editorRole, adminRole, acceptGroups });
       setNotice({
         error: false,
-        text: "Correspondance enregistrée. Elle s'applique à la prochaine connexion de chaque compte Keycloak.",
+        text: "Correspondance enregistrée. Chaque compte Keycloak la suit dans l'heure.",
       });
     } catch (failure) {
       setNotice({ error: true, text: failureMessage(failure, "admin") });
@@ -595,7 +646,7 @@ function RoleMappingForm({
         <FieldDescription>
           Un compte Keycloak est Lecteur, sauf s'il porte l'un des rôles
           ci-dessous, rôle du royaume ou du client ; Admin l'emporte. Son rôle
-          est relu à chaque connexion.
+          est relu à chaque connexion, puis toutes les heures.
         </FieldDescription>
         <Field>
           <FieldLabel htmlFor="keycloak-editor-role">

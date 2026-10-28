@@ -104,3 +104,88 @@ export function roleNameOrNull(value: string | null): string | null {
   const name = value?.trim();
   return name ? name : null;
 }
+
+/** What Keycloak's token endpoint made of a stored refresh token. */
+export type KeycloakRefresh =
+  | {
+      kind: "tokens";
+      accessToken: string;
+      refreshToken: string | null;
+      idToken: string | null;
+      accessTokenExpiresAt: number | null;
+      refreshTokenExpiresAt: number | null;
+    }
+  /** Keycloak no longer vouches for that login (ADR 0036). */
+  | { kind: "revoked" }
+  /** Unreachable or answering something else: nothing can be concluded. */
+  | { kind: "unavailable" };
+
+const REFRESH_TIMEOUT_MS = 10_000;
+
+/**
+ * Trades a stored refresh token for new tokens. Only `invalid_grant` means
+ * the login is over: the user was disabled or deleted, or the session was
+ * revoked or idled out. A wrong client secret or an outage says nothing
+ * about the user.
+ */
+export async function refreshKeycloakTokens(
+  config: KeycloakConfig,
+  refreshToken: string,
+  now = Date.now(),
+): Promise<KeycloakRefresh> {
+  let response: Response;
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), REFRESH_TIMEOUT_MS);
+  try {
+    response = await fetch(`${config.issuer}/protocol/openid-connect/token`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        accept: "application/json",
+      },
+      body: new URLSearchParams({
+        grant_type: "refresh_token",
+        refresh_token: refreshToken,
+        client_id: config.clientId,
+        client_secret: config.clientSecret,
+      }),
+      redirect: "error",
+      signal: abort.signal,
+    });
+  } catch {
+    clearTimeout(timer);
+    return { kind: "unavailable" };
+  }
+  const body: unknown = await response.json().catch(() => null);
+  clearTimeout(timer);
+  const field = (name: string): unknown =>
+    body !== null && typeof body === "object"
+      ? (body as Record<string, unknown>)[name]
+      : undefined;
+  if (!response.ok) {
+    return response.status === 400 && field("error") === "invalid_grant"
+      ? { kind: "revoked" }
+      : { kind: "unavailable" };
+  }
+  const accessToken = field("access_token");
+  if (typeof accessToken !== "string") return { kind: "unavailable" };
+  const text = (name: string) => {
+    const value = field(name);
+    return typeof value === "string" ? value : null;
+  };
+  // Keycloak says 0 for a refresh token that never expires on its own.
+  const expiry = (name: string) => {
+    const seconds = field(name);
+    return typeof seconds === "number" && seconds > 0
+      ? now + seconds * 1000
+      : null;
+  };
+  return {
+    kind: "tokens",
+    accessToken,
+    refreshToken: text("refresh_token"),
+    idToken: text("id_token"),
+    accessTokenExpiresAt: expiry("expires_in"),
+    refreshTokenExpiresAt: expiry("refresh_expires_in"),
+  };
+}

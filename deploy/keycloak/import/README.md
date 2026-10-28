@@ -17,4 +17,9 @@ and any `127.0.0.1` or `localhost` port. Its users all have the password
 | `kc.admin`   | `netplan-admin`, `netplan-editor` | Admin                                                                                  |
 | `kc.doublon` | none                              | refused while a local account has its email (`editeur@netplan.test`, a seeded account) |
 
+Every user also holds `default-roles-netplan`, which carries
+`offline_access`: Netplan asks for it to read roles again every hour (ADR
+0036), and a realm import that lists a user's roles without it leaves that
+user unable to sign in.
+
 Map `netplan-editor` and `netplan-admin` on Netplan's users page.
