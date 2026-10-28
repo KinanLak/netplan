@@ -4,6 +4,7 @@ import {
   Outlet,
   Scripts,
   createRootRoute,
+  useRouter,
 } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import { TanStackDevtools } from "@tanstack/react-devtools";
@@ -11,7 +12,7 @@ import { ConvexProviderWithAuth } from "convex/react";
 import { createServerFn } from "@tanstack/react-start";
 import { useEffect } from "react";
 import type { ReactNode } from "react";
-import { ErrorScreen } from "@/components/error-screen";
+import { BACKEND_UNREACHABLE, ErrorScreen } from "@/components/error-screen";
 import { ThemeProvider, themeScript } from "@/components/theme-provider";
 import { useDocumentTitle } from "@/hooks/use-document-title";
 import appCss from "@/styles.css?url";
@@ -27,9 +28,15 @@ import { logGraphicsAccelerationStatusOnce } from "@/lib/graphicsAcceleration";
 
 // Read from the session cookie on the server, so a signed-out visitor is
 // redirected before any page renders and a signed-in one starts authenticated.
-const getAuthToken = createServerFn({ method: "GET" }).handler(
-  async () => (await getToken()) ?? null,
-);
+// It fails when Convex does not answer, which the error screen tells apart
+// from an unexpected failure.
+const getAuthToken = createServerFn({ method: "GET" }).handler(async () => {
+  try {
+    return (await getToken()) ?? null;
+  } catch {
+    throw new Error(BACKEND_UNREACHABLE);
+  }
+});
 
 // What the server said when the page loaded. Signing in and out reload the
 // page, so in the browser neither changes until the next full load, and a
@@ -140,6 +147,7 @@ function RootComponent() {
     pageToken ??= { token };
     pageConfig ??= config;
   }, [token, config]);
+  usePreloadedPages();
   const tokens = sessionTokens(token);
   useSessionKeptAlive(tokens.signedIn);
   // Constant for the page's life: Convex drops the identity whenever these
@@ -157,6 +165,28 @@ function RootComponent() {
       <Outlet />
     </ConvexProviderWithAuth>
   );
+}
+
+// Every page's code, fetched once the first page is idle: a page change
+// offline would otherwise need a file never loaded, and the router reloads
+// the window when one fails, which offline ends on the browser's own error
+// page instead of NetPlan's.
+function usePreloadedPages() {
+  const router = useRouter();
+  useEffect(() => {
+    const preload = () => {
+      for (const route of Object.values(router.routesById)) {
+        Promise.resolve(router.loadRouteChunk(route)).catch(() => {});
+      }
+    };
+    // Safari has no idle callback.
+    if (!("requestIdleCallback" in window)) {
+      const timer = setTimeout(preload, 2_000);
+      return () => clearTimeout(timer);
+    }
+    const idle = window.requestIdleCallback(preload, { timeout: 5_000 });
+    return () => window.cancelIdleCallback(idle);
+  }, [router]);
 }
 
 function RootDocument({ children }: { children: ReactNode }) {

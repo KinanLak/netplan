@@ -63,6 +63,13 @@ instead of signing the page out.
 so a page that fails leaves the signed-in layout and the Convex client in
 place.
 
+**A connection failure says so and heals.** The app's server reports a
+session it could not read because Convex does not answer as such, and the
+error screen then reads « Serveur injoignable » instead of « Une erreur
+inattendue », asks `/health` with a growing delay and reloads the page once
+it answers. Every page's code is fetched once the first page is idle, so a
+page change offline stays in NetPlan instead of the browser's error page.
+
 ## Consequences
 
 - `e2e/offline.e2e.ts` holds that a page change during an outage keeps the

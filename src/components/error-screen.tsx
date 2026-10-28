@@ -1,8 +1,15 @@
 import { Link, useRouter } from "@tanstack/react-router";
 import type { ErrorComponentProps } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useEffectEvent } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { useOnline } from "@/hooks/use-online";
+
+/**
+ * What the app's server throws when it cannot read the session because
+ * Convex does not answer. A message rather than a class: the error crosses
+ * from the server to the browser, which only keeps its message.
+ */
+export const BACKEND_UNREACHABLE = "NetPlan: backend unreachable";
 
 /**
  * A fetch that never reached a server: the browser is offline, or the app's
@@ -15,28 +22,73 @@ export function isNetworkError(error: unknown): boolean {
   );
 }
 
+/** A failure that comes back on its own once the servers answer again. */
+export function isConnectionError(error: unknown): boolean {
+  return (
+    isNetworkError(error) ||
+    (error instanceof Error && error.message === BACKEND_UNREACHABLE)
+  );
+}
+
+const FIRST_PROBE_MS = 2_000;
+const MAX_PROBE_MS = 30_000;
+
+/**
+ * Calls `onBack` once the app's server and Convex answer again, asking
+ * `/health` with a growing delay, and at once when the network returns.
+ */
+function useServerReturn(enabled: boolean, onBack: () => void) {
+  const back = useEffectEvent(onBack);
+  useEffect(() => {
+    if (!enabled) return;
+    let timer: number | undefined;
+    let delay = FIRST_PROBE_MS;
+    let stopped = false;
+    const probe = async () => {
+      try {
+        const response = await fetch("/health", { cache: "no-store" });
+        if (response.ok && !stopped) {
+          stopped = true;
+          back();
+          return;
+        }
+      } catch {
+        // Still unreachable.
+      }
+      if (stopped) return;
+      delay = Math.min(delay * 2, MAX_PROBE_MS);
+      timer = window.setTimeout(() => void probe(), delay);
+    };
+    const onOnline = () => {
+      window.clearTimeout(timer);
+      void probe();
+    };
+    timer = window.setTimeout(() => void probe(), delay);
+    window.addEventListener("online", onOnline);
+    return () => {
+      stopped = true;
+      window.clearTimeout(timer);
+      window.removeEventListener("online", onOnline);
+    };
+  }, [enabled]);
+}
+
 /**
  * What the router shows instead of a page that failed to load. A page fails
- * mostly when the app's server cannot be reached, so the network coming back
- * retries on its own.
+ * mostly when the app's server or Convex cannot be reached, so the screen
+ * says so and comes back by itself when they answer again.
  */
 export function ErrorScreen({ error, reset }: ErrorComponentProps) {
   const router = useRouter();
   const online = useOnline();
+  const connection = !online || isConnectionError(error);
 
   const retry = () => {
     reset();
     void router.invalidate();
   };
 
-  useEffect(() => {
-    const onOnline = () => {
-      reset();
-      void router.invalidate();
-    };
-    window.addEventListener("online", onOnline);
-    return () => window.removeEventListener("online", onOnline);
-  }, [reset, router]);
+  useServerReturn(connection, retry);
 
   const { title, description } = !online
     ? {
@@ -44,11 +96,11 @@ export function ErrorScreen({ error, reset }: ErrorComponentProps) {
         description:
           "Ce navigateur n'est plus connecté au réseau. La page se rechargera dès son retour.",
       }
-    : isNetworkError(error)
+    : connection
       ? {
           title: "Serveur injoignable",
           description:
-            "Le serveur NetPlan ne répond pas. Réessayez dans un instant ; si cela dure, prévenez votre administrateur.",
+            "Le serveur NetPlan ne répond pas. La page se rechargera dès son retour ; si cela dure, prévenez votre administrateur.",
         }
       : {
           title: "Cette page n'a pas pu s'afficher",
