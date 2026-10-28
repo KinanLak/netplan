@@ -993,9 +993,8 @@ export const collectFromLibreNMS = async (
   };
   const failed = new Set<number>();
   let finished = new Set<number>();
-  // Asked for a discovery this cycle that did not finish: their tables were
-  // not refreshed, which their line says quietly.
-  let unrefreshed = new Set<number>();
+  // Asked for a discovery this cycle that did not finish.
+  let missed = new Set<number>();
   // What a switch's table looked like before its discovery, when no earlier
   // read says it: the only way to tell, on a first read, a discovery that
   // refreshed nothing.
@@ -1018,7 +1017,7 @@ export const collectFromLibreNMS = async (
     }
     const discovery = await rediscover(readOnce, trigger, plan.devices);
     finished = discovery.finished;
-    unrefreshed = new Set(
+    missed = new Set(
       plan.devices.map(({ id }) => id).filter((id) => !finished.has(id)),
     );
     for (const [deviceId, reason] of discovery.refusals) {
@@ -1088,16 +1087,17 @@ export const collectFromLibreNMS = async (
     const { fresh, table } = freshFdb(
       entries,
       device.fdbTable ?? before.get(device.id),
-      finished.has(device.id),
+      finished.has(device.id)
+        ? "finished"
+        : missed.has(device.id)
+          ? "missed"
+          : "none",
     );
     if (table) tables.push({ deviceId: device.id, table });
     // Both recover by themselves with the next discovery that dates or
     // refreshes the table, so they are said quietly rather than noted.
     if (entries.length > 0 && !table) macTables.set(device.id, "undated");
-    else if (
-      entries.length > 0 &&
-      (fresh.length === 0 || unrefreshed.has(device.id))
-    ) {
+    else if (entries.length > 0 && (fresh.length === 0 || table?.unrefreshed)) {
       macTables.set(device.id, "stale");
     }
     fdb.push(...fresh);

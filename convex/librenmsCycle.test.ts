@@ -1190,6 +1190,17 @@ describe("the LibreNMS step", () => {
     expect(throttled.switches).toEqual([
       { name: "pile", ok: true, notes: [], macTable: "stale" },
     ]);
+    // A read too soon to rediscover still says so; a finished discovery
+    // clears it.
+    expect((await cycle(admin, siteId)).switches?.[0]?.macTable).toBe("stale");
+    await admin.run(async (ctx) => {
+      const row = await ctx.db.query("siteCycles").first();
+      if (row) await ctx.db.patch(row._id, { librenmsDiscoveryAt: 0 });
+    });
+    librenms.state.discoverStatus = 200;
+    expect(
+      (await cycle(admin, siteId)).switches?.[0]?.macTable,
+    ).toBeUndefined();
   });
 
   it("sees nothing in a table a discovery did not refresh", async () => {

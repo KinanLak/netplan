@@ -147,9 +147,9 @@ A discovery LibreNMS was too busy to take (a 5xx, a 429, a timeout) or that
 did not finish within 2 minutes says no more than the muted line below and
 fails nothing: the switch is read anyway and the next cycle asks again.
 
-- **"· Table MAC non rafraîchie"** (muted, after "lu"): this cycle's
-  discovery did not finish, or finished and moved nothing in the forwarding
-  table. In the second case none of its entries counts and the devices
+- **"· Table MAC non rafraîchie"** (muted, after "lu"): the last
+  discovery asked for did not finish, or finished and moved nothing in the
+  forwarding table. In the second case none of its entries counts and the devices
   behind the switch go offline after two cycles. It clears by itself with
   the next discovery that refreshes the table; if it stays, run
   `scripts/check-librenms.ts --discover`.
