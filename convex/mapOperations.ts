@@ -409,9 +409,9 @@ const collectOperationScope = (
       break;
     case "devices.move":
       // Planning rejects longer lists before it would need these rows.
-      if (operation.deviceIds.length <= MAX_BATCH_OPERATIONS) {
-        for (const deviceId of operation.deviceIds) {
-          scope.deviceIds.add(deviceId);
+      if (operation.from.length <= MAX_BATCH_OPERATIONS) {
+        for (const member of operation.from) {
+          scope.deviceIds.add(member.deviceId);
         }
       }
       break;
@@ -1069,8 +1069,8 @@ const planDevicesMove = (
   state: PlanningState,
   operation: DevicesMoveOperation,
 ): string | null => {
-  const ids = new Set(operation.deviceIds);
-  if (ids.size === 0 || ids.size !== operation.deviceIds.length) {
+  const ids = new Set(operation.from.map((member) => member.deviceId));
+  if (ids.size === 0 || ids.size !== operation.from.length) {
     return "Le déplacement est invalide.";
   }
   if (ids.size > MAX_BATCH_OPERATIONS)
@@ -1079,8 +1079,8 @@ const planDevicesMove = (
   if (offsetError) return offsetError;
 
   const members: Array<PlannedDevice> = [];
-  for (const deviceId of operation.deviceIds) {
-    const existing = state.devices.get(deviceId);
+  for (const member of operation.from) {
+    const existing = state.devices.get(member.deviceId);
     if (!existing) return "Cet équipement n'existe plus.";
     members.push(existing);
   }
@@ -1088,14 +1088,14 @@ const planDevicesMove = (
   if (members.some((member) => member.floorId !== floorId)) {
     return "Une modification ne peut toucher qu'un seul étage.";
   }
+  // Where the user saw them: a member moved since would deform the group.
   if (
-    operation.expected &&
     !movedAsExpected(
       members.map((member) => ({
         id: member.objectId,
         position: member.position,
       })),
-      operation.expected,
+      operation.from,
     )
   ) {
     return MOVED_SINCE;

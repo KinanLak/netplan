@@ -57,14 +57,19 @@ const snapshot = (
   labels: [],
 });
 
+/** A move of the named devices, from where `on` has them. */
 const move = (
+  on: MapDocumentSnapshot,
   deviceIds: Array<string>,
   offset: { x: number; y: number },
   seq = 1,
 ): MapOperation => ({
   kind: "devices.move",
   meta: meta(seq),
-  deviceIds: deviceIds as Array<DeviceId>,
+  from: deviceIds.map((id) => ({
+    deviceId: id as DeviceId,
+    position: on.devices.find((d) => d.id === id)?.position ?? { x: 0, y: 0 },
+  })),
   offset,
 });
 
@@ -101,7 +106,10 @@ describe("devices.move", () => {
       device("b", 140, 100),
       device("c", 400, 0),
     ]);
-    const result = applyOperation(before, move(["a", "b"], { x: 20, y: 40 }));
+    const result = applyOperation(
+      before,
+      move(before, ["a", "b"], { x: 20, y: 40 }),
+    );
     expect(result.applied).toBe(true);
     expect(positions(result.snapshot)).toEqual({
       a: { x: 20, y: 40 },
@@ -116,19 +124,19 @@ describe("devices.move", () => {
       device("b", 100, 0, "floor:b" as FloorId),
     ]);
     expect(
-      applyOperation(before, move(["a", "b"], { x: 20, y: 0 })).reason,
+      applyOperation(before, move(before, ["a", "b"], { x: 20, y: 0 })).reason,
     ).toBe("wrong-floor");
     expect(
-      applyOperation(before, move(["a", "z"], { x: 20, y: 0 })).reason,
+      applyOperation(before, move(before, ["a", "z"], { x: 20, y: 0 })).reason,
     ).toBe("missing-device");
     expect(
-      applyOperation(before, move(["a", "a"], { x: 20, y: 0 })).reason,
+      applyOperation(before, move(before, ["a", "a"], { x: 20, y: 0 })).reason,
     ).toBe("invalid-move");
   });
 
   it("undoes as one move back, and refuses once a member has moved since", () => {
     const before = snapshot([device("a", 0, 0), device("b", 100, 0)]);
-    const operation = move(["a", "b"], { x: 0, y: 60 });
+    const operation = move(before, ["a", "b"], { x: 0, y: 60 });
     const inverse = buildInverseOperation(before, operation);
     const after = applyOperation(before, operation).snapshot;
 
@@ -145,6 +153,23 @@ describe("devices.move", () => {
     expect(applyOperation(moved, inverse as MapOperation).reason).toBe(
       "conflict",
     );
+  });
+
+  it("is not applied twice over a server document that already holds it", () => {
+    const before = snapshot([device("a", 0, 0), device("b", 100, 0)]);
+    const operation = move(before, ["a", "b"], { x: 20, y: 0 });
+    const server = applyOperation(before, operation).snapshot;
+    // Still pending here while the server's revision already has it.
+    const shown = applyOperation(server, operation);
+    expect(shown.applied).toBe(false);
+    expect(positions(shown.snapshot)).toEqual(positions(server));
+  });
+
+  it("refuses a move once a member is no longer where the user saw it", () => {
+    const before = snapshot([device("a", 0, 0), device("b", 100, 0)]);
+    const operation = move(before, ["a", "b"], { x: 0, y: 60 });
+    const moved = snapshot([device("a", 0, 0), device("b", 100, 200)]);
+    expect(applyOperation(moved, operation).reason).toBe("conflict");
   });
 });
 

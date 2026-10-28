@@ -90,7 +90,10 @@ export function useSelectionMoves() {
     devices.length > 0 &&
     withinLimit(devices) &&
     commands.moveDevices(
-      devices.map((device) => device.id),
+      devices.map((device) => ({
+        deviceId: device.id,
+        position: device.position,
+      })),
       offset,
     );
 

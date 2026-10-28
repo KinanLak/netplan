@@ -5,7 +5,7 @@ import {
   defaultPorts,
   portListError,
 } from "@/devices/ports";
-import { isAsExpected, movedAsExpected } from "./devicePatch";
+import { isAsExpected, movedAsExpected, shifted } from "./devicePatch";
 import { applyLabelPatch, labelError, labelIsAsExpected } from "./labels";
 import {
   applyOverlayPatch,
@@ -117,9 +117,10 @@ const isSafeBatchNoop = (
       return reason === "already-exists";
     case "label.delete":
       return reason === "missing-label";
+    case "devices.move":
+      return reason === "already-exists";
     case "overlay.patch":
     case "device.patch":
-    case "devices.move":
     case "label.patch":
     case "batch":
       return false;
@@ -197,8 +198,9 @@ export function applyOperation(
     }
 
     case "devices.move": {
-      const ids = new Set(operation.deviceIds);
-      if (ids.size === 0 || ids.size !== operation.deviceIds.length) {
+      const { from, offset } = operation;
+      const ids = new Set<string>(from.map((member) => member.deviceId));
+      if (ids.size === 0 || ids.size !== from.length) {
         return unchanged(snapshot, "invalid-move");
       }
       const members = snapshot.devices.filter((device) => ids.has(device.id));
@@ -208,10 +210,13 @@ export function applyOperation(
       if (members.some((device) => device.floorId !== members[0].floorId)) {
         return unchanged(snapshot, "wrong-floor");
       }
-      if (operation.expected && !movedAsExpected(members, operation.expected)) {
+      // The server's document may already hold a move still pending here.
+      if (movedAsExpected(members, shifted(from, offset))) {
+        return unchanged(snapshot, "already-exists");
+      }
+      if (!movedAsExpected(members, from)) {
         return unchanged(snapshot, "conflict");
       }
-      const { offset } = operation;
       return changed({
         ...snapshot,
         devices: snapshot.devices.map((device) =>

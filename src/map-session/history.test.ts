@@ -137,19 +137,26 @@ describe("session history", () => {
   });
 
   it("coalesces a held nudge into one group move by the sum of its steps", () => {
-    const ids = ["device:a", "device:b"] as Array<DeviceId>;
-    const nudge = (seq: number, deviceIds = ids): MapOperation => ({
+    const member = (id: string, x: number) => ({
+      deviceId: id as DeviceId,
+      position: { x, y: 0 },
+    });
+    const nudge = (
+      seq: number,
+      from = [member("a", 20 * seq), member("b", 200 + 20 * seq)],
+    ): MapOperation => ({
       kind: "devices.move",
       meta: meta(seq),
-      deviceIds,
+      from,
       offset: { x: 20, y: 0 },
     });
 
+    // One move from where the first step started, by the three steps.
     expect(
       coalesceHistoryGroupOperations([nudge(1), nudge(2), nudge(3)]),
     ).toEqual({ ...nudge(1), offset: { x: 60, y: 0 } });
     // Another group in between: each move stays its own.
-    const other = nudge(2, [ids[0]]);
+    const other = nudge(2, [member("a", 40)]);
     expect(coalesceHistoryGroupOperations([nudge(1), other])).toEqual({
       kind: "batch",
       meta: meta(1),

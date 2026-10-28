@@ -4,6 +4,7 @@ import { useCanvasDeviceNodes } from "./useCanvasDeviceNodes";
 import type { NodeChange } from "@xyflow/react";
 import type { DeviceNode } from "@/devices/reactFlowDeviceAdapter";
 import type { Device, DeviceId, FloorId, Position } from "@/types/map";
+import type { GroupMember } from "@/map-engine/types";
 
 const floorId = "floor-a" as FloorId;
 const deviceId = "device-a" as DeviceId;
@@ -78,10 +79,10 @@ describe("useCanvasDeviceNodes", () => {
     const selection = new Set([device.id, other.id]);
     // A wall the group cannot reach past an offset of 40 to the right.
     const canMoveDevices = mock(
-      (_ids: ReadonlyArray<DeviceId>, offset: Position) => offset.x <= 40,
+      (_from: ReadonlyArray<GroupMember>, offset: Position) => offset.x <= 40,
     );
     const moveDevices = mock(
-      (_ids: ReadonlyArray<DeviceId>, _offset: Position) => true,
+      (_from: ReadonlyArray<GroupMember>, _offset: Position) => true,
     );
     const updateDevicePosition = mock(() => {});
     const { result } = renderHook(() =>
@@ -139,8 +140,16 @@ describe("useCanvasDeviceNodes", () => {
     expect(result.current.blockedSpots).toHaveLength(2);
 
     drag(120, false);
+    // From where the drag found them, so a member moved meanwhile refuses
+    // the move rather than bending the group.
     expect(moveDevices.mock.calls).toEqual([
-      [[device.id, other.id], { x: 40, y: 0 }],
+      [
+        [
+          { deviceId: device.id, position: { x: 0, y: 0 } },
+          { deviceId: other.id, position: { x: 140, y: 100 } },
+        ],
+        { x: 40, y: 0 },
+      ],
     ]);
     expect(updateDevicePosition.mock.calls.length).toBe(0);
     expect(result.current.blockedSpots).toHaveLength(0);

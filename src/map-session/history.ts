@@ -159,12 +159,12 @@ const mergeGroupMoves = (
 ): GroupMoveOperation | null => {
   const [first] = operations;
   if (first.kind !== "devices.move") return null;
-  const ids = new Set(first.deviceIds);
+  const ids = new Set<string>(first.from.map((member) => member.deviceId));
   const moves = operations.filter(
     (operation): operation is GroupMoveOperation =>
       operation.kind === "devices.move" &&
-      operation.deviceIds.length === ids.size &&
-      operation.deviceIds.every((id) => ids.has(id)),
+      operation.from.length === ids.size &&
+      operation.from.every((member) => ids.has(member.deviceId)),
   );
   if (moves.length !== operations.length) return null;
   return {

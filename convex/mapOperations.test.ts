@@ -230,6 +230,16 @@ describe("mapOperations.apply", () => {
       });
       return floorId;
     };
+    /** Where `groupRoom` puts them. */
+    const seeded = (ids: Array<string>) =>
+      ids.map((deviceId) => ({
+        deviceId,
+        position: {
+          "device:g1": { x: 100, y: 0 },
+          "device:g2": { x: 100, y: 100 },
+          "device:g3": { x: 0, y: 300 },
+        }[deviceId] ?? { x: 0, y: 0 },
+      }));
     const positionsOf = async (t: TestClient, floorId: string) =>
       Object.fromEntries(
         (await getFloorDocument(t, floorId)).devices.map((d) => [
@@ -247,7 +257,7 @@ describe("mapOperations.apply", () => {
         operation: {
           kind: "devices.move",
           meta: meta(41),
-          deviceIds: ["device:g1", "device:g2"],
+          from: seeded(["device:g1", "device:g2"]),
           offset: { x: 20, y: 0 },
         },
       });
@@ -270,7 +280,7 @@ describe("mapOperations.apply", () => {
             operation: {
               kind: "devices.move",
               meta: meta(seq),
-              deviceIds: ["device:g1", "device:g2"],
+              from: seeded(["device:g1", "device:g2"]),
               offset,
             },
           }),
@@ -295,7 +305,7 @@ describe("mapOperations.apply", () => {
         operation: {
           kind: "devices.move",
           meta: meta(44),
-          deviceIds: ["device:g1", "device:g2"],
+          from: seeded(["device:g1", "device:g2"]),
           offset: { x: 0, y: 40 },
         },
       });
@@ -314,7 +324,10 @@ describe("mapOperations.apply", () => {
           operation: {
             kind: "devices.move",
             meta: meta(46),
-            deviceIds: ["device:g3", "device:elsewhere"],
+            from: [
+              ...seeded(["device:g3"]),
+              { deviceId: "device:elsewhere", position: { x: 0, y: 0 } },
+            ],
             offset: { x: 20, y: 0 },
           },
         }),
@@ -325,7 +338,7 @@ describe("mapOperations.apply", () => {
       });
     });
 
-    it("does not undo a move once a member has moved since", async () => {
+    it("refuses a move, or its undo, once a member has moved since", async () => {
       const t = await signedInTest();
       const floorId = await groupRoom(t);
       await t.mutation(api.mapOperations.apply, {
@@ -342,12 +355,8 @@ describe("mapOperations.apply", () => {
           operation: {
             kind: "devices.move",
             meta: meta(48),
-            deviceIds: ["device:g1", "device:g2"],
+            from: seeded(["device:g1", "device:g2"]),
             offset: { x: -20, y: 0 },
-            expected: [
-              { deviceId: "device:g1", position: { x: 100, y: 0 } },
-              { deviceId: "device:g2", position: { x: 100, y: 100 } },
-            ],
           },
         }),
       );

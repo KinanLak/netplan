@@ -291,7 +291,7 @@ Built by lot 3b (ADR 0025) and redrawn by the UX lot U3 (ADR 0029).
 - **Moves made by others.** The cycle moves devices through
   `applyMapOperation`, so they reach every client and enter no history. An
   undo or redo carries where it expects the device (`expected` on
-  `device.patch`, `devices.move` and `device.unplace`), and the engine and server refuse it
+  `device.patch` and `device.unplace`, `from` on `devices.move`), and the engine and server refuse it
   once someone else, the cycle included, has moved the device since.
 
 ## History and the push to NetBox

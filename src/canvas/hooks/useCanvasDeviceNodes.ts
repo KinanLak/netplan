@@ -18,6 +18,7 @@ import { portsByDevice } from "@/devices/ports";
 import { GRID_SIZE } from "@/lib/grid";
 import { createGroupDrag } from "@/canvas/groupDrag";
 import type { GroupDrag } from "@/canvas/groupDrag";
+import type { GroupMember } from "@/map-engine/types";
 
 interface UseCanvasDeviceNodesParams {
   devices: Array<Device>;
@@ -37,12 +38,9 @@ interface UseCanvasDeviceNodesParams {
   ) => boolean;
   updateDevicePosition: (deviceId: DeviceId, position: Position) => void;
   /** Moves a group as one block (ADR 0034); false when refused. */
-  moveDevices: (
-    deviceIds: ReadonlyArray<DeviceId>,
-    offset: Position,
-  ) => boolean;
+  moveDevices: (from: ReadonlyArray<GroupMember>, offset: Position) => boolean;
   canMoveDevices: (
-    deviceIds: ReadonlyArray<DeviceId>,
+    from: ReadonlyArray<GroupMember>,
     offset: Position,
   ) => boolean;
   selectDevice: (deviceId: DeviceId | null) => void;
@@ -154,22 +152,34 @@ const areNodeListsEqual = (a: Array<DeviceNode>, b: Array<DeviceNode>) => {
   return a.every((node, index) => areNodesEqual(node, b[index]));
 };
 
-/** The group being dragged: the selection's devices on the floor. */
+type GroupDragSession = {
+  /** The members where the drag found them: React Flow drags from there. */
+  from: ReadonlyArray<GroupMember>;
+  startOf: ReadonlyMap<string, Position>;
+  drag: GroupDrag;
+};
+
+/**
+ * The group being dragged: the selection's devices on the floor, where the
+ * drag started. Its offset is always measured from there, and the move is
+ * refused if a member has moved since, as someone else may.
+ */
 const startGroupDrag = (
   devices: ReadonlyArray<Device>,
   floorId: FloorId,
   selectedDeviceIdSet: ReadonlySet<DeviceId>,
   canMoveDevices: UseCanvasDeviceNodesParams["canMoveDevices"],
-) => {
-  const deviceIds = devices
+): GroupDragSession => {
+  const from = devices
     .filter(
       (device) =>
         device.floorId === floorId && selectedDeviceIdSet.has(device.id),
     )
-    .map((device) => device.id);
+    .map((device) => ({ deviceId: device.id, position: device.position }));
   return {
-    deviceIds,
-    drag: createGroupDrag((offset) => canMoveDevices(deviceIds, offset)),
+    from,
+    startOf: new Map(from.map((member) => [member.deviceId, member.position])),
+    drag: createGroupDrag((offset) => canMoveDevices(from, offset)),
   };
 };
 
@@ -193,10 +203,7 @@ export function useCanvasDeviceNodes({
   const [nodes, setNodes, onNodesChange] = useNodesState<DeviceNode>([]);
   const devicePlacement = useDevicePlacement(checkCollision);
   const draggingDeviceIdsRef = useRef<Set<DeviceId>>(new Set());
-  const groupDragRef = useRef<{
-    deviceIds: ReadonlyArray<DeviceId>;
-    drag: GroupDrag;
-  } | null>(null);
+  const groupDragRef = useRef<GroupDragSession | null>(null);
   const [blockedSpots, setBlockedSpots] = useState<ReadonlyArray<BlockedSpot>>(
     [],
   );
@@ -259,7 +266,7 @@ export function useCanvasDeviceNodes({
       const committedPositions = new Map<DeviceId, Position>();
       // Set from within the map below, where the drag ends.
       const ended: {
-        group: { deviceIds: ReadonlyArray<DeviceId>; offset: Position } | null;
+        group: { from: ReadonlyArray<GroupMember>; offset: Position } | null;
       } = { group: null };
       const isGroupMember = (deviceId: DeviceId) =>
         selectedDeviceIdSet.size > 1 && selectedDeviceIdSet.has(deviceId);
@@ -278,18 +285,16 @@ export function useCanvasDeviceNodes({
             selectedDeviceIdSet,
             canMoveDevices,
           ));
+          const start = group.startOf.get(deviceId) ?? device.position;
           if (change.dragging) {
             draggingDeviceIdsRef.current.add(deviceId);
             const wanted = {
-              x: change.position.x - device.position.x,
-              y: change.position.y - device.position.y,
+              x: change.position.x - start.x,
+              y: change.position.y - start.y,
             };
             const offset = group.drag.resolve(wanted);
             const snapped = snapToGrid(change.position);
-            const position = {
-              x: device.position.x + offset.x,
-              y: device.position.y + offset.y,
-            };
+            const position = { x: start.x + offset.x, y: start.y + offset.y };
             setBlockedSpots((current) =>
               withBlockedSpot(
                 current,
@@ -306,21 +311,16 @@ export function useCanvasDeviceNodes({
           setBlockedSpots((current) =>
             withBlockedSpot(current, deviceId, null),
           );
-          ended.group ??= {
-            deviceIds: group.deviceIds,
-            offset: group.drag.offset(),
-          };
-          // Refused at the last moment (someone else moved), it goes back.
-          const offset = canMoveDevices(group.deviceIds, ended.group.offset)
-            ? ended.group.offset
-            : { x: 0, y: 0 };
-          return {
-            ...change,
-            position: {
-              x: device.position.x + offset.x,
-              y: device.position.y + offset.y,
-            },
-          };
+          ended.group ??= { from: group.from, offset: group.drag.offset() };
+          // Refused at the last moment (someone else moved a member), the
+          // group stays where the server has it.
+          const position = canMoveDevices(group.from, ended.group.offset)
+            ? {
+                x: start.x + ended.group.offset.x,
+                y: start.y + ended.group.offset.y,
+              }
+            : device.position;
+          return { ...change, position };
         }
 
         if (change.dragging) {
@@ -372,7 +372,7 @@ export function useCanvasDeviceNodes({
       onNodesChange(processedChanges);
 
       if (!canEditDevices) return;
-      if (ended.group) moveDevices(ended.group.deviceIds, ended.group.offset);
+      if (ended.group) moveDevices(ended.group.from, ended.group.offset);
       committedPositions.forEach((position, deviceId) => {
         updateDevicePosition(deviceId, position);
       });

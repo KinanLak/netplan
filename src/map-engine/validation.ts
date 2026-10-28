@@ -123,7 +123,11 @@ export function validateOperation(
     }
 
     case "devices.move":
-      return validateGroupMove(snapshot, operation.deviceIds, operation.offset);
+      return validateGroupMove(
+        snapshot,
+        operation.from.map((member) => member.deviceId),
+        operation.offset,
+      );
 
     case "batch": {
       for (const subOperation of operation.operations) {

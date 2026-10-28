@@ -16,10 +16,14 @@ received one `device.patch` per member and checked only where each landed.
 ## Decision
 
 - **One operation, one offset.** A drag or an arrow nudge of the selection is
-  a `devices.move`: the devices of one floor and the offset they all move
-  by. The group cannot deform, since no member has a position of its own.
-  The engine applies it, its inverse is the opposite offset with where each
-  member is expected (as `device.patch` does, ADR 0025), and a held arrow key
+  a `devices.move`: the devices of one floor, each where it stood when the
+  move was made (`from`), and the offset they all move by. The group cannot
+  deform, since no member has a position of its own. A member no longer at
+  its `from` refuses the move, as `expected` does for `device.patch` (ADR
+  0025), so a drag never bends a group someone else has changed meanwhile;
+  members already at `from + offset` mean the move is in, so a move still
+  pending is not applied twice over a server document that holds it. The
+  inverse moves back from where the move left them, and a held arrow key
   sums its steps into one move.
 - **Never through a wall.** Each member slides in a straight line from where
   it stands to where it lands. The move is refused when a member lands on a

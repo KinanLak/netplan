@@ -13,9 +13,11 @@ import { buildInverseOperation } from "@/map-engine/buildInverseOperation";
 import { materializeDocument } from "@/map-engine/materializeDocument";
 import type {
   LabelPatch,
+  GroupMember,
   MapOperation,
   OverlayPatch,
 } from "@/map-engine/types";
+import { movedAsExpected } from "@/map-engine/devicePatch";
 import { normalizeLabelText } from "@/map-engine/labels";
 import { validateGroupMove } from "@/map-engine/validation";
 import { forgetCableChange, reshowCableChange } from "@/devices/cableUndo";
@@ -99,17 +101,14 @@ export interface MapDocumentCommands {
    */
   updateDevicePositions: (updates: Array<PositionUpdate>) => void;
   /**
-   * Moves devices of the current floor by one offset, as a rigid block
-   * (ADR 0034); false when a member would land on something or pass
-   * through a wall.
+   * Moves devices of the current floor, each from where it stood, by one
+   * offset, as a rigid block (ADR 0034); false when a member has moved
+   * since, would land on something or would pass through a wall.
    */
-  moveDevices: (
-    deviceIds: ReadonlyArray<DeviceId>,
-    offset: Position,
-  ) => boolean;
+  moveDevices: (from: ReadonlyArray<GroupMember>, offset: Position) => boolean;
   /** Whether `moveDevices` would take this move, without making it. */
   canMoveDevices: (
-    deviceIds: ReadonlyArray<DeviceId>,
+    from: ReadonlyArray<GroupMember>,
     offset: Position,
   ) => boolean;
   /** False when the device cannot be deleted yet, or at all. */
@@ -487,26 +486,26 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
   };
 
   const canMoveDevices = (
-    deviceIds: ReadonlyArray<DeviceId>,
+    from: ReadonlyArray<GroupMember>,
     offset: Position,
   ): boolean =>
     isReadyRef.current &&
-    validateGroupMove(documentRef.current, deviceIds, offset).valid;
+    movedAsExpected(documentRef.current.devices, from) &&
+    validateGroupMove(
+      documentRef.current,
+      from.map((member) => member.deviceId),
+      offset,
+    ).valid;
 
   const moveDevices = (
-    deviceIds: ReadonlyArray<DeviceId>,
+    from: ReadonlyArray<GroupMember>,
     offset: Position,
   ): boolean => {
-    if (!canMoveDevices(deviceIds, offset)) return false;
+    if (!canMoveDevices(from, offset)) return false;
     if (offset.x === 0 && offset.y === 0) return true;
     const meta = freshMeta();
     if (!meta) return false;
-    dispatchOperation({
-      kind: "devices.move",
-      meta,
-      deviceIds: [...new Set(deviceIds)],
-      offset,
-    });
+    dispatchOperation({ kind: "devices.move", meta, from: [...from], offset });
     return true;
   };
 

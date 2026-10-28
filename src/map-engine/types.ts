@@ -19,6 +19,12 @@ import type { LabelPatch } from "./labels";
 
 export type { LabelPatch } from "./labels";
 
+/** A member of a group move, where it stands before the move. */
+export interface GroupMember {
+  deviceId: DeviceId;
+  position: Position;
+}
+
 /** The map edits only where a device stands; its identity is edited apart. */
 export interface DevicePatch {
   position?: Position;
@@ -62,10 +68,14 @@ export type AtomicMapOperation =
        */
       kind: "devices.move";
       meta: OperationMeta;
-      deviceIds: Array<DeviceId>;
+      /**
+       * Every member, where it stood when the move was made. A member that
+       * has moved since refuses the move, as `expected` does for
+       * `device.patch` (ADR 0025); members already at `from + offset` mean
+       * the move is in, so a pending move is never applied twice.
+       */
+      from: Array<GroupMember>;
       offset: Position;
-      /** Where an undo or a redo expects each device, as for `device.patch`. */
-      expected?: Array<{ deviceId: DeviceId; position: Position }>;
     }
   | { kind: "device.delete"; meta: OperationMeta; deviceId: DeviceId }
   | {
