@@ -42,8 +42,9 @@ the map's queued edits in place.
 
 - A queued edit survives any page change during an outage and is sent when
   the backend returns; `e2e/offline.e2e.ts` holds that.
-- The app no longer subscribes to better-auth's session in the browser. The
-  session still slides with use: every token refresh reads it.
+- The app no longer subscribes to better-auth's session in the browser. It
+  still reads it on load and when the tab comes back, which slides the
+  session and its cookie as ADR 0031 requires.
 - A page loaded before a sign-in in another tab stays signed out until it
   reloads, as a page loaded before a sign-out already stayed signed in until
   Convex refused it.

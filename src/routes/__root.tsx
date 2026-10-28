@@ -115,6 +115,22 @@ const sessionTokens = (initialToken: string | null) => {
   return (browserTokens ??= create());
 };
 
+// Reading the session slides it and its cookie (ADR 0031), which the token
+// requests do not promise. Done on load and when the tab comes back, as
+// better-auth's own session hook did; a failure waits for the next one.
+function useSessionKeptAlive(signedIn: boolean) {
+  useEffect(() => {
+    if (!signedIn) return;
+    const read = () => {
+      if (document.visibilityState !== "visible") return;
+      authClient.getSession().catch(() => {});
+    };
+    read();
+    document.addEventListener("visibilitychange", read);
+    return () => document.removeEventListener("visibilitychange", read);
+  }, [signedIn]);
+}
+
 function RootComponent() {
   const config = Route.useLoaderData();
   const { token } = Route.useRouteContext();
@@ -125,6 +141,7 @@ function RootComponent() {
     pageConfig ??= config;
   }, [token, config]);
   const tokens = sessionTokens(token);
+  useSessionKeptAlive(tokens.signedIn);
   // Constant for the page's life: Convex drops the identity whenever these
   // change, and queries in flight then fail as a lost session.
   const useAuth = () => ({
