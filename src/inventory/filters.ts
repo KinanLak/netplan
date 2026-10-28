@@ -1,6 +1,7 @@
 // The inventory's filters, kept in the URL so a reload, a link or Back
 // brings the same list (A62), and counted in the context of one another.
 import { getDeviceKindLabel } from "@/devices/deviceKindRegistry";
+import { isAbsentFromSource } from "@/devices/identity";
 import { matchesDeviceSearch } from "@/devices/search";
 import { DEVICE_STATUS_LABELS } from "@/devices/status";
 import { DEFAULT_SORT, locationLabel, statusOf } from "@/inventory/columns";
@@ -14,6 +15,17 @@ export type InventoryFilters = {
   placement: Placement;
   status: "all" | DeviceStatus;
   type: "all" | DeviceType;
+  /** Only the devices NetBox no longer returns (ADR 0034). */
+  absent: boolean;
+};
+
+/** No filter at all. */
+export const NO_FILTERS: InventoryFilters = {
+  query: "",
+  placement: "all",
+  status: "all",
+  type: "all",
+  absent: false,
 };
 
 /** What the URL holds; a default value is left out. */
@@ -22,6 +34,7 @@ export type InventorySearch = {
   placement?: Exclude<Placement, "all">;
   status?: DeviceStatus;
   type?: DeviceType;
+  absent?: true;
   sort?: Exclude<SortKey, "name">;
   desc?: true;
 };
@@ -50,6 +63,7 @@ export const parseInventorySearch = (
     typeof search.type === "string" && search.type !== ""
       ? (search.type as DeviceType)
       : undefined,
+  absent: search.absent === true || search.absent === "true" ? true : undefined,
   sort:
     typeof search.sort === "string" && SORT_KEYS.includes(search.sort)
       ? (search.sort as Exclude<SortKey, "name">)
@@ -62,6 +76,7 @@ export const filtersOf = (search: InventorySearch): InventoryFilters => ({
   placement: search.placement ?? "all",
   status: search.status ?? "all",
   type: search.type ?? "all",
+  absent: search.absent === true,
 });
 
 export const sortOf = (search: InventorySearch): Sort =>
@@ -78,6 +93,7 @@ export const toSearch = (
   ...(filters.placement !== "all" && { placement: filters.placement }),
   ...(filters.status !== "all" && { status: filters.status }),
   ...(filters.type !== "all" && { type: filters.type }),
+  ...(filters.absent && { absent: true as const }),
   ...(sort.key !== "name" && { sort: sort.key }),
   ...(sort.descending && { desc: true as const }),
 });
@@ -86,9 +102,10 @@ export const isFiltered = (filters: InventoryFilters): boolean =>
   filters.query.trim() !== "" ||
   filters.placement !== "all" ||
   filters.status !== "all" ||
-  filters.type !== "all";
+  filters.type !== "all" ||
+  filters.absent;
 
-type Facet = "query" | "placement" | "status" | "type";
+type Facet = "query" | "placement" | "status" | "type" | "absent";
 
 const passes = (
   device: InventoryRow,
@@ -104,6 +121,9 @@ const passes = (
   (except === "type" ||
     filters.type === "all" ||
     device.type === filters.type) &&
+  (except === "absent" ||
+    !filters.absent ||
+    isAbsentFromSource(device.source)) &&
   (except === "query" ||
     matchesDeviceSearch(device, filters.query, [
       getDeviceKindLabel(device.type),
@@ -125,6 +145,8 @@ export const facetCounts = (
 ): {
   placement: Record<Placement, number>;
   status: Record<"all" | DeviceStatus, number>;
+  /** Devices NetBox no longer returns, the other filters applied. */
+  absent: number;
 } => {
   const byPlacement = rows.filter((device) =>
     passes(device, filters, "placement"),
@@ -132,6 +154,10 @@ export const facetCounts = (
   const byStatus = rows.filter((device) => passes(device, filters, "status"));
   const statuses = Object.keys(DEVICE_STATUS_LABELS) as Array<DeviceStatus>;
   return {
+    absent: rows.filter(
+      (device) =>
+        passes(device, filters, "absent") && isAbsentFromSource(device.source),
+    ).length,
     placement: {
       all: byPlacement.length,
       placed: byPlacement.filter((device) => device.location).length,

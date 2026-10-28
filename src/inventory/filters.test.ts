@@ -5,6 +5,7 @@ import {
   applyFilters,
   facetCounts,
   filtersOf,
+  NO_FILTERS,
   parseInventorySearch,
   sortOf,
   toSearch,
@@ -59,7 +60,7 @@ describe("inventory URL", () => {
     expect(toSearch(filtersOf(search), sortOf(search))).toEqual({});
     expect(
       toSearch(
-        { query: "", placement: "unplaced", status: "all", type: "pc" },
+        { ...NO_FILTERS, placement: "unplaced", type: "pc" },
         { key: "name", descending: true },
       ),
     ).toEqual({ placement: "unplaced", type: "pc", desc: true });
@@ -69,10 +70,9 @@ describe("inventory URL", () => {
 describe("filters", () => {
   it("combines every filter with the search, type and place included", () => {
     const filters = {
+      ...NO_FILTERS,
       query: "etage 1",
-      placement: "all" as const,
       status: "down" as const,
-      type: "all" as const,
     };
     expect(applyFilters(rows, filters).map((device) => device.name)).toEqual([
       "Poste 2",
@@ -81,10 +81,9 @@ describe("filters", () => {
 
   it("counts each choice with the other filters applied", () => {
     const counts = facetCounts(rows, {
-      query: "",
+      ...NO_FILTERS,
       placement: "unplaced",
       status: "down",
-      type: "all",
     });
     // Two devices are down, one of them unplaced; two are unplaced, one down.
     expect(counts.status).toEqual({
@@ -95,6 +94,27 @@ describe("filters", () => {
       unknown: 1,
     });
     expect(counts.placement).toEqual({ all: 2, placed: 1, unplaced: 1 });
+  });
+});
+
+describe("absent from NetBox", () => {
+  const absent = row("Ancien poste", {
+    source: {
+      integration: "netbox",
+      externalId: "4",
+      syncedAt: 1,
+      missingSince: 2,
+    },
+  });
+
+  it("keeps only the devices NetBox no longer returns, and counts them", () => {
+    const all = [...rows, absent];
+    const filters = filtersOf(parseInventorySearch({ absent: "true" }));
+    expect(applyFilters(all, filters).map((device) => device.name)).toEqual([
+      "Ancien poste",
+    ]);
+    expect(facetCounts(all, NO_FILTERS).absent).toBe(1);
+    expect(toSearch(filters, sortOf({}))).toEqual({ absent: true });
   });
 });
 
