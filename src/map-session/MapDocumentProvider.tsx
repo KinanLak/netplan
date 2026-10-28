@@ -1117,10 +1117,10 @@ export function MapDocumentProvider({
       onAck: (operation, result) => {
         // The device is back, but the user lost cables to lay again by hand.
         if (result.droppedCables) {
-          toast.warning(droppedCablesMessage(result.droppedCables), {
-            description:
-              "Leur autre extrémité a disparu ou porte déjà un autre câble.",
-          });
+          const { title, description } = droppedCablesMessage(
+            result.droppedCables,
+          );
+          toast.warning(title, { description });
         }
         ackedRevisionsRef.current.set(
           operation.meta.opId,

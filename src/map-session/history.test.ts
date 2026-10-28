@@ -10,6 +10,7 @@ import type { MapOperation } from "@/map-engine/types";
 import {
   appendCappedHistory,
   coalesceHistoryGroupOperations,
+  droppedCablesMessage,
   HISTORY_LIMIT,
   removeHistoryEntriesForOperation,
   removePendingHistoryGroupOperation,
@@ -211,6 +212,17 @@ describe("session history", () => {
 
     expect(removePendingHistoryGroupOperation(group, "op:rejected")).toEqual(
       [],
+    );
+  });
+
+  it("says how many cables an undone deletion could not lay again (4.1)", () => {
+    expect(droppedCablesMessage(1)).toEqual({
+      title: "1 câble n'a pas pu être rebranché.",
+      description:
+        "Son autre extrémité a disparu ou porte déjà un autre câble.",
+    });
+    expect(droppedCablesMessage(3).title).toBe(
+      "3 câbles n'ont pas pu être rebranchés.",
     );
   });
 });
