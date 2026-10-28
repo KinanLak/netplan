@@ -34,3 +34,30 @@ export function MapSkeleton() {
     </div>
   );
 }
+
+/**
+ * A list page's frame (inventory, history) before its code runs: the server
+ * renders it, so a slow link shows the page's shape instead of white.
+ */
+export function ListPageSkeleton() {
+  return (
+    <div className="flex h-svh flex-col bg-background">
+      <div className="flex h-12 shrink-0 items-center gap-3 border-b bg-sidebar px-4">
+        <Skeleton className="h-7 w-24" />
+        <Skeleton className="h-5 w-40" />
+      </div>
+      <div className="mx-auto w-full max-w-6xl p-4 md:p-8">
+        <ListSkeleton />
+      </div>
+    </div>
+  );
+}
+
+/** The administration's frame before its code runs. */
+export function AdminSkeleton() {
+  return (
+    <div className="mx-auto h-svh max-w-4xl bg-background p-4 md:p-8">
+      <ListSkeleton />
+    </div>
+  );
+}

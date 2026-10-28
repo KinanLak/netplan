@@ -5,7 +5,7 @@ import { useQuery } from "convex/react";
 import { toast } from "sonner";
 import { useEffect, useId, useState } from "react";
 import { ModeToggle } from "@/components/mode-toggle";
-import { ListSkeleton } from "@/components/loading-skeletons";
+import { ListPageSkeleton, ListSkeleton } from "@/components/loading-skeletons";
 import { AppNavLinks, UserMenu } from "@/components/app-nav";
 import { NetplanLogo } from "@/components/netplan-logo";
 import { Button } from "@/components/ui/button";
@@ -87,6 +87,9 @@ const inventorySearch = (
 
 export const Route = createFileRoute("/_authed/inventory")({
   ssr: false,
+  // Rendered by the server, so a slow link shows the frame at once.
+  pendingComponent: ListPageSkeleton,
+  pendingMinMs: 0,
   validateSearch: inventorySearch,
   head: () => ({ meta: [{ title: "Inventaire" }] }),
   component: InventoryPage,

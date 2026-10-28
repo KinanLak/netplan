@@ -6,11 +6,12 @@ import {
   Search01Icon,
 } from "@hugeicons/core-free-icons";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
-import { usePaginatedQuery, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
+import { useKeptPaginatedQuery } from "@/hooks/use-kept-paginated-query";
 import type { FunctionReturnType } from "convex/server";
 import { useEffect, useState } from "react";
 import { ModeToggle } from "@/components/mode-toggle";
-import { ListSkeleton } from "@/components/loading-skeletons";
+import { ListPageSkeleton, ListSkeleton } from "@/components/loading-skeletons";
 import { AppNavLinks, UserMenu } from "@/components/app-nav";
 import { NetplanLogo } from "@/components/netplan-logo";
 import { Segmented } from "@/components/segmented";
@@ -91,6 +92,9 @@ const historySearch = (search: Record<string, unknown>): HistorySearch => ({
 
 export const Route = createFileRoute("/_authed/history")({
   ssr: false,
+  // Rendered by the server, so a slow link shows the frame at once.
+  pendingComponent: ListPageSkeleton,
+  pendingMinMs: 0,
   validateSearch: historySearch,
   head: () => ({ meta: [{ title: "Historique" }] }),
   component: HistoryPage,
@@ -251,7 +255,7 @@ function SiteEvents({ site }: { site: SiteSummary }) {
     });
   };
 
-  const { results, status, loadMore } = usePaginatedQuery(
+  const { results, status, loadMore } = useKeptPaginatedQuery(
     api.history.forSite,
     {
       siteId: site.id,
@@ -614,7 +618,7 @@ function SlotEntries({ site, slot }: { site: SiteSummary; slot: Slot }) {
     results: shown,
     status,
     loadMore,
-  } = usePaginatedQuery(
+  } = useKeptPaginatedQuery(
     api.history.slotEntries,
     {
       siteId: site.id,

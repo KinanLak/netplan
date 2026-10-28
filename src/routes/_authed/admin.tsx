@@ -5,7 +5,7 @@ import {
   WorkHistoryIcon,
 } from "@hugeicons/core-free-icons";
 import { Link, Outlet, createFileRoute } from "@tanstack/react-router";
-import { ListSkeleton } from "@/components/loading-skeletons";
+import { AdminSkeleton } from "@/components/loading-skeletons";
 import { UserMenu } from "@/components/app-nav";
 import { NetplanLogo } from "@/components/netplan-logo";
 import { ModeToggle } from "@/components/mode-toggle";
@@ -16,6 +16,9 @@ import { isAdmin } from "@/lib/roles";
 
 export const Route = createFileRoute("/_authed/admin")({
   ssr: false,
+  // Rendered by the server, so a slow link shows the frame at once.
+  pendingComponent: AdminSkeleton,
+  pendingMinMs: 0,
   head: () => ({ meta: [{ title: "Administration" }] }),
   component: AdminShell,
 });
@@ -31,13 +34,7 @@ const APP_LINKS = [
 // them a page of errors.
 function AdminShell() {
   const me = useCurrentUser();
-  if (me === undefined) {
-    return (
-      <div className="mx-auto h-svh max-w-4xl bg-background p-4 md:p-8">
-        <ListSkeleton />
-      </div>
-    );
-  }
+  if (me === undefined) return <AdminSkeleton />;
   if (!isAdmin(me.role)) return <AdminOnly sso={me.sso} />;
 
   return (
