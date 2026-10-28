@@ -298,38 +298,21 @@ const moveBrushPointer = (
     };
   }
 
-  if (!baseState.isBrushStrokeActive) {
-    addBrushAtPoint(context, adapter, sample.snappedPoint);
-
-    return {
-      ...baseState,
-      isBrushStrokeActive: true,
-      brushStrokeLastSample: sample,
-      ignoreNextBrushClick: true,
-    };
-  }
-
-  const previous = baseState.brushStrokeLastSample;
-  if (!previous) {
-    addBrushAtPoint(context, adapter, sample.snappedPoint);
-
-    return {
-      ...baseState,
-      brushStrokeLastSample: sample,
-      ignoreNextBrushClick: true,
-    };
-  }
-
-  const strokeResult = adapter.addWallLine({
-    floorId: context.currentFloorId,
-    start: previous.snappedPoint,
-    end: sample.snappedPoint,
-    color: context.selectedWallColor,
-  });
+  const previous = baseState.isBrushStrokeActive
+    ? baseState.brushStrokeLastSample
+    : null;
+  const strokeResult = previous
+    ? adapter.addWallLine({
+        floorId: context.currentFloorId,
+        start: previous.snappedPoint,
+        end: sample.snappedPoint,
+        color: context.selectedWallColor,
+      })
+    : addBrushAtPoint(context, adapter, sample.snappedPoint);
 
   return {
-    ...baseState,
-    drawMessage: strokeResult.changed ? null : baseState.drawMessage,
+    ...withBrushResult(baseState, strokeResult, "stroke"),
+    isBrushStrokeActive: true,
     ignoreNextBrushClick: true,
     brushStrokeLastSample: sample,
   };
@@ -365,6 +348,28 @@ const clickErasePane = (
   };
 };
 
+/**
+ * A brush click or stroke that crosses a device says so and flashes; a
+ * stroke flashes once each time it reaches one, not at every cell it is
+ * held over (A19).
+ */
+const withBrushResult = (
+  state: WallInteractionState,
+  result: WallCommandResult,
+  gesture: "click" | "stroke",
+): WallInteractionState => {
+  if (result.reason === "collision-with-device") {
+    const flashes =
+      gesture === "click" || state.drawMessage !== COLLISION_LINE_MESSAGE;
+    return {
+      ...state,
+      drawMessage: COLLISION_LINE_MESSAGE,
+      refusals: state.refusals + (flashes ? 1 : 0),
+    };
+  }
+  return result.changed ? { ...state, drawMessage: null } : state;
+};
+
 const clickBrushPane = (
   state: WallInteractionState,
   context: WallInteractionContext,
@@ -376,17 +381,9 @@ const clickBrushPane = (
   }
 
   const brushResult = addBrushAtPoint(context, adapter, sample.snappedPoint);
-  const refused = brushResult.reason === "collision-with-device";
-  const nextMessage = refused
-    ? COLLISION_LINE_MESSAGE
-    : brushResult.changed
-      ? null
-      : state.drawMessage;
 
   return {
-    ...state,
-    drawMessage: nextMessage,
-    refusals: state.refusals + (refused ? 1 : 0),
+    ...withBrushResult(state, brushResult, "click"),
     hoverSnapPoint: sample.snappedPoint,
     pointerPreview: null,
   };

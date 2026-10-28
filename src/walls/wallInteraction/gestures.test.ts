@@ -268,6 +268,26 @@ describe("press and drag", () => {
     expect(refusedBy("already-exists")).toBe(0);
   });
 
+  it("flashes a brush stroke once each time it reaches a device", () => {
+    const context = makeContext({ activeDrawTool: "wall-brush" });
+    const blocked = (x: number) => x >= 100 && x <= 140;
+    const adapter = {
+      ...makeAdapter(),
+      addWallLine: mock((line: { end: { x: number } }) =>
+        blocked(line.end.x)
+          ? unchangedResult("collision-with-device")
+          : applied(),
+      ),
+    };
+    let state = createWallInteractionState();
+    for (const x of [40, 80, 100, 120, 140, 160, 120]) {
+      state = moveWallPointer(state, context, adapter, sampleAt(x, 40), 1);
+    }
+    // Into the device, out of it, and into it again: two flashes.
+    expect(state.refusals).toBe(2);
+    expect(state.drawMessage).toBe("Mur refusé : il traverse un équipement.");
+  });
+
   it("does nothing for the brush, the eraser, or a shape already started", () => {
     const adapter = makeAdapter();
     const idle = createWallInteractionState();
