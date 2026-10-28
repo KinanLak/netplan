@@ -29,7 +29,7 @@ const failingPushes = async (ctx: QueryCtx, siteId: string) => {
       .withIndex("by_object_id", (q) => q.eq("objectId", row.deviceId))
       .unique();
     if (!device?.source || device.source.integration !== "netbox") continue;
-    // Absent from NetBox: nothing is pushed to it any more (ADR 0034).
+    // Absent from NetBox: nothing is pushed to it any more (ADR 0039).
     if (device.source.missingSince !== undefined) continue;
     if (failing.length === FAILING_SHOWN) {
       more = true;

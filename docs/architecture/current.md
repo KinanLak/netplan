@@ -162,7 +162,7 @@ stops every cycle on a server.
   Éditeur suggestion, an ambiguous one as an admin conflict
   (`importReviews`), both settled from the inventory page. A device NetBox
   no longer lists stays bound, absent since `source.missingSince` (ADR
-  0034): NetBox returning it, under its id or by MAC or serial, clears it;
+  0039): NetBox returning it, under its id or by MAC or serial, clears it;
   a daily job purges one that has been absent, and on no floor, for 30
   days, measured up to the last import. The push skips absent devices.
 - **LibreNMS** (`convex/librenmsCycle.ts`, the pure rules in

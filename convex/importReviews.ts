@@ -20,7 +20,7 @@ const deviceRow = async (ctx: QueryCtx, deviceId: string) =>
 
 /**
  * Whether a device may still become the NetBox device of a review: a manual
- * one, or one NetBox no longer returns (ADR 0034).
+ * one, or one NetBox no longer returns (ADR 0039).
  */
 const reviewable = (device: Doc<"devices">) =>
   device.source === undefined || device.source.missingSince !== undefined;

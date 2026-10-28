@@ -94,7 +94,7 @@ export const setPush = adminMutation({
 
 /**
  * How many of the site's devices NetBox returns, which the push writes to;
- * an absent one is not written to (ADR 0034).
+ * an absent one is not written to (ADR 0039).
  */
 export const importedCount = adminQuery({
   args: { siteId: v.string() },

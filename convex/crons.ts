@@ -26,7 +26,7 @@ crons.daily(
   {},
 );
 
-// A device absent from NetBox goes after 30 days off the plan (ADR 0034).
+// A device absent from NetBox goes after 30 days off the plan (ADR 0039).
 crons.daily(
   "purge devices absent from NetBox",
   { hourUTC: 3, minuteUTC: 53 },

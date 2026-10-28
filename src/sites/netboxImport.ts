@@ -113,7 +113,7 @@ export type InventoryDevice = {
   serial?: string;
   macs: ReadonlyArray<string>;
   placed: boolean;
-  /** Since when NetBox no longer returns it (ADR 0034). */
+  /** Since when NetBox no longer returns it (ADR 0039). */
   missingSince?: number;
 };
 
@@ -127,7 +127,7 @@ export type ImportPlan = {
   conflict: Array<{ device: ImportedDevice; candidateIds: Array<string> }>;
   /**
    * Devices NetBox stopped returning with this import; they keep their
-   * binding, absent since now (ADR 0034).
+   * binding, absent since now (ADR 0039).
    */
   missing: Array<string>;
   /** The MAC addresses each written device ends with. */
@@ -155,7 +155,7 @@ const countOf = (keys: Iterable<string | undefined>) => {
  * that shares its MAC or serial without contradicting it, waits for review
  * when only a hostname matches or the match is ambiguous, and is created
  * otherwise. A device NetBox no longer returns is never removed here: it
- * becomes absent (ADR 0034).
+ * becomes absent (ADR 0039).
  */
 export function planNetBoxImport(
   imported: ReadonlyArray<ImportedDevice>,
@@ -176,7 +176,7 @@ export function planNetBoxImport(
   );
   const listed = new Set(imported.map((device) => device.externalId));
   // A device NetBox no longer returns links again to the device NetBox
-  // returns in its place, by the same rules as a manual one (ADR 0034).
+  // returns in its place, by the same rules as a manual one (ADR 0039).
   const free = inventory.filter(
     (device) =>
       device.netboxId === undefined ||
@@ -297,7 +297,7 @@ function assignMacs(
   return macs;
 }
 
-/** How long a device absent from NetBox and on no floor is kept (ADR 0034). */
+/** How long a device absent from NetBox and on no floor is kept (ADR 0039). */
 export const ABSENCE_KEPT_MS = 30 * 24 * 60 * 60_000;
 
 /**
@@ -524,7 +524,7 @@ export function planDevicePorts(
   const nameKey = (kind: PortKind, name: string) =>
     `${kind}:${name.trim().toLowerCase()}`;
   // A manual port, or one whose NetBox port NetBox no longer lists, as when
-  // an absent device comes back recreated (ADR 0034), keeps its id by name.
+  // an absent device comes back recreated (ADR 0039), keeps its id by name.
   const listed = new Set(wanted.map((port) => port.externalId));
   const manual = new Map<string, string>();
   for (const port of existing) {

@@ -160,7 +160,7 @@ export const due = internalQuery({
     const devices = [];
     for (const device of page.page) {
       // NetBox no longer returns it: there is nothing there to write to
-      // (ADR 0034).
+      // (ADR 0039).
       if (device.source?.missingSince !== undefined) continue;
       const netboxId = Number(device.source?.externalId);
       if (!Number.isSafeInteger(netboxId)) continue;

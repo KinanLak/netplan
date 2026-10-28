@@ -218,7 +218,7 @@ export const apply = internalMutation({
 
     // Nothing NetBox stops returning is deleted or released here: it stays
     // bound, absent since now, until NetBox returns it or the purge takes it
-    // (ADR 0034).
+    // (ADR 0039).
     for (const deviceId of plan.missing) {
       const device = byId.get(deviceId);
       if (!device?.source) continue;
@@ -318,7 +318,7 @@ const PURGE_BATCH = 100;
 /**
  * Deletes the devices absent from NetBox for 30 days and on no floor for as
  * long, with their MACs, ports, cables and push row, as an import once did
- * at once (ADR 0034). Daily; an archived site keeps everything.
+ * at once (ADR 0039). Daily; an archived site keeps everything.
  */
 export const purgeAbsent = internalMutation({
   args: {},
