@@ -2,6 +2,8 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import {
   ArrowDown01Icon,
   ArrowRight01Icon,
+  EthernetPortIcon,
+  Location01Icon,
   Search01Icon,
 } from "@hugeicons/core-free-icons";
 import { useNavigate } from "@tanstack/react-router";
@@ -13,12 +15,12 @@ import type { FormEvent, ReactNode } from "react";
 import { toast } from "sonner";
 import { Time } from "@/components/time";
 import { CopyValue } from "@/components/copy-value";
+import { IconNote, IconNotes } from "@/components/icon-note";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -185,12 +187,7 @@ export function UnknownMacs({
         />
       </div>
 
-      {unknown.length === 0 ? (
-        <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-          Toutes les adresses que LibreNMS voit sont portées par un équipement
-          ou ignorées.
-        </p>
-      ) : (
+      {unknown.length === 0 ? null : (
         <section aria-label="Adresses MAC inconnues" className="space-y-2">
           <SelectionBar
             count={shown.length}
@@ -358,12 +355,19 @@ export function UnknownMacs({
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Créer l'équipement</DialogTitle>
-            <DialogDescription>
-              {creating?.socket?.placed
-                ? `Il portera ${creating.mac} et sera placé près de « ${creating.socket.name} ».`
-                : `Il portera ${creating?.mac ?? ""}, hors plan.`}
-            </DialogDescription>
           </DialogHeader>
+          {creating ? (
+            <IconNotes>
+              <IconNote icon={EthernetPortIcon}>
+                <span className="font-mono">{creating.mac}</span>
+              </IconNote>
+              <IconNote icon={Location01Icon}>
+                {creating.socket?.placed
+                  ? `Près de « ${creating.socket.name} »`
+                  : "Hors plan"}
+              </IconNote>
+            </IconNotes>
+          ) : null}
           {/* Keyed by MAC, so each one starts from its own form. */}
           {creating ? (
             <CreateForm
@@ -430,8 +434,7 @@ function SelectionBar({
 
 function NoMatch({ onReset }: { onReset: () => void }) {
   return (
-    <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-      <p>Aucune adresse ne correspond à cette recherche.</p>
+    <div className="flex justify-center rounded-lg border border-dashed p-6">
       <Button variant="outline" size="sm" onClick={onReset}>
         Effacer la recherche
       </Button>
@@ -448,15 +451,15 @@ function Where({
   switchName: string | null;
   portName: string | null;
 }) {
-  const port = [switchName, portName].filter(Boolean).join(" · ");
   return (
     <span className="flex min-w-0 flex-col">
       <span className="truncate">
         {socketName === null ? "Sans prise" : <SocketName name={socketName} />}
       </span>
-      {port ? (
-        <span className="truncate font-mono text-xs text-muted-foreground">
-          {port}
+      {switchName || portName ? (
+        <span className="flex gap-2 truncate font-mono text-xs text-muted-foreground">
+          {switchName ? <span className="truncate">{switchName}</span> : null}
+          {portName ? <span className="shrink-0">{portName}</span> : null}
         </span>
       ) : null}
     </span>
@@ -647,7 +650,7 @@ function CreateForm({
           Annuler
         </Button>
         <Button type="submit" disabled={saving}>
-          Créer
+          Créer l'équipement
         </Button>
       </DialogFooter>
     </form>

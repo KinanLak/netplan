@@ -25,7 +25,6 @@ import {
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { getDeviceKindLabel } from "@/devices/deviceKindRegistry";
@@ -80,7 +79,6 @@ export function ColumnPicker({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
         <DropdownMenuGroup>
-          <DropdownMenuLabel>Colonnes affichées</DropdownMenuLabel>
           {OPTIONAL_COLUMNS.map((column) => (
             <DropdownMenuCheckboxItem
               key={column.id}
@@ -422,7 +420,16 @@ function InventoryItem({
       ) : null}
       {shows("location") ? (
         <td className={cn(CELL, "truncate")} title={place}>
-          {place ?? <span className="text-muted-foreground">Hors plan</span>}
+          {location ? (
+            <>
+              {location.buildingName}
+              <span className="ms-2 text-muted-foreground">
+                {location.floorName}
+              </span>
+            </>
+          ) : (
+            <span className="text-muted-foreground">Hors plan</span>
+          )}
         </td>
       ) : null}
       {shows("seen") ? (
@@ -451,11 +458,11 @@ function InventoryItem({
               </DropdownMenuItem>
             ) : null}
             <DropdownMenuItem onClick={() => setShowingCables(true)}>
-              Câbles
+              Voir les câbles
             </DropdownMenuItem>
             {hasHistory ? (
               <DropdownMenuItem onClick={() => setShowingHistory(true)}>
-                Historique
+                Voir l'historique
               </DropdownMenuItem>
             ) : null}
             {canEdit ? (

@@ -21,9 +21,6 @@ type Place = SnapshotEntry["place"];
 
 /** Where the network saw a device, with the names it had then. */
 export function PlaceLabel({ place }: { place: Place }) {
-  const floor = [place.buildingName, place.floorName]
-    .filter(Boolean)
-    .join(" · ");
   return (
     <span className="flex min-w-0 flex-col">
       <span className="truncate">
@@ -32,12 +29,18 @@ export function PlaceLabel({ place }: { place: Place }) {
         ) : (
           <SocketName name={place.socketName} />
         )}
-        {floor ? (
-          <span className="text-muted-foreground"> — {floor}</span>
+        {place.buildingName ? (
+          <span className="ms-2 text-muted-foreground">
+            {place.buildingName}
+          </span>
+        ) : null}
+        {place.floorName ? (
+          <span className="ms-2 text-muted-foreground">{place.floorName}</span>
         ) : null}
       </span>
       <span className="truncate font-mono text-xs text-muted-foreground">
-        {place.switchName} · {place.portName}
+        {place.switchName}
+        <span className="ms-2">{place.portName}</span>
       </span>
     </span>
   );
@@ -89,7 +92,7 @@ export function EventSummary({
   );
 }
 
-/** The paginated query's "more" button, or why there is nothing more. */
+/** The paginated query's "more" button. */
 export function LoadMore({
   status,
   onLoadMore,
