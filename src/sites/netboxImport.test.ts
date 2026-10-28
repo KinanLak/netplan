@@ -413,6 +413,24 @@ describe("readNetBoxCabling", () => {
     }
   });
 
+  it("keeps an interface named like a virtual one when NetBox has a cable on it", () => {
+    const cabled = (name: string) =>
+      isPhysicalInterface({
+        name,
+        type: { value: "1000base-t" },
+        cable: { id: 12 },
+      });
+    expect(cabled("vlan10-uplink")).toBe(true);
+    expect(cabled("Po1")).toBe(true);
+    expect(
+      isPhysicalInterface({
+        name: "br0",
+        type: { value: "bridge" },
+        cable: { id: 3 },
+      }),
+    ).toBe(false);
+  });
+
   it("leaves out virtual, bridge and aggregate interfaces", () => {
     const { ports } = readNetBoxCabling([netbox("1")], {
       interfaces: [

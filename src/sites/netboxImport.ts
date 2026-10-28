@@ -479,10 +479,15 @@ const VIRTUAL_NAMES: ReadonlyArray<RegExp> = [
   /\.\d+$/,
 ];
 
-/** Whether a NetBox interface is something a cable plugs into. */
+/**
+ * Whether a NetBox interface is something a cable plugs into. A name that
+ * looks virtual leaves out only an interface NetBox has no cable on: a cable
+ * says it is a real port, whatever it is called.
+ */
 export const isPhysicalInterface = (item: Raw): boolean => {
   const type = isObject(item.type) ? text(item.type.value) : undefined;
   if (type !== undefined && NOT_A_PORT.has(type)) return false;
+  if (isObject(item.cable)) return true;
   const name = text(item.name) ?? "";
   return !VIRTUAL_NAMES.some((pattern) => pattern.test(name));
 };
