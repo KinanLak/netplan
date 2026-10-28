@@ -15,6 +15,7 @@ import {
   SITE,
   outbox,
   post,
+  tokenFromLink,
   withMail,
   withMailRelay,
 } from "./_test/mail.setup";
@@ -658,6 +659,51 @@ describe("handing a local account to Keycloak", () => {
     await expect(
       admin.mutation(api.users.cancelInvitation, { userId }),
     ).rejects.toThrow("déjà servi");
+  });
+
+  // The handover runs while a request is between its read and its write:
+  // the state it leaves is set directly here.
+  it("lets no password or session in that was already on its way at the handover", async () => {
+    const t = withMail();
+    const { userId, signIn } = await localAccount(t);
+    await post(t, "/request-password-reset", {
+      email: lou.email,
+      redirectTo: "/reset-password",
+    });
+    await t.finishAllScheduledFunctions(() => {});
+    const [mail] = await outbox(t);
+    const { token } = await tokenFromLink(t, mail);
+    await t.mutation(internal.keycloakHandovers.start, { userId });
+
+    // A sign-in whose password was checked before the credential went.
+    expect((await signIn()).status).toBe(403);
+
+    // A reset whose token was read before the handover deleted it.
+    await t.run((ctx) =>
+      ctx.runMutation(components.betterAuth.adapter.deleteMany, {
+        input: {
+          model: "account",
+          where: [{ field: "userId", value: userId }],
+        },
+        paginationOpts: { numItems: 10, cursor: null },
+      }),
+    );
+    expect(
+      (
+        await post(t, "/reset-password", {
+          token,
+          newPassword: "new-password-2",
+        })
+      ).ok,
+    ).toBe(false);
+    const accounts = await t.run((ctx) =>
+      ctx.runQuery(components.betterAuth.adapter.findMany, {
+        model: "account",
+        where: [{ field: "userId", value: userId }],
+        paginationOpts: { numItems: 10, cursor: null },
+      }),
+    );
+    expect(accounts.page).toEqual([]);
   });
 
   it("waits for a disabled account to be enabled again", async () => {

@@ -141,6 +141,8 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
   // The email of the user a Keycloak sign-in is creating in this request:
   // its account is the one link that needs no handover.
   let signingUpEmail: string | null = null;
+  const awaitingKeycloak = (userId: string) =>
+    ctx.runQuery(internal.keycloakHandovers.isPending, { userId });
   return {
     baseURL: process.env.SITE_URL,
     // SITE_URL plus TRUSTED_ORIGINS (comma-separated), which dev:agent sets
@@ -233,8 +235,18 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
       account: {
         create: {
           // A Keycloak account goes to the user this sign-in just created,
-          // or to an account an admin handed to Keycloak; nowhere else.
+          // or to an account an admin handed to Keycloak; nowhere else. A
+          // password never goes to an account waiting for Keycloak, even
+          // from a reset that was already under way at the handover.
           before: async (account) => {
+            if (account.providerId === "credential") {
+              if (await awaitingKeycloak(account.userId)) {
+                throw new APIError("FORBIDDEN", {
+                  code: "AWAITING_KEYCLOAK",
+                });
+              }
+              return;
+            }
             if (account.providerId !== "keycloak") return;
             const { runQuery } = requireActionCtx(ctx);
             const user = (await runQuery(
@@ -297,10 +309,15 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
         },
         create: {
           before: async (session, context) => {
-            if (
-              keycloakConfig &&
-              context?.path.startsWith("/oauth2/callback/")
-            ) {
+            const viaKeycloak = context?.path.startsWith("/oauth2/callback/");
+            // A password sign-in already checking its hash at the handover
+            // would otherwise open a session after they were all closed. A
+            // Keycloak sign-in is the one the account waits for: the account
+            // hook let it link, and ends the wait just after.
+            if (!viaKeycloak && (await awaitingKeycloak(session.userId))) {
+              throw new APIError("FORBIDDEN", { code: "AWAITING_KEYCLOAK" });
+            }
+            if (keycloakConfig && viaKeycloak) {
               await applyKeycloakRole(ctx, keycloakConfig, session.userId);
             }
           },
