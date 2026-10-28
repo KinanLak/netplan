@@ -5,6 +5,7 @@ import { components, internal } from "./_generated/api";
 import type { ActionCtx, MutationCtx, QueryCtx } from "./_generated/server";
 import { createAuth } from "./auth";
 import { internalMutation } from "./_generated/server";
+import { endSessions } from "./lib/sessions";
 import { noteSignIn } from "./lib/signIns";
 import {
   adminAction,
@@ -232,21 +233,27 @@ export const setDisabled = adminMutation({
         },
       },
     });
-    // deleteMany removes one page per call.
-    let cursor: string | null = null;
-    while (disabled) {
-      const deleted: { isDone: boolean; continueCursor: string } =
-        await ctx.runMutation(components.betterAuth.adapter.deleteMany, {
-          input: {
-            model: "session",
-            where: [{ field: "userId", value: userId }],
-          },
-          paginationOpts: { numItems: 200, cursor },
-        });
-      if (deleted.isDone) break;
-      cursor = deleted.continueCursor;
-    }
+    if (disabled) await endSessions(ctx, userId);
     return null;
+  },
+});
+
+/**
+ * Ends every session of another account without disabling it (ADR 0036).
+ * It signs in again at once if it can; a Keycloak account's role is read
+ * again then. Answers how many sessions ended, never which.
+ */
+export const signOutEverywhere = adminMutation({
+  args: { userId: v.string() },
+  returns: v.number(),
+  handler: async (ctx, { userId }) => {
+    if (userId === ctx.user.id) {
+      throw new ConvexError(
+        "Pour votre propre compte, utilisez « Se déconnecter ».",
+      );
+    }
+    await existingUser(ctx, userId);
+    return await endSessions(ctx, userId);
   },
 });
 

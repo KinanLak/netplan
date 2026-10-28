@@ -447,6 +447,13 @@ export default defineSchema({
     .index("by_kind_and_identifier", ["kind", "identifier"])
     .index("by_last_attempt", ["lastAttemptAt"]),
 
+  // When each Keycloak account's role was last read again (ADR 0036). Kept
+  // apart from the account row, which better-auth also writes.
+  keycloakRoleChecks: defineTable({
+    userId: v.string(),
+    at: v.number(),
+  }).index("by_user", ["userId"]),
+
   // A single row: the Keycloak role names that grant Éditeur and Admin
   // (ADR 0004), and whether groups count too (ADR 0036, absent is no).
   // Absent until an admin first saves them.

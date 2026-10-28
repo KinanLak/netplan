@@ -50,6 +50,7 @@
       "firstName": "Lou",
       "lastName": "Keycloak",
       "enabled": true,
+      "realmRoles": ["default-roles-netplan"],
       "credentials": [
         { "type": "password", "value": "netplan-dev", "temporary": false }
       ]
@@ -61,7 +62,7 @@
       "firstName": "Eli",
       "lastName": "Keycloak",
       "enabled": true,
-      "realmRoles": ["netplan-editor"],
+      "realmRoles": ["default-roles-netplan", "netplan-editor"],
       "credentials": [
         { "type": "password", "value": "netplan-dev", "temporary": false }
       ]
@@ -73,7 +74,11 @@
       "firstName": "Ada",
       "lastName": "Keycloak",
       "enabled": true,
-      "realmRoles": ["netplan-admin", "netplan-editor"],
+      "realmRoles": [
+        "default-roles-netplan",
+        "netplan-admin",
+        "netplan-editor"
+      ],
       "credentials": [
         { "type": "password", "value": "netplan-dev", "temporary": false }
       ]
@@ -85,6 +90,7 @@
       "firstName": "Éditeur",
       "lastName": "Doublon",
       "enabled": true,
+      "realmRoles": ["default-roles-netplan"],
       "credentials": [
         { "type": "password", "value": "netplan-dev", "temporary": false }
       ]

@@ -23,6 +23,7 @@ export const modules: Record<string, () => Promise<Record<string, any>>> = {
   "./http.ts": () => import("../http"),
   "./importReviews.ts": () => import("../importReviews"),
   "./integrations.ts": () => import("../integrations"),
+  "./keycloakRoles.ts": () => import("../keycloakRoles"),
   "./librenms.ts": () => import("../librenms"),
   "./librenmsCycle.ts": () => import("../librenmsCycle"),
   "./mapDocument.ts": () => import("../mapDocument"),

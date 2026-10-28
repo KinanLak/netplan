@@ -71,7 +71,13 @@ per identifier typed, with no limit shared between people (ADR 0036).
   session hook sets the role from the token's realm and client roles (groups
   too when the admin ticks « Accepter aussi les groupes », ADR 0036) and the
   two names an admin stores in `authSettings` from the users page (Admin
-  wins, no match is Lecteur), so the users page never edits a Keycloak account's role.
+  wins, no match is Lecteur), so the users page never edits a Keycloak
+  account's role. Netplan asks for `offline_access`, and each hourly session
+  refresh schedules `keycloakRoles.refresh`, which trades the stored refresh
+  token for new tokens and sets the role again; `invalid_grant` ends the
+  user's sessions, any other failure changes nothing (ADR 0036). An admin's
+  « Déconnecter partout » ends another account's sessions without disabling
+  it.
   A Keycloak identity never links to a local account: the same email is
   refused and the linking routes are disabled. OAuth errors land on `/login`,
   which explains them in French. Signing out does not end the Keycloak

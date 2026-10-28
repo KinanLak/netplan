@@ -18,12 +18,9 @@ import type { DataModel } from "./_generated/dataModel";
 import authConfig from "./auth.config";
 import authSchema from "./betterAuth/schema";
 import { authRoles } from "./lib/authRoles";
-import {
-  keycloakRoleNames,
-  readKeycloakConfig,
-  roleFromKeycloak,
-} from "./lib/keycloak";
+import { readKeycloakConfig } from "./lib/keycloak";
 import type { KeycloakConfig } from "./lib/keycloak";
+import { setRoleFromTokens } from "./lib/keycloakRole";
 import { resetPasswordMail } from "./lib/mailTemplates";
 import type { AttemptKind } from "./lib/signInLimit";
 import { noteSignIn } from "./lib/signIns";
@@ -87,18 +84,12 @@ async function applyKeycloakRole(
     ],
   });
   if (!account) return;
-  const mapping = await runQuery(internal.authSettings.keycloakRoleMapping, {});
-  const role = roleFromKeycloak(
-    keycloakRoleNames(account, config.clientId, mapping),
-    mapping,
+  await setRoleFromTokens(
+    { runQuery, runMutation },
+    config.clientId,
+    userId,
+    account,
   );
-  await runMutation(components.betterAuth.adapter.updateOne, {
-    input: {
-      model: "user",
-      where: [{ field: "_id", value: userId }],
-      update: { role, updatedAt: Date.now() },
-    },
-  });
 }
 
 /**
@@ -198,7 +189,17 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
     // generic OAuth also registers Keycloak with the social linking route.
     // Without a per-address limit, asking whether a username is free would
     // list the accounts one by one; the sign-in page never asks (ADR 0036).
-    disabledPaths: ["/oauth2/link", "/link-social", "/is-username-available"],
+    // The routes that hand out Keycloak's tokens or profile also refresh
+    // the tokens, without reading the role again; the hourly re-read would
+    // then drop its answer as overtaken (ADR 0036). Netplan needs none.
+    disabledPaths: [
+      "/oauth2/link",
+      "/link-social",
+      "/is-username-available",
+      "/get-access-token",
+      "/refresh-token",
+      "/account-info",
+    ],
     // OAuth failures that happen before the sign-in state is read (Keycloak
     // answering access_denied, a lost state) go here, not to an English
     // library page; the login page explains the code.
@@ -209,8 +210,8 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
     },
     databaseHooks: {
       session: {
-        // Activity extends a session up to 7 days after its login, so a
-        // role removed in Keycloak lands within a week (ADR 0031).
+        // Activity extends a session up to 7 days after its login, which
+        // bounds a stolen session (ADR 0031).
         update: {
           before: async (session, endpoint) => {
             if (!(session.expiresAt instanceof Date)) return;
@@ -227,6 +228,13 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
             // out when it fails. The browser sends the cookie, and the
             // bearer plugin turns a token into one.
             if (!current) return;
+            // The hourly refresh reads a Keycloak role again (ADR 0036), in
+            // the background so that Keycloak never slows a page down.
+            if (keycloakConfig && "scheduler" in ctx) {
+              await ctx.scheduler.runAfter(0, internal.keycloakRoles.refresh, {
+                userId: current.session.userId,
+              });
+            }
             // The Convex adapter hands dates back as numbers.
             const cap =
               new Date(current.session.createdAt).getTime() + SESSION_MAX_MS;
@@ -288,7 +296,14 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
         config: keycloakConfig
           ? [
               {
-                ...keycloak({ ...keycloakConfig, pkce: true }),
+                ...keycloak({
+                  ...keycloakConfig,
+                  pkce: true,
+                  // An ordinary refresh token dies with Keycloak's session,
+                  // 30 minutes idle by default; the offline one lives as
+                  // long as Netplan reads the role with it (ADR 0036).
+                  scopes: ["openid", "profile", "email", "offline_access"],
+                }),
                 // Keycloak leaves `name` out for a user without first and
                 // last names, and better-auth refuses a login without one.
                 mapProfileToUser: (profile) => ({

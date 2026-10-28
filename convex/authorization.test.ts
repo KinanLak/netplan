@@ -97,6 +97,7 @@ const POLICY: Record<string, Role> = {
   "users:sendTestMail": "admin",
   "users:setDisabled": "admin",
   "users:setRole": "admin",
+  "users:signOutEverywhere": "admin",
   "walls:listForFloor": "reader",
 };
 
