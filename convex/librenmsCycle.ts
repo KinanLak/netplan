@@ -817,9 +817,11 @@ type SwitchResult = Infer<typeof switchResult>;
  * could not be asked, the devices that did not finish in time, and those
  * that did.
  */
-/** The note for a device LibreNMS answers 404 for: it was deleted there. */
-export const MISSING_NOTE =
-  "n'existe plus dans LibreNMS (404) : revoyez la correspondance des switchs.";
+/**
+ * The note for a device LibreNMS answers 404 for: it was deleted there.
+ * Santé puts the way out, a link to the switch mapping, under it.
+ */
+export const MISSING_NOTE = "n'existe plus dans LibreNMS (404).";
 
 // A 404 on a device's own path says the device is gone, not the API.
 const deviceFailure = (answer: { message: string; status?: number }) =>

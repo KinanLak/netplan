@@ -420,7 +420,25 @@ function RemoveIntegration({
 }) {
   const remove = useMutation(api.integrations.remove);
   const [open, setOpen] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const label = INTEGRATION_LABELS[kind];
+
+  // A refusal keeps the dialog open and says why (A79); success unmounts it
+  // with the card's « Retirer ».
+  const confirm = async () => {
+    setPending(true);
+    setError(null);
+    try {
+      await remove({ siteId, kind });
+      setOpen(false);
+    } catch (failure) {
+      setError(failureMessage(failure, "admin"));
+    } finally {
+      setPending(false);
+    }
+  };
+
   return (
     <>
       <Button
@@ -431,7 +449,13 @@ function RemoveIntegration({
       >
         Retirer
       </Button>
-      <AlertDialog open={open} onOpenChange={setOpen}>
+      <AlertDialog
+        open={open}
+        onOpenChange={(next) => {
+          setOpen(next);
+          if (!next) setError(null);
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Retirer {label} de ce site ?</AlertDialogTitle>
@@ -444,11 +468,13 @@ function RemoveIntegration({
               </span>
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {error ? <FieldError>{error}</FieldError> : null}
           <AlertDialogFooter>
             <AlertDialogCancel>Annuler</AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
-              onClick={() => void remove({ siteId, kind })}
+              disabled={pending}
+              onClick={() => void confirm()}
             >
               Retirer
             </AlertDialogAction>
