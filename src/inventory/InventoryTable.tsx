@@ -7,7 +7,7 @@ import {
   MoreHorizontalIcon,
 } from "@hugeicons/core-free-icons";
 import { useNavigate } from "@tanstack/react-router";
-import { useMutation } from "convex/react";
+import { useOnlineMutation } from "@/hooks/use-online-mutation";
 import { useState } from "react";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
@@ -269,8 +269,8 @@ function InventoryItem({
   setShowingSheet: (open: boolean) => void;
 }) {
   const navigate = useNavigate();
-  const createDevice = useMutation(api.devices.create);
-  const removeDevice = useMutation(api.devices.remove);
+  const createDevice = useOnlineMutation(api.devices.create);
+  const removeDevice = useOnlineMutation(api.devices.remove);
   const [editing, setEditing] = useState(false);
   const [showingCables, setShowingCables] = useState(false);
   const [showingHistory, setShowingHistory] = useState(false);

@@ -1,4 +1,5 @@
-import { useAction, useMutation, useQuery } from "convex/react";
+import { useAction, useQuery } from "convex/react";
+import { useOnlineMutation } from "@/hooks/use-online-mutation";
 import { useState } from "react";
 import type { FormEvent } from "react";
 import type { FunctionReturnType } from "convex/server";
@@ -418,7 +419,7 @@ function RemoveIntegration({
   siteId: string;
   kind: IntegrationKind;
 }) {
-  const remove = useMutation(api.integrations.remove);
+  const remove = useOnlineMutation(api.integrations.remove);
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);

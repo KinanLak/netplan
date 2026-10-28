@@ -31,12 +31,8 @@ export function MapDocumentStatus({
   floorless?: boolean;
 }) {
   const isReady = useMapDocumentReady() || floorless;
-  const {
-    isSaving,
-    isRetrying,
-    hasBackgroundPendingOperations,
-    rejectedMessage,
-  } = useMapDocumentSyncStatus();
+  const { isSaving, hasBackgroundPendingOperations, rejectedMessage } =
+    useMapDocumentSyncStatus();
   const { dismissRejectedOperation } = useMapDocumentActions();
 
   // A refusal is a toast like every other one; the circle below only says
@@ -54,7 +50,6 @@ export function MapDocumentStatus({
   const statusMessage = getDocumentActivityMessage({
     isReady,
     isSaving,
-    isRetrying,
     hasBackgroundPendingOperations,
   });
   const busy = statusMessage !== null;
@@ -106,12 +101,7 @@ export function MapDocumentStatus({
         )}
       >
         {busy ? (
-          <span
-            className={cn(
-              "size-3.5 animate-spin rounded-full border-2 border-muted border-t-foreground",
-              isRetrying && "border-t-down",
-            )}
-          />
+          <span className="size-3.5 animate-spin rounded-full border-2 border-muted border-t-foreground" />
         ) : (
           <HugeiconsIcon
             icon={Tick02Icon}
@@ -128,16 +118,13 @@ export function MapDocumentStatus({
 export const getDocumentActivityMessage = ({
   isReady,
   isSaving,
-  isRetrying,
   hasBackgroundPendingOperations,
 }: {
   isReady: boolean;
   isSaving: boolean;
-  isRetrying: boolean;
   hasBackgroundPendingOperations: boolean;
 }): string | null => {
   if (!isReady) return "Chargement du plan…";
-  if (isRetrying) return "Reconnexion et nouvelle tentative d'enregistrement…";
   if (!isSaving) return null;
   return hasBackgroundPendingOperations
     ? "Enregistrement de modifications sur plusieurs étages…"

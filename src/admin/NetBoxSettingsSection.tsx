@@ -1,4 +1,5 @@
-import { useAction, useMutation, useQuery } from "convex/react";
+import { useAction, useQuery } from "convex/react";
+import { useOnlineMutation } from "@/hooks/use-online-mutation";
 import { useState } from "react";
 import type { FunctionReturnType } from "convex/server";
 import {
@@ -133,7 +134,7 @@ function PushSetting({
   push: boolean;
   ready: boolean;
 }) {
-  const setPush = useMutation(api.netbox.setPush);
+  const setPush = useOnlineMutation(api.netbox.setPush);
   const imported = useQuery(api.netbox.importedCount, { siteId });
   const [confirming, setConfirming] = useState(false);
   const [pending, setPending] = useState(false);
@@ -257,7 +258,7 @@ function SettingsForm({
   options: Options;
   onDone: () => void;
 }) {
-  const save = useMutation(api.netbox.saveSettings);
+  const save = useOnlineMutation(api.netbox.saveSettings);
   const [site, setSite] = useState<NetBoxSite | null>(
     options.sites.find((choice) => choice.id === settings.site?.id) ?? null,
   );

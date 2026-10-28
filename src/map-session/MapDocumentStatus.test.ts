@@ -23,7 +23,6 @@ describe("MapDocumentStatus", () => {
       getDocumentActivityMessage({
         isReady: false,
         isSaving: false,
-        isRetrying: false,
         hasBackgroundPendingOperations: false,
       }),
     ).toBe("Chargement du plan…");
@@ -31,17 +30,8 @@ describe("MapDocumentStatus", () => {
       getDocumentActivityMessage({
         isReady: true,
         isSaving: true,
-        isRetrying: false,
         hasBackgroundPendingOperations: true,
       }),
     ).toContain("plusieurs étages");
-    expect(
-      getDocumentActivityMessage({
-        isReady: true,
-        isSaving: false,
-        isRetrying: true,
-        hasBackgroundPendingOperations: false,
-      }),
-    ).toContain("nouvelle tentative");
   });
 });

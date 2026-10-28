@@ -1,4 +1,4 @@
-import { useMutation } from "convex/react";
+import { useOnlineMutation } from "@/hooks/use-online-mutation";
 import { toast } from "sonner";
 import { failureMessage } from "@/lib/errors";
 import { forgetCableChange, rememberCableChange } from "./cableUndo";
@@ -17,8 +17,8 @@ const CABLE_TOAST_ID = "cable-change";
  * own "Annuler" on the toast that reports it, which Ctrl+Z shows again.
  */
 export const useCableCommands = () => {
-  const connect = useMutation(api.cables.connect);
-  const disconnect = useMutation(api.cables.disconnect);
+  const connect = useOnlineMutation(api.cables.connect);
+  const disconnect = useOnlineMutation(api.cables.disconnect);
 
   const toastFailure = (error: unknown) =>
     toast.error(failureMessage(error, "editor"));

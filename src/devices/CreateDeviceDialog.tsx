@@ -1,4 +1,4 @@
-import { useMutation } from "convex/react";
+import { useOnlineMutation } from "@/hooks/use-online-mutation";
 import { Fragment, useId, useState } from "react";
 import type { FormEvent } from "react";
 import { Button } from "@/components/ui/button";
@@ -111,7 +111,7 @@ function CreateDeviceForm({
   onCreated?: (deviceId: string, name: string) => void;
   onDone: () => void;
 }) {
-  const createDevice = useMutation(api.devices.create);
+  const createDevice = useOnlineMutation(api.devices.create);
   const id = useId();
   // One id per form, so a retry after a lost answer finds the device made.
   const [deviceId] = useState(() => createStandaloneObjectId("device"));

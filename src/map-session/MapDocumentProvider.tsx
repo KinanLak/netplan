@@ -7,7 +7,7 @@ import {
   useState,
 } from "react";
 import type { Dispatch, ReactNode, RefObject, SetStateAction } from "react";
-import { useConvexConnectionState, useMutation, useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { applyOperation } from "@/map-engine/applyOperation";
 import { buildInverseOperation } from "@/map-engine/buildInverseOperation";
 import { materializeDocument } from "@/map-engine/materializeDocument";
@@ -76,7 +76,8 @@ import {
   withOperationMeta,
 } from "./history";
 import type { SessionHistoryEntry } from "./history";
-import { SequentialOutbox, rejectingForbidden } from "./outbox";
+import { SequentialOutbox } from "./outbox";
+import { useConnectionStore } from "@/store/useConnectionStore";
 import type { OutboxState } from "./outbox";
 import {
   appendPendingOperation,
@@ -152,16 +153,14 @@ export interface MapDocumentData {
   pendingOperations: ReadonlyArray<MapOperation>;
 }
 
-/** Save/connection status — flickers with the outbox lifecycle. */
+/** Save status — flickers with the outbox lifecycle. */
 export interface MapDocumentSyncStatus {
   isSaving: boolean;
   /** Operations not yet acknowledged, on every floor. */
   pendingCount: number;
-  isRetrying: boolean;
   hasBackgroundPendingOperations: boolean;
   hasRejectedOperations: boolean;
   rejectedMessage: string | null;
-  connectionState: "connecting" | "connected" | "disconnected";
 }
 
 /** Per-floor undo/redo stacks — changes on every recorded edit. */
@@ -321,7 +320,7 @@ const replaceGroupedPendingOperations = (
 
 interface SessionActionDeps {
   identityRef: RefObject<LocalIdentity | null>;
-  isReadyRef: RefObject<boolean>;
+  canWriteRef: RefObject<boolean>;
   activeFloorIdRef: RefObject<FloorId>;
   documentRef: RefObject<MapDocumentSnapshot>;
   undoStackRef: RefObject<ReadonlyArray<SessionHistoryEntry>>;
@@ -344,7 +343,7 @@ interface SessionActionDeps {
 const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
   const {
     identityRef,
-    isReadyRef,
+    canWriteRef,
     activeFloorIdRef,
     documentRef,
     undoStackRef,
@@ -413,7 +412,7 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
 
   const addDevice = (draft: DeviceDraft): DeviceId | null => {
     const identity = identityRef.current;
-    if (!isReadyRef.current || !identity) return null;
+    if (!canWriteRef.current || !identity) return null;
     const id = createObjectId("device", identity) as DeviceId;
     const meta = freshMeta();
     if (!meta) return null;
@@ -424,7 +423,7 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
 
   const addDevices = (drafts: Array<DeviceDraft>): Array<DeviceId> => {
     const identity = identityRef.current;
-    if (!isReadyRef.current || !identity || drafts.length === 0) return [];
+    if (!canWriteRef.current || !identity || drafts.length === 0) return [];
     const meta = freshMeta();
     if (!meta) return [];
     const devices = drafts.map((draft): NewDevice => ({
@@ -443,7 +442,7 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
   };
 
   const updateDevicePosition = (deviceId: DeviceId, position: Position) => {
-    if (!isReadyRef.current) return;
+    if (!canWriteRef.current) return;
     const device = documentRef.current.devices.find(
       (item) => item.id === deviceId,
     );
@@ -461,7 +460,7 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
   };
 
   const updateDevicePositions = (updates: Array<PositionUpdate>) => {
-    if (!isReadyRef.current || updates.length === 0) return;
+    if (!canWriteRef.current || updates.length === 0) return;
     const deviceById = new Map(
       documentRef.current.devices.map((device) => [device.id, device]),
     );
@@ -491,7 +490,7 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
     from: ReadonlyArray<GroupMember>,
     offset: Position,
   ): boolean =>
-    isReadyRef.current &&
+    canWriteRef.current &&
     movedAsExpected(documentRef.current.devices, from) &&
     validateGroupMove(
       documentRef.current,
@@ -512,7 +511,7 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
   };
 
   const deleteDevice = (deviceId: DeviceId): boolean => {
-    if (!isReadyRef.current) return false;
+    if (!canWriteRef.current) return false;
     const device = documentRef.current.devices.find(
       (item) => item.id === deviceId,
     );
@@ -530,7 +529,7 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
   };
 
   const unplaceDevice = (deviceId: DeviceId) => {
-    if (!isReadyRef.current) return;
+    if (!canWriteRef.current) return;
     if (!documentRef.current.devices.some((item) => item.id === deviceId)) {
       return;
     }
@@ -540,7 +539,7 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
   };
 
   const unplaceDevices = (deviceIds: ReadonlyArray<DeviceId>) => {
-    if (!isReadyRef.current) return;
+    if (!canWriteRef.current) return;
     const placed = new Set(documentRef.current.devices.map((d) => d.id));
     const ids = deviceIds.filter((id) => placed.has(id));
     if (ids.length <= 1) {
@@ -560,7 +559,7 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
   };
 
   const placeDevice = (device: Device): boolean => {
-    if (!isReadyRef.current) return false;
+    if (!canWriteRef.current) return false;
     if (device.floorId !== activeFloorIdRef.current) return false;
     if (documentRef.current.devices.some((item) => item.id === device.id)) {
       return false;
@@ -576,7 +575,7 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
   const dispatchOverlayOperation = (
     build: (meta: MapOperation["meta"], floorId: FloorId) => MapOperation,
   ): boolean => {
-    if (!isReadyRef.current) return false;
+    if (!canWriteRef.current) return false;
     const meta = freshMeta();
     if (!meta) return false;
     const snapshot = documentRef.current;
@@ -642,7 +641,7 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
     size: Size,
     ignoredDeviceIds?: ReadonlySet<DeviceId>,
   ): boolean => {
-    if (!isReadyRef.current) return true;
+    if (!canWriteRef.current) return true;
 
     for (const other of documentRef.current.devices) {
       if (other.floorId !== targetFloorId) continue;
@@ -730,7 +729,7 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
   const addWallLine = (line: WallDraft): WallCommandResult => {
     const identity = identityRef.current;
     const floorWalls = floorWallsOf(line.floorId);
-    if (!isReadyRef.current || !identity)
+    if (!canWriteRef.current || !identity)
       return unchangedWallResult(floorWalls, "invalid-line");
     const floorDevices = floorDevicesOf(line.floorId);
     const result = addLine({
@@ -750,7 +749,7 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
   const addWallRoom = (room: RoomDraft): WallCommandResult => {
     const identity = identityRef.current;
     const floorWalls = floorWallsOf(room.floorId);
-    if (!isReadyRef.current || !identity)
+    if (!canWriteRef.current || !identity)
       return unchangedWallResult(floorWalls, "invalid-room");
     const floorDevices = floorDevicesOf(room.floorId);
     const result = addRoom({
@@ -769,7 +768,7 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
 
   const eraseWallAtPointer = (input: WallPointerInput): WallCommandResult => {
     const floorWalls = floorWallsOf(input.floorId);
-    if (!isReadyRef.current)
+    if (!canWriteRef.current)
       return unchangedWallResult(floorWalls, "no-wall-at-pointer");
     const result = eraseAtPointer({
       walls: floorWalls,
@@ -784,7 +783,7 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
     input: WallStrokeInput,
   ): WallCommandResult => {
     const floorWalls = floorWallsOf(input.floorId);
-    if (!isReadyRef.current)
+    if (!canWriteRef.current)
       return unchangedWallResult(floorWalls, "empty-stroke");
     const result = eraseStroke({
       walls: floorWalls,
@@ -799,7 +798,7 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
     input: WallPointerInput,
   ): WallCommandResult => {
     const floorWalls = floorWallsOf(input.floorId);
-    if (!isReadyRef.current)
+    if (!canWriteRef.current)
       return unchangedWallResult(floorWalls, "preview-miss");
     return previewEraseAtPointer({
       walls: floorWalls,
@@ -844,7 +843,7 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
     type: "undo" | "redo",
   ) => {
     const identity = identityRef.current;
-    if (!identity || !isReadyRef.current) return;
+    if (!identity || !canWriteRef.current) return;
     const snapshotBefore = documentRef.current;
     const operation = withOperationMeta(
       entry.operation,
@@ -887,7 +886,7 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
   };
 
   const undo = () => {
-    if (!isReadyRef.current) return;
+    if (!canWriteRef.current) return;
     // A cable changed after the last map edit: undo shows its toast again,
     // since cables are site facts outside this history (ADR 0022, B14).
     if (reshowCableChange()) return;
@@ -903,7 +902,7 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
   };
 
   const redo = () => {
-    if (!isReadyRef.current) return;
+    if (!canWriteRef.current) return;
     const entry = redoStackRef.current.at(-1);
     if (!entry) return;
     setHistoryByFloor((current) =>
@@ -959,7 +958,7 @@ export function MapDocumentProvider({
   const toServerOperation = (
     operation: MapOperation,
   ): ApplyMutationArgs["operation"] => operation;
-  const convexConnectionState = useConvexConnectionState();
+  const isOffline = useConnectionStore((s) => s.isOffline);
   // One subscription per collection: an edit only pushes the collection it
   // touched (and the revision), so moving a device never re-sends the walls.
   // Convex updates all of them at the same logical timestamp.
@@ -979,10 +978,6 @@ export function MapDocumentProvider({
   const [rejectedMessage, setRejectedMessage] = useState<string | null>(null);
   const [outboxState, setOutboxState] = useState<OutboxState>({
     pendingCount: 0,
-    isFlushing: false,
-    isRetrying: false,
-    lastFailure: null,
-    nextRetryAt: null,
   });
 
   const activeFloorId = floorId ?? NONE_FLOOR_ID;
@@ -1067,7 +1062,7 @@ export function MapDocumentProvider({
   const undoStackRef = useRef<ReadonlyArray<SessionHistoryEntry>>(undoStack);
   const redoStackRef = useRef<ReadonlyArray<SessionHistoryEntry>>(redoStack);
   const identityRef = useRef<LocalIdentity | null>(identity);
-  const isReadyRef = useRef(isReady);
+  const canWriteRef = useRef(isReady && !isOffline);
   const activeFloorIdRef = useRef(activeFloorId);
   const serverRevisionRef = useRef(serverDocument.revision);
   // Acks live in a ref: recording one must not re-render the tree. Removal is
@@ -1082,7 +1077,8 @@ export function MapDocumentProvider({
     undoStackRef.current = undoStack;
     redoStackRef.current = redoStack;
     identityRef.current = identity;
-    isReadyRef.current = isReady;
+    // Nothing is made without a connection (ADR 0037).
+    canWriteRef.current = isReady && !isOffline;
     activeFloorIdRef.current = activeFloorId;
     serverRevisionRef.current = serverDocument.revision;
     pendingEntriesRef.current = pendingEntries;
@@ -1095,7 +1091,7 @@ export function MapDocumentProvider({
   const [actions] = useState(() =>
     createSessionActions({
       identityRef,
-      isReadyRef,
+      canWriteRef,
       activeFloorIdRef,
       documentRef,
       undoStackRef,
@@ -1111,9 +1107,8 @@ export function MapDocumentProvider({
 
   useEffect(() => {
     const outbox = new SequentialOutbox({
-      send: rejectingForbidden((operation) =>
+      send: (operation) =>
         applyMutation({ operation: toServerOperation(operation) }),
-      ),
       onAck: (operation, result) => {
         // The device is back, but the user lost cables to lay again by hand.
         if (result.droppedCables) {
@@ -1172,9 +1167,6 @@ export function MapDocumentProvider({
         }
         setRejectedMessage(error);
       },
-      // The status card already says the outbox is retrying; a network
-      // failure is not a refusal.
-      onNetworkFailure: () => {},
       onStateChange: setOutboxState,
     });
     outboxRef.current = outbox;
@@ -1254,12 +1246,6 @@ export function MapDocumentProvider({
     };
   }, [activeFloorId, observedPending, pendingEntries]);
 
-  useEffect(() => {
-    if (convexConnectionState.isWebSocketConnected) {
-      outboxRef.current?.retry();
-    }
-  }, [convexConnectionState.isWebSocketConnected]);
-
   // Until the floor loads the document is empty, and reconciling against it
   // would drop a selection made before arriving, as from the inventory.
   useEffect(() => {
@@ -1268,11 +1254,6 @@ export function MapDocumentProvider({
     if (patch) useMapStore.setState(patch);
   }, [document, isReady]);
 
-  const connectionState = !convexConnectionState.hasEverConnected
-    ? "connecting"
-    : convexConnectionState.isWebSocketConnected
-      ? "connected"
-      : "disconnected";
   const isSaving = pendingEntries.length > 0 || outboxState.pendingCount > 0;
 
   useEffect(() => {
@@ -1292,19 +1273,15 @@ export function MapDocumentProvider({
     () => ({
       isSaving,
       pendingCount: pendingEntries.length,
-      isRetrying: outboxState.isRetrying,
       hasBackgroundPendingOperations,
       hasRejectedOperations: rejectedMessage !== null,
       rejectedMessage,
-      connectionState,
     }),
     [
       isSaving,
       pendingEntries.length,
-      outboxState.isRetrying,
       hasBackgroundPendingOperations,
       rejectedMessage,
-      connectionState,
     ],
   );
   const history = useMemo<MapDocumentHistoryState>(

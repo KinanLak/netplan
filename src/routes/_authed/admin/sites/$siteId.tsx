@@ -4,7 +4,8 @@ import {
   useLocation,
   useNavigate,
 } from "@tanstack/react-router";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
+import { useOnlineMutation } from "@/hooks/use-online-mutation";
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import type { FunctionReturnType } from "convex/server";
@@ -190,7 +191,7 @@ const sameDraft = (a: Draft, b: Draft) =>
   JSON.stringify(a) === JSON.stringify(b);
 
 function SiteSettingsForm({ site }: { site: Site }) {
-  const update = useMutation(api.sites.update);
+  const update = useOnlineMutation(api.sites.update);
   const [draft, setDraft] = useState(() => toDraft(site));
   // What the form last read or saved. A draft left untouched follows another
   // admin's save; a touched one is theirs to keep or drop.
@@ -398,7 +399,7 @@ function SetArchivedButton({
   site: Site;
   archived: boolean;
 }) {
-  const setArchived = useMutation(api.sites.setArchived);
+  const setArchived = useOnlineMutation(api.sites.setArchived);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
@@ -470,7 +471,7 @@ function ArchiveSite({ site }: { site: Site }) {
 }
 
 function DeleteSite({ site }: { site: Site }) {
-  const remove = useMutation(api.sites.remove);
+  const remove = useOnlineMutation(api.sites.remove);
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);

@@ -2,11 +2,7 @@ import { describe, expect, it } from "bun:test";
 import type { DeviceId, FloorId } from "@/types/map";
 import type { MapOperation } from "@/map-engine/types";
 import { ConvexError } from "convex/values";
-import {
-  FORBIDDEN_REJECTION,
-  SequentialOutbox,
-  rejectingForbidden,
-} from "./outbox";
+import { FORBIDDEN_REJECTION, SequentialOutbox } from "./outbox";
 import type { OutboxApplyResult } from "./outbox";
 
 const floorId = "floor:a" as FloorId;
@@ -35,19 +31,16 @@ const tick = () =>
   new Promise<void>((resolve) => queueMicrotask(() => resolve()));
 
 describe("SequentialOutbox", () => {
-  it("rejects an operation the server refuses for the user's role, without retrying", async () => {
+  it("rolls back an operation the server refuses for the user's role", async () => {
     const sent: Array<string> = [];
     const rejected: Array<[string, string]> = [];
-    const failures: Array<string> = [];
     const outbox = new SequentialOutbox({
-      send: rejectingForbidden((item) => {
+      send: (item) => {
         sent.push(item.meta.opId);
         return Promise.reject(new ConvexError({ code: "forbidden" }));
-      }),
+      },
       onAck: () => {},
       onReject: (item, error) => rejected.push([item.meta.opId, error]),
-      onNetworkFailure: (item) => failures.push(item.meta.opId),
-      retry: { baseDelayMs: 1, jitterRatio: 0, random: () => 0 },
     });
 
     outbox.enqueue(operation(1));
@@ -56,25 +49,41 @@ describe("SequentialOutbox", () => {
 
     expect(sent).toEqual(["op:test:1"]);
     expect(rejected).toEqual([["op:test:1", FORBIDDEN_REJECTION]]);
-    expect(failures).toEqual([]);
   });
 
-  it("still retries other failures behind the role check", async () => {
-    const failures: Array<string> = [];
+  it("rolls back an operation whose function failed, with the server's message, and those made after it", async () => {
+    const sent: Array<string> = [];
+    const rejected: Array<[string, string]> = [];
+    const acked: Array<string> = [];
     const outbox = new SequentialOutbox({
-      send: rejectingForbidden(() => Promise.reject(new Error("offline"))),
-      onAck: () => {},
-      onReject: () => {},
-      onNetworkFailure: (item) => failures.push(item.meta.opId),
-      retry: { baseDelayMs: 60_000, jitterRatio: 0, random: () => 0 },
+      send: (item) => {
+        sent.push(item.meta.opId);
+        return item.meta.clientSeq === 1
+          ? Promise.reject(new ConvexError("Les ports sont invalides."))
+          : Promise.resolve({ status: "applied", opId: item.meta.opId });
+      },
+      onAck: (item) => acked.push(item.meta.opId),
+      onReject: (item, error) => rejected.push([item.meta.opId, error]),
     });
 
     outbox.enqueue(operation(1));
+    outbox.enqueue(operation(2));
+    await tick();
     await tick();
     await tick();
 
-    expect(failures).toEqual(["op:test:1"]);
-    outbox.dispose();
+    expect(sent).toEqual(["op:test:1"]);
+    expect(rejected).toEqual([
+      ["op:test:1", "Les ports sont invalides."],
+      ["op:test:2", "Les ports sont invalides."],
+    ]);
+    expect(acked).toEqual([]);
+    expect(outbox.length).toBe(0);
+
+    outbox.enqueue(operation(3));
+    await tick();
+    await tick();
+    expect(acked).toEqual(["op:test:3"]);
   });
 
   it("flushes operations sequentially in dispatch order", async () => {
@@ -87,7 +96,6 @@ describe("SequentialOutbox", () => {
       },
       onAck: (item) => acked.push(item.meta.opId),
       onReject: () => {},
-      onNetworkFailure: () => {},
     });
 
     outbox.enqueue(operation(1));
@@ -97,72 +105,6 @@ describe("SequentialOutbox", () => {
 
     expect(sent).toEqual(["op:test:1", "op:test:2"]);
     expect(acked).toEqual(sent);
-  });
-
-  it("keeps an operation pending on network failure and retries same opId", async () => {
-    const sent: Array<string> = [];
-    let shouldFail = true;
-    const outbox = new SequentialOutbox({
-      send: (item) => {
-        sent.push(item.meta.opId);
-        if (shouldFail) return Promise.reject(new Error("offline"));
-        return Promise.resolve({ status: "applied", opId: item.meta.opId });
-      },
-      onAck: () => {},
-      onReject: () => {},
-      onNetworkFailure: () => {},
-      retry: { baseDelayMs: 1, jitterRatio: 0, random: () => 0 },
-    });
-
-    outbox.enqueue(operation(1));
-    await tick();
-    expect(outbox.length).toBe(1);
-
-    shouldFail = false;
-    outbox.retry();
-    await tick();
-
-    expect(sent).toEqual(["op:test:1", "op:test:1"]);
-    expect(outbox.length).toBe(0);
-  });
-
-  it("automatically retries transient failures without a new action", async () => {
-    const sent: Array<string> = [];
-    const timers: Array<() => void> = [];
-    let shouldFail = true;
-    const outbox = new SequentialOutbox({
-      send: (item) => {
-        sent.push(item.meta.opId);
-        if (shouldFail) return Promise.reject(new Error("offline"));
-        return Promise.resolve({ status: "applied", opId: item.meta.opId });
-      },
-      onAck: () => {},
-      onReject: () => {},
-      onNetworkFailure: () => {},
-      retry: {
-        baseDelayMs: 10,
-        jitterRatio: 0,
-        random: () => 0,
-        setTimeout: (callback) => {
-          timers.push(callback);
-          return timers.length;
-        },
-        clearTimeout: () => {},
-      },
-    });
-
-    outbox.enqueue(operation(1));
-    await tick();
-    expect(outbox.length).toBe(1);
-    expect(outbox.state.isRetrying).toBe(true);
-
-    shouldFail = false;
-    timers[0]?.();
-    await tick();
-    await tick();
-
-    expect(sent).toEqual(["op:test:1", "op:test:1"]);
-    expect(outbox.length).toBe(0);
   });
 
   it("removes rejected operations and reports the rejection", async () => {
@@ -178,7 +120,6 @@ describe("SequentialOutbox", () => {
       onReject: (_item, error) => {
         rejected = error;
       },
-      onNetworkFailure: () => {},
     });
 
     outbox.enqueue(operation(1));
@@ -201,7 +142,6 @@ describe("SequentialOutbox", () => {
         }),
       onAck: (item) => acked.push(item.meta.opId),
       onReject: () => {},
-      onNetworkFailure: () => {},
     });
     const first = operation(1);
     const second = operation(2);
@@ -230,85 +170,6 @@ describe("SequentialOutbox", () => {
     await tick();
     await tick();
     expect(acked).toEqual([second.meta.opId]);
-    expect(outbox.length).toBe(0);
-  });
-
-  it("reconnect retry cancels scheduled backoff and flushes immediately", async () => {
-    const sent: Array<string> = [];
-    const cleared: Array<number> = [];
-    let shouldFail = true;
-    const outbox = new SequentialOutbox({
-      send: (item) => {
-        sent.push(item.meta.opId);
-        if (shouldFail) return Promise.reject(new Error("offline"));
-        return Promise.resolve({ status: "applied", opId: item.meta.opId });
-      },
-      onAck: () => {},
-      onReject: () => {},
-      onNetworkFailure: () => {},
-      retry: {
-        baseDelayMs: 1000,
-        jitterRatio: 0,
-        setTimeout: () => 1,
-        clearTimeout: (timer) => cleared.push(Number(timer)),
-      },
-    });
-
-    outbox.enqueue(operation(1));
-    await tick();
-    shouldFail = false;
-    outbox.retry();
-    await tick();
-
-    expect(cleared).toEqual([1]);
-    expect(sent).toEqual(["op:test:1", "op:test:1"]);
-  });
-
-  it("does not retry validation rejections", async () => {
-    const timers: Array<() => void> = [];
-    const outbox = new SequentialOutbox({
-      send: (item) =>
-        Promise.resolve({
-          status: "rejected",
-          opId: item.meta.opId,
-          error: "invalid",
-        }),
-      onAck: () => {},
-      onReject: () => {},
-      onNetworkFailure: () => {},
-      retry: {
-        setTimeout: (callback) => {
-          timers.push(callback);
-          return timers.length;
-        },
-      },
-    });
-
-    outbox.enqueue(operation(1));
-    await tick();
-
-    expect(outbox.length).toBe(0);
-    expect(timers).toEqual([]);
-  });
-
-  it("dispose cancels scheduled retry timers", async () => {
-    const cleared: Array<number> = [];
-    const outbox = new SequentialOutbox({
-      send: () => Promise.reject(new Error("offline")),
-      onAck: () => {},
-      onReject: () => {},
-      onNetworkFailure: () => {},
-      retry: {
-        setTimeout: () => 9,
-        clearTimeout: (timer) => cleared.push(Number(timer)),
-      },
-    });
-
-    outbox.enqueue(operation(1));
-    await tick();
-    outbox.dispose();
-
-    expect(cleared).toEqual([9]);
     expect(outbox.length).toBe(0);
   });
 });

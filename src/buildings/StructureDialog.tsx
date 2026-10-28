@@ -1,4 +1,5 @@
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
+import { useOnlineMutation } from "@/hooks/use-online-mutation";
 import { useId, useState } from "react";
 import type { FormEvent } from "react";
 import { toast } from "sonner";
@@ -162,7 +163,7 @@ function CreateBuildingForm({
   siteId: string;
   onDone: () => void;
 }) {
-  const create = useMutation(api.buildings.create);
+  const create = useOnlineMutation(api.buildings.create);
   const id = useId();
   // One pair of ids per form, so a retry after a lost answer finds them.
   const [buildingId] = useState(() => createStandaloneObjectId("building"));
@@ -234,7 +235,7 @@ function AddFloorForm({
   action: Extract<StructureAction, { kind: "add-floor" }>;
   onDone: () => void;
 }) {
-  const create = useMutation(api.floors.create);
+  const create = useOnlineMutation(api.floors.create);
   const id = useId();
   const [floorId] = useState(() => createStandaloneObjectId("floor"));
   const [name, setName] = useState("");
@@ -289,8 +290,8 @@ function RenameForm({
   action: Extract<StructureAction, { kind: "rename" }>;
   onDone: () => void;
 }) {
-  const renameBuilding = useMutation(api.buildings.rename);
-  const renameFloor = useMutation(api.floors.rename);
+  const renameBuilding = useOnlineMutation(api.buildings.rename);
+  const renameFloor = useOnlineMutation(api.floors.rename);
   const id = useId();
   const [name, setName] = useState(action.name);
   const { error, saving, submit } = useNamesForm(onDone);
@@ -341,8 +342,8 @@ function RemoveDialog({
   action: Extract<StructureAction, { kind: "remove" }>;
   onClose: () => void;
 }) {
-  const removeBuilding = useMutation(api.buildings.remove);
-  const removeFloor = useMutation(api.floors.remove);
+  const removeBuilding = useOnlineMutation(api.buildings.remove);
+  const removeFloor = useOnlineMutation(api.floors.remove);
   const building = action.target === "building";
   const buildingContent = useQuery(
     api.buildings.content,
