@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { components, internal } from "./_generated/api";
 import { internalAction, internalMutation } from "./_generated/server";
+import type { MutationCtx } from "./_generated/server";
 import { readKeycloakConfig, refreshKeycloakTokens } from "./lib/keycloak";
 import { setRoleFromTokens } from "./lib/keycloakRole";
 import { endSessions } from "./lib/sessions";
@@ -17,6 +18,15 @@ type KeycloakAccount = {
   updatedAt: number;
 };
 
+const keycloakAccount = async (ctx: MutationCtx, userId: string) =>
+  (await ctx.runQuery(components.betterAuth.adapter.findOne, {
+    model: "account",
+    where: [
+      { field: "userId", value: userId },
+      { field: "providerId", value: "keycloak" },
+    ],
+  })) as KeycloakAccount | null;
+
 /**
  * Takes the stored refresh token for one refresh, unless another took it in
  * the last five minutes. A mutation, so two claims at once cannot both win.
@@ -25,20 +35,10 @@ export const claim = internalMutation({
   args: { userId: v.string() },
   returns: v.union(
     v.null(),
-    v.object({
-      accountId: v.string(),
-      refreshToken: v.string(),
-      offline: v.boolean(),
-    }),
+    v.object({ refreshToken: v.string(), offline: v.boolean() }),
   ),
   handler: async (ctx, { userId }) => {
-    const account = (await ctx.runQuery(components.betterAuth.adapter.findOne, {
-      model: "account",
-      where: [
-        { field: "userId", value: userId },
-        { field: "providerId", value: "keycloak" },
-      ],
-    })) as KeycloakAccount | null;
+    const account = await keycloakAccount(ctx, userId);
     const now = Date.now();
     if (!account?.refreshToken) return null;
     if (now - account.updatedAt < RECENTLY_REFRESHED_MS) return null;
@@ -50,11 +50,64 @@ export const claim = internalMutation({
       },
     });
     return {
-      accountId: account._id,
       refreshToken: account.refreshToken,
       // better-auth stores the granted scopes joined by commas.
       offline: (account.scope ?? "").split(/[\s,]+/).includes("offline_access"),
     };
+  },
+});
+
+/**
+ * Applies what Keycloak answered, unless a login replaced the refresh token
+ * meanwhile: that login read a newer role, which an older answer must not
+ * undo, and its token is not the one Keycloak refused.
+ */
+export const apply = internalMutation({
+  args: {
+    userId: v.string(),
+    clientId: v.string(),
+    claimedRefreshToken: v.string(),
+    outcome: v.union(
+      v.object({ kind: v.literal("revoked") }),
+      v.object({
+        kind: v.literal("tokens"),
+        accessToken: v.string(),
+        refreshToken: v.union(v.string(), v.null()),
+        idToken: v.union(v.string(), v.null()),
+        accessTokenExpiresAt: v.union(v.number(), v.null()),
+        refreshTokenExpiresAt: v.union(v.number(), v.null()),
+      }),
+    ),
+  },
+  returns: v.null(),
+  handler: async (ctx, { userId, clientId, claimedRefreshToken, outcome }) => {
+    const account = await keycloakAccount(ctx, userId);
+    if (account?.refreshToken !== claimedRefreshToken) return null;
+    if (outcome.kind === "revoked") {
+      await endSessions(ctx, userId);
+      return null;
+    }
+    await ctx.runMutation(components.betterAuth.adapter.updateOne, {
+      input: {
+        model: "account",
+        where: [{ field: "_id", value: account._id }],
+        update: {
+          accessToken: outcome.accessToken,
+          idToken: outcome.idToken,
+          accessTokenExpiresAt: outcome.accessTokenExpiresAt,
+          // Keycloak may keep the same refresh token and not send it again.
+          ...(outcome.refreshToken
+            ? {
+                refreshToken: outcome.refreshToken,
+                refreshTokenExpiresAt: outcome.refreshTokenExpiresAt,
+              }
+            : {}),
+          updatedAt: Date.now(),
+        },
+      },
+    });
+    await setRoleFromTokens(ctx, clientId, userId, outcome);
+    return null;
   },
 });
 
@@ -77,32 +130,15 @@ export const refresh = internalAction({
 
     const result = await refreshKeycloakTokens(config, claimed.refreshToken);
     if (result.kind === "unavailable") return null;
-    if (result.kind === "revoked") {
-      // An ordinary refresh token, from a client without the offline scope,
-      // dies with Keycloak's idle session: that says nothing about the user.
-      if (claimed.offline) await endSessions(ctx, userId);
-      return null;
-    }
-    await ctx.runMutation(components.betterAuth.adapter.updateOne, {
-      input: {
-        model: "account",
-        where: [{ field: "_id", value: claimed.accountId }],
-        update: {
-          accessToken: result.accessToken,
-          idToken: result.idToken,
-          accessTokenExpiresAt: result.accessTokenExpiresAt,
-          // Keycloak may keep the same refresh token and not send it again.
-          ...(result.refreshToken
-            ? {
-                refreshToken: result.refreshToken,
-                refreshTokenExpiresAt: result.refreshTokenExpiresAt,
-              }
-            : {}),
-          updatedAt: Date.now(),
-        },
-      },
+    // An ordinary refresh token, from a client without the offline scope,
+    // dies with Keycloak's idle session: that says nothing about the user.
+    if (result.kind === "revoked" && !claimed.offline) return null;
+    await ctx.runMutation(internal.keycloakRoles.apply, {
+      userId,
+      clientId: config.clientId,
+      claimedRefreshToken: claimed.refreshToken,
+      outcome: result,
     });
-    await setRoleFromTokens(ctx, config.clientId, userId, result);
     return null;
   },
 });

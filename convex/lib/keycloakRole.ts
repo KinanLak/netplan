@@ -1,5 +1,5 @@
 import { components, internal } from "../_generated/api";
-import type { ActionCtx } from "../_generated/server";
+import type { ActionCtx, MutationCtx } from "../_generated/server";
 import { keycloakRoleNames, roleFromKeycloak } from "./keycloak";
 
 /**
@@ -9,7 +9,7 @@ import { keycloakRoleNames, roleFromKeycloak } from "./keycloak";
  * written when it changes.
  */
 export async function setRoleFromTokens(
-  ctx: Pick<ActionCtx, "runQuery" | "runMutation">,
+  ctx: Pick<ActionCtx | MutationCtx, "runQuery" | "runMutation">,
   clientId: string,
   userId: string,
   tokens: { accessToken?: string | null; idToken?: string | null },

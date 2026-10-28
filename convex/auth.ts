@@ -189,7 +189,16 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
     // generic OAuth also registers Keycloak with the social linking route.
     // Without a per-address limit, asking whether a username is free would
     // list the accounts one by one; the sign-in page never asks (ADR 0036).
-    disabledPaths: ["/oauth2/link", "/link-social", "/is-username-available"],
+    // The two routes that hand out or refresh Keycloak's tokens would also
+    // refresh them without reading the role again, and keep the hourly
+    // re-read from running (ADR 0036); Netplan never needs those tokens.
+    disabledPaths: [
+      "/oauth2/link",
+      "/link-social",
+      "/is-username-available",
+      "/get-access-token",
+      "/refresh-token",
+    ],
     // OAuth failures that happen before the sign-in state is read (Keycloak
     // answering access_denied, a lost state) go here, not to an English
     // library page; the login page explains the code.

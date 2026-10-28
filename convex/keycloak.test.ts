@@ -8,7 +8,7 @@ import {
   setSystemTime,
 } from "bun:test";
 import * as native from "undici";
-import { api, components } from "./_generated/api";
+import { api, components, internal } from "./_generated/api";
 import { createSignedInUser } from "./_test/auth.setup";
 import type { TestBackend } from "./_test/auth.setup";
 import { SITE, post, withMail, withMailRelay } from "./_test/mail.setup";
@@ -415,6 +415,51 @@ describe("Keycloak role refresh", () => {
       expect(await sessionOf(t, cookie)).not.toBeNull();
     } finally {
       grantedScope = "openid profile email offline_access";
+    }
+  });
+
+  it("lets an answer that a newer login overtook change nothing", async () => {
+    const t = withMail();
+    const { cookie } = await signedInEditor(t);
+    const overtaken = `offline-${camille.sub}-netplan-editor`;
+    // A new login while the refresh waited for Keycloak: Lecteur now.
+    await keycloakLogin(t, { ...camille, roles: [] });
+    const userId = (await userByEmail(t, camille.email))?._id ?? "";
+
+    await t.mutation(internal.keycloakRoles.apply, {
+      userId,
+      clientId: "netplan",
+      claimedRefreshToken: overtaken,
+      outcome: {
+        kind: "tokens",
+        accessToken: jwt({ realm_access: { roles: ["netplan-admin"] } }),
+        refreshToken: "stale",
+        idToken: null,
+        accessTokenExpiresAt: null,
+        refreshTokenExpiresAt: null,
+      },
+    });
+    expect((await userByEmail(t, camille.email))?.role).toBe("reader");
+
+    await t.mutation(internal.keycloakRoles.apply, {
+      userId,
+      clientId: "netplan",
+      claimedRefreshToken: overtaken,
+      outcome: { kind: "revoked" },
+    });
+    expect(await sessionOf(t, cookie)).not.toBeNull();
+  });
+
+  it("offers no route that refreshes Keycloak's tokens without the role", async () => {
+    const t = withMail();
+    const { cookie } = await signedInEditor(t);
+    for (const path of ["/get-access-token", "/refresh-token"]) {
+      const response = await t.fetch(`/api/auth${path}`, {
+        method: "POST",
+        headers: { cookie, origin: SITE, "content-type": "application/json" },
+        body: JSON.stringify({ providerId: "keycloak" }),
+      });
+      expect(response.status).toBe(404);
     }
   });
 
