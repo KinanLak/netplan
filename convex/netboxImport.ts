@@ -227,6 +227,8 @@ export const apply = internalMutation({
         updatedAt: now,
         updatedBy: IMPORTED_BY,
       });
+      // Nothing is pushed to it any more, so a failure it had is moot.
+      await deletePush(ctx, deviceId);
     }
 
     // Every MAC the import moves is freed before any is claimed again.
@@ -314,9 +316,9 @@ export const apply = internalMutation({
 const PURGE_BATCH = 100;
 
 /**
- * Deletes the devices absent from NetBox for 30 days and on no floor, with
- * their MACs, ports, cables and push row, as an import once did at once
- * (ADR 0034). Daily; an archived site keeps everything.
+ * Deletes the devices absent from NetBox for 30 days and on no floor for as
+ * long, with their MACs, ports, cables and push row, as an import once did
+ * at once (ADR 0034). Daily; an archived site keeps everything.
  */
 export const purgeAbsent = internalMutation({
   args: {},
@@ -338,18 +340,32 @@ export const purgeSite = internalMutation({
   handler: async (ctx, { siteId }) => {
     const importedAt = (await cycleOf(ctx, siteId))?.netboxImportedAt;
     if (importedAt === undefined) return 0;
-    const due = (
+    const now = Date.now();
+    const absent = (
       await ctx.db
         .query("devices")
         .withIndex("by_site_source", (q) =>
           q.eq("siteId", siteId).eq("source.integration", "netbox"),
         )
         .collect()
-    ).filter((device) =>
+    ).filter((device) => device.source?.missingSince !== undefined);
+    // Where each absent device stands now starts or stops its clock.
+    for (const device of absent) {
+      const { source } = device;
+      if (!source) continue;
+      const placed = device.placement !== undefined;
+      if (placed === (source.offPlanSince === undefined)) continue;
+      const { offPlanSince: _, ...rest } = source;
+      await ctx.db.patch(device._id, {
+        source: placed ? rest : { ...source, offPlanSince: now },
+      });
+    }
+    const due = absent.filter((device) =>
       absencePurgeDue(
         {
           placed: device.placement !== undefined,
           missingSince: device.source?.missingSince,
+          offPlanSince: device.source?.offPlanSince,
         },
         importedAt,
       ),

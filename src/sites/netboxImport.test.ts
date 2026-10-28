@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import {
+  absencePurgeDue,
   importSummary,
   isPhysicalInterface,
   planDevicePorts,
@@ -271,6 +272,27 @@ describe("planNetBoxImport", () => {
     );
     expect(plan.update.map((u) => u.deviceId)).toEqual(["device:one"]);
     expect(plan.create.map((d) => d.externalId)).toEqual(["2"]);
+  });
+});
+
+describe("absencePurgeDue", () => {
+  const DAY = 24 * 60 * 60_000;
+  it("counts 30 days from the later of the absence and leaving the plan", () => {
+    const at = 100 * DAY;
+    const due = (missingFor: number, offPlanFor?: number, placed = false) =>
+      absencePurgeDue(
+        {
+          placed,
+          missingSince: at - missingFor,
+          offPlanSince: offPlanFor === undefined ? undefined : at - offPlanFor,
+        },
+        at,
+      );
+    expect(due(30 * DAY, 30 * DAY)).toBe(true);
+    expect(due(40 * DAY, 29 * DAY)).toBe(false);
+    // The purge has not yet seen it off the plan.
+    expect(due(40 * DAY)).toBe(false);
+    expect(due(40 * DAY, 40 * DAY, true)).toBe(false);
   });
 });
 

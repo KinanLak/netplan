@@ -498,13 +498,20 @@ describe("NetBox import", () => {
     devices.length = 0;
     await refresh(editor, siteId);
 
-    const age = async (missingFor: number, importedAgo = 0) =>
+    const age = async (
+      missingFor: number,
+      { importedAgo = 0, offPlanFor = missingFor } = {},
+    ) =>
       await t.run(async (ctx) => {
         const now = Date.now();
         for (const row of await ctx.db.query("devices").collect()) {
           if (!row.source) continue;
           await ctx.db.patch(row._id, {
-            source: { ...row.source, missingSince: now - missingFor },
+            source: {
+              ...row.source,
+              missingSince: now - missingFor,
+              ...(row.name !== "pc-0013" && { offPlanSince: now - offPlanFor }),
+            },
             ...(row.name === "pc-0013" && {
               placement: {
                 floorId: "floor:a",
@@ -530,11 +537,23 @@ describe("NetBox import", () => {
       return (await inventory(editor, siteId)).map((d) => d.name);
     };
 
+    // The first run starts the clock of each absent device on no floor.
+    expect(await purge()).toEqual(["pc-0012", "pc-0013"]);
+    expect(
+      (await inventory(editor, siteId)).map(
+        (d) => d.source?.offPlanSince !== undefined,
+      ),
+    ).toEqual([true, true]);
+
     await age(29 * DAY);
     expect(await purge()).toEqual(["pc-0012", "pc-0013"]);
 
     // NetBox has not been read for two days: those days do not count.
-    await age(31 * DAY, 2 * DAY);
+    await age(31 * DAY, { importedAgo: 2 * DAY });
+    expect(await purge()).toEqual(["pc-0012", "pc-0013"]);
+
+    // Absent for long, but taken off a plan yesterday: its 30 days start then.
+    await age(40 * DAY, { offPlanFor: DAY });
     expect(await purge()).toEqual(["pc-0012", "pc-0013"]);
 
     await age(31 * DAY);

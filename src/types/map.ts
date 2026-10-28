@@ -78,6 +78,11 @@ export interface DeviceSource {
   syncedAt: number;
   /** Since when NetBox no longer returns the device (ADR 0034). */
   missingSince?: number;
+  /**
+   * While absent: since when the purge has seen it on no floor, so a device
+   * taken off a plan gets its 30 days from then (ADR 0034).
+   */
+  offPlanSince?: number;
 }
 
 // ── Domain documents ─────────────────────────────────────────────────────────

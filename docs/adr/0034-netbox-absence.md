@@ -42,21 +42,26 @@ all 447 devices of the real site. The owner decided how absence works on
   comes back or goes, since NetBox may still have it under a role NetPlan does
   not import.
 - **Off the plan: purged after 30 days.** A daily job deletes an absent device
-  that is on no floor once 30 days separate `missingSince` from the site's
-  last NetBox import, with its MACs, ports, cables and push row, as an import
-  used to at once. Measuring up to the last import rather than to now means a
-  NetBox that no longer answers, or that a site stops reading, never makes
-  anything look absent for longer than it confirmed. An archived site keeps
-  everything (ADR 0033).
+  that is on no floor once 30 days separate the site's last NetBox import
+  from the later of `missingSince` and `source.offPlanSince`, with its MACs,
+  ports, cables and push row, as an import used to at once. The job itself
+  sets `offPlanSince` the first time it finds an absent device on no floor,
+  and clears it when the device is placed again, so a device absent for long
+  and taken off a plan today still has 30 days. Measuring up to the last
+  import rather than to now means a NetBox that no longer answers, or that a
+  site stops reading, never makes anything look absent for longer than it
+  confirmed. An archived site keeps everything (ADR 0033).
 - **On a plan: kept.** A placed absent device is never purged. The map draws
   it greyed; the drawer and the inventory say « Absent de NetBox depuis le … ».
   An Éditeur may delete it, from the map or, once it is off every plan, from
-  the inventory, and undo brings it back absent with its date. Off the plan,
-  the 30 days of the previous point apply, counted from `missingSince`.
+  the inventory. Undo brings it back absent with its date, its ports and its
+  cables, the NetBox ones as manual; its binding is then marked `staleId`,
+  like after a change of instance below, since a person sent it back. Off
+  the plan, the 30 days of the previous point apply.
 - **No threshold.** An import that makes many devices absent is applied: absence
   is reversible for 30 days, and Santé shows how many devices are absent.
-- **Push.** The push to NetBox (ADR 0027) skips an absent device: NetBox has
-  nothing under that id to write to.
+- **Push.** The push to NetBox (ADR 0027) skips an absent device, and forgets
+  what it last sent to it: NetBox has nothing under that id to write to.
 - **Localisation.** The LibreNMS cycle still localises an absent device: it is
   still where the network sees it, and the map keeps telling the truth about
   it. A sighting places an absent device that was on no floor, as for any pc
@@ -68,8 +73,11 @@ all 447 devices of the real site. The owner decided how absence works on
 ## A new NetBox address
 
 Saving the NetBox connection with another address first asks the new address
-whether it is the same instance: it reads the configured NetBox site by id and
-the mapped roles by id, and compares their names with the stored ones.
+whether it is the same instance: it reads the configured NetBox site by id.
+The instance is the same when that site answers and either keeps its name or
+most of a sample of the linked devices answer under their ids with their
+names, so a site renamed in NetBox is still recognised. `/api/status/` is not
+compared: its version changes with an upgrade of the same instance.
 
 - **Same instance.** Everything stays: the bindings, the NetBox site, the
   roles, the push and the LibreNMS mapping. The next import updates each
@@ -77,11 +85,12 @@ the mapped roles by id, and compares their names with the stored ones.
 - **Another instance.** The form asks for a confirmation that says how many
   devices are linked to NetBox. Once confirmed, the site and roles are
   forgotten, since their ids name other things in the new NetBox, and every
-  linked device becomes absent, with its binding marked as belonging to the
-  previous instance so that only the identity rules can link it again, never
-  its old id. Its ports and NetBox cables become manual: their ids mean
-  nothing in the new NetBox. A NetBox that has no site chosen yet, or no
-  linked devices, needs no confirmation.
+  linked device becomes absent, with its binding marked `staleId` so that
+  only the identity rules can link it again, never its old id. Its ports and
+  NetBox cables become manual: their ids mean nothing in the new NetBox. With
+  no linked device there is nothing to confirm; with linked devices but no
+  NetBox site chosen, the instance cannot be recognised and the admin
+  confirms.
 
 ## Santé and the import message
 
@@ -95,9 +104,9 @@ the mapped roles by id, and compares their names with the stored ones.
 
 ## Consequences
 
-- `devices.source` carries `missingSince`, and `formerInstance` after a
-  confirmed change of instance; the import, the reviews, the deletion rules,
-  the push and the display all read them.
+- `devices.source` carries `missingSince`, `offPlanSince` for the purge, and
+  `staleId` after a confirmed change of instance or an undo; the import, the
+  reviews, the deletion rules, the purge, the push and the display read them.
 - An absent device's binding is not a release: its fields stay read-only, and
   making it editable means deleting it or removing the NetBox integration.
 - A device kept on a plan after it left NetBox for good stays until someone

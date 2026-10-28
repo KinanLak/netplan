@@ -163,8 +163,8 @@ stops every cycle on a server.
   (`importReviews`), both settled from the inventory page. A device NetBox
   no longer lists stays bound, absent since `source.missingSince` (ADR
   0034): NetBox returning it, under its id or by MAC or serial, clears it;
-  a daily job purges one that has been absent 30 days, measured up to the
-  last import, and is on no floor. The push skips absent devices.
+  a daily job purges one that has been absent, and on no floor, for 30
+  days, measured up to the last import. The push skips absent devices.
 - **LibreNMS** (`convex/librenmsCycle.ts`, the pure rules in
   `src/sites/librenmsCycle.ts`): at most every 5 minutes the cycle asks each
   polled switch to rediscover, then reads its ports and forwarding table.

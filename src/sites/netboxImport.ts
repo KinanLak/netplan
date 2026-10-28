@@ -301,18 +301,23 @@ function assignMacs(
 export const ABSENCE_KEPT_MS = 30 * 24 * 60 * 60_000;
 
 /**
- * Whether the purge deletes an absent device. The 30 days are measured up to
- * the site's last NetBox import rather than to now, so an absence NetBox has
- * not confirmed, because its imports stopped or fail, is never purged.
+ * Whether the purge deletes an absent device: 30 days from the later of when
+ * NetBox stopped returning it and when the purge first saw it off every plan,
+ * so taking a long-absent device off a plan never loses it overnight. The
+ * days are measured up to the site's last NetBox import rather than to now,
+ * so an absence NetBox has not confirmed, because its imports stopped or
+ * fail, is never purged.
  */
 export const absencePurgeDue = (
-  device: { placed: boolean; missingSince?: number },
+  device: { placed: boolean; missingSince?: number; offPlanSince?: number },
   importedAt: number | undefined,
 ) =>
   !device.placed &&
   device.missingSince !== undefined &&
+  device.offPlanSince !== undefined &&
   importedAt !== undefined &&
-  importedAt - device.missingSince >= ABSENCE_KEPT_MS;
+  importedAt - Math.max(device.missingSince, device.offPlanSince) >=
+    ABSENCE_KEPT_MS;
 
 /** The key of a created device in `ImportPlan.macs`, before it has an id. */
 export const newDeviceKey = (device: ImportedDevice) =>
