@@ -172,7 +172,7 @@ const portEndNamer = (ctx: QueryCtx) => {
           .query("buildings")
           .withIndex("by_object_id", (q) => q.eq("objectId", floor.buildingId))
           .unique();
-        return building ? `${building.name} · ${floor.name}` : floor.name;
+        return building ? `${building.name}, ${floor.name}` : floor.name;
       })();
       places.set(floorId, place);
     }

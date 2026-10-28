@@ -263,7 +263,7 @@ describe("endLabels", () => {
     } as const;
     expect(endLabels([portEnd(1), portEnd(2), away]).get(id("sw"))).toEqual([
       "Gi1/0/1, Gi1/0/2",
-      "Cœur · Te1/1/1 (hors plan)",
+      "Cœur Te1/1/1 (hors plan)",
     ]);
     expect(endLabels([1, 2, 3, 4, 5].map(portEnd)).get(id("sw"))).toEqual([
       "5 ports",

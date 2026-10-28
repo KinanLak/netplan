@@ -299,9 +299,9 @@ const once = <T>(items: ReadonlyArray<T>, key: (item: T) => string) => {
 const labelOf = (end: Exclude<PathEnd, { kind: "port" }>): string => {
   switch (end.kind) {
     case "shared":
-      return `${end.portName} · partagé`;
+      return `${end.portName}, partagé`;
     case "away":
-      return `${end.deviceName} · ${end.portName} (${end.floorName ?? "hors plan"})`;
+      return `${end.deviceName} ${end.portName} (${end.floorName ?? "hors plan"})`;
     case "seen-away":
       return `Vu à ${end.socketName} (${end.floorName ?? "hors plan"})`;
   }

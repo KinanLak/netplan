@@ -100,7 +100,7 @@ describe("cables", () => {
       deviceName: "panel",
       portName: "1",
       portKind: "rear",
-      place: "Bâtiment A · RDC",
+      place: "Bâtiment A, RDC",
     });
     expect(switchPort?.traceEnd).toMatchObject({
       deviceId: "device:socket",
