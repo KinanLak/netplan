@@ -202,9 +202,11 @@ Built by lot 4 (ADR 0026).
   cards filter to what is left to place. Unknown MACs have their own tab
   (`?view=unknown`, Éditeurs only); `ignore` and `restore` take a list, all or
   none, and `ignoredMacs` keeps where each MAC was last seen.
-- **Dates and times** are always shown in the reader's zone on a 24-hour
-  clock, the zone on hover (`src/lib/time.ts`, `<Time>`); a site's zone only
-  schedules its cycles and snapshot slots.
+- **Dates and times** are always shown in the reader's zone and the
+  browser's locale on a 24-hour clock, the zone on hover (`src/lib/time.ts`,
+  `<Time>`); relative words (« il y a 3 min », « Aujourd'hui ») stay French
+  with the interface. A site's zone only schedules its cycles and snapshot
+  slots.
 - **Buildings and floors.** Éditeurs create, rename and remove them through
   `convex/buildings.ts` and `convex/floors.ts`, outside the map's undo, so
   removal is refused unless nothing stands on the floor. Names are unique

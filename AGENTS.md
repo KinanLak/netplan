@@ -136,7 +136,7 @@ The owner's standing preferences; each was broken more than once.
 - Keys on the map follow ADR 0030: arrows nudge the selection and never pan,
   Ctrl+/Ctrl− and the wheel zoom the map, Tab skips the devices.
 - Times go through `<Time>` (`src/components/time.tsx`) or `src/lib/time.ts`:
-  the browser's zone, 24-hour clock, the zone on hover.
+  the browser's zone and locale, 24-hour clock, the zone on hover.
 - Checkboxes, not switches. Every icon-only button has a French
   `aria-label`.
 
