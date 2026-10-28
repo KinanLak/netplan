@@ -132,7 +132,7 @@ export function SiteSetupSteps({
                 <button
                   type="button"
                   className={stepClass}
-                  disabled={refresh.busy}
+                  disabled={refresh.busy || refresh.freshness?.paused}
                   onClick={() => void refresh.start()}
                 >
                   {step.label}

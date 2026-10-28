@@ -37,7 +37,10 @@ export const Route = createFileRoute("/_authed/admin/sites/")({
   head: () => ({ meta: [{ title: "Sites · Administration" }] }),
   // `?create` opens « Créer un site », for the links that offer it.
   validateSearch: (search: Record<string, unknown>): { create?: true } =>
-    search.create === true || search.create === "true" ? { create: true } : {},
+    // A bare `?create` arrives as an empty string.
+    search.create === true || search.create === "true" || search.create === ""
+      ? { create: true }
+      : {},
   component: SitesPage,
 });
 
