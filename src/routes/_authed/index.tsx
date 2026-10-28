@@ -351,9 +351,18 @@ function MapWorkspace({
  * two never fight.
  */
 function useMapUrlSync() {
-  const { floor, device } = Route.useSearch();
+  const { floor: requestedFloor, device } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const allFloors = useQuery(api.floors.listAll);
+  const { site } = useCurrentSite();
+  // A link that names only a device opens it on its floor (A7).
+  const deviceFloor = useQuery(
+    api.devices.floorOf,
+    site && device && !requestedFloor
+      ? { siteId: site.id, deviceId: device }
+      : "skip",
+  );
+  const floor = requestedFloor ?? deviceFloor ?? undefined;
   const currentFloorId = useCurrentFloorId();
   const selectedDeviceId = useSelectedDeviceId();
   const appliedRef = useRef<string | null>(null);
@@ -362,6 +371,8 @@ function useMapUrlSync() {
   // the map was opened from elsewhere (the inventory, a search).
   useEffect(() => {
     if (!allFloors) return;
+    // Wait for the device's floor, or the write-back below would drop it.
+    if (device && !requestedFloor && deviceFloor === undefined) return;
     const key = `${floor ?? ""}|${device ?? ""}`;
     if (appliedRef.current !== key) {
       appliedRef.current = key;
@@ -371,7 +382,7 @@ function useMapUrlSync() {
     const state = useMapStore.getState();
     const nextFloor = state.currentFloorId ?? undefined;
     const nextDevice = state.selectedDeviceId ?? undefined;
-    if (nextFloor === floor && nextDevice === device) return;
+    if (nextFloor === requestedFloor && nextDevice === device) return;
     appliedRef.current = `${nextFloor ?? ""}|${nextDevice ?? ""}`;
     void navigate({
       search: (previous) => ({
@@ -381,7 +392,16 @@ function useMapUrlSync() {
       }),
       replace: true,
     });
-  }, [allFloors, floor, device, currentFloorId, selectedDeviceId, navigate]);
+  }, [
+    allFloors,
+    requestedFloor,
+    deviceFloor,
+    floor,
+    device,
+    currentFloorId,
+    selectedDeviceId,
+    navigate,
+  ]);
 }
 
 /**

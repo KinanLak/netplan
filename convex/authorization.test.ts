@@ -24,6 +24,7 @@ const POLICY: Record<string, Role> = {
   "collection:refresh": "editor",
   "collection:status": "admin",
   "devices:create": "editor",
+  "devices:floorOf": "reader",
   "devices:listForFloor": "reader",
   "devices:listForSite": "reader",
   "devices:unplacedCount": "reader",

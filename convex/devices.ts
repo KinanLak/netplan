@@ -134,6 +134,21 @@ export const lastSeen = readerQuery({
 });
 
 /**
+ * The floor a device of the site stands on, so a link that names only the
+ * device opens it there (ADR 0030); null when it is on no floor or not the
+ * site's.
+ */
+export const floorOf = readerQuery({
+  args: { siteId: v.string(), deviceId: v.string() },
+  returns: v.union(v.string(), v.null()),
+  handler: async (ctx, { siteId, deviceId }) => {
+    const device = await getDevice(ctx, deviceId);
+    if (device?.siteId !== siteId) return null;
+    return device.placement?.floorId ?? null;
+  },
+});
+
+/**
  * How many of the site's devices stand on no floor, so the map can say it
  * does not show the whole site.
  */
