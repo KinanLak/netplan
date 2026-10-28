@@ -54,6 +54,19 @@ const interfaceMacs = (item: Raw): Array<string> => {
   });
 };
 
+/** A NetBox device's model; device types named "undefined" stand for none. */
+const modelOf = (item: Raw): string | undefined =>
+  isObject(item.device_type)
+    ? meaningful(text(item.device_type.model))
+    : undefined;
+
+/**
+ * The name the import gives a NetBox device: its own, or its model and id,
+ * since NetBox lets a device go unnamed.
+ */
+export const importedName = (item: Raw): string =>
+  text(item.name) ?? `${modelOf(item) ?? "Équipement"} #${String(item.id)}`;
+
 /**
  * The devices of the mapped roles, with the MAC addresses of their
  * interfaces. Devices of other roles, and objects NetBox did not describe as
@@ -79,10 +92,7 @@ export function readNetBoxDevices(
     const roleId = idOf(item.role) ?? idOf(item.device_role);
     const type = roleId === undefined ? undefined : typeOfRole.get(roleId);
     if (id === undefined || !type) return [];
-    // NetBox device types named "undefined" stand for no model at all.
-    const model = isObject(item.device_type)
-      ? meaningful(text(item.device_type.model))
-      : undefined;
+    const model = modelOf(item);
     const address = isObject(item.primary_ip)
       ? text(item.primary_ip.address)
       : undefined;
@@ -91,8 +101,7 @@ export function readNetBoxDevices(
         externalId: String(id),
         url: text(item.display_url),
         type,
-        // NetBox lets a device go unnamed.
-        name: text(item.name) ?? `${model ?? "Équipement"} #${id}`,
+        name: importedName(item),
         serial: meaningful(text(item.serial)),
         macs: [...(macsOf.get(id) ?? [])].sort(),
         model,

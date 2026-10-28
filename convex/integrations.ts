@@ -20,7 +20,7 @@ import {
   probeIntegration,
   sourceGet,
 } from "./lib/integrationProbe";
-import { idOf, nameOf, netboxList } from "./lib/netboxApi";
+import { idOf, netboxList } from "./lib/netboxApi";
 import type {
   ConnectionCheck,
   Source,
@@ -46,6 +46,7 @@ import {
 } from "../src/sites/integrations";
 import type { IntegrationKind } from "../src/sites/integrations";
 import { sameNetBoxInstance, sameNetBoxSite } from "../src/sites/netbox";
+import { importedName } from "../src/sites/netboxImport";
 
 const integrationSummary = v.object({
   kind: integrationKind,
@@ -243,14 +244,18 @@ const netboxInstance = async (
   }
   // The site was renamed, or another NetBox reuses its id: the devices say.
   if (sample.length === 0) return { same: false, linked };
+  // Not `brief`: an unnamed device is named after its model, as the import
+  // named it.
   const found = await netboxList(
     source,
-    `/api/dcim/devices/?brief=1${sample.map((device) => `&id=${device.externalId}`).join("")}`,
+    `/api/dcim/devices/?${sample.map((device) => `id=${device.externalId}`).join("&")}`,
     PROBE_RETRY,
   );
   if (!found.ok) return { error: found.message };
   const names = new Map(
-    found.items.map((item) => [String(idOf(item)), nameOf(item)] as const),
+    found.items.map(
+      (item) => [String(idOf(item)), importedName(item)] as const,
+    ),
   );
   const matched = sample.filter(
     (device) => names.get(device.externalId) === device.name,

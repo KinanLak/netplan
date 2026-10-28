@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import {
   absencePurgeDue,
+  importedName,
   importSummary,
   isPhysicalInterface,
   planDevicePorts,
@@ -113,6 +114,18 @@ const manual = (
   id: string,
   more: Partial<InventoryDevice> = {},
 ): InventoryDevice => ({ id, name: id, macs: [], placed: false, ...more });
+
+describe("importedName", () => {
+  it("names an unnamed device after its model and id, as the import does", () => {
+    expect(importedName({ id: 9, name: "pc-9" })).toBe("pc-9");
+    expect(importedName({ id: 9, device_type: { model: "OptiPlex" } })).toBe(
+      "OptiPlex #9",
+    );
+    expect(
+      importedName({ id: 9, name: "", device_type: { model: "undefined" } }),
+    ).toBe("Équipement #9");
+  });
+});
 
 describe("planNetBoxImport", () => {
   it("updates the devices NetBox brought and creates new ones", () => {
