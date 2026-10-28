@@ -26,6 +26,7 @@ import {
 import {
   absencePurgeDue,
   importSummary,
+  withPlacementClock,
   newDeviceKey,
   planDevicePorts,
   planNetBoxImport,
@@ -223,7 +224,11 @@ export const apply = internalMutation({
       const device = byId.get(deviceId);
       if (!device?.source) continue;
       await ctx.db.patch(device._id, {
-        source: { ...device.source, missingSince: now },
+        source: withPlacementClock(
+          { ...device.source, missingSince: now },
+          device.placement !== undefined,
+          now,
+        ),
         updatedAt: now,
         updatedBy: IMPORTED_BY,
       });
@@ -338,6 +343,12 @@ export const purgeSite = internalMutation({
   args: { siteId: v.string() },
   returns: v.number(),
   handler: async (ctx, { siteId }) => {
+    // Archived since this run was scheduled: it keeps everything (ADR 0033).
+    const site = await ctx.db
+      .query("sites")
+      .withIndex("by_object_id", (q) => q.eq("objectId", siteId))
+      .unique();
+    if (!site || site.archivedAt !== undefined) return 0;
     const importedAt = (await cycleOf(ctx, siteId))?.netboxImportedAt;
     if (importedAt === undefined) return 0;
     const now = Date.now();
@@ -349,7 +360,8 @@ export const purgeSite = internalMutation({
         )
         .collect()
     ).filter((device) => device.source?.missingSince !== undefined);
-    // Where each absent device stands now starts or stops its clock.
+    // A safety net: placement writes keep the clock, but a device written
+    // otherwise still gets it.
     for (const device of absent) {
       const { source } = device;
       if (!source) continue;

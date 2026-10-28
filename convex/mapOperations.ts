@@ -1,3 +1,4 @@
+import { withPlacementClock } from "../src/sites/netboxImport";
 import type { Infer } from "convex/values";
 import { v } from "convex/values";
 import { readerQuery, editorMutation } from "./lib/functions";
@@ -1674,9 +1675,24 @@ const executePlan = async (ctx: MutationCtx, plan: WritePlan) => {
         await recordArrival(ctx, write.value.objectId, Date.now());
         break;
       }
-      case "patchDevice":
-        await ctx.db.patch(write.rowId, write.value);
+      case "patchDevice": {
+        // An absent device leaving or reaching a plan moves its purge clock
+        // (ADR 0039), whoever moved it: a person, an undo or the cycle.
+        const row = await ctx.db.get(write.rowId);
+        const placed = write.value.placement !== undefined;
+        const moved =
+          row?.source?.missingSince !== undefined &&
+          "placement" in write.value &&
+          (row.placement !== undefined) !== placed;
+        await ctx.db.patch(write.rowId, {
+          ...write.value,
+          ...(moved && {
+            // The server's clock: an operation's time is the client's.
+            source: withPlacementClock(row.source, placed, Date.now()),
+          }),
+        });
         break;
+      }
       case "deleteDevice":
         await ctx.db.delete(write.rowId);
         await deleteDeviceMacs(ctx, write.objectId);

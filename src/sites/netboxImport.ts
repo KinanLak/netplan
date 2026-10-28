@@ -319,6 +319,23 @@ export const absencePurgeDue = (
   importedAt - Math.max(device.missingSince, device.offPlanSince) >=
     ABSENCE_KEPT_MS;
 
+/**
+ * The binding of a device whose placement changes: an absent device taken
+ * off every plan starts its 30 days now, one placed again stops them (ADR
+ * 0039). Any other binding is returned as it is.
+ */
+export const withPlacementClock = <
+  S extends { missingSince?: number; offPlanSince?: number },
+>(
+  source: S | undefined,
+  placed: boolean,
+  now: number,
+): S | undefined => {
+  if (source?.missingSince === undefined) return source;
+  const { offPlanSince: _, ...rest } = source;
+  return placed ? (rest as S) : { ...source, offPlanSince: now };
+};
+
 /** The key of a created device in `ImportPlan.macs`, before it has an id. */
 export const newDeviceKey = (device: ImportedDevice) =>
   `netbox:${device.externalId}`;

@@ -44,13 +44,15 @@ all 447 devices of the real site. The owner decided how absence works on
 - **Off the plan: purged after 30 days.** A daily job deletes an absent device
   that is on no floor once 30 days separate the site's last NetBox import
   from the later of `missingSince` and `source.offPlanSince`, with its MACs,
-  ports, cables and push row, as an import used to at once. The job itself
-  sets `offPlanSince` the first time it finds an absent device on no floor,
-  and clears it when the device is placed again, so a device absent for long
-  and taken off a plan today still has 30 days. Measuring up to the last
-  import rather than to now means a NetBox that no longer answers, or that a
-  site stops reading, never makes anything look absent for longer than it
-  confirmed. An archived site keeps everything (ADR 0033).
+  ports, cables and push row, as an import used to at once. `offPlanSince` is
+  set whenever an absent device leaves every plan, by the import that finds
+  it missing while unplaced or by the map operation that takes it off (a
+  person, an undo or the cycle), and cleared when it is placed, so every
+  removal gets 30 days; the job also sets it for a device it finds without
+  one. Measuring up to the last import rather than to now means a NetBox that
+  no longer answers, or that a site stops reading, never makes anything look
+  absent for longer than it confirmed. An archived site keeps everything (ADR
+  0033), even a run scheduled before it was archived.
 - **On a plan: kept.** A placed absent device is never purged. The map draws
   it greyed; the drawer and the inventory say « Absent de NetBox depuis le … ».
   An Éditeur may delete it, from the map or, once it is off every plan, from

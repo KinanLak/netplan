@@ -537,7 +537,7 @@ describe("NetBox import", () => {
       return (await inventory(editor, siteId)).map((d) => d.name);
     };
 
-    // The first run starts the clock of each absent device on no floor.
+    // Absent while on no floor: its clock runs from the import that missed it.
     expect(await purge()).toEqual(["pc-0012", "pc-0013"]);
     expect(
       (await inventory(editor, siteId)).map(
@@ -555,6 +555,28 @@ describe("NetBox import", () => {
     // Absent for long, but taken off a plan yesterday: its 30 days start then.
     await age(40 * DAY, { offPlanFor: DAY });
     expect(await purge()).toEqual(["pc-0012", "pc-0013"]);
+
+    // Archived, a site keeps everything, even a run already scheduled.
+    await age(31 * DAY);
+    await t.run(async (ctx) => {
+      const site = await ctx.db
+        .query("sites")
+        .withIndex("by_object_id", (q) => q.eq("objectId", siteId))
+        .unique();
+      if (site) await ctx.db.patch(site._id, { archivedAt: 1 });
+    });
+    await t.mutation(internal.netboxImport.purgeSite, { siteId });
+    expect((await inventory(editor, siteId)).map((d) => d.name)).toEqual([
+      "pc-0012",
+      "pc-0013",
+    ]);
+    await t.run(async (ctx) => {
+      const site = await ctx.db
+        .query("sites")
+        .withIndex("by_object_id", (q) => q.eq("objectId", siteId))
+        .unique();
+      if (site) await ctx.db.patch(site._id, { archivedAt: undefined });
+    });
 
     await age(31 * DAY);
     expect(await purge()).toEqual(["pc-0013"]);
