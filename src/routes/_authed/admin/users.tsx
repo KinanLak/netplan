@@ -103,6 +103,7 @@ const statusFilterItems: Array<{ value: UserStatus | "all"; label: string }> = [
 function UsersPage() {
   const users = useQuery(api.users.list);
   const presences = useQuery(api.presences.list);
+  const keycloak = useQuery(api.authSettings.keycloak);
   const me = useCurrentUser();
   const now = useNow(PRESENCE_STALE_AFTER_MS);
   const online = new Set(
@@ -211,6 +212,7 @@ function UsersPage() {
                   isMe={user.id === me?.id}
                   online={online.has(user.id)}
                   now={now}
+                  keycloakEnabled={Boolean(keycloak?.issuer)}
                 />
               ))}
             </ul>
@@ -266,6 +268,9 @@ function Activity({
       </span>
     );
   }
+  if (user.kind === "awaiting-keycloak") {
+    return <span>En attente de sa première connexion avec Keycloak.</span>;
+  }
   return user.lastSignInAt === null ? null : (
     <span>
       Dernière connexion <Time at={user.lastSignInAt} now={now} format="age" />
@@ -278,19 +283,23 @@ function UserItem({
   isMe,
   online,
   now,
+  keycloakEnabled,
 }: {
   user: UserRow;
   isMe: boolean;
   online: boolean;
   now: number;
+  keycloakEnabled: boolean;
 }) {
   const setRole = useOnlineMutation(api.users.setRole);
   const setDisabled = useOnlineMutation(api.users.setDisabled);
   const cancelInvitation = useOnlineMutation(api.users.cancelInvitation);
   const signOutEverywhere = useOnlineMutation(api.users.signOutEverywhere);
+  const handOver = useOnlineMutation(api.users.handOverToKeycloak);
+  const cancelHandover = useOnlineMutation(api.users.cancelHandover);
   const resend = useAction(api.users.resendInvitation);
   const [confirming, setConfirming] = useState<
-    "disable" | "cancel" | "sign-out" | { role: Role } | null
+    "disable" | "cancel" | "sign-out" | "hand-over" | { role: Role } | null
   >(null);
   const [pending, setPending] = useState(false);
   const [notice, setNotice] = useState<{ error: boolean; text: string }>();
@@ -322,7 +331,9 @@ function UserItem({
     ? "Un autre administrateur doit changer votre rôle."
     : user.kind === "sso"
       ? "Suit la correspondance des rôles Keycloak, relue à chaque connexion et toutes les heures."
-      : null;
+      : user.kind === "awaiting-keycloak"
+        ? "Suivra la correspondance des rôles Keycloak dès sa première connexion."
+        : null;
 
   const roleSelect = (
     <Select
@@ -382,34 +393,67 @@ function UserItem({
                   }),
                 ),
             }
-          : confirming === "cancel"
+          : confirming === "hand-over"
             ? {
-                title: `Annuler l'invitation de « ${user.name} » ?`,
-                text: "Le compte, qui n'a jamais servi, est supprimé et son lien ne fonctionne plus. Vous pourrez inviter cette adresse à nouveau.",
-                action: "Annuler l'invitation",
+                title: `Passer « ${user.name} » sur Keycloak ?`,
+                text: `Son mot de passe est supprimé et ses sessions se ferment. Sa prochaine connexion avec Keycloak sous ${user.email} retrouvera ce compte, son historique et ses actions ; son rôle suivra alors Keycloak.`,
+                action: "Passer sur Keycloak",
                 destructive: true,
-                run: () =>
-                  void run(
-                    () => cancelInvitation({ userId: user.id }),
-                    () => toast.success(`Invitation de ${user.email} annulée.`),
-                  ),
+                run: () => void run(() => handOver({ userId: user.id })),
               }
-            : {
-                title:
-                  confirming.role === "admin"
-                    ? `Donner le rôle Admin à « ${user.name} » ?`
-                    : `Retirer le rôle Admin à « ${user.name} » ?`,
-                text:
-                  confirming.role === "admin"
-                    ? "Il pourra gérer les utilisateurs, les sites et leurs intégrations, et changer le rôle des autres administrateurs."
-                    : `Il devient ${ROLE_LABELS[confirming.role]} : il ne verra plus l'administration.`,
-                action:
-                  confirming.role === "admin"
-                    ? "Donner le rôle Admin"
-                    : "Retirer le rôle Admin",
-                destructive: false,
-                run: () => changeRole(confirming.role),
-              };
+            : confirming === "cancel"
+              ? {
+                  title: `Annuler l'invitation de « ${user.name} » ?`,
+                  text: "Le compte, qui n'a jamais servi, est supprimé et son lien ne fonctionne plus. Vous pourrez inviter cette adresse à nouveau.",
+                  action: "Annuler l'invitation",
+                  destructive: true,
+                  run: () =>
+                    void run(
+                      () => cancelInvitation({ userId: user.id }),
+                      () =>
+                        toast.success(`Invitation de ${user.email} annulée.`),
+                    ),
+                }
+              : {
+                  title:
+                    confirming.role === "admin"
+                      ? `Donner le rôle Admin à « ${user.name} » ?`
+                      : `Retirer le rôle Admin à « ${user.name} » ?`,
+                  text:
+                    confirming.role === "admin"
+                      ? "Il pourra gérer les utilisateurs, les sites et leurs intégrations, et changer le rôle des autres administrateurs."
+                      : `Il devient ${ROLE_LABELS[confirming.role]} : il ne verra plus l'administration.`,
+                  action:
+                    confirming.role === "admin"
+                      ? "Donner le rôle Admin"
+                      : "Retirer le rôle Admin",
+                  destructive: false,
+                  run: () => changeRole(confirming.role),
+                };
+
+  // Rare actions, kept out of the row: only those that apply.
+  const moreActions = [
+    !user.disabled && (user.kind === "local" || user.kind === "sso")
+      ? {
+          label: "Déconnecter partout",
+          act: () => setConfirming("sign-out"),
+        }
+      : null,
+    keycloakEnabled &&
+    !user.disabled &&
+    (user.kind === "local" || user.kind === "invited")
+      ? {
+          label: "Passer ce compte sur Keycloak",
+          act: () => setConfirming("hand-over"),
+        }
+      : null,
+    user.kind === "awaiting-keycloak"
+      ? {
+          label: "Annuler le passage sur Keycloak",
+          act: () => void run(() => cancelHandover({ userId: user.id })),
+        }
+      : null,
+  ].filter((action) => action !== null);
 
   return (
     <li className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -417,7 +461,7 @@ function UserItem({
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-medium">{user.name}</span>
           {isMe ? <Badge variant="secondary">Vous</Badge> : null}
-          {user.kind === "sso" ? (
+          {user.kind === "sso" || user.kind === "awaiting-keycloak" ? (
             <Badge variant="outline">Keycloak</Badge>
           ) : null}
           {user.kind === "invited" ? (
@@ -460,7 +504,9 @@ function UserItem({
             Renvoyer l'invitation
           </Button>
         ) : null}
-        {user.kind === "invited" ? (
+        {/* An account that has signed in was used, even without a password
+            now: it is disabled, not deleted. */}
+        {user.kind === "invited" && user.lastSignInAt === null ? (
           <Button
             variant="ghost"
             size="sm"
@@ -491,7 +537,7 @@ function UserItem({
             Désactiver
           </Button>
         )}
-        {isMe || user.kind === "invited" || user.disabled ? null : (
+        {isMe || moreActions.length === 0 ? null : (
           <DropdownMenu>
             <DropdownMenuTrigger
               render={<Button variant="ghost" size="icon-sm" />}
@@ -501,9 +547,11 @@ function UserItem({
               <HugeiconsIcon icon={MoreHorizontalIcon} strokeWidth={2} />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => setConfirming("sign-out")}>
-                Déconnecter partout
-              </DropdownMenuItem>
+              {moreActions.map(({ label, act }) => (
+                <DropdownMenuItem key={label} onClick={act}>
+                  {label}
+                </DropdownMenuItem>
+              ))}
             </DropdownMenuContent>
           </DropdownMenu>
         )}

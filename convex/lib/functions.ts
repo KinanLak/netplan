@@ -12,7 +12,7 @@ import {
   customMutation,
   customQuery,
 } from "convex-helpers/server/customFunctions";
-import { components } from "../_generated/api";
+import { components, internal } from "../_generated/api";
 import { authComponent } from "../auth";
 import { hasRole, roleOf } from "./roles";
 import type { Role } from "./roles";
@@ -35,6 +35,16 @@ export async function getSignedInUser(
 ): Promise<SignedInUser | null> {
   const doc = await authComponent.safeGetAuthUser(ctx);
   if (!doc || doc.banned === true) return null;
+  // An account waiting for Keycloak has no session left; one opened by a
+  // password sign-in that was already checking its hash at the handover
+  // must not work either (ADR 0036).
+  if (
+    await ctx.runQuery(internal.keycloakHandovers.isPending, {
+      userId: doc._id,
+    })
+  ) {
+    return null;
+  }
   return {
     id: doc._id,
     name: doc.name,

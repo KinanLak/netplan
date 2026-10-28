@@ -3,12 +3,18 @@
 /**
  * `local` signs in with a password, `sso` through Keycloak, and `invited`
  * has no way in yet: the invitation link is how it chooses a password.
+ * `awaiting-keycloak` was handed to Keycloak by an admin and attaches to
+ * its first Keycloak sign-in (ADR 0036).
  */
-export type AccountKind = "local" | "sso" | "invited";
+export type AccountKind = "local" | "sso" | "invited" | "awaiting-keycloak";
 
-export function accountKind(providerIds: ReadonlyArray<string>): AccountKind {
+export function accountKind(
+  providerIds: ReadonlyArray<string>,
+  awaitingKeycloak = false,
+): AccountKind {
   if (providerIds.includes("credential")) return "local";
-  return providerIds.length > 0 ? "sso" : "invited";
+  if (providerIds.length > 0) return "sso";
+  return awaitingKeycloak ? "awaiting-keycloak" : "invited";
 }
 
 // better-auth's username plugin defaults, so an invitation never stores a

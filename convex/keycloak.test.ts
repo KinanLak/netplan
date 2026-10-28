@@ -11,7 +11,14 @@ import * as native from "undici";
 import { api, components, internal } from "./_generated/api";
 import { createSignedInUser } from "./_test/auth.setup";
 import type { TestBackend } from "./_test/auth.setup";
-import { SITE, post, withMail, withMailRelay } from "./_test/mail.setup";
+import {
+  SITE,
+  outbox,
+  post,
+  tokenFromLink,
+  withMail,
+  withMailRelay,
+} from "./_test/mail.setup";
 import {
   keycloakRoleNames,
   readKeycloakConfig,
@@ -42,6 +49,7 @@ type Login = {
   name: string;
   roles: Array<string>;
   groups?: Array<string>;
+  emailVerified?: boolean;
 };
 let nextLogin: Login = { sub: "", email: "", name: "", roles: [] };
 // What the token endpoint answers to a refresh token: the roles Keycloak
@@ -52,7 +60,14 @@ let nextRefresh: Array<string> | "invalid_grant" | "down" = [];
 let grantedScope = "openid profile email offline_access";
 const refreshTokensSeen: Array<string | null> = [];
 
-const tokensFor = ({ sub, email, name, roles, groups }: Login) =>
+const tokensFor = ({
+  sub,
+  email,
+  name,
+  roles,
+  groups,
+  emailVerified = true,
+}: Login) =>
   Response.json({
     token_type: "Bearer",
     expires_in: 300,
@@ -60,7 +75,7 @@ const tokensFor = ({ sub, email, name, roles, groups }: Login) =>
     scope: grantedScope,
     refresh_token: `offline-${sub}-${roles.join("+")}`,
     access_token: jwt({ sub, realm_access: { roles }, groups }),
-    id_token: jwt({ sub, email, email_verified: true, name }),
+    id_token: jwt({ sub, email, email_verified: emailVerified, name }),
   });
 const realFetch = globalThis.fetch;
 // The test DOM's Request and Response drop Cookie and Set-Cookie as a
@@ -247,7 +262,7 @@ describe("Keycloak sign-in", () => {
       roles: [],
     });
     expect(new URL(location, SITE).searchParams.get("error")).toBe(
-      "account_not_linked",
+      "unable_to_link_account",
     );
     const accounts = await t.run((ctx) =>
       ctx.runQuery(components.betterAuth.adapter.findMany, {
@@ -544,6 +559,269 @@ describe("signing a user out everywhere", () => {
         .withIdentity(admin.identity)
         .mutation(api.users.signOutEverywhere, { userId: admin.userId }),
     ).rejects.toThrow("Se déconnecter");
+  });
+});
+
+describe("handing a local account to Keycloak", () => {
+  const PASSWORD = "first-password-1"; // gitleaks:allow
+  const lou = {
+    sub: "kc-lou",
+    email: "lou@example.test",
+    name: "Lou Keycloak",
+  };
+  const errorOf = (location: string) =>
+    new URL(location, SITE).searchParams.get("error");
+
+  async function localAccount(t: TestBackend) {
+    await t.action(internal.bootstrap.ensureFirstAdmin, {
+      email: lou.email,
+      password: PASSWORD,
+      name: "Lou Local",
+    });
+    const admin = await asAdmin(t);
+    const userId = (await userByEmail(t, lou.email))?._id ?? "";
+    const signIn = () =>
+      post(t, "/sign-in/email", { email: lou.email, password: PASSWORD });
+    const kind = async () =>
+      (await admin.query(api.users.list, {})).find((row) => row.id === userId)
+        ?.kind;
+    return { admin, userId, signIn, kind };
+  }
+
+  it("takes the password away and attaches the next Keycloak sign-in to the same account", async () => {
+    const t = withMail();
+    const { admin, userId, signIn, kind } = await localAccount(t);
+    const signedIn = await signIn();
+    expect(signedIn.status).toBe(200);
+    expect(
+      errorOf((await keycloakLogin(t, { ...lou, roles: [] })).location),
+    ).toBe("unable_to_link_account");
+
+    await admin.mutation(api.users.handOverToKeycloak, { userId });
+    expect(await kind()).toBe("awaiting-keycloak");
+    // Typing the address into one's own Keycloak profile is not enough.
+    expect(
+      errorOf(
+        (await keycloakLogin(t, { ...lou, roles: [], emailVerified: false }))
+          .location,
+      ),
+    ).toBe("account_not_linked");
+    expect(await kind()).toBe("awaiting-keycloak");
+    expect(await sessionOf(t, cookieOf(signedIn))).toBeNull();
+    expect((await signIn()).status).toBe(401);
+    // No forgotten-password mail gives it a password back.
+    await post(t, "/request-password-reset", {
+      email: lou.email,
+      redirectTo: "/reset-password",
+    });
+    await t.finishAllScheduledFunctions(() => {});
+    expect(await outbox(t)).toEqual([]);
+
+    expect((await keycloakLogin(t, { ...lou, roles: [] })).location).toBe("/");
+    const user = await userByEmail(t, lou.email);
+    // The same user, its name kept, its role now Keycloak's.
+    expect(user).toMatchObject({
+      _id: userId,
+      name: "Lou Local",
+      role: "reader",
+    });
+    expect(await kind()).toBe("sso");
+    expect(
+      await t.query(internal.keycloakHandovers.isPending, { userId }),
+    ).toBe(false);
+  });
+
+  it("leaves an invitation never used refusing Keycloak, as implicit linking stays off", async () => {
+    const t = withMail();
+    const admin = await asAdmin(t);
+    await admin.action(api.users.invite, {
+      name: "Invitée",
+      email: lou.email,
+      role: "editor",
+    });
+    expect(
+      errorOf((await keycloakLogin(t, { ...lou, roles: [] })).location),
+    ).toBe("unable_to_link_account");
+  });
+
+  it("can be cancelled before it completes, leaving a used account to invite again", async () => {
+    const t = withMail();
+    const { admin, userId, signIn, kind } = await localAccount(t);
+    await signIn();
+    await admin.mutation(api.users.handOverToKeycloak, { userId });
+    await admin.mutation(api.users.cancelHandover, { userId });
+
+    expect(await kind()).toBe("invited");
+    expect(
+      errorOf((await keycloakLogin(t, { ...lou, roles: [] })).location),
+    ).toBe("unable_to_link_account");
+    // It was used, so it is not deleted like a mistaken invitation.
+    await expect(
+      admin.mutation(api.users.cancelInvitation, { userId }),
+    ).rejects.toThrow("déjà servi");
+  });
+
+  // The handover runs while a request is between its read and its write:
+  // the state it leaves is set directly here.
+  it("lets no password or session in that was already on its way at the handover", async () => {
+    const t = withMail();
+    const { userId, signIn } = await localAccount(t);
+    await post(t, "/request-password-reset", {
+      email: lou.email,
+      redirectTo: "/reset-password",
+    });
+    await t.finishAllScheduledFunctions(() => {});
+    const [mail] = await outbox(t);
+    const { token } = await tokenFromLink(t, mail);
+    // A session a sign-in opened while the handover committed.
+    expect((await signIn()).status).toBe(200);
+    const [session] = (
+      await t.run((ctx) =>
+        ctx.runQuery(components.betterAuth.adapter.findMany, {
+          model: "session",
+          where: [{ field: "userId", value: userId }],
+          paginationOpts: { numItems: 10, cursor: null },
+        }),
+      )
+    ).page as Array<{ _id: string }>;
+    await t.mutation(internal.keycloakHandovers.start, { userId });
+    await expect(
+      t
+        .withIdentity({ subject: userId, sessionId: session._id })
+        .query(api.users.me, {}),
+    ).rejects.toThrow("unauthenticated");
+
+    // A sign-in whose password was checked before the credential went.
+    expect((await signIn()).status).toBe(403);
+
+    // A reset whose token was read before the handover deleted it.
+    await t.run((ctx) =>
+      ctx.runMutation(components.betterAuth.adapter.deleteMany, {
+        input: {
+          model: "account",
+          where: [{ field: "userId", value: userId }],
+        },
+        paginationOpts: { numItems: 10, cursor: null },
+      }),
+    );
+    expect(
+      (
+        await post(t, "/reset-password", {
+          token,
+          newPassword: "new-password-2",
+        })
+      ).ok,
+    ).toBe(false);
+    const accounts = await t.run((ctx) =>
+      ctx.runQuery(components.betterAuth.adapter.findMany, {
+        model: "account",
+        where: [{ field: "userId", value: userId }],
+        paginationOpts: { numItems: 10, cursor: null },
+      }),
+    );
+    expect(accounts.page).toEqual([]);
+  });
+
+  it("clears what slipped in during the wait, whether it completes or is cancelled", async () => {
+    const providers = async (t: TestBackend, userId: string) =>
+      (
+        (
+          await t.run((ctx) =>
+            ctx.runQuery(components.betterAuth.adapter.findMany, {
+              model: "account",
+              where: [{ field: "userId", value: userId }],
+              paginationOpts: { numItems: 10, cursor: null },
+            }),
+          )
+        ).page as Array<{ providerId: string }>
+      ).map((account) => account.providerId);
+
+    for (const ending of ["keycloak", "cancel"] as const) {
+      const t = withMail();
+      const { admin, userId, signIn } = await localAccount(t);
+      // A password session and the password itself, both written after the
+      // handover's own cleanup by requests already past their checks.
+      const straggler = cookieOf(await signIn());
+      await t.mutation(internal.keycloakHandovers.start, { userId });
+
+      if (ending === "keycloak") {
+        const { location, cookie } = await keycloakLogin(t, {
+          ...lou,
+          roles: [],
+        });
+        expect(location).toBe("/");
+        expect(await sessionOf(t, cookie)).not.toBeNull();
+        expect(await providers(t, userId)).toEqual(["keycloak"]);
+      } else {
+        await admin.mutation(api.users.cancelHandover, { userId });
+        expect(await providers(t, userId)).toEqual([]);
+      }
+      expect(await sessionOf(t, straggler)).toBeNull();
+    }
+  });
+
+  it("never gives a Keycloak account a password, even from a reset begun before", async () => {
+    const t = withMail();
+    await keycloakLogin(t, { ...camille, roles: [] });
+    const userId = (await userByEmail(t, camille.email))?._id ?? "";
+    const token = "reset-begun-before-the-handover";
+    await t.run((ctx) =>
+      ctx.runMutation(components.betterAuth.adapter.create, {
+        input: {
+          model: "verification",
+          data: {
+            identifier: `reset-password:${token}`,
+            value: userId,
+            expiresAt: Date.now() + 60_000,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          },
+        },
+      }),
+    );
+    expect(
+      (
+        await post(t, "/reset-password", {
+          token,
+          newPassword: "new-password-2",
+        })
+      ).ok,
+    ).toBe(false);
+    const accounts = await t.run((ctx) =>
+      ctx.runQuery(components.betterAuth.adapter.findMany, {
+        model: "account",
+        where: [{ field: "userId", value: userId }],
+        paginationOpts: { numItems: 10, cursor: null },
+      }),
+    );
+    expect(
+      (accounts.page as Array<{ providerId: string }>).map(
+        (account) => account.providerId,
+      ),
+    ).toEqual(["keycloak"]);
+  });
+
+  it("waits for a disabled account to be enabled again", async () => {
+    const t = withMail();
+    const { admin, userId } = await localAccount(t);
+    await admin.mutation(api.users.setDisabled, { userId, disabled: true });
+    await expect(
+      admin.mutation(api.users.handOverToKeycloak, { userId }),
+    ).rejects.toThrow("Réactivez ce compte");
+  });
+
+  it("is not for the admin's own account, nor one already on Keycloak", async () => {
+    const t = withMail();
+    const admin = await createSignedInUser(t, "admin");
+    const asIt = t.withIdentity(admin.identity);
+    await expect(
+      asIt.mutation(api.users.handOverToKeycloak, { userId: admin.userId }),
+    ).rejects.toThrow("Un autre administrateur");
+    await keycloakLogin(t, { ...camille, roles: [] });
+    const sso = (await userByEmail(t, camille.email))?._id ?? "";
+    await expect(
+      asIt.mutation(api.users.handOverToKeycloak, { userId: sso }),
+    ).rejects.toThrow("déjà avec Keycloak");
   });
 });
 

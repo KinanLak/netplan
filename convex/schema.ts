@@ -454,6 +454,13 @@ export default defineSchema({
     at: v.number(),
   }).index("by_user", ["userId"]),
 
+  // Accounts an admin handed to Keycloak, until their first Keycloak sign-in
+  // attaches to them (ADR 0036).
+  keycloakHandovers: defineTable({
+    userId: v.string(),
+    at: v.number(),
+  }).index("by_user", ["userId"]),
+
   // A single row: the Keycloak role names that grant Éditeur and Admin
   // (ADR 0004), and whether groups count too (ADR 0036, absent is no).
   // Absent until an admin first saves them.

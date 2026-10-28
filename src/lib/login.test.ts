@@ -163,8 +163,8 @@ describe("requestFailure", () => {
 
 describe("keycloakErrorMessage", () => {
   it("says why Keycloak could not sign the user in", () => {
-    expect(keycloakErrorMessage("account_not_linked")).toContain(
-      "utilise déjà l'adresse e-mail",
+    expect(keycloakErrorMessage("unable_to_link_account")).toContain(
+      "demandez à un administrateur de le passer sur Keycloak",
     );
     expect(keycloakErrorMessage("BANNED_USER")).toBe(
       loginErrorMessage({ code: "BANNED_USER" }),

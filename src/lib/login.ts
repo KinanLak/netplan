@@ -79,8 +79,10 @@ export function loginErrorMessage(error: AuthFailure): string {
  * better-auth code, or the provider's own such as `access_denied`.
  */
 export function keycloakErrorMessage(code: string): string {
-  if (code === "account_not_linked") {
-    return "Un compte NetPlan utilise déjà l'adresse e-mail de ce compte Keycloak. Connectez-vous avec son identifiant et son mot de passe.";
+  // better-auth says `unable_to_link_account` when the account hook refuses
+  // the link (ADR 0036), `account_not_linked` when linking is off.
+  if (code === "unable_to_link_account" || code === "account_not_linked") {
+    return "Un compte NetPlan utilise déjà l'adresse e-mail de ce compte Keycloak. Connectez-vous avec son mot de passe, ou demandez à un administrateur de le passer sur Keycloak.";
   }
   if (code === "BANNED_USER") {
     return loginErrorMessage({ code });

@@ -60,9 +60,10 @@ per identifier typed, with no limit shared between people (ADR 0036).
   invites a user from **Administration › Utilisateurs**: the account is
   created without a password and the mail carries a seven-day password-reset
   link. Forgotten password reuses that page with a one-hour link, which never
-  goes to a Keycloak account. Disabling is a better-auth ban. Only an
-  invitation never accepted can be deleted (C5): a used account is disabled,
-  so its name stays in the history. A session hook records each sign-in in
+  goes to a Keycloak account or one handed to Keycloak. Disabling is a
+  better-auth ban. Only an invitation never accepted and never signed in
+  can be deleted (C5): a used account is disabled, so its name stays in the
+  history. A session hook records each sign-in in
   `signIns` for the users page. The first admin comes from
   `BOOTSTRAP_ADMIN_*` at deploy time.
 - **Keycloak.** Generic OAuth with PKCE, on when `KEYCLOAK_ISSUER`,
@@ -77,9 +78,11 @@ per identifier typed, with no limit shared between people (ADR 0036).
   token for new tokens and sets the role again; `invalid_grant` ends the
   user's sessions, any other failure changes nothing (ADR 0036). An admin's
   « Déconnecter partout » ends another account's sessions without disabling
-  it.
-  A Keycloak identity never links to a local account: the same email is
-  refused and the linking routes are disabled. OAuth errors land on `/login`,
+  it. A Keycloak identity links to an existing account only when an admin
+  chose « Passer ce compte sur Keycloak », which removes its password and
+  records it in `keycloakHandovers`: an account-creation hook refuses every
+  other link, so a local account's email refuses Keycloak, and the linking
+  routes are disabled. OAuth errors land on `/login`,
   which explains them in French. Signing out does not end the Keycloak
   session.
 - **Mail.** A Node action sends invitations, reset links and the admin's test

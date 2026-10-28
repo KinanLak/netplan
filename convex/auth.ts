@@ -39,9 +39,10 @@ export const authComponent = createClient<DataModel, typeof authSchema>(
 
 /**
  * Whether a forgotten-password mail may go to this user. Not to a disabled
- * account, and not to an SSO account: setting a password would give it a
- * second way in that its identity provider does not control. An invited
- * user who has not chosen a password yet has no account at all and may.
+ * account, and not to an SSO account or one handed to Keycloak: setting a
+ * password would give it a second way in that its identity provider does
+ * not control. An invited user who has not chosen a password yet has no
+ * account at all and may.
  */
 async function mayResetPassword(
   ctx: GenericCtx<DataModel>,
@@ -53,6 +54,9 @@ async function mayResetPassword(
     where: [{ field: "_id", value: userId }],
   });
   if (!user || user.banned === true) return false;
+  if (await runQuery(internal.keycloakHandovers.isPending, { userId })) {
+    return false;
+  }
   const account = (providerId?: string) =>
     runQuery(components.betterAuth.adapter.findOne, {
       model: "account",
@@ -134,6 +138,11 @@ const signInOptions = (keycloakEnabled: boolean) =>
 
 export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
   const keycloakConfig = readKeycloakConfig(process.env);
+  // The email of the user a Keycloak sign-in is creating in this request:
+  // its account is the one link that needs no handover.
+  let signingUpEmail: string | null = null;
+  const signInState = (userId: string) =>
+    ctx.runQuery(internal.keycloakHandovers.signInState, { userId });
   return {
     baseURL: process.env.SITE_URL,
     // SITE_URL plus TRUSTED_ORIGINS (comma-separated), which dev:agent sets
@@ -180,10 +189,14 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
       }),
     },
     account: {
-      // A Keycloak login whose email a local account already uses is refused
-      // (ADR 0021): linking would let the identity provider into an account
-      // its admin created with a password, under that account's role.
-      accountLinking: { enabled: false },
+      // Linking is on so that an account an admin handed to Keycloak can
+      // attach; the account hook below refuses every other link (ADR 0036).
+      // better-auth links only when Keycloak says the address is verified,
+      // so nobody takes a waiting account by typing its address there.
+      accountLinking: {
+        enabled: true,
+        requireLocalEmailVerified: false,
+      },
     },
     // Linking from a signed-in session does not check the setting above, and
     // generic OAuth also registers Keycloak with the social linking route.
@@ -209,6 +222,54 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
         : undefined,
     },
     databaseHooks: {
+      user: {
+        create: {
+          before: (user, context) => {
+            if (context?.path.startsWith("/oauth2/callback/")) {
+              signingUpEmail = user.email.toLowerCase();
+            }
+            return Promise.resolve();
+          },
+        },
+      },
+      account: {
+        create: {
+          // A Keycloak account goes to the user this sign-in just created,
+          // or to an account an admin handed to Keycloak; nowhere else. A
+          // password never goes to an account waiting for Keycloak, even
+          // from a reset that was already under way at the handover.
+          before: async (account) => {
+            if (account.providerId === "credential") {
+              const state = await signInState(account.userId);
+              // Nor to a Keycloak account, which a reset begun before its
+              // handover completed would otherwise reach.
+              if (state.hasKeycloak || state.awaitingKeycloak) {
+                throw new APIError("FORBIDDEN", {
+                  code: "AWAITING_KEYCLOAK",
+                });
+              }
+              return;
+            }
+            if (account.providerId !== "keycloak") return;
+            const { runQuery } = requireActionCtx(ctx);
+            const user = (await runQuery(
+              components.betterAuth.adapter.findOne,
+              {
+                model: "user",
+                where: [{ field: "_id", value: account.userId }],
+              },
+            )) as { email: string } | null;
+            if (user && user.email === signingUpEmail) return;
+            const handedOver = await runQuery(
+              internal.keycloakHandovers.isPending,
+              { userId: account.userId },
+            );
+            if (!handedOver) {
+              throw new APIError("FORBIDDEN", { code: "ACCOUNT_NOT_LINKED" });
+            }
+          },
+        },
+      },
       session: {
         // Activity extends a session up to 7 days after its login, which
         // bounds a stolen session (ADR 0031).
@@ -244,10 +305,31 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
         },
         create: {
           before: async (session, context) => {
+            const viaKeycloak = context?.path.startsWith("/oauth2/callback/");
+            // A password sign-in already checking its hash at the handover
+            // would otherwise open a session after they were all closed. A
+            // Keycloak sign-in is the one the account waits for: the account
+            // hook let it link.
+            const state = await signInState(session.userId);
+            const awaiting = state.awaitingKeycloak;
+            // A password session needs the password to still exist: one
+            // checked before the handover deleted it opens nothing after.
+            const viaPassword = context?.path.startsWith("/sign-in/") === true;
             if (
-              keycloakConfig &&
-              context?.path.startsWith("/oauth2/callback/")
+              (awaiting && !viaKeycloak) ||
+              (viaPassword && !state.hasPassword)
             ) {
+              throw new APIError("FORBIDDEN", { code: "AWAITING_KEYCLOAK" });
+            }
+            // The Keycloak sign-in the account waited for: what slipped in
+            // during the wait goes before its own session is written.
+            if (awaiting) {
+              await requireActionCtx(ctx).runMutation(
+                internal.keycloakHandovers.end,
+                { userId: session.userId },
+              );
+            }
+            if (keycloakConfig && viaKeycloak) {
               await applyKeycloakRole(ctx, keycloakConfig, session.userId);
             }
           },
