@@ -1,4 +1,5 @@
 import type { MapOperation } from "@/map-engine/types";
+import { failureMessage } from "@/lib/errors";
 import { isForbidden } from "@/lib/login";
 
 export interface OutboxApplyResult {
@@ -13,10 +14,6 @@ export interface OutboxApplyResult {
 
 /** The rejection an operation gets when the user's role cannot edit. */
 export const FORBIDDEN_REJECTION = "forbidden";
-
-/** What the user reads when the server failed on an operation. */
-export const FAILED_REJECTION =
-  "La modification n'a pas pu être enregistrée. Réessayez.";
 
 export interface OutboxState {
   pendingCount: number;
@@ -35,8 +32,9 @@ export interface SequentialOutboxOptions {
  * Nothing is made without a connection (ADR 0034). An operation already
  * sent when the connection drops stays with Convex's client, which sends it
  * again on reconnection: the server confirms it, or refuses it and it rolls
- * back like any refusal. A function that fails rolls back too, with a
- * message: retrying it would fail the same way.
+ * back like any refusal. A function that fails rolls back too, with its
+ * message, and so do the operations made after it, which built on it:
+ * retrying would fail the same way.
  */
 export class SequentialOutbox {
   private readonly queue: Array<MapOperation> = [];
@@ -92,11 +90,15 @@ export class SequentialOutbox {
         try {
           result = await this.options.send(operation);
         } catch (error) {
-          result = {
-            status: "rejected",
-            opId: operation.meta.opId,
-            error: isForbidden(error) ? FORBIDDEN_REJECTION : FAILED_REJECTION,
-          };
+          if (generation !== this.generation) return;
+          const message = isForbidden(error)
+            ? FORBIDDEN_REJECTION
+            : failureMessage(error, "editor");
+          for (const failed of this.queue.splice(0)) {
+            this.options.onReject(failed, message);
+          }
+          this.emitState();
+          break;
         }
         if (generation !== this.generation) return;
         this.queue.shift();

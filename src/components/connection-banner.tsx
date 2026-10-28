@@ -76,14 +76,18 @@ export function ConnectionBanner() {
 
   useEffect(() => {
     useConnectionStore.setState({ isMapFrozen: frozen, isBannerShown: shown });
-    // What was open would still edit, and a tool or a multi-selection left
-    // on would block plain navigation; they close as they do when an
-    // Éditeur becomes a Lecteur. Edit mode itself resumes on reconnection.
-    if (frozen) {
-      useMapStore.getState().leaveEditTools();
-      useStructureDialog.getState().close();
-    }
   }, [frozen, shown]);
+
+  // A tool or a multi-selection left on would block plain navigation, so
+  // they close as they do when an Éditeur becomes a Lecteur; edit mode
+  // itself resumes on reconnection. Only once the drop has lasted: a socket
+  // that reconnects at once must not throw away a cable being drawn or a
+  // name being typed, and changes are refused meanwhile anyway.
+  useEffect(() => {
+    if (!shown) return;
+    useMapStore.getState().leaveEditTools();
+    useStructureDialog.getState().close();
+  }, [shown]);
 
   if (!shown) return null;
 

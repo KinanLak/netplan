@@ -371,7 +371,32 @@ export function useCanvasDeviceNodes({
       if (ended.group) groupDragRef.current = null;
       onNodesChange(processedChanges);
 
-      if (!canEditDevices) return;
+      if (!canEditDevices) {
+        // The map froze during the drag (ADR 0037): nothing is sent, so the
+        // devices dropped go back to where the plan has them.
+        const deviceById = new Map(devices.map((item) => [item.id, item]));
+        const dropped = processedChanges.flatMap((change) =>
+          change.type === "position" && !change.dragging ? [change.id] : [],
+        );
+        if (dropped.length > 0) {
+          onNodesChange(
+            dropped.flatMap((deviceId) => {
+              const device = deviceById.get(deviceId as DeviceId);
+              return device
+                ? [
+                    {
+                      id: deviceId,
+                      type: "position" as const,
+                      position: device.position,
+                      dragging: false,
+                    },
+                  ]
+                : [];
+            }),
+          );
+        }
+        return;
+      }
       if (ended.group) moveDevices(ended.group.from, ended.group.offset);
       committedPositions.forEach((position, deviceId) => {
         updateDevicePosition(deviceId, position);

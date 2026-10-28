@@ -1062,7 +1062,7 @@ export function MapDocumentProvider({
   const undoStackRef = useRef<ReadonlyArray<SessionHistoryEntry>>(undoStack);
   const redoStackRef = useRef<ReadonlyArray<SessionHistoryEntry>>(redoStack);
   const identityRef = useRef<LocalIdentity | null>(identity);
-  const canWriteRef = useRef(isReady);
+  const canWriteRef = useRef(isReady && !isMapFrozen);
   const activeFloorIdRef = useRef(activeFloorId);
   const serverRevisionRef = useRef(serverDocument.revision);
   // Acks live in a ref: recording one must not re-render the tree. Removal is

@@ -2,11 +2,7 @@ import { describe, expect, it } from "bun:test";
 import type { DeviceId, FloorId } from "@/types/map";
 import type { MapOperation } from "@/map-engine/types";
 import { ConvexError } from "convex/values";
-import {
-  FAILED_REJECTION,
-  FORBIDDEN_REJECTION,
-  SequentialOutbox,
-} from "./outbox";
+import { FORBIDDEN_REJECTION, SequentialOutbox } from "./outbox";
 import type { OutboxApplyResult } from "./outbox";
 
 const floorId = "floor:a" as FloorId;
@@ -55,7 +51,7 @@ describe("SequentialOutbox", () => {
     expect(rejected).toEqual([["op:test:1", FORBIDDEN_REJECTION]]);
   });
 
-  it("rolls back an operation whose function failed, with a message, and goes on", async () => {
+  it("rolls back an operation whose function failed, with the server's message, and those made after it", async () => {
     const sent: Array<string> = [];
     const rejected: Array<[string, string]> = [];
     const acked: Array<string> = [];
@@ -63,7 +59,7 @@ describe("SequentialOutbox", () => {
       send: (item) => {
         sent.push(item.meta.opId);
         return item.meta.clientSeq === 1
-          ? Promise.reject(new Error("Server Error"))
+          ? Promise.reject(new ConvexError("Les ports sont invalides."))
           : Promise.resolve({ status: "applied", opId: item.meta.opId });
       },
       onAck: (item) => acked.push(item.meta.opId),
@@ -76,10 +72,18 @@ describe("SequentialOutbox", () => {
     await tick();
     await tick();
 
-    expect(sent).toEqual(["op:test:1", "op:test:2"]);
-    expect(rejected).toEqual([["op:test:1", FAILED_REJECTION]]);
-    expect(acked).toEqual(["op:test:2"]);
+    expect(sent).toEqual(["op:test:1"]);
+    expect(rejected).toEqual([
+      ["op:test:1", "Les ports sont invalides."],
+      ["op:test:2", "Les ports sont invalides."],
+    ]);
+    expect(acked).toEqual([]);
     expect(outbox.length).toBe(0);
+
+    outbox.enqueue(operation(3));
+    await tick();
+    await tick();
+    expect(acked).toEqual(["op:test:3"]);
   });
 
   it("flushes operations sequentially in dispatch order", async () => {

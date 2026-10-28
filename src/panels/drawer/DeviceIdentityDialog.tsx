@@ -1,4 +1,4 @@
-import { useMutation } from "convex/react";
+import { useOnlineMutation } from "@/hooks/use-online-mutation";
 import { useId, useState } from "react";
 import type { FormEvent } from "react";
 import type { Device } from "@/types/map";
@@ -95,7 +95,7 @@ function IdentityForm({
   device: IdentityDevice;
   onDone: () => void;
 }) {
-  const updateIdentity = useMutation(api.devices.updateIdentity);
+  const updateIdentity = useOnlineMutation(api.devices.updateIdentity);
   const id = useId();
   // The device as the form opened on it: only fields edited since are sent,
   // so a save never reverts what another user changed meanwhile.

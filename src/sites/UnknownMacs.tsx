@@ -5,7 +5,8 @@ import {
   Search01Icon,
 } from "@hugeicons/core-free-icons";
 import { useNavigate } from "@tanstack/react-router";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
+import { useOnlineMutation } from "@/hooks/use-online-mutation";
 import type { FunctionReturnType } from "convex/server";
 import { useId, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
@@ -91,8 +92,8 @@ export function UnknownMacs({
 }) {
   const unknown = useQuery(api.unknownMacs.listForSite, { siteId });
   const ignored = useQuery(api.unknownMacs.listIgnored, { siteId });
-  const ignoreMacs = useMutation(api.unknownMacs.ignore);
-  const restoreMacs = useMutation(api.unknownMacs.restore);
+  const ignoreMacs = useOnlineMutation(api.unknownMacs.ignore);
+  const restoreMacs = useOnlineMutation(api.unknownMacs.restore);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [chosenIgnored, setChosenIgnored] = useState<ReadonlySet<string>>(
     new Set(),
@@ -547,7 +548,7 @@ function CreateForm({
   sighting: UnknownMac;
   onDone: () => void;
 }) {
-  const createDevice = useMutation(api.unknownMacs.createDevice);
+  const createDevice = useOnlineMutation(api.unknownMacs.createDevice);
   const navigate = useNavigate();
   const id = useId();
   // One id per form, so a retry after a lost answer finds the device made.

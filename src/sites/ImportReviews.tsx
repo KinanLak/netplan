@@ -1,4 +1,5 @@
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
+import { useOnlineMutation } from "@/hooks/use-online-mutation";
 import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -54,7 +55,7 @@ export function ImportReviews({ siteId }: { siteId: string }) {
 
 function ReviewItem({ siteId, review }: { siteId: string; review: Review }) {
   const me = useCurrentUser();
-  const resolve = useMutation(api.importReviews.resolve);
+  const resolve = useOnlineMutation(api.importReviews.resolve);
   const [pending, setPending] = useState(false);
   const { device, candidates } = review;
   const [chosen, setChosen] = useState<string | null>(null);

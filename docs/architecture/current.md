@@ -235,11 +235,13 @@ Built by the UX lot U1 (ADR 0031) and reworked by U8 (ADR 0034).
 - **Offline.** `ConnectionBanner`, mounted once in the signed-in layout,
   follows Convex's socket and `navigator.onLine` (`src/lib/connection.ts`).
   The moment either drops, `useConnectionStore.isMapFrozen` turns the map
-  read-only: `useIsEditMode()` and the shortcut runtime read it, open tools
-  and the structure dialog close, and the map session refuses new
-  operations. After 2 s a discreet line says so, with the count of edits
-  sent but unconfirmed; Convex's client sends those again on reconnection
-  (ADR 0034).
+  read-only: `useIsEditMode()` and the shortcut runtime read it, and the
+  map session refuses new operations. Changes made outside the map
+  (inventory, dialogs, MACs) go through `useOnlineMutation`, which refuses
+  them at once with a message. After 2 s a discreet line says so, with the
+  count of edits sent but unconfirmed, and open tools and the structure
+  dialog close; Convex's client sends unconfirmed edits again on
+  reconnection (ADR 0034).
 
 ## Map
 

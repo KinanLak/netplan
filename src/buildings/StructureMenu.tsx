@@ -7,7 +7,7 @@ import {
   MoreHorizontalIcon,
   PencilEdit02Icon,
 } from "@hugeicons/core-free-icons";
-import { useMutation } from "convex/react";
+import { useOnlineMutation } from "@/hooks/use-online-mutation";
 import { toast } from "sonner";
 import type { ReactElement } from "react";
 import {
@@ -40,7 +40,7 @@ export function StructureMenu({
   canMoveDown?: boolean;
 }) {
   const open = useStructureDialog((state) => state.open);
-  const moveFloor = useMutation(api.floors.move);
+  const moveFloor = useOnlineMutation(api.floors.move);
   const what = target === "building" ? "du bâtiment" : "de l'étage";
   const move = (direction: "up" | "down") => {
     moveFloor({ id, direction }).catch((caught: unknown) => {
