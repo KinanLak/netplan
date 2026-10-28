@@ -3482,3 +3482,82 @@ Questions of 2026-10-28.
 
 - The custom field `netplan_updated` does not exist in the real NetBox yet, and `netplan_last_seen` is still there: the owner runs `scripts/netbox-custom-fields.ts` and removes the old field when he wants. Until then a site with the push on gets 400s, shown in Santé.
 - No NetBox test object was created; the real NetBox and LibreNMS got no request from this lot.
+
+### U13 — Collection and cadence
+
+#### Does the single cadence keep a per-site interval?
+
+- Context: 5.1 says one cadence, « today's weekday daytime cadence », and removes every setting tied to business hours. That daytime cadence was itself a per-site setting (5 minutes by default).
+- Decision: one per-site field, « Intervalle (minutes) », 5 by default, from 5 to 1 440. Business hours, working days and the off-hours interval go, with their fields, validators, helpers, tests and docs.
+- Why: Q34bis made the cadence per site because the SNMP load is each network's own. The owner removed the day/night split, not that reason, and a fixed 5 minutes would be a decision nobody took. Stale expiry is then 2 × interval + lease, 25 minutes by default, as 3.1 asks.
+- Who: agent (judgement call)
+
+#### Does the site keep its time zone?
+
+- Context: the time zone served the business hours, the history's snapshot slots and its days.
+- Decision: it stays, for the history only. The « Collecte » description no longer says that cycles follow the site's clock.
+- Why: the history slots still need it.
+- Who: agent (obvious)
+
+#### Migration for sites in the old shape?
+
+- Context: `sites.cadence` becomes `sites.intervalMinutes`. A backend with old sites refuses the schema push.
+- Decision: no migration, as #28 decided. Local backends use `dev:agent --reseed`; a compose deployment needs a fresh install.
+- Why: ADR 0001 restarts data from zero, and nothing is in production.
+- Who: agent (following ADR 0001)
+
+#### Where does the MAC-table fallback show, and is it a remark?
+
+- Context: 3.2 asks for a short, discreet text on the switch's Santé line. The « ne rafraîchit plus » case used to be an amber remark, counted « avec remarque ».
+- Decision: a separate `macTable: "undated" | "stale"` on the switch's result. Santé shows it muted after « lu »: « Table MAC non datée » or « Table MAC non rafraîchie ». It is not a note, has no amber dot, is not counted and does not appear on the site page.
+- Why: the owner's standing principle: infrastructure noise stays quiet, and the next discovery clears it.
+- Who: agent (following the owner's principle)
+
+#### How does the drawer tell a cable from an undocumented port?
+
+- Context: 3.3.
+- Decision: from the sighting's socket. A port whose trace reaches a socket gives « vu via un câble »; an uncabled, quiet port gives « vu sur un port non documenté ». The phrase ends the time line of « Vu sur le réseau ».
+- Why: these are exactly ADR 0022's two kinds of edge port, so no new data is needed.
+- Who: agent (obvious)
+
+#### What is « clearly the most recent » for 3.4, and what does a held device keep?
+
+- Context: after the freshness filter, the entries of one switch's table are all within `FDB_FRESH_MS` (2 minutes) of each other. Differences come from separate tables: other switches, or a discovery that did not finish.
+- Decision:
+  - A socket wins when its entry is more than `FDB_FRESH_MS` newer than every other. Entries that are undated or closer than that hold the device where it is.
+  - A sighting row always records what was seen. A separate `decided` names the socket the place follows when it differs, or none yet while the device is held.
+  - The history records a location only where the map moves.
+- Why: two minutes is already the rule's « same discovery » window. The first version kept the old row instead; zipzoup showed on #156 that this skewed presence, expiry and history (three P2s).
+- Who: agent (judgement call)
+
+#### Where is the port-name proposal kept, and who sees it?
+
+- Context: 3.5: the drawer proposes « Adopter les 52 noms de LibreNMS » to an Éditeur only.
+- Decision:
+  - The cycle stores offers in `siteCycles.portNameOffers`, and releasing LibreNMS clears them. `librenms.portNameOffer` and `adoptPortNames` are Éditeur level and re-check the mapping and the default names.
+  - The button shows in edit mode only.
+  - There is no undo: port names are outside Ctrl+Z, as 4.3 says.
+  - Success confirms in place; an error is a toast.
+- Why: CLAUDE.md's edit-mode rule and Lecteur minimalism. An offer is collection state, not inventory.
+- Who: agent (obvious)
+
+#### ADR number
+
+- Context: U8, U9 and U11 each opened an ADR 0034 at the same time.
+- Decision: U13 takes 0038. U8 (two records), U9 and U11 fill 0034 to 0037.
+- Why: avoids a clash and a renumbering while the lots merge.
+- Who: agent (obvious)
+
+#### Items
+
+- 5.1 (one cadence, all the time): fait #151
+- 3.1 (stale readings expire after about 25 minutes, no `max`): fait #151
+- 3.2 (« Table MAC non datée » / « non rafraîchie » in Santé): fait #154
+- 3.3 (« vu via un câble » / « vu sur un port non documenté »): fait #154
+- 3.4 (several new sockets: the clearly newest, otherwise stay): fait #156
+- 3.5 (LibreNMS port names proposed in the drawer): fait #158
+
+#### Leftovers
+
+- `~/l5-smoke` holds sites in the old shape, so it needs a fresh install to take the new schema.
+- No NetBox test object was created. The real NetBox and LibreNMS got no request: the collection logic was tested against fake LibreNMS answers, and the browser checks used rows imported into the local backend.
