@@ -161,6 +161,72 @@ describe("buildInverseOperation", () => {
     expect(inverse.ports?.some((port) => "source" in port)).toBe(false);
   });
 
+  it("brings a device NetBox no longer returns back absent, with its date", () => {
+    const { a, snapshot } = cabledPair();
+    const absent: Device = {
+      ...a,
+      source: {
+        integration: "netbox",
+        externalId: "42",
+        syncedAt: 1,
+        missingSince: 5,
+      },
+    };
+    const before = {
+      ...snapshot,
+      devices: snapshot.devices.map((each) =>
+        each.id === a.id ? absent : each,
+      ),
+    };
+    const remove: MapOperation = {
+      kind: "device.delete",
+      meta: meta(1),
+      deviceId: a.id,
+    };
+
+    const deleted = applyOperation(before, remove);
+    expect(deleted.applied).toBe(true);
+    const inverse = buildInverseOperation(before, remove);
+    if (!inverse) throw new Error("no inverse");
+    expect(
+      applyOperation(deleted.snapshot, inverse).snapshot.devices,
+    ).toContainEqual(absent);
+  });
+
+  it("brings an absent device's NetBox cables back as manual ones", () => {
+    const { a, snapshot } = cabledPair();
+    const sourced = {
+      ...snapshot,
+      devices: snapshot.devices.map((each) =>
+        each.id === a.id
+          ? {
+              ...each,
+              source: {
+                integration: "netbox" as const,
+                externalId: "42",
+                syncedAt: 1,
+                missingSince: 5,
+              },
+            }
+          : each,
+      ),
+      cables: snapshot.cables.map((cable) => ({
+        ...cable,
+        source: { integration: "netbox" as const, externalId: "100" },
+      })),
+    };
+
+    const inverse = buildInverseOperation(sourced, {
+      kind: "device.delete",
+      meta: meta(1),
+      deviceId: a.id,
+    });
+
+    expect(inverse).toMatchObject({ kind: "device.create" });
+    if (inverse?.kind !== "device.create") return;
+    expect(inverse.cables).toEqual(snapshot.cables);
+  });
+
   it("puts an unplaced device back, and takes a placed one off", () => {
     const { a, snapshot } = cabledPair();
     const unplace: MapOperation = {

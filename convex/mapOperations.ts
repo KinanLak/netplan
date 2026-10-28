@@ -25,6 +25,9 @@ import { recordArrival } from "./history";
 import { syncOverlayFileReleases } from "./lib/overlayFiles";
 import {
   identityEditError,
+  isDeletable,
+  isSourceOwned,
+  restoredSource,
   macListProblem,
   MAX_MACS_PER_DEVICE,
 } from "../src/devices/identity";
@@ -112,6 +115,7 @@ interface PlanningState {
   unplacedDevices: Map<string, UnplacedDevice>;
   /** The device owning each loaded MAC address, keyed by `macKey`. */
   macOwners: Map<string, string>;
+
   walls: Map<string, PlannedWall>;
   /**
    * The loaded ports and cables: those of created and deleted devices, and
@@ -873,7 +877,9 @@ const planDeviceCreate = (
 ): string | null => {
   // A device drawn with a hostname is named after it (B10), so the row
   // inserted, and the replay compared with it, carry that name.
-  const hostname = created.device.hostname?.trim();
+  const hostname = isSourceOwned(created.device.source, "name")
+    ? undefined
+    : created.device.hostname?.trim();
   const operation = hostname
     ? { ...created, device: { ...created.device, name: hostname } }
     : created;
@@ -904,6 +910,8 @@ const planDeviceCreate = (
 
   const macsError = deviceMacsError(state, siteId, operation.device);
   if (macsError) return macsError;
+  const restored = restoredSource(operation.device.source);
+  if ("error" in restored) return restored.error;
   const identityError = identityEditError(operation.device);
   if (identityError) return identityError;
   if (portListError(operation.device.id, ports)) {
@@ -927,6 +935,10 @@ const planDeviceCreate = (
   const { id, ...device } = operation.device;
   const value: DeviceInsert = {
     ...device,
+    // Brought back onto a plan: its purge clock stops (ADR 0039).
+    ...(restored.source && {
+      source: withPlacementClock(restored.source, true, Date.now()),
+    }),
     objectId: id,
     siteId,
     updatedAt: operation.meta.createdAt,
@@ -1182,7 +1194,7 @@ const planDeviceDelete = (
   const existing = state.devices.get(operation.deviceId);
   if (!existing) return "Cet équipement n'existe plus.";
   // Its integration would bring it back at the next sync.
-  if (existing.source)
+  if (!isDeletable(existing))
     return "Cet équipement vient d'une intégration : il ne peut pas être supprimé.";
 
   planCablingDelete(state, operation.deviceId);

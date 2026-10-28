@@ -113,6 +113,8 @@ export const cableRowAt = async (ctx: QueryCtx, portId: string) =>
 export const deleteDeviceCabling = async (
   ctx: MutationCtx,
   deviceId: string,
+  /** Hand back its source's cables too, as manual: the source dropped them. */
+  { keepSourced = false }: { keepSourced?: boolean } = {},
 ): Promise<{ ports: Array<NewPort>; cables: Array<NewCable> }> => {
   const [ports, cables] = await Promise.all([
     portRowsOf(ctx, deviceId),
@@ -126,7 +128,7 @@ export const deleteDeviceCabling = async (
     }),
     // A source's cable comes back with its next sync, not as a manual one.
     cables: cables
-      .filter((row) => row.source === undefined)
+      .filter((row) => keepSourced || row.source === undefined)
       .map((row) => {
         const { source: _, ...value } = toCable(row);
         return value;

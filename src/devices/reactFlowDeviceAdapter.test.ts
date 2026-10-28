@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import type { Device, DeviceId, FloorId } from "@/types/map";
 import {
+  ABSENT_NODE_CLASS,
   deviceNodeTypes,
   toDeviceNode,
   toDeviceNodes,
@@ -80,6 +81,22 @@ describe("react flow device adapter", () => {
     );
 
     expect(nodes.every((node) => node.selected)).toBe(true);
+  });
+
+  it("greys only a device its source no longer returns", () => {
+    const source = {
+      integration: "netbox" as const,
+      externalId: "7",
+      syncedAt: 1,
+    };
+    const node = (missingSince?: number) =>
+      toDeviceNode({
+        device: createDevice({ source: { ...source, missingSince } }),
+        selectedDeviceId: null,
+        canEditDevices: false,
+      });
+    expect(node(5).className).toBe(ABSENT_NODE_CLASS);
+    expect(node().className).toBeUndefined();
   });
 
   it("filters devices by current floor when adapting the collection", () => {

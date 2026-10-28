@@ -1,5 +1,6 @@
 import type { MapDocumentSnapshot } from "@/types/map";
 import { cableTouches } from "@/devices/ports";
+import { isAbsentFromSource, isDeletable } from "@/devices/identity";
 import { applyOperation } from "./applyOperation";
 import { shifted } from "./devicePatch";
 import { applyLabelPatch } from "./labels";
@@ -102,8 +103,10 @@ export function buildInverseOperation(
       const device = snapshotBeforeOperation.devices.find(
         (item) => item.id === operation.deviceId,
       );
-      // A sourced device is never deleted, so there is nothing to restore.
-      if (!device || device.source) return null;
+      // A device its source still returns is never deleted, so there is
+      // nothing to restore. One it no longer returns comes back absent, with
+      // its binding and date (ADR 0039).
+      if (!device || !isDeletable(device)) return null;
       return {
         kind: "device.create",
         meta: operation.meta,
@@ -111,10 +114,16 @@ export function buildInverseOperation(
         ports: snapshotBeforeOperation.ports
           .filter((port) => port.deviceId === device.id)
           .map(({ source: _, ...port }) => port),
-        // A source's cable comes back with its next sync, not as a manual one.
-        cables: snapshotBeforeOperation.cables.filter(
-          (cable) => cableTouches(cable, device.id) && !cable.source,
-        ),
+        // A source's cable comes back with its next sync, not as a manual
+        // one; NetBox no longer lists those of an absent device, so they come
+        // back manual (ADR 0039).
+        cables: snapshotBeforeOperation.cables
+          .filter(
+            (cable) =>
+              cableTouches(cable, device.id) &&
+              (!cable.source || isAbsentFromSource(device.source)),
+          )
+          .map(({ source: _, ...cable }) => cable),
       };
     }
 

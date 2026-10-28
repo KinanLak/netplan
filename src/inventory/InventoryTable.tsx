@@ -1,3 +1,5 @@
+import { isDeletable } from "@/devices/identity";
+import { AbsenceNote } from "@/panels/drawer/DeviceDetails";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useCanEdit } from "@/hooks/use-current-user";
 import {
@@ -278,7 +280,8 @@ function InventoryItem({
   const canReadHistory = useCanEdit();
   const hasHistory = canReadHistory && HAS_HISTORY.has(device.type);
   const { location, source } = device;
-  const removable = canEdit && !location && !source;
+  // A device its source no longer returns may go too (ADR 0039).
+  const removable = canEdit && !location && isDeletable(device);
   const status = statusOf(device);
   const place = locationLabel(device);
 
@@ -361,6 +364,7 @@ function InventoryItem({
             className="flex max-w-full text-xs text-muted-foreground"
           />
         ) : null}
+        <AbsenceNote source={source} className="text-xs" />
       </td>
       {shows("type") ? (
         <td className={cn(CELL, "truncate text-muted-foreground")}>

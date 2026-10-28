@@ -27,6 +27,41 @@ export const isSourceOwned = (
   source !== undefined &&
   SOURCE_OWNED_FIELDS[source.integration].includes(field);
 
+/** Whether the source that brought a device no longer returns it (ADR 0039). */
+export const isAbsentFromSource = (
+  source: { missingSince?: number } | undefined,
+): boolean => source?.missingSince !== undefined;
+
+/**
+ * Whether a person may delete a device: a manual one, or one its source no
+ * longer returns; any other would come back with the next sync (ADR 0039).
+ */
+export const isDeletable = (device: {
+  source?: { missingSince?: number };
+}): boolean => device.source === undefined || isAbsentFromSource(device.source);
+
+/**
+ * The binding a device a person brings back may carry (ADR 0039): only a
+ * NetBox one NetBox no longer returns, as undoing its deletion sends, and
+ * marked `staleId`, since nothing proves the id still names that device:
+ * only the identity rules link it again. A forged binding can then do no
+ * more than a manual device with the same MACs.
+ */
+export const restoredSource = <
+  S extends { integration: IntegrationKind; missingSince?: number },
+>(
+  source: S | undefined,
+): { source?: S & { staleId: true } } | { error: string } => {
+  if (!source) return {};
+  if (source.integration !== "netbox" || !isAbsentFromSource(source)) {
+    return {
+      error:
+        "Cet équipement vient d'une intégration : il ne peut pas être créé.",
+    };
+  }
+  return { source: { ...source, staleId: true } };
+};
+
 export const IDENTITY_TEXT_LIMITS: Record<IdentityTextField | "notes", number> =
   {
     // A name may be a hostname (B10), so it is as long as one may be.

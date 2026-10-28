@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { api } from "./_generated/api";
 import { addLine } from "../src/walls/engine";
-import type { FloorId, WallId } from "../src/types/map";
+import type { DeviceSource, FloorId, WallId } from "../src/types/map";
 import { signedInTest, createTestSite } from "./_test/auth.setup";
 import type { TestClient } from "./_test/auth.setup";
 
@@ -1299,7 +1299,7 @@ describe("mapOperations.apply on the site inventory", () => {
   const create = (
     t: TestClient,
     seq: number,
-    item: ReturnType<typeof device>,
+    item: ReturnType<typeof device> & { source?: DeviceSource },
   ) =>
     t.mutation(api.mapOperations.apply, {
       operation: { kind: "device.create", meta: meta(seq), device: item },
@@ -1461,6 +1461,64 @@ describe("mapOperations.apply on the site inventory", () => {
       status: "rejected",
       error:
         "Cet équipement vient d'une intégration : il ne peut pas être supprimé.",
+    });
+  });
+
+  it("deletes a device NetBox no longer returns, and undo brings it back absent", async () => {
+    const t = await signedInTest();
+    const siteId = await createTestSite(t);
+    const floorId = await freshFloor(t, siteId);
+    const source = {
+      integration: "netbox" as const,
+      externalId: "7",
+      syncedAt: 1,
+      missingSince: 2,
+    };
+    await t.run(async (ctx) => {
+      await ctx.db.insert("devices", {
+        objectId: "device:absent",
+        siteId,
+        type: "pc",
+        name: "pc-7",
+        macs: [],
+        placement: {
+          floorId,
+          position: { x: 0, y: 0 },
+          size: { width: 80, height: 80 },
+        },
+        source,
+        metadata: {},
+        updatedAt: 1,
+        updatedBy: "netbox",
+      });
+    });
+    const removed = await t.mutation(api.mapOperations.apply, {
+      operation: {
+        kind: "device.delete",
+        meta: meta(1),
+        deviceId: "device:absent",
+      },
+    });
+    expect(removed.status).toBe("applied");
+    expect(await deviceRow(t, "device:absent")).toBeNull();
+
+    // NetBox owns its name: a hostname does not rename it.
+    const back = {
+      ...device("device:absent", floorId, 0),
+      name: "pc-7",
+      hostname: "poste-7",
+    };
+    // A device NetBox still returns is never created by a person.
+    const forged = await create(t, 2, {
+      ...back,
+      source: { ...source, missingSince: undefined },
+    });
+    expect(forged.status).toBe("rejected");
+    expect((await create(t, 3, { ...back, source })).status).toBe("applied");
+    // Nothing proves the id is still NetBox's: only identity links it again.
+    expect(await deviceRow(t, "device:absent")).toMatchObject({
+      name: "pc-7",
+      source: { ...source, staleId: true },
     });
   });
 

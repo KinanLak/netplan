@@ -32,6 +32,7 @@ import {
 import {
   applyFilters,
   facetCounts,
+  NO_FILTERS,
   filtersOf,
   isFiltered,
   parseInventorySearch,
@@ -239,8 +240,7 @@ function SiteInventory({ site }: { site: SiteSummary }) {
   ];
   const shown = sortRows(applyFilters(all, active), sort);
   const filtered = isFiltered(active);
-  const reset = () =>
-    update({ query: "", placement: "all", status: "all", type: "all" });
+  const reset = () => update(NO_FILTERS);
   // From a toast, which outlives the render it was made in: the filters are
   // cleared from the URL as it is then, keeping the reader's order, and the
   // devices' tab comes back.
@@ -251,10 +251,7 @@ function SiteInventory({ site }: { site: SiteSummary }) {
         ...siteSearch(current),
         mq: current.mq,
         ignored: current.ignored,
-        ...toSearch(
-          { query: "", placement: "all", status: "all", type: "all" },
-          sortOf(current),
-        ),
+        ...toSearch(NO_FILTERS, sortOf(current)),
       }),
       replace: true,
       resetScroll: false,
@@ -267,6 +264,7 @@ function SiteInventory({ site }: { site: SiteSummary }) {
     update({
       query: "",
       status: "all",
+      absent: false,
       type: again ? "all" : next,
       placement: again ? "all" : "unplaced",
     });
@@ -438,6 +436,26 @@ function SiteInventory({ site }: { site: SiteSummary }) {
                     {filtered
                       ? `${shown.length} sur ${all.length} équipement${all.length > 1 ? "s" : ""}`
                       : `${all.length} équipement${all.length > 1 ? "s" : ""}`}
+                    {/* Shown only when NetBox has dropped some (ADR 0039). */}
+                    {counts.absent > 0 || active.absent ? (
+                      <>
+                        {" · "}
+                        <button
+                          type="button"
+                          aria-pressed={active.absent}
+                          onClick={() => update({ absent: !active.absent })}
+                          className={cn(
+                            "rounded-sm underline-offset-2 outline-none hover:text-foreground hover:underline focus-visible:ring-[3px] focus-visible:ring-ring",
+                            active.absent && "font-medium text-foreground",
+                          )}
+                        >
+                          {counts.absent}{" "}
+                          {counts.absent > 1
+                            ? "absents de NetBox"
+                            : "absent de NetBox"}
+                        </button>
+                      </>
+                    ) : null}
                     {/* An empty list offers the same button in its message. */}
                     {filtered && shown.length > 0 ? (
                       <>

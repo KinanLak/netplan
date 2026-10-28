@@ -14,6 +14,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import {
+  AbsenceNote,
   DeviceIdentitySections,
   LastSeenSection,
   StatusChip,
@@ -59,6 +60,7 @@ export function DeviceSheet({
                     ? ` · ${INTEGRATION_LABELS[device.source.integration]}`
                     : ""}
                 </SheetDescription>
+                <AbsenceNote source={device.source} />
               </div>
               <StatusChip
                 status={device.metadata.status ?? "unknown"}

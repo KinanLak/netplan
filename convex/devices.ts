@@ -19,12 +19,16 @@ import { requireOpenSite, requireSite } from "./sites";
 import {
   IDENTITY_FIELD_NAMES,
   identityEditError,
+  isAbsentFromSource,
+  isDeletable,
+  restoredSource,
   isSourceOwned,
   namedAfterHostname,
   normalizeIdentityEdit,
 } from "../src/devices/identity";
 import type { IdentityEdit } from "../src/devices/identity";
 import { INTEGRATION_LABELS } from "../src/sites/integrations";
+import { withPlacementClock } from "../src/sites/netboxImport";
 import type { Doc } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 
@@ -187,6 +191,11 @@ const removedDevice = {
   /** Absent for a new device, which gets its type's ports. */
   ports: v.optional(v.array(newPort)),
   cables: v.optional(v.array(newCable)),
+  /**
+   * Only for a device NetBox no longer returns, which the "Annuler" of its
+   * deletion brings back absent (ADR 0039).
+   */
+  source: v.optional(deviceSource),
 };
 
 /**
@@ -214,12 +223,14 @@ export async function insertManualDevice(
     metadata,
     ports,
     cables,
+    source,
   }: {
     siteId: string;
     deviceId: string;
     type: Doc<"devices">["type"];
     identity: IdentityEdit;
     metadata?: Doc<"devices">["metadata"];
+    source?: Doc<"devices">["source"];
     ports?: Array<Infer<typeof newPort>>;
     cables?: Array<Infer<typeof newCable>>;
   },
@@ -231,7 +242,9 @@ export async function insertManualDevice(
     throw new ConvexError("Cet identifiant d'équipement est déjà pris.");
   }
 
-  const edit = namedAfterHostname(normalizeIdentityEdit(identity), {});
+  const restored = restoredSource(source);
+  if ("error" in restored) throw new ConvexError(restored.error);
+  const edit = namedAfterHostname(normalizeIdentityEdit(identity), { source });
   if (!edit.name) throw new ConvexError("Le nom est obligatoire.");
   const error = identityEditError(edit);
   if (error) throw new ConvexError(error);
@@ -250,6 +263,10 @@ export async function insertManualDevice(
     model: edit.model ?? undefined,
     ip: edit.ip ?? undefined,
     notes: edit.notes ?? undefined,
+    // Brought back on no floor: its 30 days start again now (ADR 0039).
+    ...(restored.source && {
+      source: withPlacementClock(restored.source, false, Date.now()),
+    }),
     metadata: await observedMetadata(ctx, device, metadata ?? {}),
     updatedAt: Date.now(),
     updatedBy: userId,
@@ -264,8 +281,9 @@ export async function insertManualDevice(
 }
 
 /**
- * Deletes a manual device that is on no floor. A placed one is deleted from
- * the map, where undo restores its cables; a sourced one only leaves the map.
+ * Deletes a manual device that is on no floor, or one NetBox no longer
+ * returns (ADR 0039). A placed one is deleted from the map, where undo
+ * restores its cables; one its source still returns only leaves the map.
  * Returns what `create` needs to undo it, or `null` if it was already gone.
  */
 export const remove = editorMutation({
@@ -275,7 +293,7 @@ export const remove = editorMutation({
     const device = await getDevice(ctx, deviceId);
     if (!device) return null;
     await requireOpenSite(ctx, device.siteId);
-    if (device.source) {
+    if (device.source && !isDeletable(device)) {
       throw new ConvexError(
         `Cet équipement vient de ${INTEGRATION_LABELS[device.source.integration]} : il ne se supprime pas dans NetPlan.`,
       );
@@ -290,7 +308,10 @@ export const remove = editorMutation({
       .withIndex("by_device", (q) => q.eq("deviceId", deviceId))
       .collect();
     for (const row of macs) await ctx.db.delete(row._id);
-    const cabling = await deleteDeviceCabling(ctx, deviceId);
+    // NetBox no longer lists an absent device's cables (ADR 0039).
+    const cabling = await deleteDeviceCabling(ctx, deviceId, {
+      keepSourced: isAbsentFromSource(device.source),
+    });
     await ctx.db.delete(device._id);
     return {
       ...cabling,
@@ -305,6 +326,7 @@ export const remove = editorMutation({
         notes: device.notes ?? null,
       },
       metadata: device.metadata,
+      ...(device.source && { source: device.source }),
     };
   },
 });
