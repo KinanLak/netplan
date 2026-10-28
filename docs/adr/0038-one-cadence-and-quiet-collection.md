@@ -76,7 +76,9 @@ switch included, so presence and expiry rest on current evidence; when the
 device's place follows another socket, or none yet while it is held, the
 sighting says so (`decided`), and the next cycle compares with that rather
 than with an arbitrary one of the sockets. The history records a location
-only where the map moves.
+where the cycle decides the device is: none while it is held or stays,
+and the new socket when it moves, even when the plan cannot draw it there
+(a socket off the plan, no free spot), since the network did see it there.
 
 ## LibreNMS's port names are proposed, not adopted
 
