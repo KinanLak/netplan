@@ -3561,3 +3561,136 @@ Questions of 2026-10-28.
 
 - `~/l5-smoke` holds sites in the old shape, so it needs a fresh install to take the new schema.
 - No NetBox test object was created. The real NetBox and LibreNMS got no request: the collection logic was tested against fake LibreNMS answers, and the browser checks used rows imported into the local backend.
+
+### U12 — Accounts and rights
+
+#### What replaces the shared sign-in ceilings (2.1)?
+
+- Context: better-auth keys its limits on the client address; Convex sees none it can trust, so every visitor shared one bucket per endpoint (H2).
+- Decision: better-auth's limiter is off. Attempts count per identifier typed (sign-in) and per address (reset request), before the lookup. Attempts 1–4 are free; the 5th imposes 1 min, then 2, 4, 8, up to 15 min. A successful sign-in wipes the record; an hour left alone forgets it; a refused attempt changes nothing (#152).
+- Why: nothing shared between people, known and unknown identifiers behave the same, and a stranger who wants to keep one identifier waiting must keep spending attempts. Fifteen minutes caps the harm to a real user.
+- Who: owner (principle, 2.1), agent (numbers)
+
+#### Is the wait counted on failures or on attempts?
+
+- Context: « delay grows from the 5th failed attempt ».
+- Decision: every attempt counts in the `before` hook; a success clears the record in the `after` hook. So the count is the failures since the last success.
+- Why: counting in `after` would let a parallel burst through before any failure is recorded; counting first is atomic in a Convex mutation.
+- Who: agent (obvious)
+
+#### Does the reset request get the same curve?
+
+- Decision: yes, same numbers, in the same table under `kind: "password-reset"`. It has no success to clear it, so only the hour of quiet resets it.
+- Who: agent (obvious)
+
+#### How does the form say how long to wait?
+
+- Decision: the 429 carries `retryAfter` in seconds, which better-fetch spreads into the client error; the forms say « dans une minute » or « dans N minutes ».
+- Who: agent (obvious)
+
+#### Which Keycloak claims count, and what about the flat `roles` claim (2.4)?
+
+- Context: the owner said « only realm roles and client roles count » without the checkbox.
+- Decision: `realm_access.roles` and `resource_access.<client>.roles`; groups only with « Accepter aussi les groupes » (off by default, `authSettings.keycloakAcceptGroups` optional, absent = off). The flat `roles` claim is dropped too (#153).
+- Why: a mapper can put anything in `roles`, groups included; realm roles always arrive in `realm_access`.
+- Who: owner (2.4), agent (the flat claim)
+
+#### How can a refresh token still work an hour later (2.2)?
+
+- Context: Keycloak ends an ordinary refresh token with its SSO session, 30 minutes idle by default; Netplan refreshes a session at most once an hour of use, so it would almost always find the token dead.
+- Decision: Netplan asks for `offline_access` (#155). Checked against a local Keycloak 26.8.1 container: a 30-day offline token, refreshed fine, and refused with `invalid_grant: User disabled` as soon as the user is disabled.
+- Why: the only way the owner's hourly re-read works with Keycloak's defaults.
+- Who: agent (judgement call)
+
+#### What if a realm does not grant `offline_access`?
+
+- Context: checked locally: Keycloak then refuses the whole sign-in (`not_allowed`), which Netplan shows as a generic Keycloak failure. Users created through the console, registration or LDAP get it through the default roles. Users imported from a JSON that lists their realm roles do not, and the repo's own dev realm was such a case.
+- Decision: keep `offline_access`. The dev realm's users now hold `default-roles-netplan`, and `docs/operations/configuration.md` states the prerequisite.
+- Why: without it the feature is inert under default settings; an optional switch would be configuration nobody gets right.
+- Who: agent (judgement call). **To check before deploying against the real Keycloak:** that NetPlan's users hold `offline_access` (default roles), and that the `netplan` client keeps the `offline_access` optional scope. The real Keycloak was never touched by this lot.
+
+#### What does each answer of the token endpoint do?
+
+- Decision: new tokens → role from them. `invalid_grant` on an offline token → every Netplan session of the user ends (Keycloak no longer vouches: disabled, deleted, revoked); on an ordinary token, nothing. Anything else (timeout, 5xx, `invalid_client`) → nothing, silently, and the next hourly refresh tries again. A refresh within 5 minutes of the previous one is skipped, through a claiming mutation, so that two tabs never spend one token twice.
+- Why: the standing principle (stay quiet about infrastructure noise, recover by itself); a role is never changed on a guess.
+- Who: agent (judgement call)
+
+#### Does the 7-day session cap stay?
+
+- Decision: yes. It no longer bounds a role change but still bounds a stolen session.
+- Who: agent (judgement call)
+
+#### Where do « Déconnecter partout » and « Passer ce compte sur Keycloak » live on the page?
+
+- Decision: in a « ⋯ » menu on each other account's row, showing only the actions that apply. « Désactiver » and the role stay visible. « Déconnecter partout » is confirmed and says in place how many sessions ended. The handover is confirmed. « Annuler le passage sur Keycloak » is not confirmed: it is reversible.
+- Why: two rare actions as buttons on every row would clutter the list.
+- Who: agent (judgement call)
+
+#### How does a handed-over account attach without turning implicit linking on (2.3)?
+
+- Context: better-auth either links on email (when linking is on and the provider is trusted) or refuses with `account_not_linked`; there is no per-user switch.
+- Decision: better-auth linking is on (`requireLocalEmailVerified: false`; it still requires Keycloak's `email_verified`), and an account-creation hook refuses every Keycloak account except two: one for the user the same sign-in has just created (its email, noted in the user-creation hook of the same request), and one for a user in `keycloakHandovers`. Refused links come back as `unable_to_link_account`; the sign-in page then says to sign in with the password or ask an administrator to hand the account over (#157).
+- Why: the decision stays in Netplan's code, and an invitation never used still refuses Keycloak, as before.
+- Who: agent (judgement call)
+
+#### Does the handover require Keycloak's `email_verified`?
+
+- Context: first decided no (the admin named the account). The self-review showed that anyone able to set that address in their own Keycloak profile, unverified, would take the waiting account with its history.
+- Decision: yes. Keycloak is no longer a trusted provider for linking, so better-auth links only on `email_verified`; an unverified attempt gets `account_not_linked`, which reads like the other link refusals. A disabled account cannot be handed over: its Keycloak sign-in is refused only after the link, which would complete the handover without a sign-in.
+- Who: agent (judgement call, reversed at self-review)
+
+#### What does a handover remove, and is there a way back?
+
+- Decision: the credential account and every pending password link; sessions end; forgotten-password mails are not sent to it. The user row, its sign-ins and attributions stay. Before the first Keycloak sign-in the admin can cancel. The account then has no password and needs an invitation. Because it was used, « Annuler l'invitation » no longer deletes it: an account that ever signed in is refused, on the server and in the page.
+- Who: agent (judgement call)
+
+#### Which self-review findings were fixed, and which kept?
+
+- Context: a review pass over the four PRs found no P0 and several P1/P2.
+- Fixed:
+  - **Refresh tokens.** Two refreshes at once could spend one refresh token twice. A realm that rotates them would then refuse the second refresh and sign the user out. A mutation now claims the token.
+  - **Ordinary tokens.** `invalid_grant` on an ordinary refresh token, from a client without the offline scope, would sign everyone out every hour. Only an offline token now ends a login.
+  - **Username lookup.** With no limiter left, `/is-username-available` would list the accounts that exist. It is disabled; the app never used it.
+  - **Old attempt rows.** Rows left in the old `signInAttempts` table would have failed a deployment's schema push. The table is now `authAttempts`. A push with old rows still present was checked on dev:agent.
+  - **Two copies of the role rule.** Login and refresh now share one function from tokens to role.
+  - **Handover.** The unverified e-mail and disabled-account cases above.
+  - **Cron.** Its label no longer speaks of windows.
+- Kept:
+  - Local users' session refreshes also schedule the Keycloak action. It returns after one lookup, once an hour per active user.
+  - The status filter counts a waiting account as active, and a cancelled handover as an invitation, which is what the badges say.
+  - `/sign-in/oauth2` has no limit. The old shared limit only made a flood lock everyone out too, and the verification rows a flood leaves were already readable by `users.list` before this lot.
+- Who: agent (judgement call)
+
+#### Which zipzoup findings were fixed?
+
+- Context: zipzoup reviewed each PR. #152 and #153 had no findings; #155 and #157 had P1/P2 findings over two rounds.
+- Fixed in #155:
+  - **P1, bypass.** better-auth's `/get-access-token` refreshed Keycloak's tokens without the role, and its account write kept the hourly re-read skipping. `/get-access-token`, `/refresh-token` and `/account-info` are disabled; NetPlan never used them. A second round found `/account-info` doing the same, so the re-read now keeps its own clock in `keycloakRoleChecks` instead of the account row better-auth writes.
+  - **P2, overtaken answer.** A slow answer could overwrite a newer login's tokens and role. Keycloak's answer now goes through a mutation that applies it only if the stored refresh token is still the one claimed.
+- Fixed in #157:
+  - **P2, password.** A password reset under way at the handover could create a password. The account-creation hook refuses a password for an account waiting for Keycloak, and for any account with Keycloak.
+  - **P2, session.** A password sign-in under way at the handover could open a session. The session hook refuses it outside the Keycloak callback, and every role builder treats a waiting account as signed out, which also covers a session written between the check and the insert.
+- Answered: rewriting ADR 0036 inside the stack. It was not on main yet, so every revision moved into #152 and the record landed once, in its final form.
+- Who: agent (obvious)
+
+#### Was the hourly re-read checked against a real Keycloak?
+
+- Decision: yes, a local Keycloak 26.8.1 container (never the real one), with dev:agent. A real browser sign-in stored the scope `openid,profile,offline_access,email`. Running `keycloakRoles.refresh` then turned a role removed in Keycloak into Lecteur, with the session kept. Disabling the user in Keycloak ended every NetPlan session, and the account was not banned in NetPlan.
+- Who: agent (obvious)
+
+#### Which ADR number?
+
+- Context: 0034 was claimed by three open pull requests (U8, U9, U11), 0035 by U11.
+- Decision: 0036.
+- Who: agent (obvious)
+
+#### Items
+
+- 2.1 — fait #152
+- 2.4 — fait #153
+- 2.2 — fait #155
+- 2.3 — fait #157
+
+#### Leftovers
+
+- No NetBox or LibreNMS object was touched. The real Keycloak was never contacted: every check ran against a local Keycloak 26.8.1 container labelled `netplan.*`, removed at the end.
