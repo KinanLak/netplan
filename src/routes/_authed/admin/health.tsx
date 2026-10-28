@@ -260,7 +260,7 @@ function SiteCard({ site, now }: { site: SiteHealth; now: number }) {
 
 /**
  * What NetBox no longer returns, and the roles it has that no type is chosen
- * for (ADR 0034): two quiet lines, only when there is something to say.
+ * for (ADR 0039): two quiet lines, only when there is something to say.
  */
 function NetBoxNotes({
   siteId,

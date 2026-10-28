@@ -77,7 +77,7 @@ export default defineSchema({
     lastSuccessAt: v.optional(v.number()),
     /** NetBox changes slowly: it is imported every 15 minutes (ADR 0023). */
     netboxImportedAt: v.optional(v.number()),
-    /** The NetBox site's roles no type is chosen for, for Santé (ADR 0034). */
+    /** The NetBox site's roles no type is chosen for, for Santé (ADR 0039). */
     netboxUnmappedRoles: v.optional(v.array(unmappedRole)),
     /** LibreNMS is asked to rediscover at most every 5 minutes (ADR 0023). */
     librenmsDiscoveryAt: v.optional(v.number()),

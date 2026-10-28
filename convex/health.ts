@@ -67,7 +67,7 @@ export const overview = adminQuery({
         v.null(),
         v.object({
           importedAt: v.union(v.null(), v.number()),
-          /** Devices NetBox no longer returns (ADR 0034). */
+          /** Devices NetBox no longer returns (ADR 0039). */
           absent: v.number(),
           /** The NetBox site's roles that still have no type. */
           unmappedRoles: v.array(unmappedRole),

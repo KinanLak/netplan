@@ -117,7 +117,7 @@ export type UnmappedRole = { id: number; name: string; devices: number };
 
 /**
  * The roles of the NetBox site's devices that no type is chosen for yet, for
- * Santé (ADR 0034). Devices without a role are left out.
+ * Santé (ADR 0039). Devices without a role are left out.
  */
 export function unmappedNetBoxRoles(
   devices: ReadonlyArray<Raw>,

@@ -103,7 +103,7 @@ export const importFromNetBox = async (
   const { baseUrl } = connection;
 
   // Every device of the site is read, so Santé can list the roles that have
-  // no type yet (ADR 0034); the merge keeps the mapped ones. Without a role,
+  // no type yet (ADR 0039); the merge keeps the mapped ones. Without a role,
   // ports and cables are not read, and the empty import still marks absent
   // what earlier roles brought.
   const noRole = settings.roles.length === 0;
