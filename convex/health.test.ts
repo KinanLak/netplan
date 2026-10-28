@@ -39,6 +39,14 @@ describe("the admin health overview", () => {
       ignoreCertificateErrors: false,
       token: "a-token-for-tests", // gitleaks:allow
     });
+    await t.mutation(api.netbox.saveSettings, {
+      siteId: busy,
+      baseUrl: "https://netbox.test",
+      settings: {
+        site: { id: 7, name: "Siège" },
+        roles: [{ id: 4, name: "Workstation", type: "pc" }],
+      },
+    });
     const last = {
       startedAt: 1_000,
       finishedAt: 2_000,
@@ -128,6 +136,30 @@ describe("the admin health overview", () => {
       switches: { up: 0, down: 0, unknown: 0 },
       switchReads: null,
     });
+  });
+
+  it("lists no role without a type while no NetBox site is chosen", async () => {
+    const t = await admin();
+    const siteId = await createTestSite(t);
+    await t.action(api.sources.saveIntegration, {
+      siteId,
+      kind: "netbox",
+      baseUrl: "https://netbox.test",
+      enabled: true,
+      ignoreCertificateErrors: false,
+      token: "a-token-for-tests", // gitleaks:allow
+    });
+    await t.run(async (ctx) => {
+      await ctx.db.insert("siteCycles", {
+        siteId,
+        nextRunAt: 0,
+        failures: 0,
+        netboxImportedAt: 1,
+        netboxUnmappedRoles: [{ id: 6, name: "Serveur", devices: 2 }],
+      });
+    });
+    const [site] = await t.query(api.health.overview, {});
+    expect(site.netbox?.unmappedRoles).toEqual([]);
   });
 
   it("names no NetBox import while NetBox is disabled", async () => {
