@@ -6,7 +6,9 @@
 //   bun scripts/netbox-custom-fields.ts           create what is missing
 //   bun scripts/netbox-custom-fields.ts --check   only say what is missing
 //
-// A field that exists with another type is reported and left as it is.
+// A field that exists with another type is reported and left as it is. It
+// never changes or deletes a field: `netplan_last_seen`, which the push wrote
+// before ADR 0040, stays in NetBox until someone removes it there.
 import { parseArgs } from "node:util";
 import {
   defaultFetch,

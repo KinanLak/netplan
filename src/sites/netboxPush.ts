@@ -1,5 +1,6 @@
-// The location push to NetBox (ADR 0027): the custom fields Netplan writes
-// on a NetBox device, what they hold, and when a value is worth a PATCH.
+// The location push to NetBox (ADR 0027, ADR 0040): the custom fields
+// Netplan writes on a NetBox device, what they hold, and when a value is worth
+// a PATCH: only when the location changes.
 // Convex bundles this file, so relative imports only.
 
 /** Where the network last saw a device, as the push writes it. */
@@ -9,7 +10,6 @@ export type PushedValues = {
   floor: string | null;
   socket: string | null;
   switchPort: string;
-  lastSeen: number;
 };
 
 /** The names of a place, as history copies them. */
@@ -24,14 +24,12 @@ type NamedPlace = {
 export const pushValues = (
   siteName: string,
   place: NamedPlace,
-  seenAt: number,
 ): PushedValues => ({
   site: siteName,
   floor:
     [place.buildingName, place.floorName].filter(Boolean).join(" · ") || null,
   socket: place.socketName ?? null,
   switchPort: `${place.switchName} · ${place.portName}`,
-  lastSeen: seenAt,
 });
 
 /** The custom fields, as `scripts/netbox-custom-fields.ts` creates them. */
@@ -61,33 +59,33 @@ export const PUSH_FIELDS = [
     description: "Le switch et le port où il a été vu.",
   },
   {
-    name: "netplan_last_seen",
+    name: "netplan_updated",
     type: "datetime",
-    label: "Vu le (NetPlan)",
-    description: "La dernière fois que le réseau l'a vu.",
+    label: "Modifié par NetPlan le",
+    description:
+      "Quand NetPlan a écrit ces champs, la dernière fois que le lieu a changé.",
   },
 ] as const;
 
 export type PushFieldName = (typeof PUSH_FIELDS)[number]["name"];
 
-/** The `custom_fields` of the PATCH; NetBox takes whole seconds. */
+/**
+ * The `custom_fields` of the PATCH a new location sends, stamped with when it
+ * was sent; NetBox takes whole seconds. The stamp never goes alone.
+ */
 export const customFields = (
   values: PushedValues,
+  sentAt: number,
 ): Record<PushFieldName, string | null> => ({
   netplan_site: values.site,
   netplan_floor: values.floor,
   netplan_socket: values.socket,
   netplan_switch_port: values.switchPort,
-  netplan_last_seen: new Date(values.lastSeen)
-    .toISOString()
-    .replace(/\.\d{3}Z$/, "Z"),
+  netplan_updated: new Date(sentAt).toISOString().replace(/\.\d{3}Z$/, "Z"),
 });
 
 /** PATCHes one run sends at most; the next cycle's run sends the rest. */
 export const MAX_PUSHES_PER_RUN = 100;
-
-/** How old a last-seen time sent for an online device may grow. */
-export const LAST_SEEN_REFRESH_MS = 6 * 60 * 60_000;
 
 const sameLocation = (a: PushedValues, b: PushedValues) =>
   a.site === b.site &&
@@ -96,21 +94,13 @@ const sameLocation = (a: PushedValues, b: PushedValues) =>
   a.switchPort === b.switchPort;
 
 /**
- * Whether NetBox should be sent `values`. A new location goes at once. The
- * last-seen time alone goes when the device is offline, the moment it was
- * last seen, or once the one sent is six hours old: an online device seen
- * every five minutes would otherwise add a changelog entry each cycle.
+ * Whether NetBox should be sent `values`: only a location it has not been
+ * sent, so NetBox's changelog records moves and nothing else (ADR 0040).
  */
 export const pushDue = (
   values: PushedValues,
-  sent: { values: PushedValues; at: number } | null,
-  offline: boolean,
-  now: number,
-): boolean => {
-  if (!sent || !sameLocation(values, sent.values)) return true;
-  if (values.lastSeen === sent.values.lastSeen) return false;
-  return offline || now - sent.at >= LAST_SEEN_REFRESH_MS;
-};
+  sent: PushedValues | null,
+): boolean => !sent || !sameLocation(values, sent);
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;

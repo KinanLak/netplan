@@ -172,9 +172,9 @@ function PushSetting({
         {!push && !ready
           ? "Choisissez d'abord le site NetBox et au moins un rôle à importer. "
           : null}
-        Après chaque collecte, NetPlan écrit la prise, l'étage, le port de
-        switch et la dernière observation des équipements importés de NetBox
-        dans leurs champs personnalisés{" "}
+        Quand le lieu d'un équipement importé de NetBox change, NetPlan écrit sa
+        prise, son étage, son port de switch et l'heure de l'écriture dans ses
+        champs personnalisés{" "}
         {PUSH_FIELDS.map((field, index) => (
           <span key={field.name}>
             {index > 0 ? ", " : null}

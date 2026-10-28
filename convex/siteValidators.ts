@@ -119,7 +119,11 @@ export const pushedValues = v.object({
   floor: v.union(v.null(), v.string()),
   socket: v.union(v.null(), v.string()),
   switchPort: v.string(),
-  lastSeen: v.number(),
+  /**
+   * In rows sent before ADR 0040 only, which wrote when the device was last
+   * seen; never read or written now, kept so those rows still validate.
+   */
+  lastSeen: v.optional(v.number()),
 });
 
 /** How the last push run to NetBox ended. */
