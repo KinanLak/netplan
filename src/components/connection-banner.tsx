@@ -55,7 +55,7 @@ const plural = (count: number) =>
 
 /**
  * Freezes the map the moment the connection drops, and says so in one
- * discreet line once it has stayed down (ADR 0034). Mounted once, inside the
+ * discreet line once it has stayed down (ADR 0037). Mounted once, inside the
  * map session whose unconfirmed edits it counts.
  */
 export function ConnectionBanner() {

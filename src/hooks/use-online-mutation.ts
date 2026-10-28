@@ -7,7 +7,7 @@ import type {
 } from "convex/server";
 import { useConnectionStore } from "@/store/useConnectionStore";
 
-/** What a change made without a connection answers (ADR 0034). */
+/** What a change made without a connection answers (ADR 0037). */
 export const OFFLINE_REFUSAL =
   "Hors connexion : la modification n'a pas été envoyée.";
 

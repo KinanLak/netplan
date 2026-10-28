@@ -218,7 +218,7 @@ Built by lot 4 (ADR 0026).
 
 ## Shell
 
-Built by the UX lot U1 (ADR 0031) and reworked by U8 (ADR 0034).
+Built by the UX lot U1 (ADR 0031) and reworked by U8 (ADR 0037).
 
 - **Theme and errors.** A script in `<head>` sets the theme class before the
   first paint and `ThemeProvider` lives at the root, so every page, the
@@ -241,7 +241,7 @@ Built by the UX lot U1 (ADR 0031) and reworked by U8 (ADR 0034).
   them at once with a message. After 2 s a discreet line says so, with the
   count of edits sent but unconfirmed, and open tools and the structure
   dialog close; Convex's client sends unconfirmed edits again on
-  reconnection (ADR 0034).
+  reconnection (ADR 0037).
 
 ## Map
 

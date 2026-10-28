@@ -115,7 +115,7 @@ test("a page change during a backend outage keeps the page, and editing works ag
   }
 });
 
-// ADR 0034: nothing is edited without a connection, and an edit already sent
+// ADR 0037: nothing is edited without a connection, and an edit already sent
 // when it drops is confirmed on its return rather than lost.
 test("an edit in flight when the backend drops lands on its return, and the map is read-only meanwhile", async ({
   page,

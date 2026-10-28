@@ -1077,7 +1077,7 @@ export function MapDocumentProvider({
     undoStackRef.current = undoStack;
     redoStackRef.current = redoStack;
     identityRef.current = identity;
-    // Nothing is made without a connection (ADR 0034).
+    // Nothing is made without a connection (ADR 0037).
     canWriteRef.current = isReady && !isMapFrozen;
     activeFloorIdRef.current = activeFloorId;
     serverRevisionRef.current = serverDocument.revision;

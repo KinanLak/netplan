@@ -29,7 +29,7 @@ export interface SequentialOutboxOptions {
 /**
  * Sends the map's operations one at a time, in the order they were made.
  *
- * Nothing is made without a connection (ADR 0034). An operation already
+ * Nothing is made without a connection (ADR 0037). An operation already
  * sent when the connection drops stays with Convex's client, which sends it
  * again on reconnection: the server confirms it, or refuses it and it rolls
  * back like any refusal. A function that fails rolls back too, with its

@@ -5,7 +5,7 @@ export const OFFLINE_LINE_DELAY_MS = 2_000;
 /** How long a first connection may take before the page says it failed. */
 export const FIRST_CONNECTION_MS = 5_000;
 
-/** The connection as the shell tracks it (ADR 0034). */
+/** The connection as the shell tracks it (ADR 0037). */
 export interface ConnectionClock {
   state: ConnectionState;
   /** `navigator.onLine`: false says for sure the browser has no network. */
