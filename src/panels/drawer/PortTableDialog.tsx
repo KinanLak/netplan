@@ -407,8 +407,10 @@ function CablePicker({
 }) {
   const [target, setTarget] = useState<InventoryRow | null>(null);
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between gap-2 text-sm">
+    // A column whose list takes what the heading leaves, so the picker never
+    // runs past the dialog (A34).
+    <div className="flex min-h-0 flex-col gap-2">
+      <div className="flex shrink-0 items-center justify-between gap-2 text-sm">
         <span>
           Câbler{" "}
           <span className="font-mono">
@@ -463,7 +465,10 @@ function DeviceList({
     )
     .sort((a, b) => byName.compare(a.name, b.name));
   return (
-    <Command shouldFilter={false} className="rounded-lg! border">
+    <Command
+      shouldFilter={false}
+      className="h-auto min-h-0 flex-1 rounded-lg! border"
+    >
       <CommandInput
         value={query}
         onValueChange={setQuery}
@@ -528,7 +533,7 @@ function FreePortList({
   };
 
   return (
-    <Command className="rounded-lg! border">
+    <Command className="h-auto min-h-0 flex-1 rounded-lg! border">
       <CommandInput placeholder="Port libre…" autoFocus />
       <CommandList className="max-h-[50vh]">
         <CommandEmpty>

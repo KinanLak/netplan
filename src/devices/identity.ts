@@ -134,10 +134,20 @@ export function isIpAddress(value: string): boolean {
   }
 }
 
-/** A French reason a normalized identity edit is refused, or null. */
-export function identityEditError(edit: IdentityEdit): string | null {
+export interface IdentityProblem {
+  field: IdentityField;
+  message: string;
+}
+
+/**
+ * Why a normalized identity edit is refused, in French, and the field at
+ * fault, so a form can show the reason under that field; or null.
+ */
+export function identityEditProblem(
+  edit: IdentityEdit,
+): IdentityProblem | null {
   if (edit.name !== undefined && edit.name.trim() === "") {
-    return "Le nom est obligatoire.";
+    return { field: "name", message: "Le nom est obligatoire." };
   }
   for (const field of Object.keys(IDENTITY_TEXT_LIMITS) as Array<
     keyof typeof IDENTITY_TEXT_LIMITS
@@ -145,15 +155,23 @@ export function identityEditError(edit: IdentityEdit): string | null {
     const value = edit[field];
     const limit = IDENTITY_TEXT_LIMITS[field];
     if (typeof value === "string" && value.length > limit) {
-      return `Trop long : ${IDENTITY_FIELD_NAMES[field]} (${limit} caractères au plus).`;
+      return {
+        field,
+        message: `Trop long : ${IDENTITY_FIELD_NAMES[field]} (${limit} caractères au plus).`,
+      };
     }
   }
   if (typeof edit.ip === "string" && !isIpAddress(edit.ip)) {
-    return `« ${edit.ip} » n'est pas une adresse IP.`;
+    return { field: "ip", message: `« ${edit.ip} » n'est pas une adresse IP.` };
   }
   if (edit.macs) {
     const problem = macListProblem(edit.macs);
-    if (problem) return MAC_PROBLEMS[problem];
+    if (problem) return { field: "macs", message: MAC_PROBLEMS[problem] };
   }
   return null;
+}
+
+/** A French reason a normalized identity edit is refused, or null. */
+export function identityEditError(edit: IdentityEdit): string | null {
+  return identityEditProblem(edit)?.message ?? null;
 }

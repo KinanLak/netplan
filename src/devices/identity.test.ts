@@ -1,5 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import { identityEditError, isIpAddress } from "./identity";
+import {
+  identityEditError,
+  identityEditProblem,
+  isIpAddress,
+} from "./identity";
 
 describe("isIpAddress", () => {
   it("takes IPv4 and IPv6 addresses in their usual notations", () => {
@@ -39,5 +43,20 @@ describe("identityEditError", () => {
     );
     expect(identityEditError({ ip: "192.0.2.11" })).toBeNull();
     expect(identityEditError({ ip: null })).toBeNull();
+  });
+});
+
+describe("identityEditProblem", () => {
+  it("names the field at fault, so the form can mark it", () => {
+    expect(identityEditProblem({ ip: "10.0.0.256" })?.field).toBe("ip");
+    expect(identityEditProblem({ name: " " })?.field).toBe("name");
+    expect(identityEditProblem({ serial: "x".repeat(121) })?.field).toBe(
+      "serial",
+    );
+    expect(
+      identityEditProblem({ macs: ["02:00:00:00:00:01", "02:00:00:00:00:01"] })
+        ?.field,
+    ).toBe("macs");
+    expect(identityEditProblem({ name: "pc-1", ip: "2001:db8::1" })).toBeNull();
   });
 });
