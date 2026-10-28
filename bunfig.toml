@@ -1,4 +1,4 @@
 [test]
-preload = ["./test/setup-happy-dom.ts"]
+preload = ["./test/setup-happy-dom.ts", "./test/setup-locale.ts"]
 coveragePathIgnorePatterns = ["test/**"]
 onlyFailures = true
