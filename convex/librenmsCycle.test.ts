@@ -28,14 +28,15 @@ const STRANGER = macOf(3);
 
 /**
  * A LibreNMS polling one device, whose forwarding table a test sets. An
- * entry without `updated_at` was refreshed by the latest discovery.
+ * entry without `updated_at` was refreshed by the latest discovery; one with
+ * `null` has no timestamp at all.
  */
 function fakeLibreNMS() {
   const state = {
     fdb: [] as Array<{
       port_id: number | string;
       mac_address: string;
-      updated_at?: string;
+      updated_at?: string | null;
     }>,
     fdbStatus: 200,
     /** A 5xx still starts the discovery, as a proxy timing out would. */
@@ -1154,9 +1155,16 @@ describe("the LibreNMS step", () => {
         if (row) await ctx.db.patch(row._id, { librenmsDiscoveryAt: 0 });
       });
     // A first read compares with the table as it was before its discovery.
-    expect((await cycle(admin, siteId)).switches?.[0]?.notes).toContain(
-      "LibreNMS ne rafraîchit plus la table d'adresses de ce switch : vérifiez sa découverte dans LibreNMS.",
-    );
+    // It says so quietly: no remark, nothing for the freshness card to count.
+    expect((await cycle(admin, siteId)).switches?.[0]).toEqual({
+      name: "pile",
+      ok: true,
+      notes: [],
+      macTable: "stale",
+    });
+    expect(
+      (await admin.query(api.collection.freshness, { siteId }))?.switches,
+    ).toEqual({ read: 1, noted: 0 });
     expect(await statusOf(admin, "device:pc")).toBeNull();
 
     librenms.state.fdb = [
@@ -1167,9 +1175,7 @@ describe("the LibreNMS step", () => {
     expect(await statusOf(admin, "device:pc")).toBe("up");
 
     await discoverAgain();
-    expect((await cycle(admin, siteId)).switches?.[0]?.notes).toContain(
-      "LibreNMS ne rafraîchit plus la table d'adresses de ce switch : vérifiez sa découverte dans LibreNMS.",
-    );
+    expect((await cycle(admin, siteId)).switches?.[0]?.macTable).toBe("stale");
     expect(await statusOf(admin, "device:pc")).toBe("up");
     // The next cycle, too soon to rediscover, still trusts none of them.
     expect((await cycle(admin, siteId)).message).toContain(
@@ -1177,6 +1183,21 @@ describe("the LibreNMS step", () => {
     );
     expect(librenms.state.discoveries).toBe(3);
     expect(await statusOf(admin, "device:pc")).toBe("down");
+  });
+
+  it("counts a table without timestamps whole, and says so quietly", async () => {
+    const { admin, siteId } = await siteWithLibreNMS();
+    librenms.state.fdb = [{ port_id: 101, mac_address: PC, updated_at: null }];
+    expect((await cycle(admin, siteId)).switches?.[0]).toEqual({
+      name: "pile",
+      ok: true,
+      notes: [],
+      macTable: "undated",
+    });
+    expect(await statusOf(admin, "device:pc")).toBe("up");
+    expect(
+      (await admin.query(api.collection.freshness, { siteId }))?.switches,
+    ).toEqual({ read: 1, noted: 0 });
   });
 
   it("places a device next to the socket it is seen at, and keeps where a person put it", async () => {

@@ -123,9 +123,13 @@ export function LastSeenSection({ deviceId }: { deviceId: string }) {
             {[place.socketName, ...where].join(" · ")}
           </div>
         ) : null}
-        {/* The time only: the status says whether a read still vouches. */}
+        {/* The time only: the status says whether a read still vouches.
+            How the port led to the device is said in passing (ADR 0038). */}
         <div className="text-xs text-muted-foreground">
           <Time at={at} format="when" now={now} />
+          {place.socketId
+            ? " · vu via un câble"
+            : " · vu sur un port non documenté"}
         </div>
       </div>
     </section>
