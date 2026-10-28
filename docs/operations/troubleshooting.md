@@ -138,20 +138,20 @@ failed, amber when it was read with a remark:
 - **"n'existe plus dans LibreNMS (404) : revoyez la correspondance des
   switchs."**: the device was deleted or renumbered in LibreNMS; pick its
   new device in the site's LibreNMS mapping.
-- **"Sa découverte n'a pas pu être lancée."** (amber): LibreNMS refused to
-  start one (a 4xx), typically a token that may not ask for a discovery. The
-  switch is still read and its statuses updated, from a table that may be as
-  old as its last discovery.
+- **"Sa découverte n'a pas pu être lancée."** (amber): LibreNMS answered
+  401 or 403, so the token may not ask for a discovery. The switch is still
+  read and its statuses updated, from a table that may be as old as its last
+  discovery.
 
-A discovery LibreNMS was too busy to take (a 5xx, a timeout) or that did not
-finish within 2 minutes says nothing and fails nothing: the switch is read
-anyway and the next cycle asks again. If it keeps happening, the muted
-"Table MAC non rafraîchie" below shows it.
+A discovery LibreNMS was too busy to take (a 5xx, a 429, a timeout) or that
+did not finish within 2 minutes says no more than the muted line below and
+fails nothing: the switch is read anyway and the next cycle asks again.
 
-- **"· Table MAC non rafraîchie"** (muted, after "lu"): the discovery
-  moved nothing in the forwarding table, so none of its entries counts and
-  the devices behind the switch go offline after two cycles. It clears by
-  itself with the next discovery that refreshes the table; if it stays, run
+- **"· Table MAC non rafraîchie"** (muted, after "lu"): this cycle's
+  discovery did not finish, or finished and moved nothing in the forwarding
+  table. In the second case none of its entries counts and the devices
+  behind the switch go offline after two cycles. It clears by itself with
+  the next discovery that refreshes the table; if it stays, run
   `scripts/check-librenms.ts --discover`.
 - **"· Table MAC non datée"** (muted): LibreNMS gave the entries no
   timestamps, so the whole table counts, old entries included, and a device

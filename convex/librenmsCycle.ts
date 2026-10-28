@@ -904,11 +904,11 @@ const deviceFailure = (answer: { message: string; status?: number }) =>
  * `last_discovered` when asked and sets it once done. Returns the devices
  * that finished, and why LibreNMS refused to start one.
  *
- * A busy LibreNMS (a 5xx, a timeout) or a discovery still running is
- * ordinary noise: the tables are read anyway, the next cycle asks again, and
- * a table left unrefreshed already says so quietly. Only a refusal, which
- * lasts until an admin changes something, is worth a note; neither fails the
- * collection, which the reads alone decide.
+ * A busy LibreNMS (a 5xx, a 429, a timeout) or a discovery still running is
+ * ordinary noise: the tables are read anyway, their switch's line says
+ * quietly they were not refreshed, and the next cycle asks again. Only a
+ * token without the right to ask, which lasts until an admin changes it, is
+ * worth a note. Neither fails the collection, which the reads alone decide.
  */
 const rediscover = async (
   readOnce: LibreNMSRead,
@@ -925,13 +925,15 @@ const rediscover = async (
     const current = await readOnce(`/api/v0/devices/${device.id}`);
     if (!current.ok) continue;
     const asked = await trigger(`/api/v0/devices/${device.id}/discover`);
-    // An answer other than a server error says the request did not start
-    // one; a timeout or a 5xx may have, and only waiting tells.
-    if (!asked.ok && asked.status !== undefined && asked.status < 500) {
+    if (!asked.ok && (asked.status === 401 || asked.status === 403)) {
       refusals.set(
         device.id,
         `sa découverte n'a pas pu être lancée. ${asked.message}`,
       );
+    }
+    // An answer other than a server error says the request did not start
+    // one; a timeout or a 5xx may have, and only waiting tells.
+    if (!asked.ok && asked.status !== undefined && asked.status < 500) {
       continue;
     }
     before.set(device.id, readLastDiscovered(current.body));
@@ -984,13 +986,16 @@ export const collectFromLibreNMS = async (
   // What each device's line in the step says after its name.
   const notes = new Map<number, Array<string>>();
   const macTables = new Map<number, "undated" | "stale">();
-  // A device gone from LibreNMS fails its discovery and its read alike.
+  // A device whose three reads fail the same way gets one note.
   const note = (deviceId: number, phrase: string) => {
     const current = notes.get(deviceId) ?? [];
     if (!current.includes(phrase)) notes.set(deviceId, [...current, phrase]);
   };
   const failed = new Set<number>();
   let finished = new Set<number>();
+  // Asked for a discovery this cycle that did not finish: their tables were
+  // not refreshed, which their line says quietly.
+  let unrefreshed = new Set<number>();
   // What a switch's table looked like before its discovery, when no earlier
   // read says it: the only way to tell, on a first read, a discovery that
   // refreshed nothing.
@@ -1013,6 +1018,9 @@ export const collectFromLibreNMS = async (
     }
     const discovery = await rediscover(readOnce, trigger, plan.devices);
     finished = discovery.finished;
+    unrefreshed = new Set(
+      plan.devices.map(({ id }) => id).filter((id) => !finished.has(id)),
+    );
     for (const [deviceId, reason] of discovery.refusals) {
       note(deviceId, reason);
     }
@@ -1086,7 +1094,10 @@ export const collectFromLibreNMS = async (
     // Both recover by themselves with the next discovery that dates or
     // refreshes the table, so they are said quietly rather than noted.
     if (entries.length > 0 && !table) macTables.set(device.id, "undated");
-    else if (entries.length > 0 && fresh.length === 0) {
+    else if (
+      entries.length > 0 &&
+      (fresh.length === 0 || unrefreshed.has(device.id))
+    ) {
       macTables.set(device.id, "stale");
     }
     fdb.push(...fresh);

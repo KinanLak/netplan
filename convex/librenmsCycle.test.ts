@@ -1144,7 +1144,7 @@ describe("the LibreNMS step", () => {
     ]);
   });
 
-  it("asks once for a discovery, quiet when LibreNMS is busy, noted when it refuses", async () => {
+  it("asks once for a discovery, quiet when LibreNMS is busy, noted when the token may not", async () => {
     const { admin, siteId } = await siteWithLibreNMS();
     librenms.state.fdb = [{ port_id: 101, mac_address: PC }];
     librenms.state.discoverStatus = 503;
@@ -1177,6 +1177,19 @@ describe("the LibreNMS step", () => {
       ],
     });
     expect(librenms.state.discoveries).toBe(1);
+
+    // A LibreNMS that asks to slow down started nothing either: quiet, but
+    // the table it did not refresh says so.
+    await admin.run(async (ctx) => {
+      const row = await ctx.db.query("siteCycles").first();
+      if (row) await ctx.db.patch(row._id, { librenmsDiscoveryAt: 0 });
+    });
+    librenms.state.discoverStatus = 429;
+    const throttled = await cycle(admin, siteId);
+    expect(throttled.ok).toBe(true);
+    expect(throttled.switches).toEqual([
+      { name: "pile", ok: true, notes: [], macTable: "stale" },
+    ]);
   });
 
   it("sees nothing in a table a discovery did not refresh", async () => {
