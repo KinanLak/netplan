@@ -219,19 +219,58 @@ describe("planNetBoxImport", () => {
     expect(plan.conflict.map((c) => c.device.externalId)).toEqual(["1", "2"]);
   });
 
-  it("removes unplaced devices NetBox dropped and keeps placed ones as manual", () => {
+  it("marks what NetBox no longer returns as absent, placed or not, and keeps its MACs", () => {
     const plan = planNetBoxImport(
-      [netbox("3", { macs: [MAC_A] })],
+      [netbox("3", { macs: [MAC_C] })],
       [
         manual("device:gone", { netboxId: "1", macs: [MAC_A] }),
         manual("device:placed", { netboxId: "2", placed: true, macs: [MAC_B] }),
+        manual("device:already", { netboxId: "4", missingSince: 1 }),
         manual("device:librenms", { netboxId: null }),
       ],
     );
-    expect(plan.remove).toEqual(["device:gone"]);
-    expect(plan.unbind).toEqual(["device:placed"]);
-    // A removed device's MAC goes to the device NetBox now gives it to.
-    expect(plan.macs.get("netbox:3")).toEqual([MAC_A]);
+    // An absence already recorded keeps its date.
+    expect(plan.missing).toEqual(["device:gone", "device:placed"]);
+    expect(plan.update).toEqual([]);
+    expect(plan.macs.get("netbox:3")).toEqual([MAC_C]);
+  });
+
+  it("links an absent device again when NetBox returns it, under its id or by its identifiers", () => {
+    const plan = planNetBoxImport(
+      [
+        netbox("1"),
+        netbox("9", { macs: [MAC_A] }),
+        netbox("8", { name: "pc-0008" }),
+      ],
+      [
+        manual("device:back", { netboxId: "1", missingSince: 1 }),
+        manual("device:recreated", {
+          netboxId: "2",
+          missingSince: 1,
+          macs: [MAC_A],
+        }),
+        manual("device:renamed", { netboxId: "3", name: "PC-0008" }),
+      ],
+    );
+    expect(plan.update.map((u) => [u.deviceId, u.device.externalId])).toEqual([
+      ["device:back", "1"],
+      ["device:recreated", "9"],
+    ]);
+    // Only a hostname matches: a person decides, as for a manual device.
+    expect(plan.suggest.map((entry) => entry.candidateIds)).toEqual([
+      ["device:renamed"],
+    ]);
+    expect(plan.missing).toEqual(["device:renamed"]);
+    expect(plan.macs.get("device:recreated")).toEqual([MAC_A]);
+  });
+
+  it("never offers a device NetBox still returns to another NetBox device", () => {
+    const plan = planNetBoxImport(
+      [netbox("1"), netbox("2", { serial: "SN-1", macs: [MAC_A] })],
+      [manual("device:one", { netboxId: "1", serial: "SN-1", macs: [MAC_A] })],
+    );
+    expect(plan.update.map((u) => u.deviceId)).toEqual(["device:one"]);
+    expect(plan.create.map((d) => d.externalId)).toEqual(["2"]);
   });
 });
 
@@ -242,16 +281,20 @@ describe("importSummary", () => {
         imported: 463,
         created: 12,
         merged: 1,
-        removed: 0,
+        missing: 3,
+        returned: 1,
         review: 2,
       }),
-    ).toBe("Import : 463 équipements (12 nouveaux, 1 rattaché, 2 à vérifier).");
+    ).toBe(
+      "Import : 463 équipements (12 nouveaux, 1 rattaché, 3 absents de NetBox, 1 de retour, 2 à vérifier).",
+    );
     expect(
       importSummary({
         imported: 1,
         created: 0,
         merged: 0,
-        removed: 0,
+        missing: 0,
+        returned: 0,
         review: 0,
       }),
     ).toBe("Import : 1 équipement.");
@@ -511,5 +554,24 @@ describe("planDevicePorts", () => {
       "port:device:a:nb:interface:12:2",
     ]);
     expect(plan.remove).toEqual(["port:device:a:nb:interface:12"]);
+  });
+
+  it("keeps a port whose NetBox port is gone when the new one is named alike", () => {
+    const plan = planDevicePorts(
+      "device:a",
+      [
+        {
+          id: "port:device:a:nb:interface:10",
+          name: "eth0",
+          kind: "interface",
+          netboxId: "interface:10",
+        },
+      ],
+      [wanted("interface:90", "eth0")],
+    );
+    expect(plan.ports.map(({ id }) => id)).toEqual([
+      "port:device:a:nb:interface:10",
+    ]);
+    expect(plan.remove).toEqual([]);
   });
 });

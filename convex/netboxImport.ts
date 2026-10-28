@@ -24,6 +24,7 @@ import {
   netboxSettings,
 } from "./siteValidators";
 import {
+  absencePurgeDue,
   importSummary,
   newDeviceKey,
   planDevicePorts,
@@ -99,7 +100,7 @@ export const importFromNetBox = async (
   const { baseUrl } = connection;
 
   // Without a role NetBox would list every device of the site, so nothing is
-  // read, and the empty import still retires what earlier roles brought.
+  // read, and the empty import still marks absent what earlier roles brought.
   const noRole = settings.roles.length === 0;
   const roleFilter = settings.roles.map((role) => `&role_id=${role.id}`);
   const lists = noRole
@@ -141,7 +142,7 @@ export const importFromNetBox = async (
     }),
   });
   if (!counts) return { ok: true, message: "" };
-  if (noRole && counts.removed === 0) {
+  if (noRole && counts.missing === 0) {
     return {
       ok: true,
       message: "Aucun rôle NetBox n'a de type : rien n'est importé.",
@@ -154,7 +155,8 @@ const importCounts = v.object({
   imported: v.number(),
   created: v.number(),
   merged: v.number(),
-  removed: v.number(),
+  missing: v.number(),
+  returned: v.number(),
   review: v.number(),
 });
 
@@ -208,23 +210,23 @@ export const apply = internalMutation({
         serial: device.serial,
         macs: device.macs,
         placed: device.placement !== undefined,
+        missingSince: device.source?.missingSince,
       })),
     );
     const byId = new Map(inventory.map((device) => [device.objectId, device]));
     const now = Date.now();
 
-    for (const deviceId of plan.remove) {
+    // Nothing NetBox stops returning is deleted or released here: it stays
+    // bound, absent since now, until NetBox returns it or the purge takes it
+    // (ADR 0034).
+    for (const deviceId of plan.missing) {
       const device = byId.get(deviceId);
-      if (!device) continue;
-      await deleteDeviceMacs(ctx, deviceId);
-      await deleteDeviceCabling(ctx, deviceId);
-      await deletePush(ctx, deviceId);
-      await ctx.db.delete(device._id);
-    }
-    for (const deviceId of plan.unbind) {
-      const device = byId.get(deviceId);
-      if (device) await ctx.db.patch(device._id, { source: undefined });
-      await deletePush(ctx, deviceId);
+      if (!device?.source) continue;
+      await ctx.db.patch(device._id, {
+        source: { ...device.source, missingSince: now },
+        updatedAt: now,
+        updatedBy: IMPORTED_BY,
+      });
     }
 
     // Every MAC the import moves is freed before any is claimed again.
@@ -277,18 +279,93 @@ export const apply = internalMutation({
       }
     }
 
-    for (const deviceId of plan.unbind) await unbindPorts(ctx, deviceId);
     const portIds = await importPorts(ctx, siteId, written, args.ports);
-    await importCables(ctx, siteId, portIds, args.cables, now);
+    const relinked = new Set(written.map((entry) => entry.deviceId));
+    const absent = new Set([
+      ...plan.missing,
+      ...inventory
+        .filter(
+          (device) =>
+            device.source?.missingSince !== undefined &&
+            !relinked.has(device.objectId),
+        )
+        .map((device) => device.objectId),
+    ]);
+    await importCables(ctx, siteId, portIds, args.cables, absent, now);
     await replaceReviews(ctx, siteId, plan, now);
     await ctx.db.patch(cycle._id, { netboxImportedAt: now });
+    const wasAbsent = (deviceId: string) =>
+      byId.get(deviceId)?.source?.missingSince !== undefined;
     return {
       imported: devices.length,
       created: plan.create.length,
-      merged: plan.update.filter((entry) => entry.bind).length,
-      removed: plan.remove.length + plan.unbind.length,
+      merged: plan.update.filter(
+        (entry) => entry.bind && !wasAbsent(entry.deviceId),
+      ).length,
+      missing: plan.missing.length,
+      returned: plan.update.filter((entry) => wasAbsent(entry.deviceId)).length,
       review: plan.suggest.length + plan.conflict.length,
     };
+  },
+});
+
+// Deletions per mutation, so a site with many absent devices stays within a
+// mutation's limits; the rest follow in the next run.
+const PURGE_BATCH = 100;
+
+/**
+ * Deletes the devices absent from NetBox for 30 days and on no floor, with
+ * their MACs, ports, cables and push row, as an import once did at once
+ * (ADR 0034). Daily; an archived site keeps everything.
+ */
+export const purgeAbsent = internalMutation({
+  args: {},
+  returns: v.null(),
+  handler: async (ctx) => {
+    for (const site of await ctx.db.query("sites").collect()) {
+      if (site.archivedAt !== undefined) continue;
+      await ctx.scheduler.runAfter(0, internal.netboxImport.purgeSite, {
+        siteId: site.objectId,
+      });
+    }
+    return null;
+  },
+});
+
+export const purgeSite = internalMutation({
+  args: { siteId: v.string() },
+  returns: v.number(),
+  handler: async (ctx, { siteId }) => {
+    const importedAt = (await cycleOf(ctx, siteId))?.netboxImportedAt;
+    if (importedAt === undefined) return 0;
+    const due = (
+      await ctx.db
+        .query("devices")
+        .withIndex("by_site_source", (q) =>
+          q.eq("siteId", siteId).eq("source.integration", "netbox"),
+        )
+        .collect()
+    ).filter((device) =>
+      absencePurgeDue(
+        {
+          placed: device.placement !== undefined,
+          missingSince: device.source?.missingSince,
+        },
+        importedAt,
+      ),
+    );
+    for (const device of due.slice(0, PURGE_BATCH)) {
+      await deleteDeviceMacs(ctx, device.objectId);
+      await deleteDeviceCabling(ctx, device.objectId);
+      await deletePush(ctx, device.objectId);
+      await ctx.db.delete(device._id);
+    }
+    if (due.length > PURGE_BATCH) {
+      await ctx.scheduler.runAfter(0, internal.netboxImport.purgeSite, {
+        siteId,
+      });
+    }
+    return Math.min(due.length, PURGE_BATCH);
   },
 });
 
@@ -362,6 +439,7 @@ const changes = (
   fields: ReturnType<typeof sourceFields>,
 ) =>
   device.source?.integration !== "netbox" ||
+  device.source.missingSince !== undefined ||
   device.source.externalId !== fields.source.externalId ||
   device.source.url !== fields.source.url ||
   OWNED.some(
@@ -373,7 +451,7 @@ const netbox = (externalId: string) => ({
   externalId,
 });
 
-/** A device NetBox dropped keeps its ports as manual ones. */
+/** A released device keeps its ports as manual ones. */
 const unbindPorts = async (ctx: MutationCtx, deviceId: string) => {
   for (const port of await portRowsOf(ctx, deviceId)) {
     if (port.source) await ctx.db.patch(port._id, { source: undefined });
@@ -448,13 +526,16 @@ const importPorts = async (
 
 /**
  * Lays NetBox's cables between the ports it placed. A cable NetBox no longer
- * lists goes; one NetBox lays on a port with a manual cable replaces it.
+ * lists goes, unless it touches an absent device, which keeps its cabling
+ * until it comes back or is purged; one NetBox lays on a port with a manual
+ * cable replaces it.
  */
 const importCables = async (
   ctx: MutationCtx,
   siteId: string,
   located: ReadonlyMap<string, { deviceId: string; portId: string }>,
   cables: ReadonlyArray<ImportedCable>,
+  absent: ReadonlySet<string>,
   now: number,
 ) => {
   const existing = await ctx.db
@@ -497,7 +578,9 @@ const importCables = async (
     kept.add(cable.externalId);
   }
   for (const [externalId, row] of byId) {
-    if (!kept.has(externalId)) await ctx.db.delete(row._id);
+    if (kept.has(externalId)) continue;
+    if (absent.has(row.aDeviceId) || absent.has(row.bDeviceId)) continue;
+    await ctx.db.delete(row._id);
   }
 };
 

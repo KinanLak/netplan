@@ -306,6 +306,23 @@ describe("the push to NetBox", () => {
     expect(patches).toHaveLength(1);
   });
 
+  it("writes nothing for a device NetBox no longer returns", async () => {
+    const { admin, siteId } = await pushingSite();
+    await turnOn(admin, siteId);
+    await patchDevice(admin, "device:seen", {
+      source: {
+        integration: "netbox",
+        externalId: "41",
+        syncedAt: NOW,
+        missingSince: NOW,
+      },
+    });
+    const patches = netboxAnswering(() => 200);
+    await push(admin, siteId);
+    expect(patches).toEqual([]);
+    expect(await admin.query(api.netbox.importedCount, { siteId })).toBe(1);
+  });
+
   it("writes a move at once, and an offline device's last sighting", async () => {
     const { admin, siteId } = await pushingSite();
     await turnOn(admin, siteId);

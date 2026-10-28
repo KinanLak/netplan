@@ -76,6 +76,8 @@ export interface DeviceSource {
   url?: string;
   /** When the source last changed what it owns, not when it was last read. */
   syncedAt: number;
+  /** Since when NetBox no longer returns the device (ADR 0034). */
+  missingSince?: number;
 }
 
 // ── Domain documents ─────────────────────────────────────────────────────────
