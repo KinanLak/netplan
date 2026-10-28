@@ -26,11 +26,15 @@ queue of edits made without a connection are complexity that buys nothing.
 
 ## Decision
 
-**No editing without a connection.** The map turns read-only the moment
-Convex's socket closes or the browser loses its network, and editable again
-when both are back. A change made outside the map, in the inventory or a
-dialog, is refused at once with a message rather than left in Convex's
-queue to land later on data someone else may have changed. Reading,
+**No editing without a connection.** Nothing is written from the moment
+Convex's socket closes or the browser loses its network: the map session
+refuses new operations, a drag released then goes back, and a change made
+elsewhere (the inventory, a dialog, the administration) is refused at once
+with a message rather than left in Convex's queue to land later on data
+someone else may have changed. Once the drop has lasted two seconds the
+edit controls leave too, as for a Lecteur, and come back with the
+connection; a socket that reconnects at once keeps open panels and what is
+typed in them. Reading,
 moving around the plan and between pages go on as before. An edit already sent when the connection drops is either
 confirmed when it returns or rolled back with the refusal message; it is
 never dropped silently, and leaving the page while it is unconfirmed asks

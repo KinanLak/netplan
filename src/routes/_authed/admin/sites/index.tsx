@@ -1,7 +1,8 @@
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Add01Icon, ArrowRight01Icon } from "@hugeicons/core-free-icons";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
+import { useOnlineMutation } from "@/hooks/use-online-mutation";
 import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
 import type { FormEvent } from "react";
@@ -152,7 +153,7 @@ function CreateSiteDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const createSite = useMutation(api.sites.create);
+  const createSite = useOnlineMutation(api.sites.create);
   const navigate = useNavigate();
   const [name, setName] = useState("");
   const [timezone, setTimezone] = useState(DEFAULT_TIMEZONE);

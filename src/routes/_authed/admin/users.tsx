@@ -1,7 +1,8 @@
 import { HugeiconsIcon } from "@hugeicons/react";
 import { MailSend01Icon, UserAdd01Icon } from "@hugeicons/core-free-icons";
 import { createFileRoute } from "@tanstack/react-router";
-import { useAction, useMutation, useQuery } from "convex/react";
+import { useAction, useQuery } from "convex/react";
+import { useOnlineMutation } from "@/hooks/use-online-mutation";
 import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
 import type { FormEvent } from "react";
@@ -272,9 +273,9 @@ function UserItem({
   online: boolean;
   now: number;
 }) {
-  const setRole = useMutation(api.users.setRole);
-  const setDisabled = useMutation(api.users.setDisabled);
-  const cancelInvitation = useMutation(api.users.cancelInvitation);
+  const setRole = useOnlineMutation(api.users.setRole);
+  const setDisabled = useOnlineMutation(api.users.setDisabled);
+  const cancelInvitation = useOnlineMutation(api.users.cancelInvitation);
   const resend = useAction(api.users.resendInvitation);
   const [confirming, setConfirming] = useState<
     "disable" | "cancel" | { role: Role } | null
@@ -563,7 +564,7 @@ function RoleMappingForm({
 }: {
   settings: FunctionReturnType<typeof api.authSettings.keycloak>;
 }) {
-  const save = useMutation(api.authSettings.setKeycloakRoleMapping);
+  const save = useOnlineMutation(api.authSettings.setKeycloakRoleMapping);
   const [editorRole, setEditorRole] = useState(settings.editorRole ?? "");
   const [adminRole, setAdminRole] = useState(settings.adminRole ?? "");
   const [pending, setPending] = useState(false);

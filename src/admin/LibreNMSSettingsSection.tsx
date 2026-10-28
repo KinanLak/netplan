@@ -1,4 +1,5 @@
-import { useAction, useMutation, useQuery } from "convex/react";
+import { useAction, useQuery } from "convex/react";
+import { useOnlineMutation } from "@/hooks/use-online-mutation";
 import { useState } from "react";
 import type { FunctionReturnType } from "convex/server";
 import { Button } from "@/components/ui/button";
@@ -143,7 +144,7 @@ function SettingsForm({
   options: Options;
   onDone: () => void;
 }) {
-  const save = useMutation(api.librenms.saveSettings);
+  const save = useOnlineMutation(api.librenms.saveSettings);
   const items = options.devices.map(itemOf);
   const listed = new Map(options.devices.map((device) => [device.id, device]));
   const savedOf = new Map(

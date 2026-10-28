@@ -77,11 +77,11 @@ function AuthedLayout() {
   );
 }
 
-// Toasts rise above the connection banner while it shows.
+// Toasts rise above the offline line, which shows while the map is frozen.
 function ShellToaster() {
-  const isBannerShown = useConnectionStore((s) => s.isBannerShown);
+  const isMapFrozen = useConnectionStore((s) => s.isMapFrozen);
   return (
-    <Toaster position="bottom-center" offset={isBannerShown ? 56 : undefined} />
+    <Toaster position="bottom-center" offset={isMapFrozen ? 56 : undefined} />
   );
 }
 

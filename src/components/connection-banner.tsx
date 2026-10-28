@@ -75,7 +75,7 @@ export function ConnectionBanner() {
   }, [changesIn, setClock]);
 
   useEffect(() => {
-    useConnectionStore.setState({ isMapFrozen: frozen, isBannerShown: shown });
+    useConnectionStore.setState({ isOffline: frozen, isMapFrozen: shown });
   }, [frozen, shown]);
 
   // A tool or a multi-selection left on would block plain navigation, so

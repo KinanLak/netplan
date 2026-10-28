@@ -26,7 +26,7 @@ export function useOnlineMutation<
 ) => Promise<FunctionReturnType<Mutation>> {
   const mutate = useMutation(mutation);
   return (...args) =>
-    useConnectionStore.getState().isMapFrozen
+    useConnectionStore.getState().isOffline
       ? Promise.reject(new ConvexError(OFFLINE_REFUSAL))
       : mutate(...args);
 }

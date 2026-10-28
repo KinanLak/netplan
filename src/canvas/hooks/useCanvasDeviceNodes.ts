@@ -16,6 +16,7 @@ import { toDeviceNodes } from "@/devices/reactFlowDeviceAdapter";
 import type { DeviceNode } from "@/devices/reactFlowDeviceAdapter";
 import { portsByDevice } from "@/devices/ports";
 import { GRID_SIZE } from "@/lib/grid";
+import { useConnectionStore } from "@/store/useConnectionStore";
 import { createGroupDrag } from "@/canvas/groupDrag";
 import type { GroupDrag } from "@/canvas/groupDrag";
 import type { GroupMember } from "@/map-engine/types";
@@ -371,9 +372,9 @@ export function useCanvasDeviceNodes({
       if (ended.group) groupDragRef.current = null;
       onNodesChange(processedChanges);
 
-      if (!canEditDevices) {
-        // The map froze during the drag (ADR 0037): nothing is sent, so the
-        // devices dropped go back to where the plan has them.
+      if (!canEditDevices || useConnectionStore.getState().isOffline) {
+        // The connection dropped during the drag (ADR 0037): nothing is
+        // sent, so the devices dropped go back to where the plan has them.
         const deviceById = new Map(devices.map((item) => [item.id, item]));
         const dropped = processedChanges.flatMap((change) =>
           change.type === "position" && !change.dragging ? [change.id] : [],

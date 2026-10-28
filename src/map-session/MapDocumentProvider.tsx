@@ -958,7 +958,7 @@ export function MapDocumentProvider({
   const toServerOperation = (
     operation: MapOperation,
   ): ApplyMutationArgs["operation"] => operation;
-  const isMapFrozen = useConnectionStore((s) => s.isMapFrozen);
+  const isOffline = useConnectionStore((s) => s.isOffline);
   // One subscription per collection: an edit only pushes the collection it
   // touched (and the revision), so moving a device never re-sends the walls.
   // Convex updates all of them at the same logical timestamp.
@@ -1062,7 +1062,7 @@ export function MapDocumentProvider({
   const undoStackRef = useRef<ReadonlyArray<SessionHistoryEntry>>(undoStack);
   const redoStackRef = useRef<ReadonlyArray<SessionHistoryEntry>>(redoStack);
   const identityRef = useRef<LocalIdentity | null>(identity);
-  const canWriteRef = useRef(isReady && !isMapFrozen);
+  const canWriteRef = useRef(isReady && !isOffline);
   const activeFloorIdRef = useRef(activeFloorId);
   const serverRevisionRef = useRef(serverDocument.revision);
   // Acks live in a ref: recording one must not re-render the tree. Removal is
@@ -1078,7 +1078,7 @@ export function MapDocumentProvider({
     redoStackRef.current = redoStack;
     identityRef.current = identity;
     // Nothing is made without a connection (ADR 0037).
-    canWriteRef.current = isReady && !isMapFrozen;
+    canWriteRef.current = isReady && !isOffline;
     activeFloorIdRef.current = activeFloorId;
     serverRevisionRef.current = serverDocument.revision;
     pendingEntriesRef.current = pendingEntries;
