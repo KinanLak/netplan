@@ -24,7 +24,7 @@ export const TRACED_ON_ASK: ReadonlySet<Device["type"]> = new Set([
 ]);
 
 /**
- * The device whose cables show after "Voir les câbles sur le plan" on `target`:
+ * The device whose cables show after "Afficher les câbles" on `target`:
  * asking again hides them, and asking on another switch or patch panel
  * shows its own instead. Asking on any other device, or on none, hides them.
  */

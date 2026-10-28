@@ -22,7 +22,7 @@ import {
 } from "@/store/selectors";
 import { useWallToolSession } from "@/walls/useWallToolSession";
 import { WallOverlay } from "./WallOverlay";
-import { WallToolHelpCard } from "./WallToolHelpCard";
+import { WallDrawMessage } from "./WallDrawMessage";
 import { WallDebugPanel } from "./WallDebugPanel";
 
 export interface WallPaneHandlers {
@@ -223,10 +223,9 @@ export function WallInteractionLayer({
         paneHoverStrokeColor={paneHoverStrokeColor}
       />
 
-      <WallToolHelpCard
-        isVisible={isEditMode && isReady}
-        tool={activeDrawTool}
-        drawMessage={session.drawMessage}
+      <WallDrawMessage
+        isVisible={isEditMode && isReady && activeDrawTool !== "device"}
+        message={session.drawMessage}
       />
 
       <WallDebugPanel

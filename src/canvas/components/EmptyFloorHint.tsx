@@ -12,7 +12,7 @@ import { useMapStore } from "@/store/useMapStore";
 
 /**
  * Where to start on a floor with nothing on it (A25): draw a room, place a
- * device, or import a calque. A Lecteur only learns that it is empty.
+ * device, or import a calque. A Lecteur sees the empty plan (ADR 0041).
  */
 export function EmptyFloorHint() {
   const { document } = useMapDocumentData();
@@ -38,7 +38,7 @@ export function EmptyFloorHint() {
     document.walls.length === 0 &&
     document.labels.length === 0 &&
     document.overlay?.floorId !== document.floorId;
-  if (!isEmpty) return null;
+  if (!isEmpty || !canEdit) return null;
 
   const inEditMode = (run: () => void) => () => {
     if (!isEditMode) toggleEditMode();
@@ -64,23 +64,18 @@ export function EmptyFloorHint() {
 
   return (
     <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center p-6">
-      <div className="pointer-events-auto flex flex-col items-center gap-3 rounded-lg border border-border bg-card p-4 text-center text-sm shadow-md">
-        <p className="text-muted-foreground">Cet étage est encore vide.</p>
-        {canEdit ? (
-          <div className="flex flex-wrap justify-center gap-2">
-            {actions.map((action) => (
-              <Button
-                key={action.label}
-                variant="outline"
-                size="sm"
-                onClick={action.run}
-              >
-                <HugeiconsIcon icon={action.icon} strokeWidth={2} />
-                {action.label}
-              </Button>
-            ))}
-          </div>
-        ) : null}
+      <div className="pointer-events-auto flex flex-wrap justify-center gap-2 rounded-lg border border-border bg-card p-4 shadow-md">
+        {actions.map((action) => (
+          <Button
+            key={action.label}
+            variant="outline"
+            size="sm"
+            onClick={action.run}
+          >
+            <HugeiconsIcon icon={action.icon} strokeWidth={2} />
+            {action.label}
+          </Button>
+        ))}
       </div>
     </div>
   );

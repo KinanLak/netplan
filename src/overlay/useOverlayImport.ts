@@ -97,7 +97,7 @@ export function useOverlayImport() {
       setState({
         status: "error",
         message:
-          "L'étage a changé pendant l'import : le calque n'a pas été placé.",
+          "L'étage a changé pendant l'import, le calque n'est pas placé.",
       });
       return;
     }

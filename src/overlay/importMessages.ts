@@ -3,11 +3,10 @@ import { OverlayImportError } from "./rasterize";
 import type { OverlayImportErrorCode } from "./rasterize";
 
 const importMessages: Record<OverlayImportErrorCode, string> = {
-  "unsupported-file": "Formats acceptés : PNG, JPG, SVG ou PDF.",
+  "unsupported-file": "Choisissez un fichier PNG, JPG, SVG ou PDF.",
   "unreadable-file": "Ce fichier n'a pas pu être lu.",
   "pdf-password": "Ce PDF est protégé par un mot de passe.",
-  "too-large":
-    "Ce plan reste trop lourd même réduit : exportez-le en plus basse résolution.",
+  "too-large": "Ce fichier reste trop lourd une fois réduit.",
 };
 
 const serverMessages: Record<string, string> = {
@@ -15,9 +14,8 @@ const serverMessages: Record<string, string> = {
   "overlay-file-not-image":
     "Ce fichier n'est pas une image PNG ou JPEG valide.",
   "overlay-image-too-large": "L'image dépasse 16 384 pixels de côté.",
-  forbidden:
-    "Seuls les éditeurs et les administrateurs peuvent importer un calque.",
-  unauthenticated: "Votre session a expiré : reconnectez-vous.",
+  forbidden: "Action réservée aux éditeurs.",
+  unauthenticated: "Votre session a expiré.",
 };
 
 export function overlayImportMessage(error: unknown): string {
@@ -28,5 +26,5 @@ export function overlayImportMessage(error: unknown): string {
       return serverMessages[code];
     }
   }
-  return "L'import du calque a échoué. Réessayez.";
+  return "L'import du calque a échoué.";
 }

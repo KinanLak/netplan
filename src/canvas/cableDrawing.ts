@@ -53,8 +53,10 @@ export const freePortsOf = (
 /** What pressing a port of the map does. */
 export type CableStart =
   | { kind: "draw" }
-  | { kind: "unplug"; cable: Cable; label: string }
-  | { kind: "refused"; reason: string };
+  /** `far` names the other end; `label` names the whole cable. */
+  | { kind: "unplug"; cable: Cable; label: string; far: string }
+  /** `deviceId`, when set, is the device whose port table can do it. */
+  | { kind: "refused"; reason: string; deviceId?: DeviceId };
 
 /**
  * What pressing `draft`'s port does: a free port draws a cable from it; a
@@ -80,7 +82,7 @@ export const cableStart = (
   if (cable.source) {
     return {
       kind: "refused",
-      reason: `Le câble de ${near} vient de ${INTEGRATION_LABELS[cable.source.integration]} : il ne se débranche pas dans NetPlan.`,
+      reason: `Le câble de ${near} vient de ${INTEGRATION_LABELS[cable.source.integration]} et ne se débranche pas dans NetPlan.`,
     };
   }
   const far = cable.a.portId === port.id ? cable.b : cable.a;
@@ -89,13 +91,16 @@ export const cableStart = (
   if (!farDevice || !farPort) {
     return {
       kind: "refused",
-      reason: `${near} est câblé vers un autre étage : débranchez-le dans la table des ports.`,
+      reason: `${near} est câblé vers un autre étage.`,
+      deviceId: device.id,
     };
   }
+  const farLabel = endLabel(farDevice.name, farPort, farDevice.type);
   return {
     kind: "unplug",
     cable,
-    label: `${near} ↔ ${endLabel(farDevice.name, farPort, farDevice.type)}`,
+    label: `${near} ↔ ${farLabel}`,
+    far: farLabel,
   };
 };
 

@@ -1,5 +1,7 @@
 import { useId, useState } from "react";
 import type { FormEvent, KeyboardEvent } from "react";
+import { Cursor01Icon } from "@hugeicons/core-free-icons";
+import { IconNote } from "@/components/icon-note";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useMapDocumentActions } from "@/map-session/useMapDocument";
@@ -19,9 +21,10 @@ interface OverlayCalibrationStepProps {
   calibration: OverlayCalibration;
 }
 
+// Which point the calque waits for is not visible on it, so it is said.
 const instructions = [
-  "Cliquez sur le calque au début d'une longueur connue : une cote, l'échelle graphique, un mur.",
-  "Cliquez à l'autre bout de cette longueur.",
+  "Cliquez au début d'une longueur connue",
+  "Cliquez à l'autre bout",
 ];
 
 /** The panel's half of a calibration: what to click, then the real length. */
@@ -61,9 +64,11 @@ export function OverlayCalibrationStep({
         />
       ) : (
         <>
-          <p className="text-xs text-muted-foreground" role="status">
-            {instructions[calibration.points.length]}
-          </p>
+          <div role="status">
+            <IconNote icon={Cursor01Icon} className="text-xs">
+              {instructions[calibration.points.length]}
+            </IconNote>
+          </div>
           <Button variant="outline" size="sm" onClick={cancel}>
             Annuler
           </Button>
@@ -107,7 +112,7 @@ function CalibrationDistanceForm({
     return (
       <>
         <p className="text-xs text-destructive" role="alert">
-          Points trop proches pour mesurer : cliquez deux points plus éloignés.
+          Cliquez deux points plus éloignés.
         </p>
         <Button variant="outline" size="sm" onClick={onCancel}>
           Annuler
@@ -118,10 +123,6 @@ function CalibrationDistanceForm({
 
   return (
     <form className="flex flex-col gap-2" onSubmit={handleSubmit}>
-      <p className="text-xs text-muted-foreground">
-        Mesuré sur le calque : {formatDecimal(measured)} m. Un clic sur le
-        calque recommence.
-      </p>
       <div className="flex flex-col gap-1">
         <label htmlFor={id} className="text-xs text-muted-foreground">
           Distance réelle

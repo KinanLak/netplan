@@ -1,4 +1,8 @@
 import { describe, expect, it } from "bun:test";
+import {
+  COLLISION_LINE_MESSAGE,
+  toRoomFailureMessage,
+} from "@/walls/wallInteraction/messages";
 import type {
   DrawTool,
   FloorId,
@@ -253,9 +257,7 @@ describe("wall interaction", () => {
 
     expect(rejected.state.drawAnchor).toEqual({ x: 10, y: 10 });
     expect(rejected.state.pointerPreview).toEqual({ x: 50, y: 10 });
-    expect(rejected.state.drawMessage).toBe(
-      "Mur refusé : il traverse un équipement.",
-    );
+    expect(rejected.state.drawMessage).toBe(COLLISION_LINE_MESSAGE);
   });
 
   it("adds a room from the anchored drag rectangle", () => {
@@ -306,7 +308,9 @@ describe("wall interaction", () => {
 
     expect(rejected.state.drawAnchor).toEqual({ x: 10, y: 10 });
     expect(rejected.state.pointerPreview).toEqual({ x: 10, y: 50 });
-    expect(rejected.state.drawMessage).toBe("Salle refusée : rectangle vide.");
+    expect(rejected.state.drawMessage).toBe(
+      toRoomFailureMessage("invalid-room"),
+    );
   });
 
   it("suppresses the click that follows a brush drag", () => {
@@ -421,9 +425,7 @@ describe("wall interaction", () => {
       sample(10, 10),
     );
 
-    expect(clicked.state.drawMessage).toBe(
-      "Mur refusé : il traverse un équipement.",
-    );
+    expect(clicked.state.drawMessage).toBe(COLLISION_LINE_MESSAGE);
   });
 
   it("suppresses the click that follows an erase drag", () => {
@@ -526,7 +528,7 @@ describe("wall interaction", () => {
     expect(moved.eraseStrokeLastSample).toBe(null);
   });
 
-  it("reports a missed erase click", () => {
+  it("says nothing of an erase click that misses", () => {
     const { adapter } = createAdapter({ eraseChanged: false });
 
     const clicked = clickWallPane(
@@ -536,7 +538,7 @@ describe("wall interaction", () => {
       sample(10, 10),
     );
 
-    expect(clicked.state.drawMessage).toBe("Aucun bloc de mur à supprimer.");
+    expect(clicked.state.drawMessage).toBeNull();
     expect(clicked.state.pointerPreview).toBe(null);
   });
 

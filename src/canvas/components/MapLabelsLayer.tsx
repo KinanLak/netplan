@@ -13,7 +13,6 @@ import { useIsEditMode, useIsLabelToolActive } from "@/store/selectors";
 import { useMapStore } from "@/store/useMapStore";
 import type { LabelId, MapLabel, Position } from "@/types/map";
 import { cn } from "@/lib/utils";
-import { useDrawingHelpClass } from "./drawingHelp";
 
 /** A press that moves less than this, on screen, is a click, not a drag. */
 const DRAG_THRESHOLD_PX = 3;
@@ -38,7 +37,6 @@ export function MapLabelsLayer() {
   const { commands } = useMapDocumentActions();
   const [draft, setDraft] = useState<Position | null>(null);
   const [editing, setEditing] = useState<LabelId | null>(null);
-  const helpClass = useDrawingHelpClass();
 
   const canEdit = isEditMode && isReady;
 
@@ -87,43 +85,36 @@ export function MapLabelsLayer() {
   const labels = document.labels.filter(
     (label) => label.floorId === document.floorId,
   );
-  if (labels.length === 0 && !draft && !isToolActive) return null;
+  if (labels.length === 0 && !draft) return null;
 
   return (
-    <>
-      <ViewportPortal>
-        {labels.map((label) =>
-          editing === label.id && canEdit ? (
-            <LabelInput
-              key={label.id}
-              position={label.position}
-              initial={label.text}
-              onDone={(text) => finishEdit(label, text)}
-              onDelete={() => {
-                setEditing(null);
-                commands.deleteLabel(label.id);
-              }}
-            />
-          ) : (
-            <PlacedLabel
-              key={label.id}
-              label={label}
-              canEdit={canEdit}
-              onMove={(position) => commands.patchLabel(label.id, { position })}
-              onEdit={() => setEditing(label.id)}
-            />
-          ),
-        )}
-        {draft && canEdit ? (
-          <LabelInput position={draft} initial="" onDone={finishDraft} />
-        ) : null}
-      </ViewportPortal>
-      {isToolActive && canEdit && !draft ? (
-        <div className={cn(helpClass, "text-foreground")}>
-          Cliquez sur le plan où poser le texte.
-        </div>
+    <ViewportPortal>
+      {labels.map((label) =>
+        editing === label.id && canEdit ? (
+          <LabelInput
+            key={label.id}
+            position={label.position}
+            initial={label.text}
+            onDone={(text) => finishEdit(label, text)}
+            onDelete={() => {
+              setEditing(null);
+              commands.deleteLabel(label.id);
+            }}
+          />
+        ) : (
+          <PlacedLabel
+            key={label.id}
+            label={label}
+            canEdit={canEdit}
+            onMove={(position) => commands.patchLabel(label.id, { position })}
+            onEdit={() => setEditing(label.id)}
+          />
+        ),
+      )}
+      {draft && canEdit ? (
+        <LabelInput position={draft} initial="" onDone={finishDraft} />
       ) : null}
-    </>
+    </ViewportPortal>
   );
 }
 
@@ -193,11 +184,7 @@ function PlacedLabel({
         setOffset(null);
       }}
       onDoubleClick={canEdit ? onEdit : undefined}
-      title={
-        canEdit
-          ? "Glissez pour déplacer, double-cliquez pour renommer"
-          : undefined
-      }
+      title={canEdit ? "Double-cliquez pour renommer" : undefined}
     >
       {label.text}
     </div>

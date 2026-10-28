@@ -70,8 +70,8 @@ export function DeviceContextMenu({ deviceId }: { deviceId: DeviceId }) {
             }
           >
             {shownCablesDeviceId === device.id
-              ? "Masquer les câbles du plan"
-              : "Voir les câbles sur le plan"}
+              ? "Masquer les câbles"
+              : "Afficher les câbles"}
             <ShortcutHintInline action="toggle-device-cables" />
           </ContextMenuItem>
         ) : null}

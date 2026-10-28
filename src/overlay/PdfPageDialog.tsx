@@ -58,10 +58,8 @@ export function PdfPageDialog({
     <Dialog open onOpenChange={(open) => !open && onCancel()}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Choisir la page du plan</DialogTitle>
-          <DialogDescription className="truncate">
-            {fileName} — {pdf.numPages} pages
-          </DialogDescription>
+          <DialogTitle>Choisir une page</DialogTitle>
+          <DialogDescription className="truncate">{fileName}</DialogDescription>
         </DialogHeader>
         <div className="grid max-h-[60vh] grid-cols-2 gap-3 overflow-y-auto sm:grid-cols-4">
           {pages.map((page) => {

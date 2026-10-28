@@ -2,6 +2,7 @@ import { describe, expect, it, mock } from "bun:test";
 import type { FloorId, WallCommandResult } from "@/types/map";
 import { snapPositionToWallGrid } from "@/walls/gridGeometry";
 import { clickWallPane, moveWallPointer, pressWallPane } from "./gestures";
+import { COLLISION_LINE_MESSAGE } from "./messages";
 import {
   releaseWallPointer,
   areWallInteractionStatesEqual,
@@ -286,7 +287,7 @@ describe("press and drag", () => {
     }
     // Into the device, out of it, and into it again: two flashes.
     expect(state.refusals).toBe(2);
-    expect(state.drawMessage).toBe("Mur refusé : il traverse un équipement.");
+    expect(state.drawMessage).toBe(COLLISION_LINE_MESSAGE);
 
     // Released, then a new stroke straight into the same device flashes too.
     state = releaseWallPointer(state, context);

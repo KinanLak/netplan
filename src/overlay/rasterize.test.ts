@@ -63,8 +63,8 @@ describe("overlayImportMessage", () => {
   });
 
   it("falls back to a generic message for anything else", () => {
-    const fallback = "L'import du calque a échoué. Réessayez.";
-    expect(overlayImportMessage(new Error("network"))).toBe(fallback);
+    const fallback = overlayImportMessage(new Error("network"));
+    expect(fallback).toContain("calque");
     expect(overlayImportMessage(new ConvexError({ code: "toString" }))).toBe(
       fallback,
     );

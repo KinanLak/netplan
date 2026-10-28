@@ -172,7 +172,7 @@ function OverlayGizmoFrame({ overlay }: { overlay: FloorOverlay }) {
         />
         <div
           className="absolute left-1/2 -translate-1/2 cursor-grab rounded-full border-primary bg-background active:cursor-grabbing"
-          title="Faire pivoter le calque (Maj : par pas de 15°)"
+          title="Faire pivoter le calque, par pas de 15° avec Maj"
           style={{
             ...handleStyle(ROTATE_HANDLE_SIZE),
             top: -px(ROTATE_HANDLE_GAP),

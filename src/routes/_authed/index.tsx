@@ -463,7 +463,7 @@ function ModeButton({
       className="relative flex items-center gap-2 rounded-lg border border-primary bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-lg focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-hidden disabled:cursor-not-allowed disabled:opacity-60"
       title={
         frozen
-          ? "Hors connexion : le plan est en lecture seule"
+          ? "Hors connexion"
           : isEditMode
             ? "Terminer les modifications"
             : "Modifier le plan"
@@ -484,16 +484,8 @@ function ModeButton({
 }
 
 function ReadOnlyBadge() {
-  const me = useCurrentUser();
   return (
-    <div
-      className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-muted-foreground shadow-lg"
-      title={
-        me?.sso
-          ? "Votre rôle permet de consulter le plan, pas de le modifier. Il vient de Keycloak : demandez à un administrateur de vous en donner un autre."
-          : "Votre rôle permet de consulter le plan, pas de le modifier"
-      }
-    >
+    <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-muted-foreground shadow-lg">
       <HugeiconsIcon
         icon={ViewIcon}
         size={20}
@@ -538,22 +530,17 @@ function NoSite() {
   const allArchived = (sites?.length ?? 0) > 0;
   return (
     <main className="flex h-screen w-screen flex-col items-center justify-center gap-3 bg-background p-6 text-center">
-      <h1 className="text-lg font-semibold">
-        {allArchived ? "Tous les sites sont archivés" : "Aucun site"}
-      </h1>
-      <p className="max-w-sm text-sm text-muted-foreground">
-        {allArchived
-          ? admin
-            ? "Désarchivez un site ou créez-en un pour retrouver un plan."
-            : "Demandez à un administrateur de désarchiver un site."
-          : admin
-            ? "Créez un premier site pour commencer à dessiner son plan."
-            : "Aucun site n'est encore configuré. Demandez à un administrateur d'en créer un."}
-      </p>
+      {/* An admin gets the way in; anyone else only learns why the map is
+          missing, since nothing here can bring it back (ADR 0041). */}
+      {admin ? null : (
+        <h1 className="text-lg font-semibold">
+          {allArchived ? "Tous les sites sont archivés" : "Aucun site"}
+        </h1>
+      )}
       <div className="flex flex-wrap justify-center gap-2">
         {admin ? (
           <Link to="/admin/sites" className={buttonVariants()}>
-            {allArchived ? "Voir les sites" : "Créer un site"}
+            {allArchived ? "Désarchiver un site" : "Créer un site"}
           </Link>
         ) : null}
         <Button

@@ -30,7 +30,7 @@ export function OverlayPanel() {
 }
 
 const workingLabels = {
-  reading: "Conversion du plan…",
+  reading: "Conversion du fichier…",
   uploading: "Envoi du calque…",
 } as const;
 
@@ -90,7 +90,7 @@ function OverlayPanelContent() {
       {overlay ? (
         <div className="min-w-0">
           <p className="truncate" title={image?.name}>
-            {image?.name || "Plan importé"}
+            {image?.name || "Calque"}
           </p>
           {/* Its size on the plan, not its pixels: a SVG has none (A26). */}
           <p className="text-xs text-muted-foreground">
@@ -102,12 +102,7 @@ function OverlayPanelContent() {
             {"\u00a0"}m
           </p>
         </div>
-      ) : (
-        <p className="text-muted-foreground">
-          Aucun calque sur cet étage. Importez un plan (PNG, JPG, SVG ou PDF)
-          pour dessiner les murs par-dessus.
-        </p>
-      )}
+      ) : null}
 
       <div className="flex gap-2">
         <Button
@@ -118,7 +113,7 @@ function OverlayPanelContent() {
           onClick={() => inputRef.current?.click()}
         >
           <HugeiconsIcon icon={FileImportIcon} strokeWidth={2} />
-          {overlay ? "Remplacer…" : "Importer un plan…"}
+          {overlay ? "Remplacer le calque…" : "Importer un calque…"}
         </Button>
         {overlay ? (
           <Button
@@ -136,13 +131,6 @@ function OverlayPanelContent() {
 
       {overlay ? <OverlayControls overlay={overlay} isReady={isReady} /> : null}
 
-      {overlay ? (
-        <p className="text-xs text-muted-foreground">
-          {overlay.locked
-            ? "Calque verrouillé : déverrouillez-le pour le déplacer, le remplacer ou le supprimer."
-            : "Faites glisser le calque pour le déplacer, un coin pour le redimensionner, la poignée du haut pour le faire pivoter."}
-        </p>
-      ) : null}
       {isWorking ? (
         <p className="text-xs text-muted-foreground" role="status">
           {workingLabels[state.step]}

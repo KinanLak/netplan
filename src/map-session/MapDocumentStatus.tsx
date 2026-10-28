@@ -17,9 +17,7 @@ const SETTLED_MS = 1_000;
 
 /** The server rejects map operations with French sentences (ADR 0026). */
 export const getRejectedOperationMessage = (message: string): string =>
-  message === FORBIDDEN_REJECTION
-    ? "Action refusée : votre rôle ne permet pas de modifier le plan."
-    : message;
+  message === FORBIDDEN_REJECTION ? "Action réservée aux éditeurs." : message;
 
 /**
  * `floorless` when the map shows no floor: there is no document to load, but
@@ -31,8 +29,7 @@ export function MapDocumentStatus({
   floorless?: boolean;
 }) {
   const isReady = useMapDocumentReady() || floorless;
-  const { isSaving, hasBackgroundPendingOperations, rejectedMessage } =
-    useMapDocumentSyncStatus();
+  const { isSaving, rejectedMessage } = useMapDocumentSyncStatus();
   const { dismissRejectedOperation } = useMapDocumentActions();
 
   // A refusal is a toast like every other one; the circle below only says
@@ -47,11 +44,7 @@ export function MapDocumentStatus({
     dismissRejectedOperation();
   }, [rejectedMessage, dismissRejectedOperation]);
 
-  const statusMessage = getDocumentActivityMessage({
-    isReady,
-    isSaving,
-    hasBackgroundPendingOperations,
-  });
+  const statusMessage = getDocumentActivityMessage({ isReady, isSaving });
   const busy = statusMessage !== null;
   const drawerOpen = useSelectedDeviceId() !== null;
 
@@ -118,15 +111,10 @@ export function MapDocumentStatus({
 export const getDocumentActivityMessage = ({
   isReady,
   isSaving,
-  hasBackgroundPendingOperations,
 }: {
   isReady: boolean;
   isSaving: boolean;
-  hasBackgroundPendingOperations: boolean;
 }): string | null => {
   if (!isReady) return "Chargement du plan…";
-  if (!isSaving) return null;
-  return hasBackgroundPendingOperations
-    ? "Enregistrement de modifications sur plusieurs étages…"
-    : "Enregistrement en cours…";
+  return isSaving ? "Enregistrement…" : null;
 };

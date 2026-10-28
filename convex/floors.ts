@@ -109,7 +109,7 @@ export const remove = editorMutation({
     const content = describeContent(await floorContent(ctx, id));
     if (content) {
       throw new ConvexError(
-        `L'étage « ${floor.name} » porte encore ${content} : videz-le avant de le supprimer.`,
+        `L'étage « ${floor.name} » porte encore ${content}.`,
       );
     }
     await deleteEmptyFloor(ctx, floor);

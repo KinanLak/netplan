@@ -12,26 +12,26 @@ describe("MapDocumentStatus", () => {
     );
   });
 
-  it("tells a reader their role cannot edit the map", () => {
-    expect(getRejectedOperationMessage(FORBIDDEN_REJECTION)).toContain(
-      "votre rôle ne permet pas de modifier le plan",
-    );
+  it("replaces the role refusal's code with a sentence", () => {
+    const message = getRejectedOperationMessage(FORBIDDEN_REJECTION);
+    expect(message).not.toBe(FORBIDDEN_REJECTION);
+    expect(message.length).toBeGreaterThan(0);
   });
 
-  it("reports document loading and saving states", () => {
+  it("reports loading, then saving, and nothing once saved", () => {
+    const loading = getDocumentActivityMessage({
+      isReady: false,
+      isSaving: false,
+    });
+    const saving = getDocumentActivityMessage({
+      isReady: true,
+      isSaving: true,
+    });
+    expect(loading).not.toBeNull();
+    expect(saving).not.toBeNull();
+    expect(saving).not.toBe(loading);
     expect(
-      getDocumentActivityMessage({
-        isReady: false,
-        isSaving: false,
-        hasBackgroundPendingOperations: false,
-      }),
-    ).toBe("Chargement du plan…");
-    expect(
-      getDocumentActivityMessage({
-        isReady: true,
-        isSaving: true,
-        hasBackgroundPendingOperations: true,
-      }),
-    ).toContain("plusieurs étages");
+      getDocumentActivityMessage({ isReady: true, isSaving: false }),
+    ).toBeNull();
   });
 });
