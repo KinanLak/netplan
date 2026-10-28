@@ -147,11 +147,14 @@ or its read failed:
 - **"Sa découverte n'a pas fini à temps."** (amber): `last_discovered` did
   not change within 2 minutes. A slow poller, or a LibreNMS that does not
   report it ([Integrations](integrations.md)).
-- **"LibreNMS ne rafraîchit plus la table d'adresses de ce switch :
-  vérifiez sa découverte dans LibreNMS."** (amber):
-  discoveries do not rewrite the forwarding table on this LibreNMS, and its
-  devices go offline after two cycles. Run `scripts/check-librenms.ts
-  --discover`.
+- **"· Table MAC non rafraîchie"** (muted, after "lu"): the discovery
+  moved nothing in the forwarding table, so none of its entries counts and
+  the devices behind the switch go offline after two cycles. It clears by
+  itself with the next discovery that refreshes the table; if it stays, run
+  `scripts/check-librenms.ts --discover`.
+- **"· Table MAC non datée"** (muted): LibreNMS gave the entries no
+  timestamps, so the whole table counts, old entries included, and a device
+  switched off may stay online.
 
 **Switch counts.** The first line counts the site's switches by how the
 last cycle read them: "lus", "en échec" for a mapped switch it could not

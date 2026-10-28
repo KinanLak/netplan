@@ -905,6 +905,7 @@ export const collectFromLibreNMS = async (
 
   // What each device's line in the step says after its name.
   const notes = new Map<number, Array<string>>();
+  const macTables = new Map<number, "undated" | "stale">();
   // A device gone from LibreNMS fails its discovery and its read alike.
   const note = (deviceId: number, phrase: string) => {
     const current = notes.get(deviceId) ?? [];
@@ -1011,11 +1012,11 @@ export const collectFromLibreNMS = async (
       finished.has(device.id),
     );
     if (table) tables.push({ deviceId: device.id, table });
-    if (entries.length > 0 && fresh.length === 0) {
-      note(
-        device.id,
-        "LibreNMS ne rafraîchit plus la table d'adresses de ce switch : vérifiez sa découverte dans LibreNMS.",
-      );
+    // Both recover by themselves with the next discovery that dates or
+    // refreshes the table, so they are said quietly rather than noted.
+    if (entries.length > 0 && !table) macTables.set(device.id, "undated");
+    else if (entries.length > 0 && fresh.length === 0) {
+      macTables.set(device.id, "stale");
     }
     fdb.push(...fresh);
     ports.push(...own);
@@ -1054,11 +1055,13 @@ export const collectFromLibreNMS = async (
   }
   const switches = plan.devices.map((device) => {
     const deviceNotes = notes.get(device.id) ?? [];
+    const macTable = macTables.get(device.id);
     return {
       name: device.name,
       ok: !failed.has(device.id),
       notes: deviceNotes,
       ...(deviceNotes.includes(MISSING_NOTE) && { missing: true }),
+      ...(macTable && { macTable }),
     };
   });
   // Each switch's own trouble is in `switches`; the step says how many.

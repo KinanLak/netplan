@@ -279,6 +279,13 @@ type Polled = NonNullable<
   NonNullable<SiteHealth["last"]>["steps"][number]["switches"]
 >;
 
+// How the MAC table's freshness rule fell back, said in passing: it comes
+// back by itself, so it is no remark (ADR 0038).
+const MAC_TABLE_TEXT = {
+  undated: "Table MAC non datée",
+  stale: "Table MAC non rafraîchie",
+} as const;
+
 /**
  * Each polled switch's result in the last LibreNMS read, failures first: a
  * red dot for a switch not read, amber for one read with a remark.
@@ -328,6 +335,7 @@ function PolledSwitches({
                 {entry.notes.length > 0
                   ? ` : ${entry.notes.join(" ")}`
                   : " : lu"}
+                {entry.macTable ? ` · ${MAC_TABLE_TEXT[entry.macTable]}` : ""}
               </span>
             </span>
           </li>

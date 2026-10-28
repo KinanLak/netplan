@@ -35,6 +35,12 @@ export const switchResult = v.object({
   notes: v.array(v.string()),
   /** LibreNMS no longer has it: the switch mapping needs a look. */
   missing: v.optional(v.boolean()),
+  /**
+   * How its MAC table's freshness rule fell back (ADR 0038): `undated`, no
+   * timestamps, so the whole table counts; `stale`, the discovery refreshed
+   * nothing, so none of it does. Infrastructure noise, not a remark.
+   */
+  macTable: v.optional(v.union(v.literal("undated"), v.literal("stale"))),
 });
 
 /** What one source answered during a collection cycle. */
