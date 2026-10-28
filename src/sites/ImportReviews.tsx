@@ -90,20 +90,21 @@ function ReviewItem({ siteId, review }: { siteId: string; review: Review }) {
                 ? `correspond à « ${candidates[0]?.name} », qui le contredit.`
                 : "ne correspond plus à aucun équipement."}
         </p>
-        <p className="truncate text-muted-foreground">
-          {details.join(" · ")}
+        <p className="flex min-w-0 flex-wrap gap-x-3 text-muted-foreground">
+          {details.map((part, index) => (
+            <span key={index} className="truncate">
+              {part}
+            </span>
+          ))}
           {device.url ? (
-            <>
-              {" · "}
-              <a
-                href={device.url}
-                target="_blank"
-                rel="noreferrer"
-                className="underline underline-offset-2"
-              >
-                Voir dans NetBox
-              </a>
-            </>
+            <a
+              href={device.url}
+              target="_blank"
+              rel="noreferrer"
+              className="underline underline-offset-2"
+            >
+              Voir dans NetBox
+            </a>
           ) : null}
         </p>
       </div>

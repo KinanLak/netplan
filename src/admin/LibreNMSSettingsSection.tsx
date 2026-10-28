@@ -241,9 +241,7 @@ function SettingsForm({
           const gone = savedOf.get(device.id);
           const suggestion = suggestions.get(device.id);
           const others = sharing(device.id, id);
-          const where = [device.hostname, device.floor]
-            .filter(Boolean)
-            .join(" · ");
+          const where = [device.hostname, device.floor].filter(Boolean);
           return (
             <div
               key={device.id}
@@ -251,8 +249,13 @@ function SettingsForm({
             >
               <div className="min-w-0 sm:pt-2">
                 <p>{device.name}</p>
-                {where ? (
-                  <p className="text-xs text-muted-foreground">{where}</p>
+                {where.length > 0 ? (
+                  <p className="flex flex-wrap gap-x-3 text-xs text-muted-foreground">
+                    {where.map((part, index) => (
+                      // A hostname and a floor may read the same.
+                      <span key={index}>{part}</span>
+                    ))}
+                  </p>
                 ) : null}
               </div>
               <div className="space-y-1 sm:w-80">

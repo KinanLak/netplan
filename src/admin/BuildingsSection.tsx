@@ -38,10 +38,12 @@ export function BuildingsSection({ siteId }: { siteId: string }) {
             <li key={building.id} className="space-y-1 px-4 py-3">
               <p className="font-medium">{building.name}</p>
               {building.floors.length > 0 ? (
-                <p className="text-muted-foreground">
-                  {building.floors
-                    .map((floor) => `${floor.name} (${devices(floor.devices)})`)
-                    .join(" · ")}
+                <p className="flex flex-wrap gap-x-4 text-muted-foreground">
+                  {building.floors.map((floor) => (
+                    <span key={floor.id}>
+                      {floor.name} ({devices(floor.devices)})
+                    </span>
+                  ))}
                 </p>
               ) : null}
             </li>

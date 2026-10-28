@@ -277,7 +277,7 @@ describe("describeSources", () => {
       {
         label: "LibreNMS",
         detail:
-          "6 switchs lus, 1 avec remarque · il y a 3 min · échec à la dernière collecte",
+          "6 switchs lus, 1 avec remarque, il y a 3 min, échec à la dernière collecte",
         failed: true,
       },
     ]);

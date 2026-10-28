@@ -181,11 +181,11 @@ export const describeSources = (
       const { read, noted } = freshness.switches;
       detail = `${plural(read, "switch")} lu${read > 1 ? "s" : ""}`;
       if (noted > 0) detail += `, ${noted} avec remarque`;
-      if (age) detail += ` · ${age}`;
+      if (age) detail += `, ${age}`;
     } else {
       detail = age ? `Importé ${age}` : "Rien d'importé";
     }
-    if (failed) detail += " · échec à la dernière collecte";
+    if (failed) detail += ", échec à la dernière collecte";
     return { label: INTEGRATION_LABELS[source], detail, failed };
   });
 
