@@ -416,8 +416,10 @@ export default defineSchema({
     .index("by_floor", ["floorId"]),
 
   // Sign-in and password-reset attempts per identifier typed (ADR 0036).
-  // Purged an hour after their last attempt.
-  signInAttempts: defineTable({
+  // Purged an hour after their last attempt. It replaces `signInAttempts`
+  // (ADR 0031), whose rows a deployment may still hold: a new name keeps
+  // them from failing the schema.
+  authAttempts: defineTable({
     kind: v.union(v.literal("sign-in"), v.literal("password-reset")),
     identifier: v.string(),
     count: v.number(),

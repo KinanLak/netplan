@@ -33,6 +33,9 @@ identifier without an account counts, waits and answers exactly like one
 with. The refusal carries the wait in seconds, and the forms say it in
 minutes.
 
+Without a limiter, a route that says whether an account exists would list
+them all, so the username plugin's `/is-username-available` is off.
+
 Someone who knows an identifier can still keep its owner waiting, at the
 cost of one attempt per wait. That is the price of a limit without
 addresses. Each identifier counts alone, so the other one an account has
@@ -115,8 +118,13 @@ included, and realm roles already arrive in `realm_access`.
   « at each login and each hourly refresh ».
 - Keycloak must keep granting `offline_access` to Netplan's users. A realm
   that removes it from the default roles refuses their sign-in.
-- `signInAttempts` holds one row per identifier and kind tried, purged an
-  hour after its last attempt. The better-auth `rateLimit` table is gone.
+- `authAttempts` holds one row per identifier and kind tried, purged an
+  hour after its last attempt. It replaces `signInAttempts`, which a
+  deployment may still hold and which nothing reads. The better-auth
+  `rateLimit` table is gone.
+- No route has an address-keyed limit any more, so the username plugin's
+  `/is-username-available`, which would answer which accounts exist, is
+  disabled.
 - A local account can move to Keycloak without losing its history. There is
   no move back to a password other than cancelling a pending handover.
 - A realm that granted Netplan roles through groups or the flat `roles`

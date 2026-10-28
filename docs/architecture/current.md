@@ -232,7 +232,7 @@ Built by the UX lot U1 (ADR 0031) and reworked by U8 (ADR 0037).
   page loaded with, and Convex gets a constant identity from
   `src/lib/session-token.ts` that survives an outage (ADR 0037).
 - **Sign-in.** better-auth's address-keyed limiter is off; a `before` hook
-  counts sign-in and reset attempts per identifier in `signInAttempts`, and
+  counts sign-in and reset attempts per identifier in `authAttempts`, and
   an `after` hook wipes them on a successful sign-in (ADR 0036). A
   session slides 24 hours from its last use, capped at 7 days from login by
   a session update hook. A function refusing a lost session says whether

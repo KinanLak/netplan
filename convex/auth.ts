@@ -166,7 +166,7 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
         const limited = limitedAttempt(endpoint.path, endpoint.body);
         if (!limited) return;
         const result = await requireActionCtx(ctx).runMutation(
-          internal.signInAttempts.consume,
+          internal.authAttempts.consume,
           limited,
         );
         if (!result.allowed) {
@@ -183,7 +183,7 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
           return;
         }
         await requireActionCtx(ctx).runMutation(
-          internal.signInAttempts.clear,
+          internal.authAttempts.clear,
           limited,
         );
       }),
@@ -196,7 +196,9 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
     },
     // Linking from a signed-in session does not check the setting above, and
     // generic OAuth also registers Keycloak with the social linking route.
-    disabledPaths: ["/oauth2/link", "/link-social"],
+    // Without a per-address limit, asking whether a username is free would
+    // list the accounts one by one; the sign-in page never asks (ADR 0036).
+    disabledPaths: ["/oauth2/link", "/link-social", "/is-username-available"],
     // OAuth failures that happen before the sign-in state is read (Keycloak
     // answering access_denied, a lost state) go here, not to an English
     // library page; the login page explains the code.

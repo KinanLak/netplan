@@ -13,7 +13,7 @@ const attemptKind = v.union(v.literal("sign-in"), v.literal("password-reset"));
 
 const recordOf = (ctx: MutationCtx, kind: AttemptKind, identifier: string) =>
   ctx.db
-    .query("signInAttempts")
+    .query("authAttempts")
     .withIndex("by_kind_and_identifier", (q) =>
       q.eq("kind", kind).eq("identifier", normalizeIdentifier(identifier)),
     )
@@ -38,7 +38,7 @@ export const consume = internalMutation({
     }
     if (row) await ctx.db.patch(row._id, result.next);
     else {
-      await ctx.db.insert("signInAttempts", {
+      await ctx.db.insert("authAttempts", {
         kind: args.kind,
         identifier: normalizeIdentifier(args.identifier),
         ...result.next,
@@ -70,7 +70,7 @@ export const purge = internalMutation({
   returns: v.null(),
   handler: async (ctx) => {
     const forgotten = await ctx.db
-      .query("signInAttempts")
+      .query("authAttempts")
       .withIndex("by_last_attempt", (q) =>
         q.lt("lastAttemptAt", Date.now() - ATTEMPTS_FORGOTTEN_AFTER_MS),
       )
@@ -78,7 +78,7 @@ export const purge = internalMutation({
     // The longest wait is shorter than that, so none is still running.
     await Promise.all(forgotten.map((row) => ctx.db.delete(row._id)));
     if (forgotten.length === PURGE_BATCH) {
-      await ctx.scheduler.runAfter(0, internal.signInAttempts.purge, {});
+      await ctx.scheduler.runAfter(0, internal.authAttempts.purge, {});
     }
     return null;
   },
