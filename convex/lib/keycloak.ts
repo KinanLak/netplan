@@ -19,10 +19,14 @@ export function readKeycloakConfig(
   return { issuer, clientId, clientSecret };
 }
 
-/** The Keycloak role names an admin chose; null grants nothing. */
+/**
+ * The Keycloak role names an admin chose, null granting nothing, and
+ * whether a group of that name counts as well (ADR 0036).
+ */
 export type KeycloakRoleMapping = {
   editorRole: string | null;
   adminRole: string | null;
+  acceptGroups: boolean;
 };
 
 function jwtClaims(token: string | null | undefined): Record<string, unknown> {
@@ -52,14 +56,17 @@ function stringsAt(value: unknown, path: ReadonlyArray<string>): Array<string> {
 }
 
 /**
- * The role and group names a Keycloak user carries: realm roles, this
- * client's roles, and the flat `roles` and `groups` claims a realm adds with
- * mappers. The signatures are not checked: Netplan received these tokens
+ * The names a Keycloak user carries that may grant a role: realm roles and
+ * this client's roles, plus groups when the admin accepts them (ADR 0036).
+ * A group is often creatable by people who cannot manage roles, and the
+ * flat `roles` claim a mapper adds can carry anything, so neither counts by
+ * default. The signatures are not checked: Netplan received these tokens
  * from the token endpoint itself, over the connection it opened.
  */
 export function keycloakRoleNames(
   tokens: { accessToken?: string | null; idToken?: string | null },
   clientId: string,
+  { acceptGroups }: { acceptGroups: boolean },
 ): Set<string> {
   const names = new Set<string>();
   for (const claims of [
@@ -69,9 +76,11 @@ export function keycloakRoleNames(
     for (const name of [
       ...stringsAt(claims, ["realm_access", "roles"]),
       ...stringsAt(claims, ["resource_access", clientId, "roles"]),
-      ...stringsAt(claims, ["roles"]),
-      ...stringsAt(claims, ["groups"]),
     ]) {
+      names.add(name);
+    }
+    if (!acceptGroups) continue;
+    for (const name of stringsAt(claims, ["groups"])) {
       names.add(name);
       // Keycloak's group mapper writes full paths ("/netplan-admins").
       if (name.startsWith("/")) names.add(name.slice(1));

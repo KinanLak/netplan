@@ -89,7 +89,7 @@ async function applyKeycloakRole(
   if (!account) return;
   const mapping = await runQuery(internal.authSettings.keycloakRoleMapping, {});
   const role = roleFromKeycloak(
-    keycloakRoleNames(account, config.clientId),
+    keycloakRoleNames(account, config.clientId, mapping),
     mapping,
   );
   await runMutation(components.betterAuth.adapter.updateOne, {

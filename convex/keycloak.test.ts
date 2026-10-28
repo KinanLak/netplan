@@ -26,7 +26,14 @@ const jwt = (claims: Record<string, unknown>) =>
 
 // The Keycloak the next callback talks to: its discovery document, and a
 // token endpoint that answers with the profile and realm roles below.
-let nextLogin = { sub: "", email: "", name: "", roles: [] as Array<string> };
+type Login = {
+  sub: string;
+  email: string;
+  name: string;
+  roles: Array<string>;
+  groups?: Array<string>;
+};
+let nextLogin: Login = { sub: "", email: "", name: "", roles: [] };
 const realFetch = globalThis.fetch;
 // The test DOM's Request and Response drop Cookie and Set-Cookie as a
 // browser's do; the OAuth state round trip needs the server's own.
@@ -56,12 +63,12 @@ beforeAll(() => {
         );
       }
       if (url === `${ISSUER}/protocol/openid-connect/token`) {
-        const { sub, email, name, roles } = nextLogin;
+        const { sub, email, name, roles, groups } = nextLogin;
         return Promise.resolve(
           Response.json({
             token_type: "Bearer",
             expires_in: 300,
-            access_token: jwt({ sub, realm_access: { roles } }),
+            access_token: jwt({ sub, realm_access: { roles }, groups }),
             id_token: jwt({ sub, email, email_verified: true, name }),
           }),
         );
@@ -81,7 +88,7 @@ afterAll(() => {
  * Signs in through Keycloak as the login page does; answers the redirect and
  * the session cookie it sets.
  */
-async function keycloakLogin(t: TestBackend, login: typeof nextLogin) {
+async function keycloakLogin(t: TestBackend, login: Login) {
   nextLogin = login;
   const start = await post(t, "/sign-in/oauth2", {
     providerId: "keycloak",
@@ -143,6 +150,7 @@ describe("Keycloak sign-in", () => {
     await admin.mutation(api.authSettings.setKeycloakRoleMapping, {
       editorRole: "netplan-editor",
       adminRole: "netplan-admin",
+      acceptGroups: false,
     });
     await keycloakLogin(t, { ...camille, roles: ["netplan-editor"] });
     expect((await userByEmail(t, camille.email))?.role).toBe("editor");
@@ -153,6 +161,30 @@ describe("Keycloak sign-in", () => {
     expect((await userByEmail(t, camille.email))?.role).toBe("admin");
     await keycloakLogin(t, { ...camille, roles: [] });
     expect((await userByEmail(t, camille.email))?.role).toBe("reader");
+  });
+
+  it("counts a group named like a role only when the admin accepts groups", async () => {
+    const t = withMail();
+    const admin = await asAdmin(t);
+    const mapping = {
+      editorRole: "netplan-editor",
+      adminRole: "netplan-admin",
+    };
+    const inAdminGroup = { ...camille, roles: [], groups: ["/netplan-admin"] };
+
+    await admin.mutation(api.authSettings.setKeycloakRoleMapping, {
+      ...mapping,
+      acceptGroups: false,
+    });
+    await keycloakLogin(t, inAdminGroup);
+    expect((await userByEmail(t, camille.email))?.role).toBe("reader");
+
+    await admin.mutation(api.authSettings.setKeycloakRoleMapping, {
+      ...mapping,
+      acceptGroups: true,
+    });
+    await keycloakLogin(t, inAdminGroup);
+    expect((await userByEmail(t, camille.email))?.role).toBe("admin");
   });
 
   it("refuses a login whose email a local account uses", async () => {
@@ -256,6 +288,7 @@ describe("Keycloak role mapping", () => {
     await admin.mutation(api.authSettings.setKeycloakRoleMapping, {
       editorRole: " netplan-editor ",
       adminRole: " ",
+      acceptGroups: false,
     });
     expect(await admin.query(api.authSettings.keycloak, {})).toEqual({
       issuer: ISSUER,
@@ -263,6 +296,7 @@ describe("Keycloak role mapping", () => {
       redirectUri: `${SITE}/api/auth/oauth2/callback/keycloak`,
       editorRole: "netplan-editor",
       adminRole: null,
+      acceptGroups: false,
     });
   });
 
@@ -273,6 +307,7 @@ describe("Keycloak role mapping", () => {
       admin.mutation(api.authSettings.setKeycloakRoleMapping, {
         editorRole: "netplan",
         adminRole: "netplan",
+        acceptGroups: false,
       }),
     ).rejects.toThrow("deux rôles différents");
   });
@@ -283,44 +318,54 @@ describe("Keycloak roles", () => {
     accessToken: jwt(claims),
   });
 
-  it("reads realm, client, roles and groups claims", () => {
-    const names = keycloakRoleNames(
-      {
-        accessToken: jwt({
-          realm_access: { roles: ["realm-role"] },
-          resource_access: {
-            netplan: { roles: ["client-role"] },
-            other: { roles: ["other-client"] },
-          },
-        }),
-        idToken: jwt({ roles: ["flat-role"], groups: ["/netplan-admins"] }),
-      },
-      "netplan",
-    );
-    expect([...names].sort()).toEqual(
-      [
-        "/netplan-admins",
-        "client-role",
-        "flat-role",
-        "netplan-admins",
-        "realm-role",
-      ].sort(),
+  it("reads realm and client roles, and groups only when accepted", () => {
+    const tokens = {
+      accessToken: jwt({
+        realm_access: { roles: ["realm-role"] },
+        resource_access: {
+          netplan: { roles: ["client-role"] },
+          other: { roles: ["other-client"] },
+        },
+      }),
+      idToken: jwt({ roles: ["flat-role"], groups: ["/netplan-admins"] }),
+    };
+    const names = (acceptGroups: boolean) =>
+      [...keycloakRoleNames(tokens, "netplan", { acceptGroups })].sort();
+    expect(names(false)).toEqual(["client-role", "realm-role"]);
+    expect(names(true)).toEqual(
+      ["/netplan-admins", "client-role", "netplan-admins", "realm-role"].sort(),
     );
     expect(
-      keycloakRoleNames({ accessToken: "not-a-jwt", idToken: null }, "netplan")
-        .size,
+      keycloakRoleNames(
+        { accessToken: "not-a-jwt", idToken: null },
+        "netplan",
+        {
+          acceptGroups: true,
+        },
+      ).size,
     ).toBe(0);
   });
 
   it("lets Admin win and gives Lecteur without a mapped name", () => {
-    const mapping = { editorRole: "ed", adminRole: "ad" };
+    const mapping = { editorRole: "ed", adminRole: "ad", acceptGroups: false };
     const roleOf = (roles: Array<string>) =>
-      roleFromKeycloak(keycloakRoleNames(token({ roles }), "netplan"), mapping);
+      roleFromKeycloak(
+        keycloakRoleNames(
+          token({ realm_access: { roles } }),
+          "netplan",
+          mapping,
+        ),
+        mapping,
+      );
     expect(roleOf(["ed", "ad"])).toBe("admin");
     expect(roleOf(["ed"])).toBe("editor");
     expect(roleOf(["other"])).toBe("reader");
     expect(
-      roleFromKeycloak(new Set(["ad"]), { editorRole: null, adminRole: null }),
+      roleFromKeycloak(new Set(["ad"]), {
+        editorRole: null,
+        adminRole: null,
+        acceptGroups: false,
+      }),
     ).toBe("reader");
   });
 
