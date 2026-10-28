@@ -14,6 +14,7 @@ import FlowCanvas from "@/canvas/FlowCanvas";
 import { MapSkeleton } from "@/components/loading-skeletons";
 import AppSidebar from "@/panels/Sidebar";
 import { MapEmptyState } from "@/buildings/MapEmptyState";
+import { useFallbackFloor } from "@/buildings/useFallbackFloor";
 import { StructureDialog } from "@/buildings/StructureDialog";
 import Toolbar from "@/panels/Toolbar";
 import DeviceDrawer from "@/panels/DeviceDrawer";
@@ -81,9 +82,6 @@ function HomePage() {
   const currentBuildingId = useCurrentBuildingId();
   const currentFloorId = useCurrentFloorId();
 
-  const setCurrentBuilding = useMapStore((s) => s.setCurrentBuilding);
-  const setCurrentFloor = useMapStore((s) => s.setCurrentFloor);
-
   const floors = useQuery(
     api.floors.listForBuilding,
     currentBuildingId ? { buildingId: currentBuildingId } : "skip",
@@ -96,21 +94,6 @@ function HomePage() {
   }, [site, requestedSiteId, navigate]);
 
   useMapUrlSync();
-
-  useEffect(() => {
-    if (!buildings) return;
-    if (buildings.length === 0) {
-      if (currentBuildingId) setCurrentBuilding(null);
-      return;
-    }
-    if (
-      currentBuildingId &&
-      buildings.some((building) => building.id === currentBuildingId)
-    ) {
-      return;
-    }
-    setCurrentBuilding(asBuildingId(buildings[0].id));
-  }, [buildings, currentBuildingId, setCurrentBuilding]);
 
   const sortedFloors: Array<Floor> = useMemo(
     () =>
@@ -126,13 +109,7 @@ function HomePage() {
     [floors],
   );
 
-  useEffect(() => {
-    if (!floors) return;
-    if (currentFloorId && floors.some((floor) => floor.id === currentFloorId)) {
-      return;
-    }
-    setCurrentFloor(sortedFloors[0]?.id ?? null);
-  }, [floors, sortedFloors, currentFloorId, setCurrentFloor]);
+  useFallbackFloor(buildings, floors ? sortedFloors : undefined);
 
   // Only once loaded, so the map never flashes empty while it opens a floor.
   const currentBuilding =

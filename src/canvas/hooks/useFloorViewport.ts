@@ -8,6 +8,7 @@ import type { ReactFlowInstance, Viewport } from "@xyflow/react";
 import {
   FLOOR_FIT_MAX_ZOOM,
   floorContentBounds,
+  floorMinZoom,
   readFloorView,
   writeFloorView,
 } from "@/canvas/floorView";
@@ -22,7 +23,6 @@ import {
   FLOW_CANVAS_FIT_VIEW_PADDING,
   FLOW_CANVAS_LOCATE_DURATION_MS,
   FLOW_CANVAS_LOCATE_MIN_ZOOM,
-  FLOW_CANVAS_MIN_ZOOM,
 } from "@/lib/constants";
 
 const easeOutCubic = (t: number) => 1 - (1 - t) ** 3;
@@ -49,7 +49,8 @@ const EMPTY_FLOOR_VIEW: Viewport = { x: 0, y: 0, zoom: 1 };
 /**
  * Each floor opens on its last view in this tab, or, the first time, fitted
  * to what is drawn on it; the view is never refitted when devices arrive
- * (ADR 0030). Returns the fit, for "Centrer la vue".
+ * (ADR 0030). Returns the fit, for "Centrer la vue", and how far the view
+ * may zoom out on this floor.
  */
 export function useFloorViewport(reactFlow: ReactFlowInstance) {
   const currentFloorId = useCurrentFloorId();
@@ -64,14 +65,16 @@ export function useFloorViewport(reactFlow: ReactFlowInstance) {
   // to no floor and is not kept.
   const shownFloorRef = useRef<string | null>(null);
 
+  const bounds = floorContentBounds(document);
+  const minZoom = floorMinZoom(bounds, width, height);
+
   const fitViewport = (): Viewport | null => {
-    const bounds = floorContentBounds(document);
     if (!bounds || width === 0 || height === 0) return null;
     return getViewportForBounds(
       bounds,
       width,
       height,
-      FLOW_CANVAS_MIN_ZOOM,
+      minZoom,
       FLOOR_FIT_MAX_ZOOM,
       FLOW_CANVAS_FIT_VIEW_PADDING,
     );
@@ -123,5 +126,5 @@ export function useFloorViewport(reactFlow: ReactFlowInstance) {
     },
   });
 
-  return { fitViewport };
+  return { fitViewport, minZoom };
 }

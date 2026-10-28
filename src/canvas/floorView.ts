@@ -1,4 +1,9 @@
+import { getViewportForBounds } from "@xyflow/react";
 import type { Viewport } from "@xyflow/react";
+import {
+  FLOW_CANVAS_FIT_VIEW_PADDING,
+  FLOW_CANVAS_MIN_ZOOM,
+} from "@/lib/constants";
 import type { Rect } from "@/walls/gridGeometry";
 import { getWallRenderRect } from "@/walls/gridGeometry/render";
 import { overlayCorner } from "@/overlay/gesture";
@@ -46,6 +51,30 @@ export function floorContentBounds(
   const right = Math.max(...rects.map((rect) => rect.x + rect.width));
   const bottom = Math.max(...rects.map((rect) => rect.y + rect.height));
   return { x: left, y: top, width: right - left, height: bottom - top };
+}
+
+/** Below this, a stray device far away would shrink the floor to dots. */
+const FLOOR_MIN_ZOOM_LIMIT = 0.02;
+
+/**
+ * How far the view may zoom out: until the whole floor fits with the fit's
+ * margin, and at least to `FLOW_CANVAS_MIN_ZOOM`, so a floor wider than the
+ * screen can still be seen whole (A26).
+ */
+export function floorMinZoom(
+  bounds: Rect | null,
+  width: number,
+  height: number,
+): number {
+  if (!bounds || width === 0 || height === 0) return FLOW_CANVAS_MIN_ZOOM;
+  return getViewportForBounds(
+    bounds,
+    width,
+    height,
+    FLOOR_MIN_ZOOM_LIMIT,
+    FLOW_CANVAS_MIN_ZOOM,
+    FLOW_CANVAS_FIT_VIEW_PADDING,
+  ).zoom;
 }
 
 // Per tab, so a reload or a return to the floor finds the view, and another
