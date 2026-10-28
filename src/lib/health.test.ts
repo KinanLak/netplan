@@ -21,13 +21,35 @@ describe("checkHealth", () => {
         return Promise.resolve(new Response("1.0.0"));
       }),
     );
-    expect(requested).toEqual(["http://convex.test/version"]);
+    expect(requested).toEqual([
+      "http://convex.test/version",
+      "http://convex-site.test/api/auth/ok",
+    ]);
     expect(report).toEqual({
       status: "ok",
       checks: [
         { name: "config", status: "ok" },
         { name: "convex", status: "ok" },
+        { name: "convex-site", status: "ok" },
       ],
+    });
+  });
+
+  it("is ko when only the site URL, where sessions are read, does not answer", async () => {
+    const report = await checkHealth(
+      deps((url) =>
+        Promise.resolve(
+          url.startsWith("http://convex-site.test")
+            ? new Response("down", { status: 502 })
+            : new Response("1.0.0"),
+        ),
+      ),
+    );
+    expect(report.status).toBe("ko");
+    expect(report.checks[2]).toEqual({
+      name: "convex-site",
+      status: "ko",
+      detail: "backend answered 502",
     });
   });
 

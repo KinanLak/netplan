@@ -20,17 +20,30 @@ export interface HealthDeps {
   timeoutMs: number;
 }
 
+/**
+ * What the app's server throws when it cannot read the session because
+ * Convex does not answer. A message rather than a class: the error crosses
+ * from the server to the browser, which only keeps its message.
+ */
+export const BACKEND_UNREACHABLE = "NetPlan: backend unreachable";
+
 export async function checkHealth(deps: HealthDeps): Promise<HealthReport> {
   const checks: Array<HealthCheck> = [];
-  let convexUrl: string | undefined;
+  let urls: { convexUrl: string; convexSiteUrl: string } | undefined;
   try {
-    convexUrl = readRuntimeConfig(deps.env).convexUrl;
+    urls = readRuntimeConfig(deps.env);
     checks.push({ name: "config", status: "ok" });
   } catch (error) {
     checks.push({ name: "config", status: "ko", detail: describe(error) });
   }
-  if (convexUrl !== undefined) {
-    checks.push(await checkConvex(deps, convexUrl));
+  if (urls !== undefined) {
+    checks.push(
+      ...(await Promise.all([
+        checkUrl(deps, "convex", `${urls.convexUrl}/version`),
+        // Where this server reads sessions, which can differ (ADR 0021).
+        checkUrl(deps, "convex-site", `${urls.convexSiteUrl}/api/auth/ok`),
+      ])),
+    );
   }
   return {
     status: checks.every((check) => check.status === "ok") ? "ok" : "ko",
@@ -38,24 +51,25 @@ export async function checkHealth(deps: HealthDeps): Promise<HealthReport> {
   };
 }
 
-async function checkConvex(
+async function checkUrl(
   deps: HealthDeps,
-  convexUrl: string,
+  name: string,
+  url: string,
 ): Promise<HealthCheck> {
   try {
-    const response = await deps.fetch(`${convexUrl}/version`, {
+    const response = await deps.fetch(url, {
       signal: AbortSignal.timeout(deps.timeoutMs),
     });
     if (!response.ok) {
       return {
-        name: "convex",
+        name,
         status: "ko",
         detail: `backend answered ${response.status}`,
       };
     }
-    return { name: "convex", status: "ok" };
+    return { name, status: "ok" };
   } catch (error) {
-    return { name: "convex", status: "ko", detail: describe(error) };
+    return { name, status: "ko", detail: describe(error) };
   }
 }
 

@@ -64,10 +64,12 @@ so a page that fails leaves the signed-in layout and the Convex client in
 place.
 
 **A connection failure says so and heals.** The app's server reports a
-session it could not read because Convex does not answer as such, and the
-error screen then reads « Serveur injoignable » instead of « Une erreur
-inattendue », asks `/health` with a growing delay and reloads the page once
-it answers. Every page's code is fetched once the first page is idle, so a
+session it could not read because Convex does not answer as such, even
+behind a proxy that answers 502 for it: a request with a session cookie
+that gets no token checks `/health`, which now also checks the URL where
+sessions are read, before calling the visitor signed out. The error screen
+then reads « Serveur injoignable » instead of « Une erreur inattendue »,
+asks `/health` with a growing delay and reloads the page once it answers. Every page's code is fetched once the first page is idle, so a
 page change offline stays in NetPlan instead of the browser's error page.
 
 ## Consequences

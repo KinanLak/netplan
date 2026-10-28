@@ -40,7 +40,7 @@ const FIRST_RETRY_MS = 1_000;
 const MAX_RETRY_MS = 5_000;
 
 /** Waits `ms`, or less when the browser gets its network back. */
-const waitOrOnline = (ms: number) =>
+export const waitOrOnline = (ms: number) =>
   new Promise<void>((resolve) => {
     const done = () => {
       clearTimeout(timer);
@@ -98,4 +98,29 @@ export function createSessionTokens({
       return pending;
     },
   };
+}
+
+/**
+ * The session's token as the app's server reads it on a page load: null
+ * when the visitor has no session, and a throw when that cannot be told.
+ * The token helper answers null alike for no session and for a proxy's 502
+ * with Convex down behind it, so a request that carries a session cookie
+ * and gets no token asks whether the backend answers before calling it
+ * signed out: otherwise an outage would send everyone to the sign-in page.
+ */
+export async function readSessionToken({
+  getToken,
+  hasSessionCookie,
+  backendAnswers,
+}: {
+  getToken: () => Promise<string | null | undefined>;
+  hasSessionCookie: () => Promise<boolean>;
+  backendAnswers: () => Promise<boolean>;
+}): Promise<string | null> {
+  const token = await getToken();
+  if (token) return token;
+  if ((await hasSessionCookie()) && !(await backendAnswers())) {
+    throw new Error("Convex does not answer");
+  }
+  return null;
 }

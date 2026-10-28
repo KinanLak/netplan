@@ -1,5 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import { createSessionTokens, tokenAnswer } from "@/lib/session-token";
+import {
+  createSessionTokens,
+  readSessionToken,
+  tokenAnswer,
+} from "@/lib/session-token";
 import type { TokenAnswer } from "@/lib/session-token";
 
 const answers = (...queue: Array<TokenAnswer>) => {
@@ -95,5 +99,44 @@ describe("tokenAnswer", () => {
     expect(tokenAnswer({ data: null, error: { status: 500 } })).toEqual({
       kind: "unreachable",
     });
+  });
+});
+
+describe("readSessionToken", () => {
+  const read = ({
+    token,
+    cookie,
+    backendUp,
+  }: {
+    token: string | undefined;
+    cookie: boolean;
+    backendUp: boolean;
+  }) =>
+    readSessionToken({
+      getToken: () => Promise.resolve(token),
+      hasSessionCookie: () => Promise.resolve(cookie),
+      backendAnswers: () => Promise.resolve(backendUp),
+    });
+
+  it("hands over the token", async () => {
+    expect(await read({ token: "t", cookie: true, backendUp: true })).toBe("t");
+  });
+
+  it("reads a visitor without a session cookie as signed out", async () => {
+    expect(
+      await read({ token: undefined, cookie: false, backendUp: false }),
+    ).toBeNull();
+  });
+
+  it("reads a session the backend refused as signed out", async () => {
+    expect(
+      await read({ token: undefined, cookie: true, backendUp: true }),
+    ).toBeNull();
+  });
+
+  it("throws when a session cookie gets no token because the backend does not answer", async () => {
+    await expect(
+      read({ token: undefined, cookie: true, backendUp: false }),
+    ).rejects.toThrow();
   });
 });

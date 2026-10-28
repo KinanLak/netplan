@@ -12,7 +12,8 @@ import { ConvexProviderWithAuth } from "convex/react";
 import { createServerFn } from "@tanstack/react-start";
 import { useEffect } from "react";
 import type { ReactNode } from "react";
-import { BACKEND_UNREACHABLE, ErrorScreen } from "@/components/error-screen";
+import { ErrorScreen } from "@/components/error-screen";
+import { BACKEND_UNREACHABLE } from "@/lib/health";
 import { ThemeProvider, themeScript } from "@/components/theme-provider";
 import { useDocumentTitle } from "@/hooks/use-document-title";
 import appCss from "@/styles.css?url";
@@ -29,11 +30,12 @@ import { logGraphicsAccelerationStatusOnce } from "@/lib/graphicsAcceleration";
 // Read from the session cookie on the server, so a signed-out visitor is
 // redirected before any page renders and a signed-in one starts authenticated.
 // It fails when Convex does not answer, which the error screen tells apart
-// from an unexpected failure.
+// from an unexpected failure; the cause stays in the server's log.
 const getAuthToken = createServerFn({ method: "GET" }).handler(async () => {
   try {
-    return (await getToken()) ?? null;
-  } catch {
+    return await getToken();
+  } catch (cause) {
+    console.error("Reading the session failed", cause);
     throw new Error(BACKEND_UNREACHABLE);
   }
 });
@@ -147,8 +149,8 @@ function RootComponent() {
     pageToken ??= { token };
     pageConfig ??= config;
   }, [token, config]);
-  usePreloadedPages();
   const tokens = sessionTokens(token);
+  usePreloadedPages(tokens.signedIn);
   useSessionKeptAlive(tokens.signedIn);
   // Constant for the page's life: Convex drops the identity whenever these
   // change, and queries in flight then fail as a lost session.
@@ -170,10 +172,12 @@ function RootComponent() {
 // Every page's code, fetched once the first page is idle: a page change
 // offline would otherwise need a file never loaded, and the router reloads
 // the window when one fails, which offline ends on the browser's own error
-// page instead of NetPlan's.
-function usePreloadedPages() {
+// page instead of NetPlan's. Only once signed in: the sign-in pages need
+// none of it.
+function usePreloadedPages(signedIn: boolean) {
   const router = useRouter();
   useEffect(() => {
+    if (!signedIn) return;
     const preload = () => {
       for (const route of Object.values(router.routesById)) {
         Promise.resolve(router.loadRouteChunk(route)).catch(() => {});
@@ -186,7 +190,7 @@ function usePreloadedPages() {
     }
     const idle = window.requestIdleCallback(preload, { timeout: 5_000 });
     return () => window.cancelIdleCallback(idle);
-  }, [router]);
+  }, [router, signedIn]);
 }
 
 function RootDocument({ children }: { children: ReactNode }) {
