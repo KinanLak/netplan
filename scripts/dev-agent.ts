@@ -612,8 +612,11 @@ if (!flags.has("--setup")) {
   );
 }
 
+// Under an AI agent the CLI lists names only unless asked: without values,
+// every run would take the secrets below for missing and replace them, and
+// the session keys they encrypt would no longer open.
 const variables = parseEnvLines(
-  await must(convexCli("env", "list"), "convex env list"),
+  await must(convexCli("env", "list", "--include-values"), "convex env list"),
 );
 const authEnv: Record<string, string> = {
   ALLOW_DEV_SEED: "true",
