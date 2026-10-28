@@ -315,26 +315,29 @@ function PortTableLine({
       </div>
       {withObserved ? (
         // Its own column where there is room, under the line otherwise.
-        <div className="order-last basis-full pl-[calc(4rem+0.75rem)] text-xs sm:order-none sm:w-36 sm:shrink-0 sm:basis-auto sm:pl-0">
+        <div className="order-last basis-full space-y-1 pl-[calc(4rem+0.75rem)] text-xs sm:order-none sm:w-36 sm:shrink-0 sm:basis-auto sm:pl-0">
           {port.observed.map((seen) => (
             // Still there at the last read in full colour, gone since muted.
+            // The time takes its own line so the name keeps the width.
             <div
               key={`${seen.name}-${seen.at}`}
               className={cn(
-                "flex min-w-0 gap-x-2",
+                "flex min-w-0 flex-col",
                 seen.current ? "text-foreground" : "text-muted-foreground",
               )}
             >
               <span
                 className="truncate"
-                title={seen.current ? undefined : "Plus vu sur ce port"}
+                title={
+                  seen.current ? seen.name : `${seen.name}, plus vu sur ce port`
+                }
               >
                 {seen.name}
                 {seen.current ? null : (
                   <span className="sr-only">, plus vu sur ce port</span>
                 )}
               </span>
-              <Time at={seen.at} className="shrink-0" />
+              <Time at={seen.at} className="text-muted-foreground" />
             </div>
           ))}
         </div>
