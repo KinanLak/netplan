@@ -58,7 +58,7 @@ const backendSwitch = async (page: Page) => {
 const offlineLine = (page: Page) =>
   page.getByRole("status").getByText(/connexion/);
 
-// ADR 0034: during a backend outage the page keeps its Convex provider and
+// ADR 0037: during a backend outage the page keeps its Convex provider and
 // its identity across page changes, and works again once the backend
 // returns. A page change used to ask the app's server for the session,
 // which failed while Convex was down, and the error screen replaced the

@@ -52,7 +52,7 @@ const waitOrOnline = (ms: number) =>
   });
 
 /**
- * The Convex token of a page's session (ADR 0034).
+ * The Convex token of a page's session (ADR 0037).
  *
  * Convex re-authenticates whenever `fetchAccessToken` changes or returns
  * null: it drops the identity, then sends the new one. Queries evaluated in

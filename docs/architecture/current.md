@@ -226,7 +226,7 @@ Built by the UX lot U1 (ADR 0031).
   document around `ErrorScreen`, the French screen every route falls back
   to. In the browser, the root `beforeLoad` and loader answer from what the
   page loaded with, and Convex gets a constant identity from
-  `src/lib/session-token.ts` that survives an outage (ADR 0034).
+  `src/lib/session-token.ts` that survives an outage (ADR 0037).
 - **Sign-in.** A better-auth `before` hook counts attempts per identifier in
   `signInAttempts`; the address-keyed rules are only a shared ceiling. A
   session slides 24 hours from its last use, capped at 7 days from login by
