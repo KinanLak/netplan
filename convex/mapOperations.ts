@@ -935,7 +935,10 @@ const planDeviceCreate = (
   const { id, ...device } = operation.device;
   const value: DeviceInsert = {
     ...device,
-    ...restored,
+    // Brought back onto a plan: its purge clock stops (ADR 0039).
+    ...(restored.source && {
+      source: withPlacementClock(restored.source, true, Date.now()),
+    }),
     objectId: id,
     siteId,
     updatedAt: operation.meta.createdAt,

@@ -690,6 +690,9 @@ describe("the site inventory", () => {
         source: { ...source, staleId: true },
       },
     ]);
+    // Back on no floor: its 30 days start again from now.
+    const [restored] = await t.query(api.devices.listForSite, { siteId });
+    expect(restored.source?.offPlanSince).toBeGreaterThan(2);
 
     await expect(
       t.mutation(api.devices.create, {

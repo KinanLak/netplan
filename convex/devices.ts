@@ -28,6 +28,7 @@ import {
 } from "../src/devices/identity";
 import type { IdentityEdit } from "../src/devices/identity";
 import { INTEGRATION_LABELS } from "../src/sites/integrations";
+import { withPlacementClock } from "../src/sites/netboxImport";
 import type { Doc } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 
@@ -262,7 +263,10 @@ export async function insertManualDevice(
     model: edit.model ?? undefined,
     ip: edit.ip ?? undefined,
     notes: edit.notes ?? undefined,
-    ...restored,
+    // Brought back on no floor: its 30 days start again now (ADR 0039).
+    ...(restored.source && {
+      source: withPlacementClock(restored.source, false, Date.now()),
+    }),
     metadata: await observedMetadata(ctx, device, metadata ?? {}),
     updatedAt: Date.now(),
     updatedBy: userId,
