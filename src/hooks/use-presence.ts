@@ -5,15 +5,18 @@ import { useIdentity } from "@/lib/identity";
 import { activePresences } from "@/lib/presence";
 import type { ActivePresence } from "@/lib/presence";
 import { useCurrentUser } from "@/hooks/use-current-user";
+import { isSessionLost } from "@/lib/login";
 import { api } from "../../convex/_generated/api";
 import { colorHueFor } from "../../convex/lib/presence";
 
 const HEARTBEAT_MS = 2_000;
 const STALE_TICK_MS = 1_000;
 
-// A heartbeat that fails is replaced by the next one, and a lost session is
-// the signed-in layout's to handle: neither is worth an uncaught error.
-const ignoreHeartbeatFailure = () => {};
+// A lost session is the signed-in layout's to handle, and the next
+// heartbeat replaces this one; anything else is worth reading.
+const ignoreHeartbeatFailure = (error: unknown) => {
+  if (!isSessionLost(error)) console.error(error);
+};
 
 /**
  * Publishes this page's presence for `floorId`, subscribes to every live

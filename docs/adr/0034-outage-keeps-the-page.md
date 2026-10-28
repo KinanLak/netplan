@@ -30,7 +30,7 @@ layout sends the user to the sign-in page as before.
 its own `useAuth` instead of `ConvexBetterAuthProvider`'s: signed in or not
 as the page loaded, never loading, and one `fetchAccessToken` that answers
 null only when the server refuses the session. While the server cannot be
-reached it keeps asking, with a backoff up to 15 seconds, so a token
+reached it keeps asking, with a backoff up to 5 seconds, so a token
 refresh that falls in an outage waits for its end instead of signing the
 page out.
 

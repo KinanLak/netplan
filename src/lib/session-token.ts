@@ -35,7 +35,21 @@ export interface SessionTokens {
 }
 
 const FIRST_RETRY_MS = 1_000;
-const MAX_RETRY_MS = 15_000;
+// Short: when the backend returns, a token refresh that failed meanwhile
+// holds the socket, and with it the queued edits, until its next try.
+const MAX_RETRY_MS = 5_000;
+
+/** Waits `ms`, or less when the browser gets its network back. */
+const waitOrOnline = (ms: number) =>
+  new Promise<void>((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      window.removeEventListener("online", done);
+      resolve();
+    };
+    const timer = setTimeout(done, ms);
+    window.addEventListener("online", done);
+  });
 
 /**
  * The Convex token of a page's session (ADR 0034).
@@ -52,7 +66,7 @@ const MAX_RETRY_MS = 15_000;
 export function createSessionTokens({
   initialToken,
   requestToken,
-  wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  wait = waitOrOnline,
 }: {
   initialToken: string | null;
   requestToken: () => Promise<TokenAnswer>;

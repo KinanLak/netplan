@@ -47,43 +47,61 @@ test("an edit queued while the backend is down survives page changes and lands o
       : route.fallback(),
   );
 
-  await signIn(page);
-  await page.getByRole("button", { name: /^Modifier/ }).click();
-  await switchNode(page).click();
-  const before = await position(page);
+  // The seed is shared with the next run and the developer's instance.
+  let nudged = false;
+  let restored = false;
+  try {
+    await signIn(page);
+    await page.getByRole("button", { name: /^Modifier/ }).click();
+    await switchNode(page).click();
+    const before = await position(page);
 
-  down = true;
-  for (const socket of sockets) await socket.close();
-  await expect(page.getByText(/Serveur injoignable/)).toBeVisible();
+    down = true;
+    for (const socket of sockets) await socket.close();
+    await expect(page.getByText(/Serveur injoignable/)).toBeVisible();
 
-  await page.keyboard.press("ArrowDown");
-  await expect(page.getByText("1 modification en attente")).toBeVisible();
-  const moved = await position(page);
-  expect(moved).not.toBe(before);
+    await page.keyboard.press("ArrowDown");
+    nudged = true;
+    await expect(page.getByText("1 modification en attente")).toBeVisible();
+    const moved = await position(page);
+    expect(moved).not.toBe(before);
 
-  // Each of these changes the page's URL.
-  const errorScreen = page.getByText(/n'a pas pu s'afficher/);
-  await page.getByText("PC-DEMO-POSTE-1", { exact: true }).click();
-  await expect(errorScreen).toBeHidden();
-  await page.keyboard.press("Escape");
-  await page.getByRole("link", { name: "Inventaire" }).click();
-  await expect(page.getByRole("heading", { name: "Inventaire" })).toBeVisible();
-  await expect(page.getByText("1 modification en attente")).toBeVisible();
-  await page.goBack();
-  await expect(switchNode(page)).toBeVisible();
+    // Each of these changes the page's URL.
+    const errorScreen = page.getByText(/n'a pas pu s'afficher/);
+    await page.getByText("PC-DEMO-POSTE-1", { exact: true }).click();
+    await expect(errorScreen).toBeHidden();
+    await page.keyboard.press("Escape");
+    await page.getByRole("link", { name: "Inventaire" }).click();
+    await expect(
+      page.getByRole("heading", { name: "Inventaire" }),
+    ).toBeVisible();
+    await expect(page.getByText("1 modification en attente")).toBeVisible();
+    await page.goBack();
+    await expect(switchNode(page)).toBeVisible();
 
-  down = false;
-  await expect(page.getByText(/Serveur injoignable/)).toBeHidden({
-    timeout: 30_000,
-  });
-  await expect(page.getByText("1 modification en attente")).toBeHidden();
+    down = false;
+    // Convex reconnects on its own backoff, which grew during the outage.
+    await expect(page.getByText(/Serveur injoignable/)).toBeHidden({
+      timeout: 20_000,
+    });
+    await expect(page.getByText("1 modification en attente")).toBeHidden();
 
-  // Another page reads what the server holds.
-  const other = await page.context().newPage();
-  await other.goto(page.url());
-  await expect.poll(() => position(other)).toBe(moved);
+    // Another page reads what the server holds.
+    const other = await page.context().newPage();
+    await other.goto(page.url());
+    await expect.poll(() => position(other)).toBe(moved);
 
-  // Put the seed back.
-  await page.keyboard.press("Control+z");
-  await expect.poll(() => position(other)).toBe(before);
+    // Put the seed back.
+    await page.keyboard.press("Control+z");
+    await expect.poll(() => position(other)).toBe(before);
+    restored = true;
+  } finally {
+    down = false;
+    if (nudged && !restored) {
+      await page.keyboard.press("Control+z");
+      await expect(page.getByText(/modification en attente/)).toBeHidden({
+        timeout: 20_000,
+      });
+    }
+  }
 });
