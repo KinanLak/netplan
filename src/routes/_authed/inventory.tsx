@@ -47,6 +47,7 @@ import type {
 import { ColumnPicker, InventoryTable } from "@/inventory/InventoryTable";
 import { openPlacement } from "@/inventory/showOnMap";
 import { useRestoredScroll } from "@/inventory/useRestoredScroll";
+import { useTableRoom } from "@/inventory/useTableRoom";
 import { ImportReviews } from "@/sites/ImportReviews";
 import { SiteSwitcher } from "@/sites/SiteSwitcher";
 import { UnknownMacs } from "@/sites/UnknownMacs";
@@ -163,6 +164,7 @@ function SiteInventory({ site }: { site: SiteSummary }) {
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [sheetId, setSheetId] = useState<string | null>(null);
   const [macDraft, setMacDraft] = useState<string | null>(null);
+  const { measureFilters, room: tableHeight } = useTableRoom();
   const goTo = useNavigate();
   const [hidden, setHidden] = useState(readHiddenColumns);
   useSlashToSearch();
@@ -340,7 +342,10 @@ function SiteInventory({ site }: { site: SiteSummary }) {
           ) : (
             <>
               {/* The filters stay in reach while the page scrolls (A63). */}
-              <div className="sticky top-0 z-20 -mx-1 space-y-3 bg-background px-1 pt-2 pb-3">
+              <div
+                ref={measureFilters}
+                className="sticky top-0 z-20 -mx-1 space-y-3 bg-background px-1 pt-2 pb-3"
+              >
                 <div className="flex flex-wrap items-center gap-3">
                   <div className="relative min-w-60 flex-1">
                     <HugeiconsIcon
@@ -454,6 +459,7 @@ function SiteInventory({ site }: { site: SiteSummary }) {
                   highlightId={highlightId}
                   sheetId={sheetId}
                   onSheetChange={setSheetId}
+                  maxHeight={tableHeight}
                 />
               )}
             </>

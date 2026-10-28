@@ -115,6 +115,7 @@ export function InventoryTable({
   highlightId,
   sheetId,
   onSheetChange,
+  maxHeight,
 }: {
   rows: ReadonlyArray<InventoryRow>;
   site: SiteSummary;
@@ -127,6 +128,8 @@ export function InventoryTable({
   /** The device whose sheet is open: the page's, so its toasts can open one. */
   sheetId: string | null;
   onSheetChange: (deviceId: string | null) => void;
+  /** The height that keeps it clear of the page's sticky filters (A63). */
+  maxHeight?: number | null;
 }) {
   const now = useNow(60_000);
   const columns = OPTIONAL_COLUMNS.filter(
@@ -139,11 +142,10 @@ export function InventoryTable({
   const shows = (id: ColumnId) => columns.some((column) => column.id === id);
 
   return (
-    // Short enough that, scrolled into view, it clears the page's sticky
-    // filters (A63).
     <div
       data-scroll-restoration-id="inventory-table"
-      className="max-h-[calc(100svh-13rem)] overflow-auto rounded-lg border"
+      className="max-h-[calc(100svh-8rem)] overflow-auto rounded-lg border"
+      style={maxHeight ? { maxHeight } : undefined}
     >
       <table
         className="w-full table-fixed border-separate border-spacing-0 text-sm"
