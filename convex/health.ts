@@ -183,11 +183,14 @@ export const overview = adminQuery({
                 absent: devices.filter(
                   (device) => device.source?.missingSince !== undefined,
                 ).length,
-                // A role mapped since the last import is no longer listed,
-                // and none is while no NetBox site is chosen, as after a
-                // change of instance: they were the previous site's.
-                unmappedRoles: (netbox.netbox?.site
-                  ? (cycle?.netboxUnmappedRoles ?? [])
+                // Counted in the NetBox and site the settings read now: none
+                // after a change of site or instance, until the next import;
+                // a role mapped since is no longer listed.
+                unmappedRoles: (cycle?.netboxUnmappedRoles &&
+                cycle.netboxUnmappedRoles.baseUrl === netbox.baseUrl &&
+                cycle.netboxUnmappedRoles.netboxSiteId ===
+                  netbox.netbox?.site?.id
+                  ? cycle.netboxUnmappedRoles.roles
                   : []
                 ).filter(
                   (role) =>

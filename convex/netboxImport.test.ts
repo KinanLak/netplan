@@ -296,9 +296,11 @@ describe("NetBox import", () => {
           .withIndex("by_site", (q) => q.eq("siteId", siteId))
           .unique(),
     );
-    expect(cycle?.netboxUnmappedRoles).toEqual([
-      { id: 4, name: "4", devices: 2 },
-    ]);
+    expect(cycle?.netboxUnmappedRoles).toEqual({
+      baseUrl: NETBOX,
+      netboxSiteId: 7,
+      roles: [{ id: 4, name: "4", devices: 2 }],
+    });
     expect(
       (await inventory(editor, siteId)).map((d) => [
         d.name,

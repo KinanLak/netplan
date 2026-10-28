@@ -79,7 +79,11 @@ describe("the admin health overview", () => {
         failures: 1,
         last,
         netboxImportedAt: 1_500,
-        netboxUnmappedRoles: [{ id: 6, name: "Serveur", devices: 2 }],
+        netboxUnmappedRoles: {
+          baseUrl: "https://netbox.test",
+          netboxSiteId: 7,
+          roles: [{ id: 6, name: "Serveur", devices: 2 }],
+        },
       });
       const devices: Array<[DeviceType, DeviceStatus | undefined]> = [
         ["switch", "up"],
@@ -138,7 +142,7 @@ describe("the admin health overview", () => {
     });
   });
 
-  it("lists no role without a type while no NetBox site is chosen", async () => {
+  it("lists no role counted in a NetBox site the settings no longer read", async () => {
     const t = await admin();
     const siteId = await createTestSite(t);
     await t.action(api.sources.saveIntegration, {
@@ -155,11 +159,24 @@ describe("the admin health overview", () => {
         nextRunAt: 0,
         failures: 0,
         netboxImportedAt: 1,
-        netboxUnmappedRoles: [{ id: 6, name: "Serveur", devices: 2 }],
+        netboxUnmappedRoles: {
+          baseUrl: "https://netbox.test",
+          netboxSiteId: 7,
+          roles: [{ id: 6, name: "Serveur", devices: 2 }],
+        },
       });
     });
-    const [site] = await t.query(api.health.overview, {});
-    expect(site.netbox?.unmappedRoles).toEqual([]);
+    const roles = async () =>
+      (await t.query(api.health.overview, {}))[0]?.netbox?.unmappedRoles;
+    // No NetBox site chosen, as after a change of instance.
+    expect(await roles()).toEqual([]);
+    // Another NetBox site chosen since the last import.
+    await t.mutation(api.netbox.saveSettings, {
+      siteId,
+      baseUrl: "https://netbox.test",
+      settings: { site: { id: 8, name: "Lyon" }, roles: [] },
+    });
+    expect(await roles()).toEqual([]);
   });
 
   it("names no NetBox import while NetBox is disabled", async () => {

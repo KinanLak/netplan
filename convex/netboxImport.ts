@@ -318,7 +318,11 @@ export const apply = internalMutation({
     await replaceReviews(ctx, siteId, plan, now);
     await ctx.db.patch(cycle._id, {
       netboxImportedAt: now,
-      netboxUnmappedRoles: args.unmappedRoles ?? [],
+      netboxUnmappedRoles: {
+        baseUrl: args.baseUrl,
+        netboxSiteId: row.netbox.site?.id ?? 0,
+        roles: args.unmappedRoles ?? [],
+      },
     });
     const wasAbsent = (deviceId: string) =>
       byId.get(deviceId)?.source?.missingSince !== undefined;
