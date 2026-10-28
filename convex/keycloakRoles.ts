@@ -15,7 +15,6 @@ type KeycloakAccount = {
   _id: string;
   refreshToken?: string | null;
   scope?: string | null;
-  updatedAt: number;
 };
 
 const keycloakAccount = async (ctx: MutationCtx, userId: string) =>
@@ -30,6 +29,8 @@ const keycloakAccount = async (ctx: MutationCtx, userId: string) =>
 /**
  * Takes the stored refresh token for one refresh, unless another took it in
  * the last five minutes. A mutation, so two claims at once cannot both win.
+ * Its own row: better-auth writes the account at other times too, which
+ * must not hold the re-read back.
  */
 export const claim = internalMutation({
   args: { userId: v.string() },
@@ -39,16 +40,15 @@ export const claim = internalMutation({
   ),
   handler: async (ctx, { userId }) => {
     const account = await keycloakAccount(ctx, userId);
-    const now = Date.now();
     if (!account?.refreshToken) return null;
-    if (now - account.updatedAt < RECENTLY_REFRESHED_MS) return null;
-    await ctx.runMutation(components.betterAuth.adapter.updateOne, {
-      input: {
-        model: "account",
-        where: [{ field: "_id", value: account._id }],
-        update: { updatedAt: now },
-      },
-    });
+    const now = Date.now();
+    const check = await ctx.db
+      .query("keycloakRoleChecks")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .unique();
+    if (check && now - check.at < RECENTLY_REFRESHED_MS) return null;
+    if (check) await ctx.db.patch(check._id, { at: now });
+    else await ctx.db.insert("keycloakRoleChecks", { userId, at: now });
     return {
       refreshToken: account.refreshToken,
       // better-auth stores the granted scopes joined by commas.

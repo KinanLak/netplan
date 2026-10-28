@@ -461,6 +461,35 @@ describe("Keycloak role refresh", () => {
       });
       expect(response.status).toBe(404);
     }
+    const info = await t.fetch("/api/auth/account-info?providerId=keycloak", {
+      headers: { cookie, origin: SITE },
+    });
+    expect(info.status).toBe(404);
+  });
+
+  it("is not held back by better-auth writing the account", async () => {
+    const t = withMail();
+    const { useAnHourLater } = await signedInEditor(t);
+    nextRefresh = ["netplan-admin"];
+    refreshTokensSeen.length = 0;
+    const userId = (await userByEmail(t, camille.email))?._id ?? "";
+    setSystemTime(Date.now() + HOUR + 60_000);
+    // Any token refresh better-auth makes writes the account row.
+    await t.run((ctx) =>
+      ctx.runMutation(components.betterAuth.adapter.updateOne, {
+        input: {
+          model: "account",
+          where: [
+            { field: "userId", value: userId },
+            { field: "providerId", value: "keycloak" },
+          ],
+          update: { updatedAt: Date.now() },
+        },
+      }),
+    );
+    await useAnHourLater();
+    expect(refreshTokensSeen).toHaveLength(1);
+    expect((await userByEmail(t, camille.email))?.role).toBe("admin");
   });
 
   it("changes nothing while Keycloak does not answer", async () => {
