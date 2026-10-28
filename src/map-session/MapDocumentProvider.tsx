@@ -1,3 +1,4 @@
+import { isDeletable } from "@/devices/identity";
 import {
   createContext,
   useEffect,
@@ -515,7 +516,8 @@ const createSessionActions = (deps: SessionActionDeps): MapDocumentActions => {
     const device = documentRef.current.devices.find(
       (item) => item.id === deviceId,
     );
-    if (!device || device.source) return false;
+    // A source would bring it back, unless it no longer returns it (ADR 0034).
+    if (!device || !isDeletable(device)) return false;
     if (isPlacementPending(pendingEntriesRef.current, deviceId)) {
       setRejectedMessage(
         "Cet équipement vient d'être placé : réessayez dans un instant.",

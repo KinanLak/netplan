@@ -28,7 +28,7 @@ const NO_PORTS: ReadonlyArray<Port> = [];
 
 // A device NetBox no longer returns reads as no longer linked, without
 // covering its status (ADR 0034): the whole node, label included, greys.
-export const ABSENT_NODE_CLASS = "opacity-60 grayscale";
+export const ABSENT_NODE_CLASS = "opacity-70 grayscale";
 
 export const toDeviceNode = ({
   device,
