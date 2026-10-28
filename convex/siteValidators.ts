@@ -74,9 +74,11 @@ export const fdbTable = v.object({
 
 /**
  * LibreNMS's Ethernet port names for a switch with default names, from the
- * LibreNMS device it alone stands for (ADR 0038).
+ * LibreNMS device it alone stands for, on the LibreNMS at `baseUrl`
+ * (ADR 0038).
  */
 export const portNameOffer = v.object({
+  baseUrl: v.string(),
   switchId: v.string(),
   librenmsDeviceId: v.number(),
   names: v.array(v.string()),

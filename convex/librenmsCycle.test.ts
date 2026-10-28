@@ -1757,7 +1757,31 @@ describe("the LibreNMS step", () => {
     await remap(["device:sw", "device:core"]);
     expect(await admin.query(api.librenms.portNameOffer, offer)).toBeNull();
     await remap(["device:sw"]);
+    // Nor one offered by another LibreNMS than the site reads now.
+    const moveLibreNMS = async (baseUrl: string) =>
+      await admin.run(async (ctx) => {
+        const row = await ctx.db.query("integrations").first();
+        if (row) await ctx.db.patch(row._id, { baseUrl });
+      });
+    await moveLibreNMS("https://other-librenms.test");
+    expect(await admin.query(api.librenms.portNameOffer, offer)).toBeNull();
+    await moveLibreNMS(LIBRENMS);
     expect(await admin.mutation(api.librenms.adoptPortNames, offer)).toBe(3);
+  });
+
+  it("offers nothing when LibreNMS's names are the default ones", async () => {
+    const { admin, siteId } = await siteWithLibreNMS({ defaultPorts: true });
+    // As many Ethernet ports as the switch has, named as its own.
+    librenms.state.ports = Array.from({ length: 24 }, (_, i) => ({
+      port_id: 201 + i,
+      ifIndex: 1 + i,
+      ifName: String(i + 1),
+      ifType: "ethernetCsmacd",
+    }));
+    await cycle(admin, siteId);
+    expect(
+      await admin.query(api.librenms.portNameOffer, { deviceId: "device:sw" }),
+    ).toBeNull();
   });
 
   it("records nothing once LibreNMS was removed during the read", async () => {

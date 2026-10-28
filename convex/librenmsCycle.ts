@@ -447,8 +447,9 @@ type PortNameOffer = Infer<typeof portNameOffer>;
 
 /**
  * How a switch would take the names LibreNMS offers it (`adoptedPorts`), as
- * long as the LibreNMS device stands for it alone; `null` once it does not,
- * or once a person or a source named its ports.
+ * long as the offer comes from the LibreNMS the site reads and its device
+ * stands for the switch alone; `null` once it does not, once a person or a
+ * source named its ports, or when the names would change nothing.
  */
 export const portNamesPlan = async (
   ctx: QueryCtx,
@@ -461,9 +462,11 @@ export const portNamesPlan = async (
       q.eq("siteId", siteId).eq("kind", "librenms"),
     )
     .unique();
+  // A device id means nothing on another LibreNMS.
+  if (integration?.baseUrl !== offer.baseUrl) return null;
   // An admin may have mapped the switch elsewhere since.
   const mapped = polledSwitches(
-    integration?.librenms ?? EMPTY_LIBRENMS_SETTINGS,
+    integration.librenms ?? EMPTY_LIBRENMS_SETTINGS,
   ).filter(({ device }) => device.id === offer.librenmsDeviceId);
   if (mapped.length !== 1 || mapped[0]?.switchId !== offer.switchId) {
     return null;
@@ -482,7 +485,10 @@ export const portNamesPlan = async (
     })),
   );
   const plan = adoptedPorts(offer.switchId, own, offer.names);
-  return plan ? { plan, rows } : null;
+  const changes = plan
+    ? plan.rename.length + plan.add.length + plan.remove.length
+    : 0;
+  return plan && changes > 0 ? { plan, rows } : null;
 };
 
 /**
@@ -1060,7 +1066,12 @@ export const collectFromLibreNMS = async (
       own.length > 0 &&
       own.every(({ name }) => /^\d+$/.test(name))
     ) {
-      offers.push({ switchId: sole, librenmsDeviceId: device.id, names });
+      offers.push({
+        baseUrl: connection.baseUrl,
+        switchId: sole,
+        librenmsDeviceId: device.id,
+        names,
+      });
     }
     const linkOf = new Map(librenmsPorts.map(({ id, link }) => [id, link]));
     // LibreNMS numbers ports across all its devices, so the maps merge.
