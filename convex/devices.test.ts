@@ -684,7 +684,11 @@ describe("the site inventory", () => {
     });
     // NetBox still owns its name: the hostname does not rename it.
     expect(await t.query(api.devices.listForSite, { siteId })).toMatchObject([
-      { id: "device:absent", name: "pc-3", source },
+      {
+        id: "device:absent",
+        name: "pc-3",
+        source: { ...source, staleId: true },
+      },
     ]);
 
     await expect(

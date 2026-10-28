@@ -1,6 +1,6 @@
 import type { MapDocumentSnapshot } from "@/types/map";
 import { cableTouches } from "@/devices/ports";
-import { isDeletable } from "@/devices/identity";
+import { isAbsentFromSource, isDeletable } from "@/devices/identity";
 import { applyOperation } from "./applyOperation";
 import { shifted } from "./devicePatch";
 import { applyLabelPatch } from "./labels";
@@ -114,10 +114,16 @@ export function buildInverseOperation(
         ports: snapshotBeforeOperation.ports
           .filter((port) => port.deviceId === device.id)
           .map(({ source: _, ...port }) => port),
-        // A source's cable comes back with its next sync, not as a manual one.
-        cables: snapshotBeforeOperation.cables.filter(
-          (cable) => cableTouches(cable, device.id) && !cable.source,
-        ),
+        // A source's cable comes back with its next sync, not as a manual
+        // one; NetBox no longer lists those of an absent device, so they come
+        // back manual (ADR 0034).
+        cables: snapshotBeforeOperation.cables
+          .filter(
+            (cable) =>
+              cableTouches(cable, device.id) &&
+              (!cable.source || isAbsentFromSource(device.source)),
+          )
+          .map(({ source: _, ...cable }) => cable),
       };
     }
 

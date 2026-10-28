@@ -1502,7 +1502,12 @@ describe("mapOperations.apply on the site inventory", () => {
     expect(removed.status).toBe("applied");
     expect(await deviceRow(t, "device:absent")).toBeNull();
 
-    const back = { ...device("device:absent", floorId, 0), name: "pc-7" };
+    // NetBox owns its name: a hostname does not rename it.
+    const back = {
+      ...device("device:absent", floorId, 0),
+      name: "pc-7",
+      hostname: "poste-7",
+    };
     // A device NetBox still returns is never created by a person.
     const forged = await create(t, 2, {
       ...back,
@@ -1510,7 +1515,11 @@ describe("mapOperations.apply on the site inventory", () => {
     });
     expect(forged.status).toBe("rejected");
     expect((await create(t, 3, { ...back, source })).status).toBe("applied");
-    expect((await deviceRow(t, "device:absent"))?.source).toEqual(source);
+    // Nothing proves the id is still NetBox's: only identity links it again.
+    expect(await deviceRow(t, "device:absent")).toMatchObject({
+      name: "pc-7",
+      source: { ...source, staleId: true },
+    });
   });
 
   it("does not reuse the id of a device that is off the map", async () => {

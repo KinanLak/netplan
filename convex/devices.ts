@@ -21,6 +21,7 @@ import {
   identityEditError,
   isAbsentFromSource,
   isDeletable,
+  restoredSource,
   isSourceOwned,
   namedAfterHostname,
   normalizeIdentityEdit,
@@ -240,7 +241,8 @@ export async function insertManualDevice(
     throw new ConvexError("Cet identifiant d'équipement est déjà pris.");
   }
 
-  if (source) await requireRestorableSource(ctx, siteId, deviceId, source);
+  const restored = restoredSource(source);
+  if ("error" in restored) throw new ConvexError(restored.error);
   const edit = namedAfterHostname(normalizeIdentityEdit(identity), { source });
   if (!edit.name) throw new ConvexError("Le nom est obligatoire.");
   const error = identityEditError(edit);
@@ -260,7 +262,7 @@ export async function insertManualDevice(
     model: edit.model ?? undefined,
     ip: edit.ip ?? undefined,
     notes: edit.notes ?? undefined,
-    ...(source && { source }),
+    ...restored,
     metadata: await observedMetadata(ctx, device, metadata ?? {}),
     updatedAt: Date.now(),
     updatedBy: userId,
@@ -273,40 +275,6 @@ export async function insertManualDevice(
     userId,
   );
 }
-
-/**
- * Refuses a source a person sends with a device: only one NetBox no longer
- * returns, and only while no other device holds its NetBox id (ADR 0034).
- */
-const requireRestorableSource = async (
-  ctx: MutationCtx,
-  siteId: string,
-  deviceId: string,
-  source: NonNullable<Doc<"devices">["source"]>,
-) => {
-  if (source.integration !== "netbox" || !isAbsentFromSource(source)) {
-    throw new ConvexError(
-      "Cet équipement vient d'une intégration : il ne peut pas être créé.",
-    );
-  }
-  if (source.formerInstance) return;
-  const holders = await ctx.db
-    .query("devices")
-    .withIndex("by_site_source", (q) =>
-      q
-        .eq("siteId", siteId)
-        .eq("source.integration", "netbox")
-        .eq("source.externalId", source.externalId),
-    )
-    .collect();
-  if (
-    holders.some(
-      (row) => row.objectId !== deviceId && !row.source?.formerInstance,
-    )
-  ) {
-    throw new ConvexError("NetBox a renvoyé cet équipement entre-temps.");
-  }
-};
 
 /**
  * Deletes a manual device that is on no floor, or one NetBox no longer
@@ -336,7 +304,10 @@ export const remove = editorMutation({
       .withIndex("by_device", (q) => q.eq("deviceId", deviceId))
       .collect();
     for (const row of macs) await ctx.db.delete(row._id);
-    const cabling = await deleteDeviceCabling(ctx, deviceId);
+    // NetBox no longer lists an absent device's cables (ADR 0034).
+    const cabling = await deleteDeviceCabling(ctx, deviceId, {
+      keepSourced: isAbsentFromSource(device.source),
+    });
     await ctx.db.delete(device._id);
     return {
       ...cabling,

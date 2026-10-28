@@ -193,6 +193,40 @@ describe("buildInverseOperation", () => {
     ).toContainEqual(absent);
   });
 
+  it("brings an absent device's NetBox cables back as manual ones", () => {
+    const { a, snapshot } = cabledPair();
+    const sourced = {
+      ...snapshot,
+      devices: snapshot.devices.map((each) =>
+        each.id === a.id
+          ? {
+              ...each,
+              source: {
+                integration: "netbox" as const,
+                externalId: "42",
+                syncedAt: 1,
+                missingSince: 5,
+              },
+            }
+          : each,
+      ),
+      cables: snapshot.cables.map((cable) => ({
+        ...cable,
+        source: { integration: "netbox" as const, externalId: "100" },
+      })),
+    };
+
+    const inverse = buildInverseOperation(sourced, {
+      kind: "device.delete",
+      meta: meta(1),
+      deviceId: a.id,
+    });
+
+    expect(inverse).toMatchObject({ kind: "device.create" });
+    if (inverse?.kind !== "device.create") return;
+    expect(inverse.cables).toEqual(snapshot.cables);
+  });
+
   it("puts an unplaced device back, and takes a placed one off", () => {
     const { a, snapshot } = cabledPair();
     const unplace: MapOperation = {
