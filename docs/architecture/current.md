@@ -273,12 +273,15 @@ Built by lot 3b (ADR 0025) and redrawn by the UX lot U3 (ADR 0029).
   `useCableCommands`, the port table's mutations and its "Annuler" toast,
   outside the map's undo; Ctrl+Z right after a cable change shows that
   toast again rather than undoing an older map edit. Cables an integration made, and cables to another
-  floor, stay with the port table.
+  floor, stay with the port table. Undoing a device's deletion lays its
+  cables again where they still fit, and says how many could not
+  (`droppedCables` in the operation's result).
 - **Text labels.** A floor carries free text labels (`mapLabels`, ADR
   0029), such as room names, with no link to its walls. They are map
   operations (`label.create`, `label.patch`, `label.delete`) with an inverse
   and the same server planning as the rest; the « Texte » tool (5 or T)
-  puts one where the plan is clicked. They go with a deleted floor.
+  puts one where the plan is clicked. They go with a deleted floor, whose
+  confirmation names them.
 - **View, keys and selection (ADR 0030).** Each floor's view lives in
   `sessionStorage`; a first visit fits devices, walls and calque at most at
   100 %, and the view zooms out at least far enough to show them whole. A device selected from outside the plan goes through

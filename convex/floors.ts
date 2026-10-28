@@ -121,6 +121,7 @@ const contentValidator = v.object({
   devices: v.number(),
   wallBlocks: v.number(),
   overlays: v.number(),
+  labels: v.number(),
 });
 
 /** What stands on a floor, so its removal says why it cannot happen yet. */

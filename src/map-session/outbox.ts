@@ -7,6 +7,8 @@ export interface OutboxApplyResult {
   appliedRevision?: number;
   floorId?: string;
   error?: string;
+  /** Cables an undone deletion could not lay again. */
+  droppedCables?: number;
 }
 
 /** The rejection an operation gets when the user's role cannot edit. */

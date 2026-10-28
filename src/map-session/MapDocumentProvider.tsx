@@ -20,6 +20,7 @@ import type {
 import { movedAsExpected } from "@/map-engine/devicePatch";
 import { normalizeLabelText } from "@/map-engine/labels";
 import { validateGroupMove } from "@/map-engine/validation";
+import { toast } from "sonner";
 import { forgetCableChange, reshowCableChange } from "@/devices/cableUndo";
 import {
   createObjectId,
@@ -69,6 +70,7 @@ import {
   appendCappedHistory,
   coalesceHistoryGroupOperations,
   dispatchUndoRedoEvent,
+  droppedCablesMessage,
   removeHistoryEntriesForOperation,
   removePendingHistoryGroupOperation,
   withOperationMeta,
@@ -1113,6 +1115,13 @@ export function MapDocumentProvider({
         applyMutation({ operation: toServerOperation(operation) }),
       ),
       onAck: (operation, result) => {
+        // The device is back, but the user lost cables to lay again by hand.
+        if (result.droppedCables) {
+          const { title, description } = droppedCablesMessage(
+            result.droppedCables,
+          );
+          toast.warning(title, { description });
+        }
         ackedRevisionsRef.current.set(
           operation.meta.opId,
           result.appliedRevision ?? 0,

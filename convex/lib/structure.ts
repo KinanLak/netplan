@@ -56,7 +56,7 @@ export async function floorContent(
   ctx: QueryCtx,
   floorId: string,
 ): Promise<StructureContent> {
-  const [devices, walls, overlays] = await Promise.all([
+  const [devices, walls, overlays, labels] = await Promise.all([
     ctx.db
       .query("devices")
       .withIndex("by_floor", (q) => q.eq("placement.floorId", floorId))
@@ -69,11 +69,16 @@ export async function floorContent(
       .query("floorOverlays")
       .withIndex("by_floor", (q) => q.eq("floorId", floorId))
       .collect(),
+    ctx.db
+      .query("mapLabels")
+      .withIndex("by_floor", (q) => q.eq("floorId", floorId))
+      .collect(),
   ]);
   return {
     devices: devices.length,
     wallBlocks: walls.length,
     overlays: overlays.length,
+    labels: labels.length,
   };
 }
 

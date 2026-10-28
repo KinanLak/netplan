@@ -380,6 +380,8 @@ export default defineSchema({
     status: v.union(v.literal("applied"), v.literal("rejected")),
     error: v.optional(v.string()),
     appliedRevision: v.optional(v.number()),
+    /** Cables an undone deletion could not lay again, said once more on a replay. */
+    droppedCables: v.optional(v.number()),
     createdAt: v.number(),
     appliedAt: v.number(),
   })

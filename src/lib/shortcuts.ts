@@ -129,14 +129,17 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
   undo: {
     keys: ["Mod+Z"],
     label: "Annuler",
-    description: "Annuler la dernière action",
+    // Cables are outside the plan's history: undo reaches only the last one,
+    // through its toast (B14), and the help says so (4.3).
+    description:
+      "Annuler la dernière modification du plan, ou le dernier câble",
     scope: "global",
     requiresEdit: true,
   },
   redo: {
     keys: ["Mod+Shift+Z", "Mod+Y"],
     label: "Rétablir",
-    description: "Rétablir l'action annulée",
+    description: "Rétablir la modification du plan annulée",
     scope: "global",
     requiresEdit: true,
   },

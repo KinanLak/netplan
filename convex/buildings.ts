@@ -155,6 +155,7 @@ export const content = readerQuery({
       devices: v.number(),
       wallBlocks: v.number(),
       overlays: v.number(),
+      labels: v.number(),
     }),
     v.null(),
   ),
