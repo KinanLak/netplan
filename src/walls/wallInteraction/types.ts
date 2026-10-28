@@ -41,8 +41,13 @@ export interface WallInteractionState {
   pointerSnapPoint: Position | null;
   lastWallStartPoint: Position | null;
   drawMessage: string | null;
-  /** The anchor came from pressing the pane: its release may end the shape. */
-  anchoredByPress: boolean;
+  /**
+   * Where the pane was pressed when the press set the anchor: its release
+   * may end the shape, unless it stays near the press, as a click does.
+   */
+  pressPointer: Position | null;
+  /** Counts the shapes refused here, so each one flashes the toolbar (A19). */
+  refusals: number;
   erasePreviewKeys: Array<string>;
   eraseStrokeLastSample: PointerSample | null;
   isEraseStrokeActive: boolean;

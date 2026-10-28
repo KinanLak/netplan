@@ -19,6 +19,7 @@ import {
   useWallEraserSize,
 } from "@/store/selectors";
 import { useMapDocumentActions } from "@/map-session/useMapDocument";
+import { dispatchUndoRedoEvent } from "@/map-session/history";
 import { snapPositionToWallGrid } from "@/walls/gridGeometry";
 import {
   cancelWallTool,
@@ -105,6 +106,11 @@ export const useWallToolSession = (): WallToolSession => {
   };
 
   const commitInteractionState = (nextState: WallInteractionState) => {
+    // A shape refused here flashes the toolbar red, as one the server
+    // refuses does (A19).
+    if (nextState.refusals > stateRef.current.refusals) {
+      dispatchUndoRedoEvent("refused");
+    }
     stateRef.current = nextState;
     setInteractionState(nextState);
   };

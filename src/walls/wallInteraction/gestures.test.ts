@@ -193,7 +193,7 @@ describe("press and drag", () => {
     );
     expect(adapter.addWallRoom).toHaveBeenCalledTimes(1);
     expect(released.state.drawAnchor).toBe(null);
-    expect(released.state.anchoredByPress).toBe(false);
+    expect(released.state.pressPointer).toBe(null);
   });
 
   it("keeps the anchor of a press released in place, for a second click", () => {
@@ -217,6 +217,55 @@ describe("press and drag", () => {
     );
     expect(adapter.addWallRoom).toHaveBeenCalledTimes(1);
     expect(second.state.drawAnchor).toBe(null);
+  });
+
+  it("takes a click on a cell's edge for a click, not a two-cell wall", () => {
+    const context = makeContext();
+    const adapter = { ...makeAdapter(), addWallLine: mock(applied) };
+    // The hover snapped above the edge at y = 140, the release below it.
+    const hovered = moveWallPointer(
+      createWallInteractionState(),
+      context,
+      adapter,
+      sampleAt(690, 139.6),
+      0,
+    );
+    const pressed = pressWallPane(
+      hovered,
+      context,
+      adapter,
+      sampleAt(690, 139.6),
+    );
+    const clicked = clickWallPane(
+      pressed,
+      context,
+      adapter,
+      sampleAt(690, 140.2),
+    );
+    expect(sampleAt(690, 140.2).snappedPoint).not.toEqual(pressed.drawAnchor);
+    expect(adapter.addWallLine).not.toHaveBeenCalled();
+    expect(clicked.state.drawAnchor).toEqual(pressed.drawAnchor);
+  });
+
+  it("counts each refused wall or room, not one that only repeats walls", () => {
+    const refusedBy = (reason: WallCommandResult["reason"]) => {
+      const adapter = {
+        ...makeAdapter(),
+        addWallLine: mock(() => unchangedResult(reason)),
+      };
+      const context = makeContext();
+      const anchored = clickWallPane(
+        createWallInteractionState(),
+        context,
+        adapter,
+        sampleAt(40, 40),
+      ).state;
+      const once = clickWallPane(anchored, context, adapter, sampleAt(200, 40));
+      return clickWallPane(once.state, context, adapter, sampleAt(220, 40))
+        .state.refusals;
+    };
+    expect(refusedBy("collision-with-device")).toBe(2);
+    expect(refusedBy("already-exists")).toBe(0);
   });
 
   it("does nothing for the brush, the eraser, or a shape already started", () => {
