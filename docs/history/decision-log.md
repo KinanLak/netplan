@@ -3171,6 +3171,112 @@ Questions of 2026-10-27, in the order they came up (#130, #131, #132).
 - Decision:
   - Every browser check goes to a codex `gpt-6.1-terra` delegate on this worktree's dev:agent. It uses the T3 Code browser by default, and Playwright only for the wheel, modifier keys during a drag, precise group drags and reload timing.
   - The lot agent keeps git, processes, Docker and fixes, and checks positions against the Convex data itself.
+
+### U8 — Offline, errors, sign-in and loading
+
+Questions of 2026-10-28, in the order they came up.
+
+##### Should a client-side page change still ask the server for the session?
+
+- Context: the root `beforeLoad` called `getAuthToken` on every navigation; during a Convex outage it failed and the root error screen unmounted the Convex provider (C1).
+- Decision: no. In the browser the root `beforeLoad` and loader answer from what the page loaded with.
+- Why: sign-in and sign-out reload the page, so the answer cannot change; a session lost meanwhile already shows as Convex refusing it, which the signed-in layout handles.
+- Who: agent (obvious)
+
+#### Patch around `ConvexBetterAuthProvider` or replace it?
+
+- Context: its `fetchAccessToken` changes when better-auth's session arrives (U7 race), and it returns null on any token failure, which signs the page out when a token refresh falls in an outage.
+- Decision: replace it with `ConvexProviderWithAuth` and NetPlan's own `useAuth` (`src/lib/session-token.ts`): constant for the page's life, null only on a 401/403, retrying from 1 s to 5 s, and at once when the network returns, while unreachable.
+- Why: both defects come from the identity changing; the upstream provider offers no option to keep it. Its cross-domain one-time-token handling is unused (same origin).
+- Who: agent (judgement call)
+
+#### Does dropping `authClient.useSession()` stop the session from sliding?
+
+- Context: the old provider called `get-session` on load and on focus; that endpoint refreshes the session and its cookie.
+- Decision: keep a `get-session` call on load and when the tab becomes visible, ignored when it fails.
+- Why: the token endpoint refreshes the session row but its cookie is not guaranteed to reach the browser; ADR 0031 promises a 24-hour sliding session.
+- Who: agent (judgement call)
+
+#### How to test the outage?
+
+- Context: C1 needs a Convex outage while the app's server still answers, and CI runs the e2e against a service container a test cannot stop.
+- Decision: `e2e/offline.e2e.ts` cuts Convex's WebSocket with `page.routeWebSocket` and makes server functions answer 502. One test changes page during the outage and edits after it (fails on `main`); another drops the server's answers so an edit stays in flight, cuts, and checks from a second page that it lands. Browser checks used the real container stopped, through a watcher only the lot agent ran.
+- Why: routing reproduces what the browser sees, deterministically.
+- Who: agent (obvious)
+
+#### Why did the e2e smoke test start failing on CI?
+
+- Context: with a second e2e file, Playwright ran two browsers at once on a runner that also hosts the app server and the Convex backend; the first map load then took more than 5 s.
+- Decision: `workers: 1` on CI.
+- Why: deterministic, and the suite is small; raising every expectation's timeout would hide real slowness.
+- Who: agent (obvious)
+
+#### No offline editing: where does « stop at once » live?
+
+- Context: the owner dropped the 30-second grace and the offline queue (2026-10-28, second round), and asked to stay quiet about network blips.
+- Decision: two flags. `isOffline`, set the moment Convex's socket closes or `navigator.onLine` goes false, stops every write: the map session refuses operations, a drag released then goes back, and every user change elsewhere, the administration included, goes through `useOnlineMutation`, which refuses it with « Hors connexion : la modification n'a pas été envoyée. ». `isMapFrozen` follows once the drop has lasted 2 s: the edit controls leave as for a Lecteur, open tools close, and one discreet line shows.
+- Why: nothing is written or queued offline from the first moment, while a socket that reconnects at once keeps open panels and what is typed in them (zipzoup P2 on #149).
+- Who: owner (theme 6) for the rule; agent (judgement call) for the 2-second split
+
+#### What happens to an edit in flight when the connection drops?
+
+- Context: « confirmed on reconnection or rolled back visibly, never lost silently ».
+- Decision: Convex's client keeps a mutation in flight and sends it again on reconnection; the server confirms or refuses it, and a refusal rolls back with the usual toast. The outbox no longer retries: a function that fails rolls back with the server's message, and so do the operations made after it. The offline line counts unconfirmed edits, and leaving the page asks first.
+- Why: the retry machinery only served offline editing; Convex already owns redelivery.
+- Who: agent (judgement call)
+
+#### What does the offline line say?
+
+- Context: « keep the offline indicator minimal ».
+- Decision: « Hors connexion », plus « lecture seule » for those who can edit, plus the count of unconfirmed edits. It no longer tells « Serveur injoignable » from « Pas de connexion réseau » or says that data may be stale.
+- Why: the user cannot act on the difference; only the read-only state and an unconfirmed edit matter to them.
+- Who: agent (judgement call)
+
+#### How does the error screen tell an unreachable backend from an unexpected failure?
+
+- Context: a server function's error reaches the browser as a plain `Error` whose message varies by runtime; behind Caddy, Convex down even made the token helper answer null, as for no session, which sent everyone to `/login`.
+- Decision: `getAuthToken` throws `Error("NetPlan: backend unreachable")` and logs the cause. A request with a session cookie that gets no token checks `/health` before calling the visitor signed out. `/health` now also checks `CONVEX_SITE_URL`, where sessions are read.
+- Why: the message is all that survives serialisation, and a 502 behind a proxy must read as an outage, not as a lost session.
+- Who: agent (judgement call)
+
+#### How does the error screen notice the server is back?
+
+- Context: it only listened to `online`, which never fires when only the server goes down; a root error screen has no Convex client to watch.
+- Decision: probe `/health` at 2 s, doubling up to 30 s, and at once on `online`; reload the route when it answers 200. A screen first shown offline keeps healing once the network returns. The screen stays because the page cannot render without the server; it says nothing more.
+- Why: works for the root and page screens alike, and `/health` exists for this.
+- Who: agent (obvious)
+
+#### How to keep an offline page change inside NetPlan?
+
+- Context: a never-visited page's chunk fails offline, and TanStack's lazy component then reloads the window onto the browser's error page.
+- Decision: once signed in, fetch every route's chunks when the first page is idle (`router.loadRouteChunk`). A full reload offline still ends on the browser's page: without a service worker there is nothing to serve.
+- Why: a few hundred compressed kilobytes once, against a dead end offline; the router's reload cannot be turned off.
+- Who: agent (judgement call)
+
+#### Skeletons for `ssr: false` pages: per-route `pendingComponent` or an app-wide one?
+
+- Context: the server rendered nothing but the title for every signed-in page; TanStack Start renders a `ssr: false` route's `pendingComponent` on the server.
+- Decision: per route, each the shape of its page (map, list page, admin menu and list), with `defaultPendingMinMs: 0` so a fast load is not held back.
+- Why: the frame then matches what replaces it, without a jump (measured: 256 px and 224 px columns, as the real pages).
+- Who: agent (obvious)
+
+#### Compress in Caddy too?
+
+- Context: the counter-verification suggested `encode zstd gzip` in `deploy/Caddyfile` and Nitro's precompression.
+- Decision: Nitro's precompressed assets only; dynamic responses stay uncompressed.
+- Why: the assets are the weight (532 KB → 147 KB); the HTML and server-function answers carry the session's token next to reflected search parameters, BREACH's precondition.
+- Who: agent (judgement call)
+
+#### Which ADR number?
+
+- Context: 0034 to 0036 and 0038 were taken by other lots while this one ran.
+- Decision: ADR 0037, superseding the « Offline » section of ADR 0031.
+- Who: agent (obvious)
+
+#### Who checks in the browser?
+
+- Context: owner's rule of 2026-10-28, given during this lot, then refined: the T3 browser by default, Playwright only for offline, a stopped backend, slow 3G and timings, and no re-check of what was validated.
+- Decision: every browser check went to a codex `gpt-6.1-terra` delegate (`isolation: shared`) on this worktree's dev:agent and a production build of it. The lot agent kept git, processes, Docker (its own container, stopped on request through a watcher) and fixes.
 - Who: owner
 
 #### Items
@@ -3191,3 +3297,17 @@ Questions of 2026-10-27, in the order they came up (#130, #131, #132).
 
 - 4.1 was shown by deleting the cable's far end from the plan in a second tab, outside the first tab's undo history.
 - No NetBox test object was created, and the real NetBox and LibreNMS got no request.
+
+- C1 (no page change during an outage swaps in the error screen or drops Convex's identity; reframed by the owner's « no editing offline »): fait #136
+- A44 (the offline line and the page survive a page change during an outage; reframed likewise): fait #136
+- No editing offline (owner, 2026-10-28, second round): fait #149
+- U7 token race at sign-in on a slow link: fait #136
+- G1 presence errors left uncaught: fait #136
+- G1 the offline line follows `navigator.onLine`: fait #149
+- A43 (« Serveur injoignable » rather than « erreur inattendue », the screen heals by itself, offline page changes stay in NetPlan): fait #144
+- G1 a malformed identifier reads « Identifiant ou mot de passe incorrect. »: fait #144
+- A45 (frames from the server on a slow link, compressed assets, the history list kept during a search): fait #145
+
+#### Leftovers
+
+- None in scope. No NetBox or LibreNMS request was made. The demo data of this worktree's backend was reseeded once, after an aborted e2e run left a switch moved.
