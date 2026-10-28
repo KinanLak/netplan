@@ -57,6 +57,7 @@ import {
   readLibreNMSPorts,
   sightingSummary,
   socketMoves,
+  socketSightings,
 } from "../src/sites/librenmsCycle";
 import type {
   FdbEntry,
@@ -513,7 +514,9 @@ export const adoptPortNames = internalMutation({
  * up again, so a device that dropped a MAC, or a MAC whose device was
  * deleted, is settled too. A device seen at another socket than the last
  * time, or while on no floor, is placed next to the socket; where a person
- * put it is kept while the socket stays the same.
+ * put it is kept while the socket stays the same. One seen at several new
+ * sockets about as recent is held: it stays, and so does where its MACs were
+ * last seen, for a later cycle to decide (ADR 0038).
  */
 export const recordSightings = internalMutation({
   args: {
@@ -537,6 +540,14 @@ export const recordSightings = internalMutation({
       }),
     ),
     sightings: v.array(macSighting),
+    /** Every socket each MAC was seen behind (`SocketSighting`). */
+    socketSightings: v.array(
+      v.object({
+        mac: v.string(),
+        socketId: v.string(),
+        updatedAt: v.optional(v.number()),
+      }),
+    ),
     tables: v.array(v.object({ deviceId: v.number(), table: fdbTable })),
   },
   returns: v.union(
@@ -561,12 +572,13 @@ export const recordSightings = internalMutation({
       links,
       presence,
       sightings,
+      socketSightings: seenAtSockets,
       tables,
     },
   ) => {
-    const held = await heldCycle(ctx, siteId, cycleId, baseUrl);
-    if (!held) return null;
-    const { cycle } = held;
+    const holding = await heldCycle(ctx, siteId, cycleId, baseUrl);
+    if (!holding) return null;
+    const { cycle } = holding;
 
     const site = await ctx.db
       .query("sites")
@@ -628,10 +640,28 @@ export const recordSightings = internalMutation({
     const owners = new Map<string, Doc<"devices">>();
     const dropped = new Set<string>();
     const presentOwners = new Map<string, { id: string; placed: boolean }>();
+    const ownerOfMac = new Map<string, Doc<"devices"> | null>();
+    for (const mac of misses.keys()) {
+      const owner = await ownerOf(ctx, siteId, mac);
+      ownerOfMac.set(mac, owner);
+      if (owner && sightingOf.has(mac) && PRESENT_TYPES.has(owner.type)) {
+        presentOwners.set(mac, {
+          id: owner.objectId,
+          placed: owner.placement !== undefined,
+        });
+      }
+    }
+    const { moves, held } = socketMoves(seenAtSockets, presentOwners, rows);
+    const socketsOf = new Map<string, Set<string>>();
+    for (const { mac, socketId } of seenAtSockets) {
+      socketsOf.set(mac, (socketsOf.get(mac) ?? new Set()).add(socketId));
+    }
+    // The MACs whose sighting keeps the place it had, with that place.
+    const kept = new Map<string, Doc<"macSightings">>();
     const ignored = await ignoredMacsOf(ctx, siteId);
     let unknown = 0;
     for (const [mac, missed] of misses) {
-      const owner = await ownerOf(ctx, siteId, mac);
+      const owner = ownerOfMac.get(mac) ?? null;
       const row = rowOf.get(mac);
       const seen = sightingOf.get(mac);
       if (owner) owners.set(owner.objectId, owner);
@@ -639,25 +669,31 @@ export const recordSightings = internalMutation({
       if (row?.ownerId !== undefined && row.ownerId !== owner?.objectId) {
         dropped.add(row.ownerId);
       }
-      if (owner && seen && PRESENT_TYPES.has(owner.type)) {
-        presentOwners.set(mac, {
-          id: owner.objectId,
-          placed: owner.placement !== undefined,
-        });
-      }
       if (!owner && missed >= MISSES_OFFLINE) {
         if (row) await ctx.db.delete(row._id);
         continue;
       }
+      // A MAC still behind the socket it was last seen at stays there, so a
+      // second socket seen at once moves nothing; a held device's MACs keep
+      // their place while where it is stays undecided.
+      const placeKept =
+        seen !== undefined &&
+        row !== undefined &&
+        (held.has(owner?.objectId ?? "") ||
+          (row.socketId !== undefined &&
+            seen.socketId !== row.socketId &&
+            (socketsOf.get(mac)?.has(row.socketId) ?? false)));
+      if (placeKept) kept.set(mac, row);
       const fields = {
         misses: missed,
         ownerId: owner?.objectId,
-        ...(seen && {
-          switchId: seen.switchId,
-          portId: seen.portId,
-          socketId: seen.socketId,
-          seenAt: now,
-        }),
+        ...(seen && { seenAt: now }),
+        ...(seen &&
+          !placeKept && {
+            switchId: seen.switchId,
+            portId: seen.portId,
+            socketId: seen.socketId,
+          }),
       };
       if (!row && seen) {
         await ctx.db.insert("macSightings", {
@@ -701,17 +737,42 @@ export const recordSightings = internalMutation({
     }
 
     let placed = 0;
-    for (const [deviceId, socketId] of socketMoves(
-      sightings,
-      presentOwners,
-      rows,
-    )) {
+    for (const [deviceId, socketId] of moves) {
       const device = owners.get(deviceId);
       if (device && (await placeNextTo(ctx, device, socketId))) placed += 1;
     }
+    // The history follows the map: nothing for a held device, and a device
+    // placed at a socket is located on the port it was seen at there.
+    const ownerIdOf = (mac: string) => presentOwners.get(mac)?.id;
+    const atTarget = ({
+      mac,
+      socketId,
+    }: {
+      mac: string;
+      socketId?: string;
+    }) => {
+      const id = ownerIdOf(mac);
+      return (
+        id !== undefined && socketId !== undefined && moves.get(id) === socketId
+      );
+    };
+    const located = sightings
+      .filter(({ mac }) => !held.has(ownerIdOf(mac) ?? ""))
+      .map((one) => {
+        const row = kept.get(one.mac);
+        return row
+          ? {
+              mac: one.mac,
+              portId: row.portId,
+              switchId: row.switchId,
+              ...(row.socketId !== undefined && { socketId: row.socketId }),
+            }
+          : one;
+      })
+      .toSorted((a, b) => Number(atTarget(b)) - Number(atTarget(a)));
     const placeOf = placeNamer(ctx);
     for (const [deviceId, { seen, first }] of portMoves(
-      sightings,
+      located,
       presentOwners,
       rows,
     )) {
@@ -1034,6 +1095,7 @@ export const collectFromLibreNMS = async (
       links,
       presence: portPresence(fdb, matched, ports),
       sightings,
+      socketSightings: socketSightings(fdb, matched, ports),
       tables,
     },
   );

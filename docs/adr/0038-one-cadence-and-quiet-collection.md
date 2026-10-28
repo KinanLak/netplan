@@ -71,7 +71,10 @@ seen, moves to the socket whose LibreNMS entry is clearly the most recent:
 newer than every other by more than two minutes, the spread of one cycle's
 discoveries (`FDB_FRESH_MS`). When the entries are about as recent, or carry
 no time, it stays where it is, its sightings keep their last place, and a
-later cycle decides. There is no new state and no message.
+later cycle decides. There is no new state and no message. Likewise a MAC
+still seen behind the socket it was last seen at keeps that place when it
+shows behind another one too, so the next cycle does not take the other for
+a move. The history records a location only where the map moves.
 
 ## LibreNMS's port names are proposed, not adopted
 

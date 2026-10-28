@@ -1327,6 +1327,104 @@ describe("the LibreNMS step", () => {
     ]);
   });
 
+  it("holds a device seen at two new sockets about as recent, until a cycle tells", async () => {
+    const { admin, siteId } = await siteWithLibreNMS();
+    const buildingId = await admin.mutation(api.buildings.create, {
+      siteId,
+      objectId: "building:cycle",
+      name: "Bâtiment",
+    });
+    const floorId = await admin.mutation(api.floors.create, {
+      objectId: "floor:cycle",
+      buildingId,
+      name: "RDC",
+    });
+    await admin.mutation(api.devices.create, {
+      siteId,
+      deviceId: "device:socket-2",
+      type: "wall-port",
+      identity: { name: "socket-2", macs: [] },
+      cables: [
+        {
+          id: "cable:desk-2",
+          a: { deviceId: "device:sw", portId: "port:device:sw:interface:2" },
+          b: {
+            deviceId: "device:socket-2",
+            portId: "port:device:socket-2:front:1",
+          },
+        },
+      ],
+    });
+    const placementOf = async (deviceId: string) =>
+      await admin.run(
+        async (ctx) =>
+          (
+            await ctx.db
+              .query("devices")
+              .withIndex("by_object_id", (q) => q.eq("objectId", deviceId))
+              .unique()
+          )?.placement ?? null,
+      );
+    await admin.run(async (ctx) => {
+      for (const [deviceId, x] of [
+        ["device:socket", 400],
+        ["device:socket-2", 2000],
+      ] as const) {
+        const row = await ctx.db
+          .query("devices")
+          .withIndex("by_object_id", (q) => q.eq("objectId", deviceId))
+          .unique();
+        if (row) {
+          await ctx.db.patch(row._id, {
+            placement: {
+              floorId,
+              position: { x, y: 400 },
+              size: { width: 40, height: 40 },
+            },
+          });
+        }
+      }
+    });
+    const discoverAgain = async () =>
+      await admin.run(async (ctx) => {
+        const row = await ctx.db.query("siteCycles").first();
+        if (row) await ctx.db.patch(row._id, { librenmsDiscoveryAt: 0 });
+      });
+
+    // Behind both sockets in one discovery: online, but nowhere yet.
+    librenms.state.fdb = [
+      { port_id: 101, mac_address: PC },
+      { port_id: 102, mac_address: PC },
+    ];
+    expect((await cycle(admin, siteId)).message).toContain(
+      "1 MAC vue (1 passé en ligne).",
+    );
+    expect(await statusOf(admin, "device:pc")).toBe("up");
+    expect(await placementOf("device:pc")).toBeNull();
+
+    // Behind one only: it goes there.
+    librenms.state.fdb = [{ port_id: 102, mac_address: PC }];
+    await discoverAgain();
+    expect((await cycle(admin, siteId)).message).toContain(
+      "1 placé près de sa prise",
+    );
+    const placed = await placementOf("device:pc");
+    expect(placed?.position.x).toBeGreaterThan(1800);
+
+    // Then behind both again: it stays, and so does where it was seen.
+    librenms.state.fdb = [
+      { port_id: 101, mac_address: PC },
+      { port_id: 102, mac_address: PC },
+    ];
+    await discoverAgain();
+    await cycle(admin, siteId);
+    expect(await placementOf("device:pc")).toEqual(placed);
+    expect((await sightings(admin))[0]).toMatchObject({
+      mac: PC,
+      socketId: "device:socket-2",
+    });
+  });
+
   it("lists unknown MACs and makes an endpoint of one, next to its socket", async () => {
     const { admin, siteId } = await siteWithLibreNMS();
     const buildingId = await admin.mutation(api.buildings.create, {
@@ -1633,6 +1731,7 @@ describe("the LibreNMS step", () => {
             switchId: "device:sw",
           },
         ],
+        socketSightings: [],
         tables: [],
       }),
     ).toBeNull();
