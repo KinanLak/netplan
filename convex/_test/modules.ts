@@ -8,6 +8,7 @@
 export const modules: Record<string, () => Promise<Record<string, any>>> = {
   "./_generated/api.ts": () => import("../_generated/api.js"),
   "./auth.ts": () => import("../auth"),
+  "./authAttempts.ts": () => import("../authAttempts"),
   "./authSettings.ts": () => import("../authSettings"),
   "./bootstrap.ts": () => import("../bootstrap"),
   "./buildings.ts": () => import("../buildings"),
@@ -32,7 +33,6 @@ export const modules: Record<string, () => Promise<Record<string, any>>> = {
   "./netboxPush.ts": () => import("../netboxPush"),
   "./presences.ts": () => import("../presences"),
   "./schema.ts": () => import("../schema"),
-  "./signInAttempts.ts": () => import("../signInAttempts"),
   "./sites.ts": () => import("../sites"),
   "./unknownMacs.ts": () => import("../unknownMacs"),
   "./users.ts": () => import("../users"),

@@ -64,6 +64,18 @@ describe("login", () => {
     expect(loginErrorMessage({ code: "BANNED_USER" })).toContain("désactivé");
     expect(loginErrorMessage({ status: 429 })).toContain("Trop de tentatives");
   });
+
+  it("says how long to wait, in whole minutes", () => {
+    expect(loginErrorMessage({ status: 429, retryAfter: 45 })).toBe(
+      "Trop de tentatives. Réessayez dans une minute.",
+    );
+    expect(loginErrorMessage({ status: 429, retryAfter: 230 })).toBe(
+      "Trop de tentatives. Réessayez dans 4 minutes.",
+    );
+    expect(forgotPasswordErrorMessage({ status: 429, retryAfter: 900 })).toBe(
+      "Trop de demandes. Réessayez dans 15 minutes.",
+    );
+  });
 });
 
 describe("isSessionLost", () => {

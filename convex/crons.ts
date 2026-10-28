@@ -35,9 +35,9 @@ crons.daily(
 );
 
 crons.hourly(
-  "purge ended sign-in windows",
+  "purge sign-in attempts left alone for an hour",
   { minuteUTC: 23 },
-  internal.signInAttempts.purge,
+  internal.authAttempts.purge,
   {},
 );
 

@@ -25,6 +25,7 @@ import {
 } from "./lib/keycloak";
 import type { KeycloakConfig } from "./lib/keycloak";
 import { resetPasswordMail } from "./lib/mailTemplates";
+import type { AttemptKind } from "./lib/signInLimit";
 import { noteSignIn } from "./lib/signIns";
 
 // A session ends after 24 hours without use, and 7 days after login
@@ -101,6 +102,29 @@ async function applyKeycloakRole(
 }
 
 /**
+ * The attempt a request makes on an identifier, for the endpoints that
+ * check a password or send a mail to an address (ADR 0036).
+ */
+function limitedAttempt(
+  path: string | undefined,
+  body: unknown,
+): { kind: AttemptKind; identifier: string } | null {
+  const [kind, field] =
+    path === "/sign-in/username"
+      ? (["sign-in", "username"] as const)
+      : path === "/sign-in/email"
+        ? (["sign-in", "email"] as const)
+        : path === "/request-password-reset"
+          ? (["password-reset", "email"] as const)
+          : [];
+  if (!kind) return null;
+  const identifier: unknown = (body as Record<string, unknown> | undefined)?.[
+    field
+  ];
+  return typeof identifier === "string" ? { kind, identifier } : null;
+}
+
+/**
  * `GET /api/auth/sign-in-options`: what the login page offers, read before
  * anyone is signed in.
  */
@@ -132,57 +156,36 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
       expiresIn: SESSION_SECONDS,
       updateAge: SESSION_REFRESH_SECONDS,
     },
-    rateLimit: {
-      enabled: true,
-      storage: "database",
-      // The limit guards credentials. These two run on every page load with a
-      // valid session cookie, and counting them would write a row each time
-      // and, behind an edge that does not set X-Forwarded-For, lock every
-      // user out together.
-      customRules: {
-        "/convex/token": false,
-        "/get-session": false,
-        // The app server asks on behalf of every visitor of the login page.
-        "/sign-in-options": false,
-        // `/health` asks it on every probe, from monitoring and from error
-        // screens waiting for the backend; a 429 would read as an outage.
-        "/ok": false,
-        // Only starts the redirect to Keycloak, which guards the password;
-        // the strict sign-in rule would turn a team's morning logins away.
-        "/sign-in/oauth2": { window: 10, max: 100 },
-        // Without a client address every user shares these buckets, so they
-        // only stop an attempt spread over many accounts; the hook below
-        // limits each identifier (ADR 0031).
-        "/sign-in/username": { window: 60, max: 60 },
-        "/sign-in/email": { window: 60, max: 60 },
-        // Shared too: three a minute would turn away the third person to
-        // forget a password that minute.
-        "/request-password-reset": { window: 60, max: 10 },
-      },
-    },
+    // better-auth counts per client address, and Netplan's servers see none
+    // they can trust: every visitor would share one bucket, which one
+    // stranger could empty for everyone. Attempts count per identifier in
+    // the hooks below instead (ADR 0036).
+    rateLimit: { enabled: false },
     hooks: {
       before: createAuthMiddleware(async (endpoint) => {
-        const field =
-          endpoint.path === "/sign-in/username"
-            ? "username"
-            : endpoint.path === "/sign-in/email"
-              ? "email"
-              : null;
-        if (!field) return;
-        const identifier: unknown = (
-          endpoint.body as Record<string, unknown> | undefined
-        )?.[field];
-        if (typeof identifier !== "string") return;
-        const allowed = await requireActionCtx(ctx).runMutation(
-          internal.signInAttempts.consume,
-          { identifier },
+        const limited = limitedAttempt(endpoint.path, endpoint.body);
+        if (!limited) return;
+        const result = await requireActionCtx(ctx).runMutation(
+          internal.authAttempts.consume,
+          limited,
         );
-        if (!allowed) {
+        if (!result.allowed) {
           throw new APIError("TOO_MANY_REQUESTS", {
             code: "TOO_MANY_ATTEMPTS",
-            message: "Too many sign-in attempts for this identifier.",
+            message: "Too many attempts for this identifier.",
+            retryAfter: Math.ceil(result.retryAfterMs / 1000),
           });
         }
+      }),
+      after: createAuthMiddleware(async (endpoint) => {
+        const limited = limitedAttempt(endpoint.path, endpoint.body);
+        if (limited?.kind !== "sign-in" || !endpoint.context.newSession) {
+          return;
+        }
+        await requireActionCtx(ctx).runMutation(
+          internal.authAttempts.clear,
+          limited,
+        );
       }),
     },
     account: {
@@ -193,7 +196,9 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
     },
     // Linking from a signed-in session does not check the setting above, and
     // generic OAuth also registers Keycloak with the social linking route.
-    disabledPaths: ["/oauth2/link", "/link-social"],
+    // Without a per-address limit, asking whether a username is free would
+    // list the accounts one by one; the sign-in page never asks (ADR 0036).
+    disabledPaths: ["/oauth2/link", "/link-social", "/is-username-available"],
     // OAuth failures that happen before the sign-in state is read (Keycloak
     // answering access_denied, a lost state) go here, not to an English
     // library page; the login page explains the code.
