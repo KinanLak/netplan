@@ -365,6 +365,32 @@ describe("the push to NetBox", () => {
     expect(patches).toHaveLength(2);
   });
 
+  it("clears a refusal once the device is back where NetBox shows it, writing nothing", async () => {
+    const { admin, siteId } = await pushingSite();
+    await turnOn(admin, siteId);
+    let status = 200;
+    const patches = netboxAnswering(() => status);
+    await push(admin, siteId);
+
+    status = 400;
+    await moveTo(admin, siteId, {
+      portId: "port:sw:2",
+      socketId: "device:B-02",
+      seenAt: NOW + 5 * 60_000,
+    });
+    await push(admin, siteId);
+    expect(await failing(admin, siteId)).toHaveLength(1);
+
+    await moveTo(admin, siteId, {
+      portId: "port:sw:1",
+      socketId: "device:B-01",
+      seenAt: NOW + 10 * 60_000,
+    });
+    await push(admin, siteId);
+    expect(patches).toHaveLength(2);
+    expect(await failing(admin, siteId)).toEqual([]);
+  });
+
   it("shows a refused device on the health page until NetBox takes it", async () => {
     const { admin, siteId } = await pushingSite();
     await turnOn(admin, siteId);

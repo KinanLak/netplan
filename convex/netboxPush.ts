@@ -131,7 +131,8 @@ const dueDevice = v.object({
 /**
  * One page of the site's NetBox devices with the values due to NetBox. A
  * device not seen yet has nothing to push, and a refused one waits for its
- * `retryAt`.
+ * `retryAt`. `settled` lists the refused devices back where NetBox already
+ * shows them: their failure is moot, and nothing is written to say so.
  */
 export const due = internalQuery({
   args: {
@@ -141,6 +142,7 @@ export const due = internalQuery({
   },
   returns: v.object({
     devices: v.array(dueDevice),
+    settled: v.array(v.string()),
     cursor: v.string(),
     done: v.boolean(),
   }),
@@ -155,9 +157,17 @@ export const due = internalQuery({
         q.eq("siteId", siteId).eq("source.integration", "netbox"),
       )
       .paginate({ numItems: PLAN_PAGE, cursor });
-    if (!site) return { devices: [], cursor: page.continueCursor, done: true };
+    if (!site) {
+      return {
+        devices: [],
+        settled: [],
+        cursor: page.continueCursor,
+        done: true,
+      };
+    }
     const placeOf = placeNamer(ctx);
     const devices = [];
+    const settled = [];
     for (const device of page.page) {
       // NetBox no longer returns it: there is nothing there to write to
       // (ADR 0039).
@@ -168,15 +178,18 @@ export const due = internalQuery({
       if (!sighting) continue;
       const values = pushValues(site.name, await placeOf(sighting));
       const row = await pushRowOf(ctx, device.objectId);
-      if (row?.retryAt !== undefined && row.retryAt > now) continue;
       // Values sent to another NetBox device say nothing of this one.
       const sent = row?.sent && row.netboxId === netboxId ? row.sent : null;
-      if (pushDue(values, sent)) {
-        devices.push({ deviceId: device.objectId, netboxId, values });
+      if (!pushDue(values, sent)) {
+        if (row?.retryAt !== undefined) settled.push(device.objectId);
+        continue;
       }
+      if (row?.retryAt !== undefined && row.retryAt > now) continue;
+      devices.push({ deviceId: device.objectId, netboxId, values });
     }
     return {
       devices,
+      settled,
       cursor: page.continueCursor,
       done: page.isDone,
     };
@@ -251,6 +264,30 @@ export const record = internalMutation({
   },
 });
 
+/** Clears the failures `due` found moot: NetBox shows where they are. */
+export const settle = internalMutation({
+  args: {
+    siteId: v.string(),
+    runId: v.string(),
+    deviceIds: v.array(v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, { siteId, runId, deviceIds }) => {
+    if (!(await mayGoOn(ctx, siteId, runId))) return null;
+    for (const deviceId of deviceIds) {
+      const row = await pushRowOf(ctx, deviceId);
+      if (row?.retryAt === undefined) continue;
+      await ctx.db.patch(row._id, {
+        failures: 0,
+        message: undefined,
+        failingSince: undefined,
+        retryAt: undefined,
+      });
+    }
+    return null;
+  },
+});
+
 export const finish = internalMutation({
   args: { siteId: v.string(), runId: v.string(), result: pushRun },
   returns: v.null(),
@@ -291,6 +328,7 @@ const pushDevices = async (
         netboxId: number;
         values: PushedValues;
       }>;
+      settled: Array<string>;
       cursor: string;
       done: boolean;
     } = await ctx.runQuery(internal.netboxPush.due, {
@@ -298,6 +336,13 @@ const pushDevices = async (
       cursor,
       now: Date.now(),
     });
+    if (page.settled.length > 0) {
+      await ctx.runMutation(internal.netboxPush.settle, {
+        siteId,
+        runId,
+        deviceIds: page.settled,
+      });
+    }
     for (const device of page.devices) {
       if (tally.sent + tally.refused >= MAX_PUSHES_PER_RUN) return;
       let answer;
