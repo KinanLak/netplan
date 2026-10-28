@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { useEffect, useId, useState } from "react";
 import { ModeToggle } from "@/components/mode-toggle";
 import { ListPageSkeleton, ListSkeleton } from "@/components/loading-skeletons";
+import { Pending } from "@/components/pending";
 import { AppNavLinks, UserMenu } from "@/components/app-nav";
 import { NetplanLogo } from "@/components/netplan-logo";
 import { Button } from "@/components/ui/button";
@@ -122,7 +123,9 @@ function InventoryPage() {
       >
         <div className="mx-auto max-w-6xl p-4 md:p-8">
           {site === undefined ? (
-            <ListSkeleton />
+            <Pending>
+              <ListSkeleton />
+            </Pending>
           ) : site === null ? (
             <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
               {sites && sites.length > 0
@@ -352,7 +355,9 @@ function SiteInventory({ site }: { site: SiteSummary }) {
           ) : null}
 
           {devices === undefined ? (
-            <ListSkeleton />
+            <Pending>
+              <ListSkeleton />
+            </Pending>
           ) : all.length === 0 ? (
             <InventoryEmpty
               canEdit={canEdit}

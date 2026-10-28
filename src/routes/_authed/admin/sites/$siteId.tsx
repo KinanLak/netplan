@@ -53,6 +53,7 @@ import {
   siteSettingsProblem,
 } from "@/sites/settings";
 import type { SiteField, SiteProblem, SiteSettings } from "@/sites/settings";
+import { Pending } from "@/components/pending";
 import { api } from "../../../../../convex/_generated/api";
 
 export const Route = createFileRoute("/_authed/admin/sites/$siteId")({
@@ -66,7 +67,7 @@ function SitePage() {
   const { siteId } = Route.useParams();
   const site = useQuery(api.sites.getSettings, { siteId });
 
-  if (site === undefined) return null;
+  if (site === undefined) return <Pending />;
   if (site === null) {
     return (
       <div className="space-y-3">

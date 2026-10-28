@@ -10,6 +10,7 @@ import { describeFreshness } from "@/sites/freshness";
 import type { SitePart } from "@/admin/SiteNav";
 import { INTEGRATION_LABELS } from "@/sites/integrations";
 import type { IntegrationKind } from "@/sites/integrations";
+import { Pending } from "@/components/pending";
 import { api } from "../../../../convex/_generated/api";
 
 export const Route = createFileRoute("/_authed/admin/health")({
@@ -39,7 +40,9 @@ function HealthPage() {
         </p>
       ) : null}
 
-      {sites === undefined ? null : sites.length === 0 ? (
+      {sites === undefined ? (
+        <Pending />
+      ) : sites.length === 0 ? (
         <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed p-8 text-center text-sm">
           <p className="font-medium">Aucun site</p>
           <p className="text-muted-foreground">
