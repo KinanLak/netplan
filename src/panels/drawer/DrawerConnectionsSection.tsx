@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { ArrowRight01Icon } from "@hugeicons/core-free-icons";
 import type { Device, DeviceId } from "@/types/map";
 import { StatusDot } from "@/components/StatusDot";
 import type { DeviceConnection } from "@/devices/ports";
@@ -23,7 +25,7 @@ interface DrawerConnectionsSectionProps {
 const nameOf = (port: DeviceConnection["port"], type: Device["type"]) =>
   type === "patch-panel" ? portLabel(port, type) : shortPortName(port.name);
 
-/** One compact line per cable: « Avant 1 → Prise B-01 », sorted by port. */
+/** One compact line per cable, its port then its far end, sorted by port. */
 export function DrawerConnectionsSection({
   deviceType,
   connections,
@@ -53,9 +55,7 @@ export function DrawerConnectionsSection({
                   <span className="shrink-0 font-mono text-xs text-muted-foreground">
                     {nameOf(port, deviceType)}
                   </span>
-                  <span aria-hidden className="text-muted-foreground">
-                    →
-                  </span>
+                  <FarEndArrow />
                   <span className="min-w-0 flex-1 truncate" title={other.name}>
                     {other.name}
                     {farPort && MANY_PORTS.has(other.type) ? (
@@ -75,7 +75,7 @@ export function DrawerConnectionsSection({
                   <span className="shrink-0 font-mono text-xs">
                     {nameOf(port, deviceType)}
                   </span>
-                  <span aria-hidden>→</span>
+                  <FarEndArrow />
                   {/* Another floor, or no floor at all: the port table says which. */}
                   <span className="truncate">hors de cet étage</span>
                 </div>
@@ -94,5 +94,17 @@ export function DrawerConnectionsSection({
         </button>
       ) : null}
     </section>
+  );
+}
+
+function FarEndArrow() {
+  return (
+    <HugeiconsIcon
+      icon={ArrowRight01Icon}
+      size={12}
+      strokeWidth={1.5}
+      className="shrink-0 text-muted-foreground"
+      aria-hidden
+    />
   );
 }

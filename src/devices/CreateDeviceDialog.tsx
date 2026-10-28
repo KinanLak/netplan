@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -76,10 +75,7 @@ export function CreateDeviceDialog({
       {/* The fields scroll between a fixed title and fixed buttons. */}
       <DialogContent className="max-h-[85vh] grid-rows-[auto_minmax(0,1fr)] sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Nouvel équipement</DialogTitle>
-          <DialogDescription>
-            Il rejoint l'inventaire du site, hors plan.
-          </DialogDescription>
+          <DialogTitle>Créer un équipement</DialogTitle>
         </DialogHeader>
         {/* Mounted on open, so each new device starts from an empty form. */}
         {open ? (
@@ -229,11 +225,7 @@ function CreateDeviceForm({
             {...problem.invalid("macs")}
             onChange={(event) => setMacs(event.target.value)}
           />
-          {problem.errorUnder("macs") ?? (
-            <FieldDescription>
-              Une par ligne, dans n'importe quelle notation.
-            </FieldDescription>
-          )}
+          {problem.errorUnder("macs")}
         </Field>
         <Field data-invalid={problem.isInvalid("notes")}>
           <FieldLabel htmlFor={`${id}-notes`}>Notes</FieldLabel>
@@ -254,7 +246,7 @@ function CreateDeviceForm({
           Annuler
         </Button>
         <Button type="submit" disabled={saving}>
-          Créer
+          Créer l'équipement
         </Button>
       </DialogFooter>
     </form>

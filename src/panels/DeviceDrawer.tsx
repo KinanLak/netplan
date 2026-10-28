@@ -152,6 +152,7 @@ export default function DeviceDrawer() {
               size="sm"
               onClick={handleCloseDrawer}
               className="flex h-8 items-center gap-1.5 px-2"
+              aria-label="Fermer"
             >
               <Kbd>Échap</Kbd>
               <HugeiconsIcon
@@ -182,7 +183,7 @@ export default function DeviceDrawer() {
             className="w-full gap-1.5"
           >
             {shownCablesDeviceId === device.id
-              ? "Masquer les câbles du plan"
+              ? "Masquer les câbles"
               : "Voir les câbles sur le plan"}
             <ShortcutHintInline action="toggle-device-cables" />
           </Button>

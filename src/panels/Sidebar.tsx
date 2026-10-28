@@ -85,7 +85,7 @@ function SidebarFloorShortcutHint() {
   return (
     <div
       className={cn(
-        "inline-flex items-center gap-1 text-xs text-muted-foreground transition-opacity duration-200",
+        "inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-opacity duration-200",
         isModifierVisible ? "opacity-100" : "opacity-0",
       )}
     >
@@ -93,7 +93,6 @@ function SidebarFloorShortcutHint() {
         {sharedFloorModifier ? <Kbd>{sharedFloorModifier}</Kbd> : null}
         <Kbd>{floorUpArrow}</Kbd>
       </KbdGroup>
-      <span>/</span>
       <KbdGroup>
         <Kbd>{floorDownArrow}</Kbd>
       </KbdGroup>
@@ -293,8 +292,8 @@ export default function AppSidebar() {
                     })
                   }
                   className="flex size-5 items-center justify-center rounded-md text-sidebar-foreground ring-sidebar-ring outline-hidden hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2"
-                  title="Nouveau bâtiment"
-                  aria-label="Nouveau bâtiment"
+                  title="Créer un bâtiment"
+                  aria-label="Créer un bâtiment"
                 >
                   <HugeiconsIcon icon={Add01Icon} size={16} strokeWidth={1.5} />
                 </button>

@@ -25,6 +25,7 @@ import {
 import { useSelectionMoves } from "@/canvas/hooks/useSelectionCommands";
 import type { Alignment } from "@/canvas/arrangement";
 import { Button } from "@/components/ui/button";
+import { Kbd, KbdGroup } from "@/components/ui/kbd";
 import { ShortcutHintAbsolute } from "@/components/ui/shortcut-hint";
 import {
   Tooltip,
@@ -172,7 +173,7 @@ export default function Toolbar() {
 
     return (
       <div key={action.id} className="relative">
-        <ToolTooltip label={action.label} shortcut={action.shortcut}>
+        <ToolTooltip label={action.title} shortcut={action.shortcut}>
           {button}
         </ToolTooltip>
         <ShortcutHintAbsolute
@@ -204,7 +205,7 @@ export default function Toolbar() {
           onClick={toggleMultiSelectMode}
           disabled={!currentFloorId || !isReady}
           className={cn("gap-2", isMultiSelectMode && "ring-2 ring-ring")}
-          title="Sélectionner et déplacer plusieurs équipements"
+          title="Sélectionner plusieurs équipements"
         >
           <span className="size-4 rounded border border-dashed border-current" />
           <span className="@max-[52rem]:sr-only">Sélection</span>
@@ -223,7 +224,10 @@ export default function Toolbar() {
         <div className="flex items-center gap-1">
           {drawToolbarActions.map((action) => renderToolbarAction(action))}
           <div className="relative">
-            <ToolTooltip label="Texte" shortcut="tool-label">
+            <ToolTooltip
+              label="Poser une étiquette de texte"
+              shortcut="tool-label"
+            >
               <Button
                 variant={isLabelToolActive ? "secondary" : "ghost"}
                 size="sm"
@@ -302,7 +306,7 @@ export default function Toolbar() {
             disabled={!currentFloorId || !isReady}
             aria-pressed={isPlacePanelOpen}
             className={cn("gap-2", isPlacePanelOpen && "ring-2 ring-ring")}
-            title="Placer sur l'étage un équipement de l'inventaire"
+            title="Placer un équipement"
           >
             <HugeiconsIcon icon={PackageIcon} strokeWidth={2} />
             <span className="@max-[52rem]:sr-only">Placer</span>
@@ -321,7 +325,7 @@ export default function Toolbar() {
             disabled={!currentFloorId}
             aria-pressed={isOverlayPanelOpen}
             className={cn("gap-2", isOverlayPanelOpen && "ring-2 ring-ring")}
-            title="Importer et régler le plan affiché sous l'étage"
+            title="Régler le calque"
           >
             <HugeiconsIcon icon={Layers01Icon} strokeWidth={2} />
             <span className="@max-[52rem]:sr-only">Calque</span>
@@ -346,12 +350,17 @@ function ToolTooltip({
   shortcut: ShortcutAction;
   children: React.ReactElement;
 }) {
-  const keys = getShortcutDisplay(shortcut)[0].join("+");
+  const keys = getShortcutDisplay(shortcut)[0];
   return (
     <Tooltip>
       <TooltipTrigger render={children} />
-      <TooltipContent side="bottom">
-        {label} · {keys}
+      <TooltipContent side="bottom" className="flex items-center gap-2">
+        {label}
+        <KbdGroup>
+          {keys.map((key) => (
+            <Kbd key={key}>{key}</Kbd>
+          ))}
+        </KbdGroup>
       </TooltipContent>
     </Tooltip>
   );

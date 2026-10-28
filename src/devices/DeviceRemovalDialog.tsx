@@ -76,6 +76,13 @@ export function DeviceRemovalDialog() {
     close();
   };
 
+  const unplaceInstead = () => {
+    if (request?.kind !== "delete") return;
+    commands.unplaceDevices([request.deviceId]);
+    useMapStore.getState().selectDevice(null);
+    close();
+  };
+
   return (
     <AlertDialog
       open={request !== null}
@@ -90,15 +97,20 @@ export function DeviceRemovalDialog() {
               ? `Supprimer « ${request.name} » du site ?`
               : `Retirer ${request?.deviceIds.length ?? 0} équipements du plan ?`}
           </AlertDialogTitle>
-          <AlertDialogDescription>
-            {request?.kind === "delete"
-              ? "Il quitte l'inventaire avec ses câbles. Pour le garder hors du plan, choisissez plutôt « Retirer du plan »."
-              : "Ils restent dans l'inventaire du site, avec leurs câbles."}{" "}
-            Ctrl+Z annule.
-          </AlertDialogDescription>
+          {request?.kind === "delete" ? (
+            <AlertDialogDescription>
+              Ses câbles sont supprimés avec lui.
+            </AlertDialogDescription>
+          ) : null}
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Annuler</AlertDialogCancel>
+          {/* Keeping it in the inventory is offered as a button (ADR 0041). */}
+          {request?.kind === "delete" ? (
+            <AlertDialogAction variant="outline" onClick={unplaceInstead}>
+              Retirer du plan
+            </AlertDialogAction>
+          ) : null}
           <AlertDialogAction
             variant={request?.kind === "delete" ? "destructive" : "default"}
             onClick={confirm}

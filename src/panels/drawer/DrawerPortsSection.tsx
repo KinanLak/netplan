@@ -1,3 +1,5 @@
+import { HugeiconsIcon } from "@hugeicons/react";
+import { ArrowRight01Icon } from "@hugeicons/core-free-icons";
 import type { DeviceType, Port, PortId } from "@/types/map";
 import { Button } from "@/components/ui/button";
 import { ShortcutHintInline } from "@/components/ui/shortcut-hint";
@@ -49,10 +51,18 @@ export function DrawerPortsSection({
     deviceType === "patch-panel"
       ? portLabel(port, deviceType)
       : shortPortName(port.name);
-  const describe = (port: Port) => {
-    const far = farEnds.get(port.id);
-    return `${nameOf(port)} · ${PORT_STATE_LABELS[portState(port)]}${far ? ` → ${far}` : ""}`;
-  };
+  // Read aloud as one phrase; shown as spaced parts.
+  const describe = (port: Port) =>
+    [nameOf(port), PORT_STATE_LABELS[portState(port)], farEnds.get(port.id)]
+      .filter(Boolean)
+      .join(", ");
+  const summary = (port: Port) => (
+    <PortSummary
+      name={nameOf(port)}
+      state={portState(port)}
+      far={farEnds.get(port.id)}
+    />
+  );
 
   return (
     <section>
@@ -67,7 +77,7 @@ export function DrawerPortsSection({
           onClick={() => onShowCables()}
           className="h-6 gap-1 text-xs"
         >
-          Ports et câbles…
+          Ports et câbles
           <ShortcutHintInline action="show-port-cables" />
         </Button>
       </div>
@@ -84,7 +94,7 @@ export function DrawerPortsSection({
               PORT_STATE_CLASSES[portState(shown[0])],
             )}
           />
-          <span className="truncate">{describe(shown[0])}</span>
+          {summary(shown[0])}
         </button>
       ) : (
         <>
@@ -107,7 +117,7 @@ export function DrawerPortsSection({
                 >
                   {port.order}
                 </TooltipTrigger>
-                <TooltipContent side="top">{describe(port)}</TooltipContent>
+                <TooltipContent side="top">{summary(port)}</TooltipContent>
               </Tooltip>
             ))}
           </div>
@@ -120,19 +130,47 @@ export function DrawerPortsSection({
 
 /**
  * How many links are up, and nothing else: the grid's colours say the rest
- * (owner, 2026-10-28). A port with a device seen on it is up too. A device
- * whose ports nobody observes, such as a patch panel, gets no line.
+ * (owner, 2026-10-28), none up included. A port with a device seen on it is
+ * up too.
  */
 function ActiveLinks({ states }: { states: ReadonlyArray<PortState> }) {
-  if (states.every((state) => state === "unknown")) return null;
   const active = states.filter(
     (state) => state === "seen" || state === "up",
   ).length;
+  if (active === 0) return null;
   return (
     <p className="mt-2 text-xs text-muted-foreground">
-      {active === 0
-        ? "Aucun lien actif"
-        : `${active} ${active === 1 ? "lien actif" : "liens actifs"}`}
+      {active} {active === 1 ? "lien actif" : "liens actifs"}
     </p>
+  );
+}
+
+/** A port's name, state and far end, spaced rather than punctuated. */
+function PortSummary({
+  name,
+  state,
+  far,
+}: {
+  name: string;
+  state: PortState;
+  far: string | undefined;
+}) {
+  return (
+    <span className="flex min-w-0 items-center gap-2">
+      <span className="shrink-0 font-mono">{name}</span>
+      <span className="shrink-0">{PORT_STATE_LABELS[state]}</span>
+      {far ? (
+        <>
+          <HugeiconsIcon
+            icon={ArrowRight01Icon}
+            size={12}
+            strokeWidth={1.5}
+            className="shrink-0"
+            aria-hidden
+          />
+          <span className="truncate">{far}</span>
+        </>
+      ) : null}
+    </span>
   );
 }

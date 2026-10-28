@@ -94,18 +94,8 @@ function PlaceDevicePanelContent() {
     event.dataTransfer.effectAllowed = "copy";
   };
 
-  // A site without devices and a site whose devices are all placed are two
-  // different dead ends, with the same way out (A15).
-  const empty =
-    devices === undefined
-      ? "Chargement…"
-      : devices.length === 0
-        ? "L'inventaire de ce site est vide."
-        : unplaced?.length === 0
-          ? "Tous les équipements du site sont sur le plan."
-          : shown?.length === 0
-            ? "Aucun équipement ne correspond."
-            : null;
+  // Nothing left to place shows only the way out: creating a device (A15).
+  const hasUnplaced = unplaced !== undefined && unplaced.length > 0;
 
   return (
     <div
@@ -114,7 +104,7 @@ function PlaceDevicePanelContent() {
       role="region"
     >
       <div className="flex items-center justify-between">
-        <h2 className="font-medium">Placer</h2>
+        <h2 className="font-medium">Placer un équipement</h2>
         <Button
           variant="ghost"
           size="icon-sm"
@@ -125,24 +115,28 @@ function PlaceDevicePanelContent() {
           <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} />
         </Button>
       </div>
-      <p className="text-xs text-muted-foreground">
-        Cliquez pour placer au centre, ou glissez sur le plan.
-      </p>
-      <Input
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-        onKeyDown={onSearchKeyDown}
-        placeholder="Nom, hostname, MAC, IP…"
-        aria-label="Chercher dans l'inventaire"
-        aria-controls={listId}
-        aria-activedescendant={active ? `${listId}-${active.id}` : undefined}
-        autoFocus
-      />
-      <div className="-mx-1 min-h-0 flex-1 overflow-y-auto">
-        {empty ? (
-          <p className="px-1 py-2 text-muted-foreground">{empty}</p>
-        ) : (
-          <ul id={listId} role="listbox" className="flex flex-col">
+      {devices === undefined ? (
+        <p className="text-muted-foreground">Chargement…</p>
+      ) : null}
+      {hasUnplaced ? (
+        <>
+          <Input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={onSearchKeyDown}
+            placeholder="Nom, hostname, MAC, IP…"
+            aria-label="Chercher dans l'inventaire"
+            aria-controls={listId}
+            aria-activedescendant={
+              active ? `${listId}-${active.id}` : undefined
+            }
+            autoFocus
+          />
+          <ul
+            id={listId}
+            role="listbox"
+            className="-mx-1 flex min-h-0 flex-1 flex-col overflow-y-auto"
+          >
             {shown?.map((device) => (
               <li
                 key={device.id}
@@ -168,21 +162,25 @@ function PlaceDevicePanelContent() {
                   )}
                 >
                   <span className="truncate">{device.name}</span>
-                  <span className="truncate text-xs text-muted-foreground">
+                  <span className="flex min-w-0 gap-x-2 text-xs text-muted-foreground">
                     {[
                       getDeviceKindLabel(device.type),
                       device.hostname,
                       device.macs[0],
                     ]
                       .filter(Boolean)
-                      .join(" · ")}
+                      .map((part) => (
+                        <span key={part} className="truncate">
+                          {part}
+                        </span>
+                      ))}
                   </span>
                 </button>
               </li>
             ))}
           </ul>
-        )}
-      </div>
+        </>
+      ) : null}
       {error ? (
         <p role="alert" className="text-xs text-destructive">
           {error}
@@ -192,7 +190,7 @@ function PlaceDevicePanelContent() {
         <>
           <Button variant="outline" size="sm" onClick={() => setCreating(true)}>
             <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
-            Nouvel équipement
+            Créer un équipement
           </Button>
           <CreateDeviceDialog
             site={site}

@@ -62,9 +62,9 @@ export type ShortcutAction =
 export type ShortcutConfig = {
   /** Shortcut key bindings — one per physical/logical binding */
   keys: [ShortcutKeyBinding, ...Array<ShortcutKeyBinding>];
-  /** Display label */
+  /** What the key does, as a specific verb and its object (ADR 0041). */
   label: string;
-  /** Longer description */
+  /** Unused: the label says it all. The shortcuts dialog still reads it. */
   description?: string;
   /** Logical scope (used for enabled conditions) */
   scope: ShortcutScope;
@@ -84,22 +84,18 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
   // Global actions
   "toggle-edit-mode": {
     keys: ["E"],
-    label: "Mode édition",
-    description: "Basculer dans le mode édition",
+    label: "Basculer le mode édition",
     scope: "global",
     requiresEdit: true,
   },
   escape: {
     keys: ["Escape"],
-    label: "Fermer",
-    description: "Fermer, abandonner ou désélectionner",
+    label: "Fermer, abandonner ou désélectionner",
     scope: "global",
   },
   delete: {
     keys: ["Delete", "Backspace"],
-    label: "Retirer du plan",
-    description:
-      "Retirer la sélection du plan ; elle reste dans l'inventaire du site",
+    label: "Retirer la sélection du plan",
     scope: "global",
     requiresEdit: true,
   },
@@ -114,64 +110,54 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
       { key: "ArrowLeft", shift: true, hiddenFromDisplay: true },
       { key: "ArrowRight", shift: true, hiddenFromDisplay: true },
     ],
-    label: "Décaler",
-    description: "Décaler la sélection d'une case (Maj : quatre)",
+    label: "Décaler la sélection d'une case, de quatre avec Maj",
     scope: "global",
     requiresEdit: true,
   },
   "select-all": {
     keys: ["Mod+A"],
-    label: "Tout sélectionner",
-    description: "Sélectionner tous les équipements de l'étage",
+    label: "Sélectionner tous les équipements de l'étage",
     scope: "global",
     requiresEdit: true,
   },
   undo: {
     keys: ["Mod+Z"],
-    label: "Annuler",
     // Cables are outside the plan's history: undo reaches only the last one,
-    // through its toast (B14), and the help says so (4.3).
-    description:
-      "Annuler la dernière modification du plan, ou le dernier câble",
+    // through its toast (B14), and the label says so (4.3).
+    label: "Annuler la dernière modification du plan ou le dernier câble",
     scope: "global",
     requiresEdit: true,
   },
   redo: {
     keys: ["Mod+Shift+Z", "Mod+Y"],
-    label: "Rétablir",
-    description: "Rétablir la modification du plan annulée",
+    label: "Rétablir la modification annulée",
     scope: "global",
     requiresEdit: true,
   },
   "show-shortcuts": {
     keys: [{ key: "?", shift: true }],
-    label: "Raccourcis",
-    description: "Afficher la liste des raccourcis clavier",
+    label: "Afficher les raccourcis clavier",
     scope: "global",
   },
   "cycle-theme": {
     keys: ["Shift+T"],
-    label: "Thème",
-    description: "Basculer entre thème clair et sombre",
+    label: "Basculer entre thème clair et sombre",
     scope: "global",
   },
   "refresh-site": {
     keys: ["Shift+R"],
     label: "Actualiser les données",
-    description: "Lancer une collecte du site maintenant",
     scope: "global",
     requiresEdit: true,
   },
   "sidebar-toggle": {
     keys: ["Mod+B"],
-    label: "Panneau latéral",
-    description: "Afficher/masquer le panneau latéral",
+    label: "Afficher ou masquer le panneau latéral",
     scope: "global",
   },
   "toggle-wall-debug": {
     keys: [{ key: "D", shift: true }],
-    label: "Débogage des murs",
-    description: "Afficher/masquer le débogage des murs",
+    label: "Afficher ou masquer le débogage des murs",
     scope: "canvas",
     requiresEdit: true,
   },
@@ -183,8 +169,7 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
       { key: "=", mod: true, shift: true, hiddenFromDisplay: true },
       { key: "+", code: "NumpadAdd", hiddenFromDisplay: true },
     ],
-    label: "Zoom +",
-    description: "Zoomer",
+    label: "Zoomer",
     scope: "global",
   },
   "zoom-out": {
@@ -192,50 +177,42 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
       "Mod+-",
       { key: "-", code: "NumpadSubtract", hiddenFromDisplay: true },
     ],
-    label: "Zoom -",
-    description: "Dézoomer",
+    label: "Dézoomer",
     scope: "global",
   },
   "zoom-reset": {
     keys: ["Mod+0", { key: "0", code: "Numpad0", hiddenFromDisplay: true }],
-    label: "Zoom 100 %",
-    description: "Remettre le zoom à 100 % autour du centre",
+    label: "Zoomer à 100 %",
     scope: "global",
   },
   "fit-view": {
     keys: [{ key: "1", code: "Digit1", shift: true }],
-    label: "Centrer la vue",
-    description: "Cadrer tout l'étage",
+    label: "Cadrer tout l'étage",
     scope: "global",
   },
   "focus-device-search": {
     keys: ["Mod+K"],
-    label: "Rechercher",
-    description: "Rechercher un équipement du site",
+    label: "Rechercher un équipement du site",
     scope: "global",
   },
   "find-device": {
     keys: ["Mod+F"],
-    label: "Trouver sur le plan",
-    description: "Trouver un équipement sur le plan par son nom",
+    label: "Trouver un équipement sur le plan",
     scope: "global",
   },
   "floor-up": {
     keys: ["Mod+ArrowUp"],
-    label: "Étage au-dessus",
-    description: "Monter d'un étage",
+    label: "Monter d'un étage",
     scope: "global",
   },
   "floor-down": {
     keys: ["Mod+ArrowDown"],
-    label: "Étage en dessous",
-    description: "Descendre d'un étage",
+    label: "Descendre d'un étage",
     scope: "global",
   },
   "cancel-wall-tool": {
     keys: ["Escape"],
-    label: "Annuler outil",
-    description: "Annuler l'outil de dessin en cours",
+    label: "Quitter l'outil de dessin",
     scope: "canvas",
     requiresEdit: true,
   },
@@ -243,36 +220,31 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
   // Tools - Walls & Rooms (numbers + letter aliases)
   "tool-wall": {
     keys: ["1", "W"],
-    label: "Mur",
-    description: "Outil de dessin de mur",
+    label: "Dessiner un mur",
     scope: "canvas",
     requiresEdit: true,
   },
   "tool-room": {
     keys: ["2", "L"],
-    label: "Salle",
-    description: "Outil de dessin de salle",
+    label: "Dessiner une salle",
     scope: "canvas",
     requiresEdit: true,
   },
   "tool-wall-brush": {
     keys: ["3", "B"],
-    label: "Pinceau murs",
-    description: "Peindre des blocs de mur",
+    label: "Peindre des murs",
     scope: "canvas",
     requiresEdit: true,
   },
   "tool-wall-erase": {
     keys: ["4", "X"],
-    label: "Suppression murs",
-    description: "Effacer des blocs de mur",
+    label: "Effacer des murs",
     scope: "canvas",
     requiresEdit: true,
   },
   "tool-label": {
     keys: ["5", "T"],
-    label: "Texte",
-    description: "Poser une étiquette de texte sur le plan",
+    label: "Poser une étiquette de texte",
     scope: "canvas",
     requiresEdit: true,
   },
@@ -282,8 +254,7 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
       { key: "=", code: "Equal", shift: true, hiddenFromDisplay: true },
       { key: "+", code: "NumpadAdd", shift: true, hiddenFromDisplay: true },
     ],
-    label: "Gomme +",
-    description: "Agrandir la zone de gomme",
+    label: "Agrandir la gomme",
     scope: "canvas",
     requiresEdit: true,
   },
@@ -299,8 +270,7 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
         hiddenFromDisplay: true,
       },
     ],
-    label: "Gomme -",
-    description: "Réduire la zone de gomme",
+    label: "Réduire la gomme",
     scope: "canvas",
     requiresEdit: true,
   },
@@ -308,7 +278,6 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
   "place-device": {
     keys: ["P"],
     label: "Placer un équipement",
-    description: "Placer sur l'étage un équipement de l'inventaire",
     scope: "canvas",
     requiresEdit: true,
   },
@@ -316,29 +285,24 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
   // Calque
   "toggle-overlay-panel": {
     keys: ["C"],
-    label: "Calque",
-    description: "Ouvrir/fermer le panneau du calque",
+    label: "Ouvrir ou fermer le panneau du calque",
     scope: "canvas",
     requiresEdit: true,
   },
   "toggle-overlay-visibility": {
     keys: ["Shift+C"],
-    label: "Afficher le calque",
-    description: "Afficher/masquer le calque de l'étage",
+    label: "Afficher ou masquer le calque",
     scope: "global",
   },
   "toggle-overlay-lock": {
     keys: ["Shift+L"],
-    label: "Verrouiller le calque",
-    description: "Verrouiller/déverrouiller le calque (panneau ouvert)",
+    label: "Verrouiller ou déverrouiller le calque (panneau ouvert)",
     scope: "canvas",
     requiresEdit: true,
   },
   "calibrate-overlay": {
     keys: ["Shift+E"],
-    label: "Étalonner le calque",
-    description:
-      "Mettre le calque à l'échelle par deux points (panneau ouvert)",
+    label: "Mettre le calque à l'échelle (panneau ouvert)",
     scope: "canvas",
     requiresEdit: true,
   },
@@ -346,45 +310,36 @@ export const shortcuts: Record<ShortcutAction, ShortcutConfig> = {
   // Device drawer
   "close-drawer": {
     keys: ["Escape"],
-    label: "Fermer",
-    description: "Fermer le panneau de détails",
+    label: "Fermer le panneau de détails",
     scope: "drawer",
   },
   "edit-device-identity": {
     keys: ["I"],
-    label: "Identité",
-    description: "Modifier le nom, les adresses et les notes de l'équipement",
+    label: "Modifier l'identité de l'équipement",
     scope: "drawer",
     requiresEdit: true,
   },
   "unplace-device": {
     keys: ["U"],
-    label: "Retirer du plan",
-    description:
-      "Retirer l'équipement du plan ; il reste dans l'inventaire du site",
+    label: "Retirer l'équipement du plan",
     scope: "drawer",
     requiresEdit: true,
   },
   "show-port-cables": {
     keys: ["K"],
-    label: "Ports et câbles",
-    description: "Voir les câbles de chaque port et où ils mènent",
+    label: "Voir les ports et câbles",
     scope: "drawer",
   },
   "show-device-history": {
     keys: ["J"],
-    label: "Historique",
-    description:
-      "Voir où le réseau a vu l'équipement et quand il était en ligne, sur 30 jours",
+    label: "Voir l'historique de l'équipement",
     scope: "drawer",
     requiresEdit: true,
     byRoleOnly: true,
   },
   "toggle-device-cables": {
     keys: ["H"],
-    label: "Câbles sur le plan",
-    description:
-      "Afficher ou masquer les câbles du switch ou du panneau de brassage sélectionné ou survolé",
+    label: "Afficher ou masquer les câbles sur le plan",
     scope: "global",
   },
 };

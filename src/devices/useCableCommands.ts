@@ -24,8 +24,9 @@ export const useCableCommands = () => {
     toast.error(failureMessage(error, "editor"));
 
   /**
-   * Plugs `cable` in and reports it as `label`. Returns why the server
-   * refused it, or `null` once it is plugged in.
+   * Plugs `cable` in and reports it as « Câblé `label` », so `label` reads
+   * « A à B ». Returns why the server refused it, or `null` once it is
+   * plugged in.
    */
   const plug = async (cable: NewCable, label: string) => {
     try {
@@ -34,7 +35,7 @@ export const useCableCommands = () => {
       return failureMessage(error, "editor");
     }
     const show = () =>
-      toast(`Câblé : ${label}`, {
+      toast(`Câblé ${label}`, {
         id: CABLE_TOAST_ID,
         action: {
           label: "Annuler",
