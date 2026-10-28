@@ -1,3 +1,4 @@
+import { isDeletable } from "@/devices/identity";
 import { useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -262,8 +263,9 @@ export default function DeviceDrawer() {
               strokeWidth={1.5}
             />
           </Button>
-          {/* A sourced device comes back at each sync, so it is never deleted. */}
-          {device.source ? null : (
+          {/* A sourced device comes back at each sync, so it is never deleted,
+              unless its source no longer returns it (ADR 0034). */}
+          {!isDeletable(device) ? null : (
             <Button
               variant="destructive"
               size="icon"

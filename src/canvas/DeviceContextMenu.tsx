@@ -1,3 +1,4 @@
+import { isDeletable } from "@/devices/identity";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { LocationRemove01Icon, WasteIcon } from "@hugeicons/core-free-icons";
 import { useReactFlow } from "@xyflow/react";
@@ -83,8 +84,9 @@ export function DeviceContextMenu({ deviceId }: { deviceId: DeviceId }) {
               <HugeiconsIcon icon={LocationRemove01Icon} />
               Retirer du plan
             </ContextMenuItem>
-            {/* A sourced device comes back at each sync, so it is never deleted. */}
-            {device.source ? null : (
+            {/* A sourced device comes back at each sync, so it is never
+                deleted, unless its source no longer returns it (ADR 0034). */}
+            {!isDeletable(device) ? null : (
               <ContextMenuItem variant="destructive" onClick={deleteDevice}>
                 <HugeiconsIcon icon={WasteIcon} />
                 Supprimer

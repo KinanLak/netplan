@@ -61,7 +61,25 @@ export function DeviceHeading({ device }: { device: DetailedDevice }) {
           </Badge>
         ) : null}
       </p>
+      <AbsenceNote source={device.source} />
     </>
+  );
+}
+
+/** Since when the source no longer returns the device (ADR 0034). */
+export function AbsenceNote({
+  source,
+  className = "text-sm",
+}: {
+  source: Device["source"];
+  className?: string;
+}) {
+  if (source?.missingSince === undefined) return null;
+  return (
+    <p className={cn("text-muted-foreground", className)}>
+      Absent de {INTEGRATION_LABELS[source.integration]} depuis le{" "}
+      <Time at={source.missingSince} />
+    </p>
   );
 }
 
