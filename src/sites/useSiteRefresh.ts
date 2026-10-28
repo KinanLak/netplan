@@ -67,7 +67,7 @@ export function useSiteRefresh(siteId: string) {
     if (!offered || starting) return;
     if (freshness?.running) {
       // A fixed id, so pressing the shortcut again does not pile them up.
-      toast.info("Une collecte est déjà en cours pour ce site.", {
+      toast.info("Collecte déjà en cours", {
         id: `refresh-running-${siteId}`,
       });
       return;

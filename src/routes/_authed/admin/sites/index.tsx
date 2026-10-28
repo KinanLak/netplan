@@ -4,14 +4,13 @@ import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import { useOnlineMutation } from "@/hooks/use-online-mutation";
 import type { FunctionReturnType } from "convex/server";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -36,11 +35,14 @@ import { api } from "../../../../../convex/_generated/api";
 
 export const Route = createFileRoute("/_authed/admin/sites/")({
   head: () => ({ meta: [{ title: "Sites · Administration" }] }),
+  // `?create` opens « Créer un site », for the links that offer it.
+  validateSearch: (search: Record<string, unknown>): { create?: true } =>
+    search.create === true || search.create === "true" ? { create: true } : {},
   component: SitesPage,
 });
 
 const count = (n: number, one: string, many: string) =>
-  n === 0 ? `Aucun ${one}` : n === 1 ? `1 ${one}` : `${n} ${many}`;
+  `${n} ${n > 1 ? many : one}`;
 
 type SiteListing = FunctionReturnType<typeof api.sites.listSettings>[number];
 
@@ -82,13 +84,20 @@ function SiteRow({ site, now }: { site: SiteListing; now: number }) {
           ) : null}
         </div>
         <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
-          <span>
-            {count(site.buildingCount, "bâtiment", "bâtiments")},{" "}
-            {count(site.floorCount, "étage", "étages").toLowerCase()}
-          </span>
-          <span>
-            {tools.length === 0 ? "Aucune intégration" : tools.join(", ")}
-          </span>
+          {/* An empty count says nothing a missing one would not. */}
+          {site.buildingCount > 0 ? (
+            <span>
+              {[
+                count(site.buildingCount, "bâtiment", "bâtiments"),
+                site.floorCount > 0
+                  ? count(site.floorCount, "étage", "étages")
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(", ")}
+            </span>
+          ) : null}
+          {tools.length > 0 ? <span>{tools.join(", ")}</span> : null}
           {tools.length > 0 && !site.automaticRefresh ? (
             <span>Collecte manuelle</span>
           ) : null}
@@ -108,30 +117,27 @@ function SiteRow({ site, now }: { site: SiteListing; now: number }) {
 function SitesPage() {
   const sites = useQuery(api.sites.listSettings);
   const now = useNow(30_000);
-  const [creating, setCreating] = useState(false);
+  const { create } = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
+  const [creating, setCreating] = useState(create === true);
+  // Opened once: the address stops asking, so a reload does not reopen it.
+  useEffect(() => {
+    if (create) void navigate({ search: {}, replace: true });
+  }, [create, navigate]);
 
   return (
     <div className="space-y-6">
-      <header className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold">Sites</h1>
-          <p className="text-sm text-muted-foreground">
-            Chaque site a ses bâtiments, son fuseau horaire et ses intégrations.
-          </p>
-        </div>
+      <header className="flex items-center justify-between gap-4">
+        <h1 className="text-xl font-semibold">Sites</h1>
         <Button onClick={() => setCreating(true)}>
           <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
-          Nouveau site
+          Créer un site
         </Button>
       </header>
 
       {sites === undefined ? (
         <Pending />
-      ) : sites.length === 0 ? (
-        <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-          Aucun site. Créez-en un pour commencer son plan.
-        </p>
-      ) : (
+      ) : sites.length === 0 ? null : (
         <ul className="divide-y rounded-lg border">
           {/* Archived sites last: they are kept, not used. */}
           {sites
@@ -197,11 +203,7 @@ function CreateSiteDialog({
       <DialogContent>
         <form noValidate onSubmit={(event) => void submit(event)}>
           <DialogHeader>
-            <DialogTitle>Nouveau site</DialogTitle>
-            <DialogDescription>
-              Son fuseau horaire fixe les heures de ses relevés et les jours de
-              son historique.
-            </DialogDescription>
+            <DialogTitle>Créer un site</DialogTitle>
           </DialogHeader>
           <FieldGroup className="py-4">
             <Field>

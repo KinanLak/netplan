@@ -3,15 +3,19 @@ import { CheckmarkCircle02Icon } from "@hugeicons/core-free-icons";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import { polledSwitches } from "@/sites/librenms";
+import { useSiteRefresh } from "@/sites/useSiteRefresh";
 import type { SitePart } from "@/admin/SiteNav";
 import { api } from "../../convex/_generated/api";
 
 type Step = {
   label: string;
   done: boolean;
-  /** The part of the page where it is done, or the plan. */
-  where: SitePart | "plan";
+  /** The part of the page where it is done, the plan, or a refresh now. */
+  where: SitePart | "plan" | "refresh";
 };
+
+const stepClass =
+  "text-left text-primary underline-offset-4 hover:underline disabled:opacity-50";
 
 const goTo = (part: SitePart) =>
   document
@@ -34,6 +38,7 @@ export function SiteSetupSteps({
   const netbox = useQuery(api.netbox.settings, { siteId });
   const librenms = useQuery(api.librenms.settings, { siteId });
   const freshness = useQuery(api.collection.freshness, { siteId });
+  const refresh = useSiteRefresh(siteId);
   if (
     integrations === undefined ||
     netbox === undefined ||
@@ -46,14 +51,12 @@ export function SiteSetupSteps({
   const connected = integrations.length > 0;
   const steps: Array<Step> = [
     {
-      label: "Créer un bâtiment et ses étages sur le plan",
+      label: "Créer un bâtiment sur le plan",
       done: buildingCount > 0,
       where: "plan",
     },
     {
-      label: connected
-        ? "Connecter NetBox ou LibreNMS"
-        : "Connecter NetBox ou LibreNMS (facultatif pour un plan dessiné à la main)",
+      label: "Connecter NetBox ou LibreNMS",
       done: integrations.some((row) => row.lastCheck?.ok === true),
       where: "integrations",
     },
@@ -73,10 +76,14 @@ export function SiteSetupSteps({
     });
   }
   if (connected) {
+    // Pressed, it starts the cycle; without « Actualiser » on this site, it
+    // shows the collection to wait for.
     steps.push({
-      label: "Attendre ou lancer la première collecte",
+      label: refresh.offered
+        ? "Lancer la première collecte"
+        : "Attendre la première collecte",
       done: (freshness?.lastSuccessAt ?? null) !== null,
-      where: "collections",
+      where: refresh.offered ? "refresh" : "collections",
     });
   }
 
@@ -111,25 +118,32 @@ export function SiteSetupSteps({
                   {index + 1}
                 </span>
               )}
-              <span className={step.done ? "text-muted-foreground" : undefined}>
-                {step.label}
-                {step.done ? <span className="sr-only"> (fait)</span> : null}
-              </span>
-              {step.done ? null : where === "plan" ? (
-                <Link
-                  to="/"
-                  search={{ site: siteId }}
-                  className="text-primary underline-offset-4 hover:underline"
-                >
-                  Ouvrir le plan
+              {/* An open step is its own way in. */}
+              {step.done ? (
+                <span className="text-muted-foreground">
+                  {step.label}
+                  <span className="sr-only"> (fait)</span>
+                </span>
+              ) : where === "plan" ? (
+                <Link to="/" search={{ site: siteId }} className={stepClass}>
+                  {step.label}
                 </Link>
+              ) : where === "refresh" ? (
+                <button
+                  type="button"
+                  className={stepClass}
+                  disabled={refresh.busy}
+                  onClick={() => void refresh.start()}
+                >
+                  {step.label}
+                </button>
               ) : (
                 <button
                   type="button"
-                  className="text-primary underline-offset-4 hover:underline"
+                  className={stepClass}
                   onClick={() => goTo(where)}
                 >
-                  Y aller
+                  {step.label}
                 </button>
               )}
             </li>

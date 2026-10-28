@@ -29,9 +29,7 @@ function RefreshWatcher({
       // elsewhere the toast leads there.
       const onHealth = router.state.location.pathname === "/admin/health";
       toast.error("L'actualisation a échoué", {
-        description: admin
-          ? `Échec côté ${outcome.sources}.`
-          : `Échec côté ${outcome.sources}. Un administrateur en voit le détail.`,
+        description: `${outcome.sources} en échec`,
         action:
           admin && !onHealth
             ? {
@@ -42,9 +40,7 @@ function RefreshWatcher({
       });
     }
     if (outcome.kind === "interrupted") {
-      toast.error("L'actualisation s'est interrompue", {
-        description: "Une nouvelle collecte est prévue.",
-      });
+      toast.error("L'actualisation s'est interrompue");
     }
   }, [admin, freshness, router, siteId, startedAt]);
   return null;

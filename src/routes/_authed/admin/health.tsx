@@ -1,8 +1,11 @@
+import { Alert02Icon, PauseIcon } from "@hugeicons/core-free-icons";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import type { ReactNode } from "react";
+import { IconNote } from "@/components/icon-note";
 import { Time } from "@/components/time";
+import { buttonVariants } from "@/components/ui/button";
 import { useNow } from "@/hooks/use-now";
 import { cn } from "@/lib/utils";
 import { CollectionFreshness } from "@/sites/CollectionFreshness";
@@ -26,35 +29,29 @@ function HealthPage() {
 
   return (
     <div className="space-y-6">
-      <header className="space-y-1">
-        <h1 className="text-xl font-semibold">Santé</h1>
-        <p className="text-sm text-muted-foreground">
-          La collecte de chaque site : ses sources, ses switchs et leur état.
-        </p>
-      </header>
+      <h1 className="text-xl font-semibold">Santé</h1>
 
-      {/* The kill switch holds for the whole server, so every site says it. */}
+      {/* The kill switch holds for the whole server, so every site says it.
+          No control here turns it back on: the variable names the way. */}
       {sites?.[0]?.freshness.paused ? (
-        <p className="rounded-lg border border-down bg-down-background p-3 text-sm">
-          La collecte est suspendue sur ce serveur (NETPLAN_COLLECTION_PAUSED).
-        </p>
+        <div className="rounded-lg border border-down bg-down-background p-3">
+          <IconNote icon={PauseIcon} className="text-foreground">
+            Collecte suspendue par{" "}
+            <code className="font-mono text-xs">NETPLAN_COLLECTION_PAUSED</code>
+          </IconNote>
+        </div>
       ) : null}
 
       {sites === undefined ? (
         <Pending />
       ) : sites.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed p-8 text-center text-sm">
-          <p className="font-medium">Aucun site</p>
-          <p className="text-muted-foreground">
-            La santé de la collecte s'affiche ici une fois un site créé.
-          </p>
-          <Link
-            to="/admin/sites"
-            className="text-primary underline underline-offset-4"
-          >
-            Créer un site
-          </Link>
-        </div>
+        <Link
+          to="/admin/sites"
+          search={{ create: true }}
+          className={buttonVariants({ className: "self-start" })}
+        >
+          Créer un site
+        </Link>
       ) : (
         <ul className="space-y-4">
           {sites
@@ -81,8 +78,8 @@ const needsLook = (site: SiteHealth, now: number) =>
 const certificateWarning = (kinds: ReadonlyArray<IntegrationKind>) => {
   const names = kinds.map((kind) => INTEGRATION_LABELS[kind]).join(" et ");
   return kinds.length > 1
-    ? `${names} sont interrogés sans vérifier leur certificat TLS, comme réglé dans leurs connexions.`
-    : `${names} est interrogé sans vérifier son certificat TLS, comme réglé dans sa connexion.`;
+    ? `Certificats TLS de ${names} non vérifiés`
+    : `Certificat TLS de ${names} non vérifié`;
 };
 
 const Dot = ({ className }: { className: string }) => (
@@ -136,43 +133,36 @@ function SiteCard({ site, now }: { site: SiteHealth; now: number }) {
         <CollectionFreshness siteId={site.id} linkToSettings={false} />
       </div>
 
+      {/* A fact with nothing to tell is left out. */}
       <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
-        <Fact label="Dernière collecte">
-          {last ? (
-            <>
-              <Time at={last.finishedAt} now={now} format="when" />,{" "}
-              {last.manual ? "manuelle" : "automatique"}
-            </>
-          ) : (
-            "Aucune"
-          )}
-        </Fact>
-        <Fact label="Échecs de suite">
-          {freshness.failures === 0 ? (
-            "Aucun"
-          ) : (
+        {last ? (
+          <Fact label="Dernière collecte">
+            <Time at={last.finishedAt} now={now} format="when" />,{" "}
+            {last.manual ? "manuelle" : "automatique"}
+          </Fact>
+        ) : null}
+        {freshness.failures > 0 ? (
+          <Fact label="Échecs de suite">
             <span className="flex items-center gap-1.5 font-medium text-down">
               <Dot className="bg-down" />
               {freshness.failures}
             </span>
-          )}
-        </Fact>
-        <Fact label="Import NetBox">
-          {netbox === null ? (
-            "NetBox inactif"
-          ) : netbox.importedAt === null ? (
-            "Jamais"
-          ) : (
-            <div className="space-y-0.5">
-              <Time at={netbox.importedAt} now={now} format="age" />
-              <NetBoxNotes siteId={site.id} netbox={netbox} />
-            </div>
-          )}
-        </Fact>
-        <Fact label="Switchs">
-          {switchTotal === 0 ? (
-            "Aucun"
-          ) : (
+          </Fact>
+        ) : null}
+        {netbox === null ? null : (
+          <Fact label="Import NetBox">
+            {netbox.importedAt === null ? (
+              "Jamais"
+            ) : (
+              <div className="space-y-0.5">
+                <Time at={netbox.importedAt} now={now} format="age" />
+                <NetBoxNotes siteId={site.id} netbox={netbox} />
+              </div>
+            )}
+          </Fact>
+        )}
+        {switchTotal === 0 ? null : (
+          <Fact label="Switchs">
             <div className="space-y-0.5">
               {switchReads ? (
                 <p>
@@ -200,22 +190,24 @@ function SiteCard({ site, now }: { site: SiteHealth; now: number }) {
               </p>
               {switchReads?.oldestReadAt ? (
                 <p className="text-xs text-muted-foreground">
-                  Statut le plus ancien :{" "}
+                  Statut le plus ancien lu{" "}
                   <Time at={switchReads.oldestReadAt} now={now} format="age" />
                 </p>
               ) : null}
             </div>
-          )}
-        </Fact>
+          </Fact>
+        )}
       </dl>
 
       {site.ignoringCertificates.length > 0 ? (
-        <p className="rounded-lg border border-warning bg-warning-background p-3 text-sm">
-          {certificateWarning(site.ignoringCertificates)}{" "}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-warning bg-warning-background p-3">
+          <IconNote icon={Alert02Icon} className="text-foreground">
+            {certificateWarning(site.ignoringCertificates)}
+          </IconNote>
           <SiteLink siteId={site.id} part="integrations">
             Revoir la connexion
           </SiteLink>
-        </p>
+        </div>
       ) : null}
 
       {last && last.steps.length > 0 ? (
@@ -233,9 +225,8 @@ function SiteCard({ site, now }: { site: SiteHealth; now: number }) {
                   {INTEGRATION_LABELS[step.source]}
                 </span>
                 {step.message ? (
-                  <span className="text-muted-foreground">
-                    {" "}
-                    · {step.message}
+                  <span className="ms-2 text-muted-foreground">
+                    {step.message}
                   </span>
                 ) : null}
               </span>
@@ -288,7 +279,9 @@ function NetBoxNotes({
       ) : null}
       {unmappedRoles.length > 0 ? (
         <p className="text-xs text-muted-foreground">
-          {unmappedRoles.length > 1 ? "Rôles sans type" : "Rôle sans type"} :{" "}
+          <SiteLink siteId={siteId} part="correspondances">
+            {counted(unmappedRoles.length, "rôle sans type", "rôles sans type")}
+          </SiteLink>{" "}
           {unmappedRoles
             .map((role) => `${role.name} (${role.devices})`)
             .join(", ")}
@@ -372,14 +365,16 @@ function PolledSwitches({
                     : "bg-up",
               )}
             />
-            <span className="min-w-0 break-words">
+            <span className="flex min-w-0 flex-wrap gap-x-2 break-words">
               <span className="font-medium">{entry.name}</span>
               <span className="text-muted-foreground">
-                {entry.notes.length > 0
-                  ? ` : ${entry.notes.join(" ")}`
-                  : " : lu"}
-                {entry.macTable ? ` · ${MAC_TABLE_TEXT[entry.macTable]}` : ""}
+                {entry.notes.length > 0 ? entry.notes.join(" ") : "Lu"}
               </span>
+              {entry.macTable ? (
+                <span className="text-muted-foreground">
+                  {MAC_TABLE_TEXT[entry.macTable]}
+                </span>
+              ) : null}
             </span>
           </li>
         ))}
@@ -422,20 +417,18 @@ function PushHealth({ push, now }: { push: Push; now: number }) {
             last === null ? "bg-muted-foreground" : ok ? "bg-up" : "bg-down",
           )}
         />
-        <span>
+        <span className="flex flex-wrap gap-x-2">
           <span className="font-medium">Envoi vers NetBox</span>
-          <span className="text-muted-foreground">
-            {" "}
-            ·{" "}
-            {last === null ? (
-              "aucun envoi depuis qu'il est activé"
-            ) : (
-              <>
-                <Time at={last.finishedAt} now={now} format="age" /> :{" "}
+          {last === null ? null : (
+            <>
+              <span className="text-muted-foreground">
                 {describePush(last)}
-              </>
-            )}
-          </span>
+              </span>
+              <span className="text-muted-foreground">
+                <Time at={last.finishedAt} now={now} format="age" />
+              </span>
+            </>
+          )}
         </span>
       </p>
       {failing.length > 0 ? (
@@ -449,8 +442,7 @@ function PushHealth({ push, now }: { push: Push; now: number }) {
               </p>
               <p className="ps-4 text-xs text-muted-foreground">
                 En échec depuis{" "}
-                <Time at={entry.failingSince} now={now} format="when" />, nouvel
-                essai après <Time at={entry.retryAt} now={now} format="when" />
+                <Time at={entry.failingSince} now={now} format="when" />
               </p>
             </li>
           ))}

@@ -129,6 +129,10 @@ export function CollectionFreshness({
   const next = nextRun(freshness, now);
   const sources = describeSources(freshness, now);
   const admin = Boolean(me && isAdmin(me.role));
+  const status =
+    failedAt === null
+      ? describeNextRun(next, now)
+      : `Dernière tentative en échec à ${formatWhen(failedAt, now)}`;
 
   // The hover card names each source's age; without one, the hint does.
   const headlineText = (
@@ -188,7 +192,7 @@ export function CollectionFreshness({
               <p className="text-muted-foreground">
                 {freshness.lastSuccessAt === null
                   ? timeZoneHint(now)
-                  : `Dernière collecte réussie : ${ageHint(freshness.lastSuccessAt, now)}`}
+                  : `Dernière collecte réussie le ${ageHint(freshness.lastSuccessAt, now)}`}
               </p>
               {admin ? (
                 <Link
@@ -203,38 +207,36 @@ export function CollectionFreshness({
         ) : (
           <p>{headlineText}</p>
         )}
-        <p
-          className={cn(
-            "text-xs text-pretty",
-            failedAt === null ? "text-muted-foreground" : "text-down",
-          )}
-        >
-          <span
-            title={
-              failedAt !== null
-                ? timeZoneHint(failedAt)
-                : next.kind === "at"
-                  ? timeZoneHint(next.at)
-                  : undefined
-            }
+        {status ? (
+          <p
+            className={cn(
+              "text-xs text-pretty",
+              failedAt === null ? "text-muted-foreground" : "text-down",
+            )}
           >
-            {failedAt === null
-              ? describeNextRun(next, now)
-              : `Dernière tentative en échec à ${formatWhen(failedAt, now)}`}
-          </span>
-          {!freshness.hasSources && linkToSettings && admin ? (
-            <>
-              {" · "}
-              <Link
-                to="/admin/sites/$siteId"
-                params={{ siteId }}
-                className="underline underline-offset-2 hover:text-foreground"
-              >
-                Configurer
-              </Link>
-            </>
-          ) : null}
-        </p>
+            <span
+              title={
+                failedAt !== null
+                  ? timeZoneHint(failedAt)
+                  : next.kind === "at"
+                    ? timeZoneHint(next.at)
+                    : undefined
+              }
+            >
+              {status}
+            </span>
+          </p>
+        ) : null}
+        {!freshness.hasSources && linkToSettings && admin ? (
+          <Link
+            to="/admin/sites/$siteId"
+            params={{ siteId }}
+            hash="integrations"
+            className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+          >
+            Connecter NetBox ou LibreNMS
+          </Link>
+        ) : null}
       </div>
       {withRefresh ? (
         <SiteRefreshButton siteId={siteId} withShortcut={withShortcut} />
