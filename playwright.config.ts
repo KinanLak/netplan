@@ -13,6 +13,10 @@ export default defineConfig({
   // Not `*.spec.ts`: `bun test` would collect those.
   testMatch: "**/*.e2e.ts",
   forbidOnly: Boolean(process.env.CI),
+  // One browser at a time on CI: the runner also hosts the app server and
+  // the Convex backend, and two pages loading the map at once there took
+  // longer than an expectation waits.
+  workers: process.env.CI ? 1 : undefined,
   reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : "list",
   use: { baseURL, trace: "retain-on-failure" },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
