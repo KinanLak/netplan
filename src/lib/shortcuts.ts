@@ -5,8 +5,8 @@
  * - Modifiers: Mod (Cmd on Mac, Ctrl on Windows), Control, Alt, Shift, Meta
  * - Combine with '+': 'Mod+Z', 'Mod+Shift+Z'
  * - Keys use event.key names: 'Escape', 'ArrowUp', 'Delete', 'Backspace'
- * - Single character keys also match physical event.code for letters, digits,
- *   and numpad digits so tool shortcuts survive layout changes.
+ * - Letters match the printed key (event.key) on every layout; only digits
+ *   also match their physical Digit* key, which AZERTY prints shifted.
  */
 
 import type { ShortcutKeyBinding } from "@/lib/shortcut-types";

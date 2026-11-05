@@ -239,10 +239,116 @@ describe("shortcut intents", () => {
     ).toBe(null);
   });
 
-  it("matches single character shortcuts case-insensitively before physical code fallback", () => {
-    expect(
-      matchesShortcutBinding(keyEvent({ code: "KeyW", key: "z" }), "Z"),
-    ).toBe(true);
+  describe("on an AZERTY keyboard", () => {
+    // AZERTY swaps A/Q and Z/W and moves M: event.code names the QWERTY key
+    // under the finger, event.key the letter printed on it.
+    const actions = Object.keys(shortcuts) as Array<ShortcutAction>;
+
+    it("letters follow the printed key: Z does not draw a wall, W does", () => {
+      expect(
+        resolveAction({ actions, event: keyEvent({ code: "KeyW", key: "z" }) }),
+      ).toBe(null);
+      expect(
+        resolveAction({ actions, event: keyEvent({ code: "KeyZ", key: "w" }) }),
+      ).toBe("tool-wall");
+      expect(
+        matchesShortcutBinding(keyEvent({ code: "KeyW", key: "z" }), "Z"),
+      ).toBe(true);
+    });
+
+    it("Ctrl with a letter follows the printed key too", () => {
+      const ctrl = (code: string, key: string) =>
+        resolveAction({
+          actions,
+          event: keyEvent({ code, ctrlKey: true, key }),
+        });
+
+      expect(ctrl("KeyW", "z")).toBe("undo");
+      expect(ctrl("KeyZ", "w")).toBe(null);
+      expect(ctrl("KeyQ", "a")).toBe("select-all");
+      expect(ctrl("KeyA", "q")).toBe(null);
+    });
+
+    it("the digit row selects tools without Shift, as QWERTY does", () => {
+      expect(
+        resolveAction({
+          actions,
+          event: keyEvent({ code: "Digit1", key: "&" }),
+        }),
+      ).toBe("tool-wall");
+      expect(
+        resolveAction({
+          actions,
+          event: keyEvent({ code: "Digit2", key: "é" }),
+        }),
+      ).toBe("tool-room");
+      expect(
+        resolveAction({
+          actions,
+          event: keyEvent({ code: "Digit0", ctrlKey: true, key: "à" }),
+        }),
+      ).toBe("zoom-reset");
+    });
+
+    it("digits never change floor", () => {
+      for (const digit of ["1", "2", "3", "4", "5"]) {
+        for (const event of [
+          keyEvent({ code: `Digit${digit}`, key: digit }),
+          keyEvent({ code: `Digit${digit}`, key: digit, shiftKey: true }),
+          keyEvent({ code: `Digit${digit}`, ctrlKey: true, key: digit }),
+          keyEvent({ code: `Numpad${digit}`, key: digit }),
+        ]) {
+          expect(["floor-up", "floor-down"]).not.toContain(
+            resolveAction({ actions, event }),
+          );
+        }
+      }
+    });
+
+    it("the numpad zooms with + and -, and its digits select tools", () => {
+      expect(
+        resolveAction({
+          actions,
+          event: keyEvent({ code: "NumpadAdd", key: "+" }),
+        }),
+      ).toBe("zoom-in");
+      expect(
+        resolveAction({
+          actions,
+          event: keyEvent({ code: "NumpadSubtract", key: "-" }),
+        }),
+      ).toBe("zoom-out");
+      expect(
+        resolveAction({
+          actions,
+          event: keyEvent({ code: "Numpad1", key: "1" }),
+        }),
+      ).toBe("tool-wall");
+    });
+
+    it("a numpad key without Num Lock is not a digit", () => {
+      expect(
+        resolveAction({
+          actions,
+          event: keyEvent({ code: "Numpad1", key: "End" }),
+        }),
+      ).toBe(null);
+      expect(
+        resolveAction({
+          actions,
+          event: keyEvent({ code: "Numpad0", key: "Insert" }),
+        }),
+      ).toBe(null);
+    });
+
+    it("Shift+? opens the shortcuts", () => {
+      expect(
+        resolveAction({
+          actions,
+          event: keyEvent({ code: "KeyM", key: "?", shiftKey: true }),
+        }),
+      ).toBe("show-shortcuts");
+    });
   });
 
   it("opens the calque panel only in edit mode, but toggles its visibility when reading", () => {
