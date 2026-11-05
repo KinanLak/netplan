@@ -138,6 +138,8 @@ The owner's standing preferences; each was broken more than once.
   help text.
 - Keys on the map follow ADR 0030: arrows nudge the selection and never pan,
   Ctrl+/Ctrl− and the wheel zoom the map, Tab skips the devices.
+  A letter shortcut follows the printed key (`event.key`) on every layout;
+  only digits also match their physical key (`Digit*`).
 - Times go through `<Time>` (`src/components/time.tsx`) or `src/lib/time.ts`:
   the browser's zone and locale, 24-hour clock, the zone on hover.
 - Checkboxes, not switches. Every icon-only button has a French

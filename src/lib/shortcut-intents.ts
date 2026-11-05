@@ -125,16 +125,12 @@ const matchesKey = (
     return true;
   }
 
-  if (key.length !== 1) {
-    return false;
-  }
-
-  const upperKey = key.toUpperCase();
-  return (
-    event.code === `Key${upperKey}` ||
-    event.code === `Digit${key}` ||
-    event.code === `Numpad${key}`
-  );
+  // Letters follow the printed key whatever the layout: matching
+  // `Key${letter}` would make AZERTY's Z the wall tool's W. Only the digit
+  // row falls back to its physical key, as AZERTY prints & é " ' ( there.
+  // The numpad's digits already arrive in event.key; without Num Lock they
+  // are End, Insert or arrows, not digits.
+  return /^[0-9]$/.test(key) && event.code === `Digit${key}`;
 };
 
 const matchesModifiers = (
