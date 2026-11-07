@@ -58,8 +58,8 @@ prints it again, `--reseed` (app stopped) starts from an empty backend,
 `--down` removes the
 backend and its data. `--integrations` also connects the demo site to the NetBox
 and LibreNMS that `NETBOX_URL`/`_TOKEN` and `LIBRENMS_URL`/`_TOKEN` name in its
-environment (`source ~/.zshrc` first); it never prints them. The skill `test-netplan-app` says how to check a change
-in a browser with it.
+environment (`source ~/.zshrc` first); it never prints them. The skill `test-netplan-app` holds what a browser
+check needs from it.
 
 - It writes `.env.local` with a marker line and refuses to touch one it did
   not write. Never point `.env.local` at a shared deployment by hand.
@@ -175,9 +175,10 @@ in the PR which entries applied:
   assert props, or write tests that mirror the implementation.
 - Never wait on sleeps in a test. A test that needs a timeout to pass is wrong.
 - An empty database is a bad test of the UI. Verify a user-visible change in a
-  real browser, never against a deployment other people use, through a Codex
-  `gpt-6.1-terra` subagent (`delegate_task`) rather than yourself; the same
-  goes for UI reviews. Effort `medium` for a few actions, `high` for many.
+  real browser, never against a deployment other people use, with the global
+  `browser-verify` skill (a GPT-6.1 Terra subagent at high effort), never by
+  driving the browser yourself; the same goes for UI reviews.
+  `test-netplan-app` holds this project's data for it.
 
 ## Code
 

@@ -1,77 +1,100 @@
 ---
 name: test-netplan-app
 description: >
-  Run Netplan locally in this worktree and check a change in a real browser
-  against the seeded demo map. Use before marking a pull request ready, when a
-  change touches anything a user sees, or when asked to try, test, preview or
-  screenshot the app.
+  Use when checking a Netplan change in a browser or writing a verification
+  or UI-review brief: how to run this worktree's instance, its URL, the demo
+  accounts and data, and the known pitfalls.
 ---
 
-# Test the Netplan app
+# Testing Netplan in a browser
 
-Each worktree has its own Convex backend (a Docker container) and its own
-ports, so this never touches another worktree or a shared deployment.
+The check itself goes through the global `browser-verify` skill: a GPT-6.1
+Terra subagent at high effort, briefed in full, on this worktree's instance.
+Never drive the browser yourself to verify your own change. This is the data
+its brief needs.
 
-## 1. Start or reuse the instance
+## Instance
 
-```sh
-bun run dev:agent --status
-```
+Each worktree has its own Convex backend in Docker and its own ports
+(AGENTS.md, "Local instance"; ADR 0018).
 
-- `running` with an `App` line that answers: reuse it, do not start another.
-  `--status` checks that the server at that URL serves this worktree.
-- Otherwise start it in the background and wait for the banner:
+- `bun run dev:agent --status`: if it reports `running` with an `App` line
+  that answers, reuse it. Otherwise run `bun run dev:agent` as a background
+  task, keep that task's id (the only process you may stop), and wait for the
+  banner.
+- The banner prints `App` (a `<worktree>-<hash>.localhost` URL: give the
+  verifier that one), `Convex`, and `Mail`, the Mailpit inbox of every mail the
+  app sends (invitations, password resets).
+- Every run puts back what is missing from the seed. `--reseed` starts from an
+  empty backend and refuses while the app runs: stop your process first.
+- Before delegating, check that the worktree is at the commit to verify and
+  that the app was started from it.
 
-  ```sh
-  bun run dev:agent > /tmp/netplan-dev-agent-<worktree>.log 2>&1
-  ```
+## Accounts
 
-  Run it as a background task and keep its task or process id: that is the
-  only process you may stop. The banner prints the `App` and `Convex` URLs,
-  and `Mail`: the Mailpit inbox of every mail the app sends (invitations,
-  password resets).
-  The first run pulls the image and creates the backend; later runs reuse
-  them.
-- Every run puts back what is missing from the seed: a cleared map, a deleted
-  floor. `--reseed` starts again from an empty backend; it refuses while the
-  app runs, so stop your process first. `--down` removes the backend and its
-  data.
+The password of every account is `DEV_PASSWORD` in `src/dev-seed/accounts.ts`
+(public on purpose: these accounts exist only on throwaway backends).
+Sign in with the username or the email:
 
-Expected noise: React Flow's attribution warning, React Scan's update notice
-and a software-renderer notice in a headless browser. Anything else in the
-console is worth reading.
+- `lecteur` (lecteur@netplan.test): Lecteur, never sees an edit action.
+- `editeur` (editeur@netplan.test): Éditeur.
+- `admin` (admin@netplan.test): Admin, with the admin pages and Santé.
 
-## 2. Look at it
+## Data
 
-Open the `App` URL in your own T3 Code preview tab (`preview_open`). It is
-a `.localhost` name of the worktree's own: cookies are scoped by host, not
-port, so on `127.0.0.1` another worktree's login would replace your session
-and send you back to the login page. Then
-drive it with `preview_click`, `preview_type`, `preview_drag` and check it with
-`preview_snapshot`. Save a screenshot (`save: true`) of each state a reviewer
-should see, and upload it to the pull request rather than committing it.
+The seed is the same in every worktree, so its names are stable targets:
 
-The seed is the same in every worktree, so its names are stable selectors:
-
-- Site "Site de démonstration" (disabled: no integration runs).
-- "Bâtiment A", floors "Rez-de-chaussée" and "Étage 1".
+- Site « Site de démonstration » (disabled: no integration runs unless
+  `--integrations`).
+- « Bâtiment A », floors « Rez-de-chaussée » and « Étage 1 ».
 - Ground floor: a technical room with two racks and the switches
   `sw-demo-coeur` and `sw-demo-acces-rdc`; an open space with sockets
-  "Prise B-01" to "Prise B-08" and eight PCs with mixed statuses; a meeting
-  room.
-- Floor 1: a room with switch `sw-demo-acces-e1`, sockets "Prise C-01" to
-  "Prise C-06" and six PCs; a break room with an unused socket.
-- Every switch port is cabled to a socket and each socket to a PC, in data:
-  the canvas does not draw links yet.
+  « Prise B-01 » to « Prise B-08 » and eight PCs with mixed statuses; a
+  meeting room.
+- Étage 1: a room with switch `sw-demo-acces-e1`, sockets « Prise C-01 » to
+  « Prise C-06 » and six PCs; a break room with an unused socket.
+- Every switch port is cabled to a socket and each socket to a PC.
 
-The UI is in French; look for French labels. Test what you changed on both
-floors, and in a second tab when the change should reach other users live.
+The UI is in French. A change that other users should see live needs a
+second tab, signed in as another account.
 
-## 3. Leave it clean
+## Known noise
 
-- Undo what you broke on purpose, or stop your process and `--reseed`, so the
-  next check starts from the seed.
-- Stop only the process you started. Never kill by name or pattern; another
-  worktree's Vite and Convex look exactly like yours.
-- Leave the backend running unless asked: the next run reuses it, and
-  `dev:agent` removes the backends of deleted worktrees.
+Not to report: React Flow's attribution warning, React Scan's notice, the
+software-renderer notice in a headless browser, and better-auth's IP warning.
+
+## Pitfalls
+
+- **Signed out at random.** Cookies are scoped by host, not port: on
+  `127.0.0.1`, another worktree's sign-in replaces yours. Always use the
+  banner's `.localhost` URL. Right after `--reseed`, that host can get a 403
+  on sign-in until `dev:agent` is restarted normally.
+- **Clicks land on nothing.** The React Scan toolbar (`#react-scan-root`)
+  sits over the page in development. Have the verifier remove it first with
+  `preview_evaluate`: `document.getElementById('react-scan-root')?.remove()`.
+- **Every request to `/api/auth/convex/token` returns 500 « Failed to decrypt
+  private key ».** The backend's JWKS row was encrypted with another secret.
+  Delete only the rows of the `jwks` model in the `betterAuth` component
+  (`adapter:deleteMany`); better-auth makes a fresh key on the next request,
+  and sessions and data stay.
+- **The page reloads mid-check.** Vite hot-reloads on any edit: do not touch
+  the worktree while a verifier runs.
+- **`ERR_NETWORK_CHANGED` or a failed dynamic import on the first load.**
+  The backend was still starting: wait for the banner, reload once.
+- **Old UI.** A delegate started with `isolation: "worktree"` checks out the
+  parent's commit, not `origin/main`. Verify in this worktree
+  (`isolation: "shared"`), at the commit you mean.
+- **What the T3 preview has failed at**: Shift+click (try `preview_act`
+  with `modifiers` first), Ctrl+wheel and drag-to-select. For those, and for locales, offline states or precise
+  timings, the verifier writes a Playwright script under `/tmp/<task>/`
+  against the same URL, with exact role-based locators (« Étage 1 » matches
+  more than one element otherwise).
+- **Integrations** (`--integrations`): LibreNMS's certificate names another
+  host, so the site needs its per-integration certificate option; never
+  write to a real NetBox or LibreNMS object (AGENTS.md).
+
+## Screenshots
+
+`preview_snapshot` with `save: true` returns the file's path. Upload the ones
+a reviewer should see to the pull request (`gh pr edit <n> --body-file
+<body> --attach <file>`), never commit them.
