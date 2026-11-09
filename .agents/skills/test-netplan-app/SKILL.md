@@ -27,6 +27,10 @@ Each worktree has its own Convex backend in Docker and its own ports
   app sends (invitations, password resets).
 - Every run puts back what is missing from the seed. `--reseed` starts from an
   empty backend and refuses while the app runs: stop your process first.
+- `--down` removes the backend and its data. `--integrations` connects the
+  demo site to the NetBox and LibreNMS named by `NETBOX_URL`/`_TOKEN` and
+  `LIBRENMS_URL`/`_TOKEN` in the environment (`source ~/.zshrc` first); it
+  never prints them.
 - Before delegating, check that the worktree is at the commit to verify and
   that the app was started from it.
 
