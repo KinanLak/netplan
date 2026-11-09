@@ -52,14 +52,9 @@ so prefer the canonical change over compatibility shims.
 ## Local instance
 
 `bun run dev:agent` gives each checkout its own self-hosted Convex backend in
-Docker (ADR 0018), seeds a demo site, and runs Convex and Vite on ports derived
-from the worktree path. It prints a banner with the app URL; `--status`
-prints it again, `--reseed` (app stopped) starts from an empty backend,
-`--down` removes the
-backend and its data. `--integrations` also connects the demo site to the NetBox
-and LibreNMS that `NETBOX_URL`/`_TOKEN` and `LIBRENMS_URL`/`_TOKEN` name in its
-environment (`source ~/.zshrc` first); it never prints them. The skill `test-netplan-app` says how to check a change
-in a browser with it.
+Docker (ADR 0018), seeds a demo site, and prints a banner with the app URL.
+Its flags (`--status`, `--reseed`, `--down`, `--integrations`) and what a
+browser check needs from it are in the skill `test-netplan-app`.
 
 - It writes `.env.local` with a marker line and refuses to touch one it did
   not write. Never point `.env.local` at a shared deployment by hand.
@@ -175,9 +170,10 @@ in the PR which entries applied:
   assert props, or write tests that mirror the implementation.
 - Never wait on sleeps in a test. A test that needs a timeout to pass is wrong.
 - An empty database is a bad test of the UI. Verify a user-visible change in a
-  real browser, never against a deployment other people use, through a Codex
-  `gpt-6.1-terra` subagent (`delegate_task`) rather than yourself; the same
-  goes for UI reviews. Effort `medium` for a few actions, `high` for many.
+  real browser, never against a deployment other people use, with the global
+  `browser-verify` skill (a GPT-6.1 Terra subagent at high effort), never by
+  driving the browser yourself; the same goes for UI reviews.
+  `test-netplan-app` holds this project's data for it.
 
 ## Code
 
@@ -213,7 +209,8 @@ Most changes need no documentation change; agents can read the code.
 
 ## Git and delivery
 
-ADR 0019 is the source; the short version:
+ADR 0019 is the source; writing a pull request, its captures, the zipzoup
+review loop and merging a stack are in the skill `pull-request`.
 
 - Never commit on `main`. Branch, and after the first commit push and open a
   draft pull request. Conventional commit subjects, no co-author or
@@ -222,28 +219,7 @@ ADR 0019 is the source; the short version:
   requests, each green on its own.
 - Before marking ready: `bun run check` green, the change verified as a user
   would see it, and a review pass of your own with P0 and P1 findings fixed.
-  Marking ready starts a zipzoup review; `/zipzoup` reruns it after a later
-  logic push, `/zipzoup force` on an already reviewed commit.
-- zipzoup posts findings tagged P0 to P2 and titles its check
-  `Reviewed <sha>`. Check each finding against the source: fix the real ones,
-  answer false positives in their thread with the reason. A green check that
-  reads `not since` has not reviewed the head.
-- Wait for checks and reviews with T3 Code's `watch_pull_request` and end the
-  turn; never poll with loops or sleeps.
+- Wait for checks and reviews with `watch_pull_request`; never poll.
 - Squash-merge your own pull request when CI is green, no P0 or P1 finding is
-  open and the branch is up to date with `main`. Merge stacks bottom-up, then
-  rebase the next layer onto `main` and retarget it. Delete the branch after
+  open and the branch is up to date with `main`. Delete the branch after
   merging.
-
-## Writing a pull request
-
-- English. Title: a conventional commit subject stating the effect, not the
-  edit: `fix(walls): a room drawn over a socket is now rejected`.
-- Body: Problem (what was wrong or missing, for whom), Change (what and why
-  this approach), Scope (what was deliberately left out), Verification (what
-  was run, and what was checked in which environment with which account).
-  Short; a simple change is a few sentences.
-- A visible change carries a before/after screenshot; motion needs a short
-  video. Upload them to the pull request, never commit them.
-- A decision that must outlive the pull request goes in `docs/`; the body
-  links to it.
