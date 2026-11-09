@@ -19,5 +19,7 @@ Netplan runs as a Docker Compose stack (`deploy/compose.yaml`, ADR 0020).
   checks.
 - **[Troubleshooting](troubleshooting.md)**: what each line of the Santé
   page means and what to do about it.
+- **[The owner's instance](owner-instance.md)**: the stack the owner tests
+  on, served on their tailnet, and how to redeploy it.
 
 Every command below runs from `deploy/`.
