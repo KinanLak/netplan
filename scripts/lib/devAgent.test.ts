@@ -9,6 +9,7 @@ import {
   nextWebPort,
   parseEnvLines,
   portRelay,
+  portlessRoute,
   preferredPorts,
   publishedPort,
   renderEnvFile,
@@ -42,6 +43,38 @@ describe("browserUrl", () => {
     const url = browserUrl("/w/netplan/UX_U5", "http://127.0.0.1:3109");
     expect(url).toMatch(/^http:\/\/ux-u5-[0-9a-f]{6}\.localhost:3109$/);
     expect(browserUrl("/other/UX_U5", "http://127.0.0.1:3109")).not.toBe(url);
+  });
+});
+
+describe("portlessRoute", () => {
+  it("serves the app at Portless's URL and port, Convex one label beside it", () => {
+    expect(
+      portlessRoute({
+        PORTLESS_URL: "https://netplan.ts.example.org",
+        PORT: "4629",
+      }),
+    ).toEqual({
+      appUrl: "https://netplan.ts.example.org",
+      port: 4629,
+      convexAlias: "netplan-convex",
+    });
+  });
+
+  it("keeps Convex at one label under a worktree prefix", () => {
+    expect(
+      portlessRoute({
+        PORTLESS_URL: "https://fix-walls.netplan.localhost",
+        PORT: "4100",
+      })?.convexAlias,
+    ).toBe("fix-walls-convex");
+  });
+
+  it("is off outside Portless", () => {
+    expect(portlessRoute({})).toBeUndefined();
+    expect(portlessRoute({ PORT: "3000" })).toBeUndefined();
+    expect(
+      portlessRoute({ PORTLESS_URL: "https://netplan.localhost" }),
+    ).toBeUndefined();
   });
 });
 
