@@ -48,6 +48,7 @@ import {
   publishedPort,
   renderEnvFile,
   browserUrl,
+  portlessRoute,
   resourceName,
 } from "./lib/devAgent";
 
@@ -60,8 +61,10 @@ const SEED_FUNCTIONS = [
   "dev:seedUnknownMacs",
 ];
 
-// Where the last run served the app, for `--status`.
+// Where the last run served the app on loopback, and the URL it printed for
+// browsers, for `--status`.
 const WEB_URL_KEY = "NETPLAN_DEV_WEB_URL";
+const APP_URL_KEY = "NETPLAN_DEV_APP_URL";
 
 const root = realpathSync(resolve(import.meta.dir, ".."));
 const envPath = join(root, ".env.local");
@@ -71,10 +74,27 @@ const mail = mailName(name);
 // considers this account's backends.
 const owner = `${OWNER_LABEL}=${process.getuid?.() ?? "unknown"}`;
 const flags = new Set(Bun.argv.slice(2));
+const portless = portlessRoute(process.env);
 const children: Array<Subprocess> = [];
+// A Portless alias is a static route: it outlives this command unless removed.
+let convexAlias: string | undefined;
+// In a worktree Portless would put the branch before the alias as well, a
+// second label that a one-level wildcard certificate does not cover.
+const portlessCli = (...args: Array<string>) => [
+  "env",
+  "PORTLESS_PREFIX=",
+  "portless",
+  ...args,
+];
 
 const stop = (code: number): never => {
   for (const child of children) child.kill();
+  if (convexAlias) {
+    Bun.spawnSync(portlessCli("alias", "--remove", convexAlias), {
+      stdout: "ignore",
+      stderr: "ignore",
+    });
+  }
   process.exit(code);
 };
 const fail = (message: string): never => {
@@ -488,16 +508,16 @@ if (flags.has("--status")) {
     process.exit(0);
   }
   const { convex } = urls(container.port);
-  const web = parseEnvLines((await readOwnEnvFile()) ?? "").get(WEB_URL_KEY);
+  const recordedUrls = parseEnvLines((await readOwnEnvFile()) ?? "");
+  const web = recordedUrls.get(WEB_URL_KEY);
   const silent = (up: boolean) => (up ? "" : " (not answering)");
   console.log(
     `${name}: ${container.running ? "running" : "stopped"}\n` +
       `  Convex   ${convex}${silent(await backendAnswers(convex))}`,
   );
   if (web) {
-    console.log(
-      `  App      ${browserUrl(root, web)}${silent(await servesThisWorktree(web))}`,
-    );
+    const app = recordedUrls.get(APP_URL_KEY) ?? browserUrl(root, web);
+    console.log(`  App      ${app}${silent(await servesThisWorktree(web))}`);
   }
   const inbox = await inspectContainer(mail, 8025);
   if (inbox?.port) {
@@ -568,9 +588,11 @@ adminKey ??= (
   .at(-1);
 if (!adminKey) fail("generate_admin_key.sh printed no key.");
 
-const webPort = nextWebPort(preferredPorts(root).web, (port) =>
-  portIsFree(port, ["127.0.0.1", "::1"]),
-);
+const webPort =
+  portless?.port ??
+  nextWebPort(preferredPorts(root).web, (port) =>
+    portIsFree(port, ["127.0.0.1", "::1"]),
+  );
 const webUrl = urls(backendPort, webPort).web ?? "";
 const convexValues = {
   CONVEX_SELF_HOSTED_URL: convexUrl,
@@ -581,11 +603,37 @@ const convexValues = {
 // Written before Vite starts: Vite restarts when an env file changes.
 // `--setup` keeps the URL of a run that may still be serving.
 const servedUrl = flags.has("--setup") ? previous.get(WEB_URL_KEY) : webUrl;
+// What browsers open: Portless's URL, or the worktree's own `.localhost` name.
+const appUrl = flags.has("--setup")
+  ? (previous.get(APP_URL_KEY) ?? browserUrl(root, servedUrl ?? webUrl))
+  : (portless?.appUrl ?? browserUrl(root, webUrl));
 await writeEnvFile(
-  servedUrl ? { ...convexValues, [WEB_URL_KEY]: servedUrl } : convexValues,
+  servedUrl
+    ? { ...convexValues, [WEB_URL_KEY]: servedUrl, [APP_URL_KEY]: appUrl }
+    : convexValues,
 );
 const childEnv = { ...baseEnv, ...convexIsolation, ...convexValues };
 const convexCli = (...args: Array<string>) => convexCliWith(convexValues, args);
+
+// The browser opens a WebSocket to CONVEX_URL itself: behind Portless it
+// needs a name the other devices reach too. `.env.local` keeps loopback for
+// the CLI and `test:e2e`.
+let browserConvexUrl = convexUrl;
+if (portless && !flags.has("--setup")) {
+  const alias = portless.convexAlias;
+  // A run that was killed left its route behind.
+  await run(portlessCli("alias", "--remove", alias));
+  await must(
+    run(portlessCli("alias", alias, String(backendPort))),
+    "portless alias",
+  );
+  convexAlias = alias;
+  browserConvexUrl =
+    (await must(run(portlessCli("get", alias)), "portless get"))
+      .trim()
+      .split("\n")
+      .at(-1) ?? convexUrl;
+}
 
 const watch = (child: Subprocess) => {
   children.push(child);
@@ -607,7 +655,12 @@ if (!flags.has("--setup")) {
         String(webPort),
         "--strictPort",
       ],
-      { cwd: root, env: childEnv, stdout: "inherit", stderr: "inherit" },
+      {
+        cwd: root,
+        env: { ...childEnv, CONVEX_URL: browserConvexUrl },
+        stdout: "inherit",
+        stderr: "inherit",
+      },
     ),
   );
 }
@@ -620,10 +673,10 @@ const variables = parseEnvLines(
 );
 const authEnv: Record<string, string> = {
   ALLOW_DEV_SEED: "true",
-  // better-auth accepts requests only from these origins: the app, under its
-  // own name and on loopback, and the production build `bun run test:e2e`
-  // serves against this backend.
-  SITE_URL: browserUrl(root, servedUrl ?? webUrl),
+  // better-auth accepts requests only from these origins: the app, under the
+  // name browsers use and on loopback, and the production build `bun run
+  // test:e2e` serves against this backend.
+  SITE_URL: appUrl,
   TRUSTED_ORIGINS: `http://127.0.0.1:4310,${servedUrl ?? webUrl}`,
   // The backend checks each token against its own JWKS; its published port
   // does not answer inside its container.
@@ -700,8 +753,8 @@ if (!up) fail(`${webUrl} did not answer within a minute.`);
 
 console.log(`
 Netplan is running for ${root}
-  App      ${browserUrl(root, webUrl)}
-  Convex   ${convexUrl}  (container ${name})
+  App      ${appUrl}
+  Convex   ${browserConvexUrl}  (container ${name})
   Mail     ${mailUrl}  (every mail the app sends)
   Data     Site de démonstration, Bâtiment A, two floors
 Ctrl-C stops the app; the backend keeps running. \`bun run dev:agent --down\` removes it.

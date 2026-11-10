@@ -42,6 +42,27 @@ export const browserUrl = (worktree: string, loopbackUrl: string): string =>
   );
 
 /**
+ * Where the app answers when Portless runs `dev:agent` (`portless`, which
+ * reads portless.json): PORTLESS_URL, served on PORT. The browser also calls
+ * the Convex API directly, so it gets a sibling name of one label, which a
+ * one-level wildcard certificate covers too.
+ */
+export const portlessRoute = (
+  env: Record<string, string | undefined>,
+): { appUrl: string; port: number; convexAlias: string } | undefined => {
+  const port = Number(env.PORT);
+  if (!env.PORTLESS_URL || !Number.isInteger(port) || port <= 0) {
+    return undefined;
+  }
+  const { origin, hostname } = new URL(env.PORTLESS_URL);
+  return {
+    appUrl: origin,
+    port,
+    convexAlias: `${hostname.split(".")[0]}-convex`,
+  };
+};
+
+/**
  * Bumped when the backend container's command changes: a container with
  * another value is replaced, keeping its volume.
  */

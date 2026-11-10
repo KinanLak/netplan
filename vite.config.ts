@@ -13,6 +13,13 @@ const config = defineConfig({
   // The package ships untranspiled ESM that imports React; bundling it keeps
   // one React instance on the server.
   ssr: { noExternal: ["@convex-dev/better-auth"] },
+  // Under Portless the dev server answers to PORTLESS_URL's host, which Vite
+  // refuses unless listed when it is not a `.localhost` name.
+  server: {
+    allowedHosts: process.env.PORTLESS_URL
+      ? [new URL(process.env.PORTLESS_URL).hostname]
+      : [],
+  },
   // pdf.js Type 1 fonts and CMaps, imported as data URLs by src/overlay/pdf.ts.
   assetsInclude: ["**/*.pfb", "**/*.bcmap"],
   plugins: [

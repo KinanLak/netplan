@@ -68,6 +68,11 @@ browser check needs from it are in the skill `test-netplan-app`.
 - The backend keeps running when the command stops, so the next run is fast;
   its container and volume are labelled `netplan.worktree=<path>` and
   `netplan.owner=<uid>`, and removed once that path is gone.
+- Run under Portless (`portless`, which reads `portless.json`), the app takes
+  Portless's URL and the Convex API an alias beside it (`netplan-convex`),
+  removed when the command stops, so another device can open both. The
+  backend still reports itself on loopback, so a calque's image loads only on
+  this machine.
 
 ## The three ways to hurt yourself
 

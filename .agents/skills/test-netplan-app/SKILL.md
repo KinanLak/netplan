@@ -22,8 +22,9 @@ Each worktree has its own Convex backend in Docker and its own ports
   that answers, reuse it. Otherwise run `bun run dev:agent` as a background
   task, keep that task's id (the only process you may stop), and wait for the
   banner.
-- The banner prints `App` (a `<worktree>-<hash>.localhost` URL: give the
-  verifier that one), `Convex`, and `Mail`, the Mailpit inbox of every mail the
+- The banner prints `App` (a `<worktree>-<hash>.localhost` URL, or
+  Portless's when run under `portless`: give the verifier that one),
+  `Convex`, and `Mail`, the Mailpit inbox of every mail the
   app sends (invitations, password resets).
 - Every run puts back what is missing from the seed. `--reseed` starts from an
   empty backend and refuses while the app runs: stop your process first.
