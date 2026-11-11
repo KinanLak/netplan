@@ -22,10 +22,12 @@ Each worktree has its own Convex backend in Docker and its own ports
   that answers, reuse it. Otherwise run `bun run dev:agent` as a background
   task, keep that task's id (the only process you may stop), and wait for the
   banner.
-- The banner prints `App` (a `<worktree>-<hash>.localhost` URL, or
-  Portless's when run under `portless`: give the verifier that one),
-  `Convex`, and `Mail`, the Mailpit inbox of every mail the
-  app sends (invitations, password resets).
+- The banner prints `App`, `Convex`, and `Mail`, the Mailpit inbox of every
+  mail the app sends (invitations, password resets). Where Portless is
+  installed they are `https://netplan(-<worktree>)(-convex|-mail).<domain>`
+  names, which other devices on the tailnet open too: give the verifier
+  those, never a port. Without Portless (`PORTLESS=0`), `App` is a
+  `<worktree>-<hash>.localhost` URL.
 - Every run puts back what is missing from the seed. `--reseed` starts from an
   empty backend and refuses while the app runs: stop your process first.
 - `--down` removes the backend and its data. `--integrations` connects the
@@ -72,7 +74,7 @@ software-renderer notice in a headless browser, and better-auth's IP warning.
 
 - **Signed out at random.** Cookies are scoped by host, not port: on
   `127.0.0.1`, another worktree's sign-in replaces yours. Always use the
-  banner's `.localhost` URL. Right after `--reseed`, that host can get a 403
+  banner's `App` URL. Right after `--reseed`, that host can get a 403
   on sign-in until `dev:agent` is restarted normally.
 - **Clicks land on nothing.** The React Scan toolbar (`#react-scan-root`)
   sits over the page in development. Have the verifier remove it first with
