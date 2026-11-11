@@ -13,6 +13,10 @@
 // SQLite in a volume, both named after the worktree and labelled with its
 // path. A Mailpit container on a network of the same name catches the mail
 // it sends. Both keep running when this command stops.
+// Where Portless is installed and PORTLESS is not 0, the app runs under it and
+// the browser opens only Portless names: the app's, and an alias for the
+// Convex API and the inbox beside it (ADR 0042). Elsewhere, as in CI, it opens
+// loopback ports.
 import {
   chmodSync,
   lstatSync,
@@ -22,7 +26,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { randomBytes } from "node:crypto";
-import { join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 import type { Subprocess } from "bun";
 import {
   CONVEX_BACKEND_IMAGE,
@@ -34,8 +38,10 @@ import {
   BACKEND_SPEC_LABEL,
   MAILPIT_IMAGE,
   OWNER_LABEL,
+  PORTLESS_PROJECT,
   ROLE_LABEL,
   WORKTREE_LABEL,
+  aliasesTo,
   backendCommand,
   backendOf,
   integrationSeedArgs,
@@ -44,13 +50,16 @@ import {
   nextBackendPorts,
   nextWebPort,
   parseEnvLines,
+  parsePortlessRoutes,
   preferredPorts,
   publishedPort,
   renderEnvFile,
   browserUrl,
   portlessRoute,
   resourceName,
+  serviceAlias,
 } from "./lib/devAgent";
+import type { BrowserService } from "./lib/devAgent";
 
 // Every function the seed runs, in order. Each one is idempotent and refuses
 // to run without ALLOW_DEV_SEED.
@@ -74,27 +83,15 @@ const mail = mailName(name);
 // considers this account's backends.
 const owner = `${OWNER_LABEL}=${process.getuid?.() ?? "unknown"}`;
 const flags = new Set(Bun.argv.slice(2));
+// Set when this run is the one Portless started for the app.
 const portless = portlessRoute(process.env);
+const portlessInstalled = Bun.which("portless") !== null;
+const usePortless =
+  portless !== undefined || (portlessInstalled && process.env.PORTLESS !== "0");
 const children: Array<Subprocess> = [];
-// A Portless alias is a static route: it outlives this command unless removed.
-let convexAlias: string | undefined;
-// In a worktree Portless would put the branch before the alias as well, a
-// second label that a one-level wildcard certificate does not cover.
-const portlessCli = (...args: Array<string>) => [
-  "env",
-  "PORTLESS_PREFIX=",
-  "portless",
-  ...args,
-];
 
 const stop = (code: number): never => {
   for (const child of children) child.kill();
-  if (convexAlias) {
-    Bun.spawnSync(portlessCli("alias", "--remove", convexAlias), {
-      stdout: "ignore",
-      stderr: "ignore",
-    });
-  }
   process.exit(code);
 };
 const fail = (message: string): never => {
@@ -153,6 +150,76 @@ const must = async (
 
 const docker = (...args: Array<string>) => run(["docker", ...args]);
 
+// ── Portless ─────────────────────────────────────────────────────────────────
+
+// Under PORTLESS=0, `portless alias` would take `alias` for an app's name;
+// in colour, `portless list` no longer parses.
+const portlessEnv: Record<string, string> = { ...baseEnv, NO_COLOR: "1" };
+delete portlessEnv.PORTLESS;
+// Alias names are given whole: no worktree label is added to them.
+const portlessCli = (...args: Array<string>) =>
+  run(["portless", ...args], { ...portlessEnv, PORTLESS_PREFIX: "" });
+
+const portlessRoutes = async () =>
+  parsePortlessRoutes((await portlessCli("list")).out);
+
+/**
+ * Portless's name for this checkout: `netplan`, or `netplan-<worktree>` in a
+ * worktree (portless.json). A worktree with a detached HEAD, as T3 Code makes
+ * them, has no branch to be named after and would get the main checkout's
+ * name: it takes its directory's, through PORTLESS_PREFIX.
+ */
+const portlessName = async (): Promise<{ name: string; prefix?: string }> => {
+  const get = async (env: Record<string, string>) => {
+    const out = await must(
+      run(["portless", "get", PORTLESS_PROJECT], env),
+      "portless get",
+    );
+    const url = URL.parse(out.trim().split("\n").at(-1) ?? "");
+    return url?.hostname.split(".")[0] ?? fail(`portless get printed ${out}`);
+  };
+  const inferred = await get(portlessEnv);
+  const linked = lstatSync(join(root, ".git"), {
+    throwIfNoEntry: false,
+  })?.isFile();
+  if (!linked || inferred !== PORTLESS_PROJECT) return { name: inferred };
+  const prefix = basename(root);
+  return {
+    name: await get({ ...portlessEnv, PORTLESS_PREFIX: prefix }),
+    prefix,
+  };
+};
+
+/**
+ * Gives a backend service its alias, kept as long as its container: returns
+ * the URL. Never takes over a name that leads to another port.
+ */
+const ensureAlias = async (alias: string, port: number): Promise<string> => {
+  const find = async () =>
+    (await portlessRoutes()).find((route) => route.name === alias);
+  let route = await find();
+  if (!route) {
+    await must(portlessCli("alias", alias, String(port)), "portless alias");
+    // Read back: a run registering the same name at once wins or loses here.
+    route = await find();
+  }
+  if (!route) return fail(`portless lists no route for ${alias}.`);
+  if (route.port !== port) {
+    fail(
+      `${route.url} already leads to port ${route.port}, not ${port}; ` +
+        `\`portless alias --remove ${alias}\` frees it if that is stale.`,
+    );
+  }
+  return route.url;
+};
+
+/** The URL of the alias leading to a backend service's port, if any. */
+const aliasUrl = async (service: BrowserService, port: number) => {
+  const routes = await portlessRoutes();
+  const [alias] = aliasesTo(routes, { [service]: port });
+  return routes.find((route) => route.name === alias)?.url;
+};
+
 // ── Docker resources ─────────────────────────────────────────────────────────
 
 interface Container {
@@ -193,10 +260,20 @@ const inspectContainer = async (
 };
 
 /**
- * Removes a backend's containers, volume and network; returns Docker's
- * error, if any. `--force` already accepts a resource that is not there.
+ * Removes a backend's Portless aliases, containers, volume and network;
+ * returns Docker's error, if any. `--force` already accepts a resource that
+ * is not there.
  */
 const removeBackend = async (target: string): Promise<string | undefined> => {
+  if (portlessInstalled) {
+    const ports = {
+      convex: (await inspectContainer(target, 3210))?.port,
+      mail: (await inspectContainer(mailName(target), 8025))?.port,
+    };
+    for (const alias of aliasesTo(await portlessRoutes(), ports)) {
+      await portlessCli("alias", "--remove", alias);
+    }
+  }
   for (const command of [
     ["container", "rm", "--force", mailName(target)],
     ["container", "rm", "--force", "--volumes", target],
@@ -497,7 +574,9 @@ if (flags.has("--down")) {
   await readOwnEnvFile();
   await mustRemoveBackend(name);
   rmSync(envPath, { force: true });
-  console.log(`dev:agent: removed ${name}, its Mailpit and .env.local.`);
+  console.log(
+    `dev:agent: removed ${name}, its Mailpit, their aliases and .env.local.`,
+  );
   process.exit(0);
 }
 
@@ -511,9 +590,12 @@ if (flags.has("--status")) {
   const recordedUrls = parseEnvLines((await readOwnEnvFile()) ?? "");
   const web = recordedUrls.get(WEB_URL_KEY);
   const silent = (up: boolean) => (up ? "" : " (not answering)");
+  // What a browser opens; the check goes to the loopback port.
+  const shown = async (service: BrowserService, port: number, url: string) =>
+    (usePortless && (await aliasUrl(service, port))) || url;
   console.log(
     `${name}: ${container.running ? "running" : "stopped"}\n` +
-      `  Convex   ${convex}${silent(await backendAnswers(convex))}`,
+      `  Convex   ${await shown("convex", container.port, convex)}${silent(await backendAnswers(convex))}`,
   );
   if (web) {
     const app = recordedUrls.get(APP_URL_KEY) ?? browserUrl(root, web);
@@ -522,9 +604,36 @@ if (flags.has("--status")) {
   const inbox = await inspectContainer(mail, 8025);
   if (inbox?.port) {
     const url = `http://127.0.0.1:${inbox.port}`;
-    console.log(`  Mail     ${url}${silent(await webAnswers(url))}`);
+    console.log(
+      `  Mail     ${await shown("mail", inbox.port, url)}${silent(await webAnswers(url))}`,
+    );
   }
   process.exit(0);
+}
+
+// The app runs under Portless, which gives it this checkout's name and
+// removes its route when it stops. `--setup` starts no app.
+if (usePortless && !portless && !flags.has("--setup")) {
+  const { prefix } = await portlessName();
+  const child = Bun.spawn(
+    [
+      "portless",
+      "run",
+      "--",
+      process.execPath,
+      import.meta.path,
+      ...Bun.argv.slice(2),
+    ],
+    {
+      cwd: root,
+      env: prefix ? { ...portlessEnv, PORTLESS_PREFIX: prefix } : portlessEnv,
+      stdin: "ignore",
+      stdout: "inherit",
+      stderr: "inherit",
+    },
+  );
+  children.push(child);
+  process.exit(await child.exited);
 }
 
 if (!(await docker("version", "--format", "{{.Server.Version}}")).ok) {
@@ -546,9 +655,22 @@ if (flags.has("--reseed")) {
 await must(run(["bun", "install"]), "bun install");
 
 const backendPort = await ensureBackend();
-const mailUrl = `http://127.0.0.1:${await ensureMail()}`;
+const mailPort = await ensureMail();
 const { convex: convexUrl, site: siteUrl } = urls(backendPort);
 if (!isLoopbackUrl(convexUrl)) fail(`${convexUrl} is not on this machine.`);
+// The browser opens the Convex API (a WebSocket to CONVEX_URL) and the inbox
+// itself: under Portless each gets an alias, removed with its backend.
+// `.env.local` keeps loopback for the CLI and `test:e2e`.
+let browserConvexUrl = convexUrl;
+let mailUrl = `http://127.0.0.1:${mailPort}`;
+if (usePortless) {
+  const app = portless?.name ?? (await portlessName()).name;
+  browserConvexUrl = await ensureAlias(
+    serviceAlias(app, "convex"),
+    backendPort,
+  );
+  mailUrl = await ensureAlias(serviceAlias(app, "mail"), mailPort);
+}
 const convexCliWith = (env: Record<string, string>, args: Array<string>) =>
   run([join(root, "node_modules/.bin/convex"), ...args], {
     ...baseEnv,
@@ -614,26 +736,6 @@ await writeEnvFile(
 );
 const childEnv = { ...baseEnv, ...convexIsolation, ...convexValues };
 const convexCli = (...args: Array<string>) => convexCliWith(convexValues, args);
-
-// The browser opens a WebSocket to CONVEX_URL itself: behind Portless it
-// needs a name the other devices reach too. `.env.local` keeps loopback for
-// the CLI and `test:e2e`.
-let browserConvexUrl = convexUrl;
-if (portless && !flags.has("--setup")) {
-  const alias = portless.convexAlias;
-  // A run that was killed left its route behind.
-  await run(portlessCli("alias", "--remove", alias));
-  await must(
-    run(portlessCli("alias", alias, String(backendPort))),
-    "portless alias",
-  );
-  convexAlias = alias;
-  browserConvexUrl =
-    (await must(run(portlessCli("get", alias)), "portless get"))
-      .trim()
-      .split("\n")
-      .at(-1) ?? convexUrl;
-}
 
 const watch = (child: Subprocess) => {
   children.push(child);
@@ -727,7 +829,7 @@ if (flags.has("--integrations")) {
 
 if (flags.has("--setup")) {
   console.log(
-    `dev:agent: ready, Convex ${convexUrl}. \`bun run dev:agent\` starts the app.`,
+    `dev:agent: ready, Convex ${browserConvexUrl}. \`bun run dev:agent\` starts the app.`,
   );
   process.exit(0);
 }

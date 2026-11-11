@@ -51,3 +51,4 @@ record's Source section points to its questions in the
 - **[0039 — A device NetBox stops returning becomes absent, is kept while on a plan, purged after 30 days off it, and linked again when NetBox returns it; a new NetBox address keeps everything when it reaches the same instance](0039-netbox-absence.md)**
 - **[0040 — The push to NetBox writes only when a device's location changes, stamped with « Modifié par NetPlan le », and no longer writes when it was last seen](0040-netbox-push-on-move.md)**
 - **[0041 — The interface shows what the user can do and does not explain itself](0041-interface-shows-actions.md)** (supersedes the « Empty states » paragraph of 0026)
+- **[0042 — Where Portless is installed, the local instance opens by Portless names only, one label per worktree and service](0042-local-instance-opens-by-portless-name.md)**

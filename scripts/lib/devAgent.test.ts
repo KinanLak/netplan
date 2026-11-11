@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import {
+  aliasesTo,
   backendCommand,
   backendOf,
   integrationSeedArgs,
@@ -8,6 +9,7 @@ import {
   nextBackendPorts,
   nextWebPort,
   parseEnvLines,
+  parsePortlessRoutes,
   portRelay,
   portlessRoute,
   preferredPorts,
@@ -15,6 +17,7 @@ import {
   renderEnvFile,
   browserUrl,
   resourceName,
+  serviceAlias,
 } from "./devAgent";
 
 describe("resourceName", () => {
@@ -47,7 +50,7 @@ describe("browserUrl", () => {
 });
 
 describe("portlessRoute", () => {
-  it("serves the app at Portless's URL and port, Convex one label beside it", () => {
+  it("serves the app at Portless's URL and port, under its name", () => {
     expect(
       portlessRoute({
         PORTLESS_URL: "https://netplan.ts.example.org",
@@ -56,17 +59,8 @@ describe("portlessRoute", () => {
     ).toEqual({
       appUrl: "https://netplan.ts.example.org",
       port: 4629,
-      convexAlias: "netplan-convex",
+      name: "netplan",
     });
-  });
-
-  it("keeps Convex at one label under a worktree prefix", () => {
-    expect(
-      portlessRoute({
-        PORTLESS_URL: "https://fix-walls.netplan.localhost",
-        PORT: "4100",
-      })?.convexAlias,
-    ).toBe("fix-walls-convex");
   });
 
   it("is off outside Portless", () => {
@@ -75,6 +69,50 @@ describe("portlessRoute", () => {
     expect(
       portlessRoute({ PORTLESS_URL: "https://netplan.localhost" }),
     ).toBeUndefined();
+  });
+});
+
+describe("Portless aliases", () => {
+  const listed = parsePortlessRoutes(
+    [
+      "Active routes:",
+      "",
+      "  https://netplan-fix-walls.ts.example.org  ->  localhost:4629  (pid 812)",
+      "  https://netplan-fix-walls-convex.ts.example.org  ->  localhost:13380  (alias)",
+      "  https://netplan-fix-walls-mail.ts.example.org  ->  localhost:14100  (alias)",
+      "  https://netplan-convex.ts.example.org  ->  localhost:13500  (alias)",
+      "  https://proxy.ts.example.org  ->  localhost:14100  (alias)",
+      "",
+    ].join("\n"),
+  );
+
+  it("names a service one label beside the app", () => {
+    expect(serviceAlias("netplan-fix-walls", "mail")).toBe(
+      "netplan-fix-walls-mail",
+    );
+  });
+
+  it("reads `portless list`", () => {
+    expect(listed[0]).toEqual({
+      name: "netplan-fix-walls",
+      url: "https://netplan-fix-walls.ts.example.org",
+      port: 4629,
+      alias: false,
+    });
+    expect(listed[1]).toEqual({
+      name: "netplan-fix-walls-convex",
+      url: "https://netplan-fix-walls-convex.ts.example.org",
+      port: 13380,
+      alias: true,
+    });
+  });
+
+  it("removes only the aliases still leading to the backend's ports", () => {
+    expect(aliasesTo(listed, { convex: 13380, mail: 14100 })).toEqual([
+      "netplan-fix-walls-convex",
+      "netplan-fix-walls-mail",
+    ]);
+    expect(aliasesTo(listed, { convex: 4629, mail: undefined })).toEqual([]);
   });
 });
 

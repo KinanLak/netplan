@@ -391,7 +391,7 @@ Built by lot 0 (ADR 0020); procedures in [`docs/operations/`](../operations/inde
 
 ## Development and delivery
 
-Built by lot F (ADRs 0018 and 0019).
+Built by lot F (ADRs 0018 and 0019), opened by Portless names since ADR 0042.
 
 - `bun run check` is read-only (typecheck, lint, format, tests, Convex
   codegen freshness against a local backend); `bun run verify` adds the
@@ -404,5 +404,7 @@ Built by lot F (ADRs 0018 and 0019).
   generated `.env.local`; a Mailpit next to it catches every mail it sends. It
   seeds a fictional demo site through
   `applyMapOperation`, the same path as user edits, behind `ALLOW_DEV_SEED`.
+  Where Portless is installed, the browser opens it only by Portless names,
+  the app's and an alias each for the Convex API and the inbox (ADR 0042).
 - zipzoup reviews each pull request when it is marked ready; agents merge
   their own once CI is green and no P0 or P1 finding is open.

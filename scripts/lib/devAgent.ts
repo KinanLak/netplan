@@ -41,26 +41,76 @@ export const browserUrl = (worktree: string, loopbackUrl: string): string =>
     `//${slugOf(worktree)}-${digest(worktree).slice(0, 6)}.localhost:`,
   );
 
+/** The project's name in portless.json. */
+export const PORTLESS_PROJECT = "netplan";
+
 /**
- * Where the app answers when Portless runs `dev:agent` (`portless`, which
- * reads portless.json): PORTLESS_URL, served on PORT. The browser also calls
- * the Convex API directly, so it gets a sibling name of one label, which a
- * one-level wildcard certificate covers too.
+ * Where the app answers when Portless runs `dev:agent`: PORTLESS_URL, served
+ * on PORT, and the name of one label Portless gave this checkout.
  */
 export const portlessRoute = (
   env: Record<string, string | undefined>,
-): { appUrl: string; port: number; convexAlias: string } | undefined => {
+): { appUrl: string; port: number; name: string } | undefined => {
   const port = Number(env.PORT);
   if (!env.PORTLESS_URL || !Number.isInteger(port) || port <= 0) {
     return undefined;
   }
   const { origin, hostname } = new URL(env.PORTLESS_URL);
-  return {
-    appUrl: origin,
-    port,
-    convexAlias: `${hostname.split(".")[0]}-convex`,
-  };
+  return { appUrl: origin, port, name: hostname.split(".")[0] };
 };
+
+/** The backend services a browser opens besides the app. */
+export type BrowserService = "convex" | "mail";
+
+/**
+ * A service's Portless alias: one label beside the app's name, which a
+ * one-level wildcard certificate covers too.
+ */
+export const serviceAlias = (app: string, service: BrowserService): string =>
+  `${app}-${service}`;
+
+export interface PortlessListedRoute {
+  /** The host's first label, the name `portless alias` takes. */
+  name: string;
+  url: string;
+  port: number;
+  alias: boolean;
+}
+
+/** Routes as `NO_COLOR=1 portless list` prints them. */
+export const parsePortlessRoutes = (text: string): Array<PortlessListedRoute> =>
+  text.split("\n").flatMap((line) => {
+    const match = /(https?:\/\/([^/\s]+))\s+->\s+\S+:(\d+)(.*)$/.exec(line);
+    if (!match) return [];
+    return [
+      {
+        name: match[2].split(".")[0],
+        url: match[1],
+        port: Number(match[3]),
+        alias: match[4].includes("(alias)"),
+      },
+    ];
+  });
+
+/**
+ * The aliases `dev:agent` registered for a backend: a service's alias that
+ * still leads to that backend's port for it. Another checkout's route, or one
+ * that now leads elsewhere, is left alone.
+ */
+export const aliasesTo = (
+  routes: Array<PortlessListedRoute>,
+  ports: Partial<Record<BrowserService, number>>,
+): Array<string> =>
+  routes
+    .filter(
+      (route) =>
+        route.alias &&
+        Object.entries(ports).some(
+          ([service, port]) =>
+            route.port === port && route.name.endsWith(`-${service}`),
+        ),
+    )
+    .map((route) => route.name);
 
 /**
  * Bumped when the backend container's command changes: a container with
