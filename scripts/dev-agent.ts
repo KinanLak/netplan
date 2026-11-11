@@ -156,7 +156,7 @@ const docker = (...args: Array<string>) => run(["docker", ...args]);
 // in colour, `portless list` no longer parses.
 const portlessEnv: Record<string, string> = { ...baseEnv, NO_COLOR: "1" };
 delete portlessEnv.PORTLESS;
-// In a worktree Portless would add the worktree to an alias's name as well.
+// Alias names are given whole: no worktree label is added to them.
 const portlessCli = (...args: Array<string>) =>
   run(["portless", ...args], { ...portlessEnv, PORTLESS_PREFIX: "" });
 
@@ -170,15 +170,14 @@ const portlessRoutes = async () =>
  * name: it takes its directory's, through PORTLESS_PREFIX.
  */
 const portlessName = async (): Promise<{ name: string; prefix?: string }> => {
-  const get = async (env: Record<string, string>) =>
-    new URL(
-      (
-        await must(
-          run(["portless", "get", PORTLESS_PROJECT], env),
-          "portless get",
-        )
-      ).trim(),
-    ).hostname.split(".")[0];
+  const get = async (env: Record<string, string>) => {
+    const out = await must(
+      run(["portless", "get", PORTLESS_PROJECT], env),
+      "portless get",
+    );
+    const url = URL.parse(out.trim().split("\n").at(-1) ?? "");
+    return url?.hostname.split(".")[0] ?? fail(`portless get printed ${out}`);
+  };
   const inferred = await get(portlessEnv);
   const linked = lstatSync(join(root, ".git"), {
     throwIfNoEntry: false,
@@ -200,7 +199,10 @@ const ensureAlias = async (alias: string, port: number): Promise<string> => {
     (await portlessRoutes()).find((route) => route.name === alias);
   let route = await find();
   if (route && route.port !== port) {
-    fail(`${route.url} already leads to port ${route.port}, not ${port}.`);
+    fail(
+      `${route.url} already leads to port ${route.port}, not ${port}; ` +
+        `\`portless alias --remove ${alias}\` frees it if that is stale.`,
+    );
   }
   if (!route) {
     await must(portlessCli("alias", alias, String(port)), "portless alias");
@@ -588,7 +590,7 @@ if (flags.has("--status")) {
   const silent = (up: boolean) => (up ? "" : " (not answering)");
   // What a browser opens; the check goes to the loopback port.
   const shown = async (service: BrowserService, port: number, url: string) =>
-    (portlessInstalled && (await aliasUrl(service, port))) || url;
+    (usePortless && (await aliasUrl(service, port))) || url;
   console.log(
     `${name}: ${container.running ? "running" : "stopped"}\n` +
       `  Convex   ${await shown("convex", container.port, convex)}${silent(await backendAnswers(convex))}`,
