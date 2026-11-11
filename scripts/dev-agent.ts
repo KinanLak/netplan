@@ -198,17 +198,19 @@ const ensureAlias = async (alias: string, port: number): Promise<string> => {
   const find = async () =>
     (await portlessRoutes()).find((route) => route.name === alias);
   let route = await find();
-  if (route && route.port !== port) {
+  if (!route) {
+    await must(portlessCli("alias", alias, String(port)), "portless alias");
+    // Read back: a run registering the same name at once wins or loses here.
+    route = await find();
+  }
+  if (!route) return fail(`portless lists no route for ${alias}.`);
+  if (route.port !== port) {
     fail(
       `${route.url} already leads to port ${route.port}, not ${port}; ` +
         `\`portless alias --remove ${alias}\` frees it if that is stale.`,
     );
   }
-  if (!route) {
-    await must(portlessCli("alias", alias, String(port)), "portless alias");
-    route = await find();
-  }
-  return route?.url ?? fail(`portless lists no route for ${alias}.`);
+  return route.url;
 };
 
 /** The URL of the alias leading to a backend service's port, if any. */
