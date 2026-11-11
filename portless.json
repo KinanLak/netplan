@@ -1,4 +1,5 @@
 {
   "name": "netplan",
-  "script": "dev:agent"
+  "script": "dev:agent",
+  "worktree": { "hostnameTemplate": "{name}-{worktree}" }
 }
